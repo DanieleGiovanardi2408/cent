@@ -19,6 +19,7 @@ concurrency:
 
 jobs:
   build:
+    name: Build e test unitari
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -48,8 +49,83 @@ jobs:
         with:
           path: dist
 
+  # Job separato, non un passo dentro `build`: un fallimento del browser deve
+  # leggersi come tale nella lista dei check, senza annegare fra i test unitari.
+  # Non dipende da `build` di proposito — gira in parallelo, cosi' il costo sul
+  # ciclo di deploy e' la differenza fra i due job, non la loro somma.
+  e2e:
+    name: Test end-to-end
+    runs-on: ubuntu-latest
+    # Se il webServer non si alza, il job muore in fretta invece di occupare
+    # il runner fino al timeout di default.
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      # La chiave della cache e' legata alla versione di Playwright **risolta**
+      # (quella che `npm ci` ha appena installato), non a una stringa fissa: un
+      # bump di @playwright/test cambia la chiave, la cache non fa centro e il
+      # browser viene riscaricato. Con una chiave fissa si continuerebbe a girare
+      # su un Chromium vecchio, incompatibile con il runner appena installato,
+      # senza alcun segnale.
+      - name: Versione di Playwright
+        id: pw
+        run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Cache dei browser
+        id: pw-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ steps.pw.outputs.version }}
+          # Nessun restore-keys: una cache parziale rimetterebbe in gioco proprio
+          # il browser vecchio che la chiave versionata serve a escludere.
+
+      # Solo chromium, mai `npx playwright install` senza argomenti: firefox e
+      # webkit triplicherebbero download e spazio su disco per browser che
+      # nessun progetto di playwright.config.ts usa.
+      - name: Installa chromium e le sue dipendenze di sistema
+        if: steps.pw-cache.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps chromium
+
+      # La cache copre ~/.cache/ms-playwright, cioe' il **binario** del browser.
+      # Le librerie di sistema che `--with-deps` installa via apt finiscono in
+      # /usr/lib e NON sono nella cache: su cache hit vanno rimesse comunque,
+      # altrimenti il chromium ripristinato non parte per un .so mancante.
+      - name: Dipendenze di sistema (cache hit)
+        if: steps.pw-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
+
+      # `test:e2e` fa la build e poi lancia playwright: `vite preview` serve il
+      # dist reale, base path `/cent/` compreso (ADR 001).
+      - name: Playwright
+        run: npm run test:e2e
+
+      - name: Report del fallimento
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
+          if-no-files-found: ignore
+
   deploy:
-    needs: build
+    name: Deploy su Pages
+    # Gli e2e bloccano la pubblicazione: cio' che proteggono — l'avvio offline e
+    # i bersagli coperti da un overlay — si scopre altrimenti sul telefono, a
+    # rete assente. Un minuto in piu' per deploy e' il prezzo accettato.
+    needs: [build, e2e]
     runs-on: ubuntu-latest
     environment:
       name: github-pages

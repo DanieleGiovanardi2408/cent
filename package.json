@@ -10,13 +10,16 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "size": "node scripts/size.mjs",
-    "icons": "node scripts/generate-icons.mjs"
+    "icons": "node scripts/generate-icons.mjs",
+    "test:e2e": "npm run build && playwright test",
+    "test:offline": "npm run build && playwright test tests/e2e/offline.spec.ts"
   },
   "dependencies": {
     "idb": "^8.0.3",
     "preact": "^10.29.8"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.1",
     "@preact/preset-vite": "^2.10.6",
     "fake-indexeddb": "^6.2.5",
     "typescript": "^7.0.2",
