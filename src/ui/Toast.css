@@ -1,0 +1,73 @@
+/* Il toast: ultima riga della colonna dell'app, subito sopra la fascia del FAB.
+ * La mano e' gia' li' e "Annulla" va raggiunto senza spostarla.
+ *
+ * **Non e' `position: fixed`, e non e' un dettaglio.** Da fisso stava
+ * esattamente sopra il tastierino: a 757px di altezza il bottone "Annulla"
+ * cadeva dentro il tasto "9", centrato, e digitare 9 cancellava la spesa
+ * precedente. Da elemento in flusso il toast **accorcia** la lista invece di
+ * coprirla, e quando il foglio e' aperto gli finisce dietro invece che davanti.
+ * Il bug non e' stato corretto: e' stato reso irrappresentabile.
+ * Vedi "Sovrapposizioni" in CLAUDE.md. */
+
+.toast {
+  flex: none;
+  display: flex;
+  justify-content: center;
+  padding-inline: max(var(--sp-4), var(--safe-left)) max(var(--sp-4), var(--safe-right));
+  padding-block-start: var(--sp-2);
+}
+
+.toast:empty {
+  display: none;
+}
+
+.toast__box {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  inline-size: 100%;
+  max-inline-size: var(--app-max);
+  min-block-size: var(--tap-min);
+  padding-block: var(--sp-1);
+  padding-inline: var(--sp-4) var(--sp-2);
+  border-radius: var(--radius-3);
+  background-color: var(--surface);
+  box-shadow: var(--shadow-1);
+  border: 1px solid var(--line);
+  animation: toast-in var(--dur-1) var(--ease-out) both;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 12px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+.toast__text {
+  flex: 1;
+  min-inline-size: 0;
+  font-size: var(--fs-200);
+  line-height: var(--lh-snug);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.toast__action {
+  flex: none;
+  min-block-size: var(--tap-min);
+  padding-inline: var(--sp-3);
+  border-radius: var(--radius-2);
+  color: var(--brand);
+  font-size: var(--fs-200);
+  font-weight: var(--fw-semibold);
+}
+
+.toast__action:active {
+  background-color: var(--brand-soft);
+}

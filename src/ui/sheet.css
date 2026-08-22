@@ -1,0 +1,33 @@
+/* Le parti condivise dai due bottom sheet dell'app (inserimento e azioni su una
+ * spesa): il velo e le due animazioni d'entrata.
+ *
+ * Stanno in un file loro perche' erano identiche e duplicarle avrebbe fatto
+ * divergere due veli che devono essere lo stesso velo — stesso colore, stessa
+ * durata, stessa origine del movimento. Solo `transform` e `opacity`.
+ */
+
+.scrim {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-scrim);
+  background-color: var(--scrim);
+  animation: scrim-in var(--dur-2) var(--ease-out) both;
+}
+
+@keyframes scrim-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes sheet-in {
+  from {
+    transform: translate3d(0, 100%, 0);
+  }
+  to {
+    transform: translate3d(0, 0, 0);
+  }
+}

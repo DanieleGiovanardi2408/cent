@@ -1,22 +1,21 @@
 /* Avviso di aggiornamento.
  *
- * Posizione: in alto, fisso. Il basso dello schermo appartiene al FAB, al
- * bottom sheet e al tastierino (fase 2): coprirli per annunciare una versione
- * nuova costerebbe un tap sul flusso che vale piu' di tutto il resto.
- * Essendo `fixed` non entra nel flusso: appare senza spostare una riga (CLS 0).
+ * Stava in alto, fisso, e copriva la barra del titolo: a 375px "Esporta" e
+ * `.updater__action` occupavano lo stesso rettangolo, quindi toccare dove c'era
+ * scritto "Esporta" ricaricava l'app — e con delle scritture non riuscite in
+ * coda, un reload butta via record di cui il mirror e' l'unica copia.
+ *
+ * Ora e' contenuto in flusso, in fondo alla colonna: **sposta** la lista invece
+ * di coprirla (regola "Sovrapposizioni" in CLAUDE.md). Comparire accorcia il
+ * contenitore che scorre, quindi nessuna riga si muove: le righe restano dove
+ * sono e la lista si accorcia dal basso.
  */
 
 .updater {
-  position: fixed;
-  inset-block-start: 0;
-  inset-inline: 0;
-  z-index: var(--z-banner);
+  flex: none;
   background-color: var(--surface);
-  border-block-end: 1px solid var(--line);
-  box-shadow: var(--shadow-1);
-  /* Notch e Dynamic Island: il contenuto non ci finisce mai sotto. */
-  padding-block-start: max(var(--sp-2), var(--safe-top));
-  padding-block-end: var(--sp-2);
+  border-block-start: 1px solid var(--line);
+  padding-block: var(--sp-2);
   padding-inline-start: max(var(--sp-3), var(--safe-left));
   padding-inline-end: max(var(--sp-3), var(--safe-right));
   animation: updater-in var(--dur-1) var(--ease-out) both;
@@ -34,7 +33,7 @@
 @keyframes updater-in {
   from {
     opacity: 0;
-    transform: translate3d(0, -8px, 0);
+    transform: translate3d(0, 8px, 0);
   }
   to {
     opacity: 1;

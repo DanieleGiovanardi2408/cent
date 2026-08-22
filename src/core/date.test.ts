@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  MINUTES_PER_DAY,
   addDays,
   clampDayOfMonth,
   compareIsoDates,
@@ -14,6 +15,9 @@ import {
   isBefore,
   isIsoDate,
   isLeapYear,
+  isTimeMinutes,
+  localInstant,
+  minutesOfDay,
   startOfMonth,
   startOfWeek,
   toDateParts,
@@ -290,5 +294,63 @@ describe('confronti', () => {
     // Le date valide restano ordinate fra loro, nell'ordine giusto.
     const valide = sorted.filter(isIsoDate)
     expect(valide).toEqual(['2024-12-31', '2025-01-15', '2025-03-01'])
+  })
+})
+
+describe('orario del giorno: minuti dalla mezzanotte locale', () => {
+  it('converte l ora da parete in minuti, e butta secondi e millisecondi', () => {
+    expect(minutesOfDay(new Date(2026, 7, 22, 0, 0))).toBe(0)
+    expect(minutesOfDay(new Date(2026, 7, 22, 20, 40))).toBe(1240)
+    expect(minutesOfDay(new Date(2026, 7, 22, 23, 59))).toBe(1439)
+    expect(minutesOfDay(new Date(2026, 7, 22, 20, 40, 59, 999))).toBe(1240)
+  })
+
+  it('isTimeMinutes accetta solo un intero 0..1439', () => {
+    expect(isTimeMinutes(0)).toBe(true)
+    expect(isTimeMinutes(1240)).toBe(true)
+    expect(isTimeMinutes(MINUTES_PER_DAY - 1)).toBe(true)
+    for (const brutto of [MINUTES_PER_DAY, -1, 12.5, NaN, Infinity, '600', null, undefined, {}]) {
+      expect(isTimeMinutes(brutto)).toBe(false)
+    }
+  })
+
+  it('data e orario escono dallo stesso istante: a mezzanotte non si dividono', () => {
+    const unMsPrima = new Date(2026, 7, 22, 23, 59, 59, 999)
+    expect(localInstant(unMsPrima)).toEqual({ date: '2026-08-22', timeMinutes: 1439 })
+
+    const mezzanotte = new Date(2026, 7, 23, 0, 0, 0, 0)
+    expect(localInstant(mezzanotte)).toEqual({ date: '2026-08-23', timeMinutes: 0 })
+  })
+
+  it('il giorno del ritorno all ora solare vale l ora da parete, non quella UTC', () => {
+    // 25 ottobre 2026, in Europa le 02:30 esistono due volte: l'ora da parete e
+    // 02:30 in entrambi i casi, ed e' quella che finisce nel record.
+    expect(minutesOfDay(new Date(2026, 9, 25, 2, 30))).toBe(150)
+    expect(minutesOfDay(new Date(2026, 9, 25, 12, 0))).toBe(720)
+    // 29 marzo 2026, giornata di 23 ore: mezzogiorno resta mezzogiorno.
+    expect(minutesOfDay(new Date(2026, 2, 29, 12, 0))).toBe(720)
+  })
+
+  it('attraversa i due cambi d ora restando dentro 0..1439 e sempre sul proprio giorno', () => {
+    // Il fuso in cui gira il test non e' noto: si campionano 48 ore vere attorno
+    // a ogni transizione europea, cosi' qualunque sia l'offset locale la
+    // transizione ci cade dentro.
+    for (const inizio of ['2026-03-28T00:00:00Z', '2026-10-24T00:00:00Z']) {
+      const primo = new Date(inizio).getTime()
+      for (let ms = primo; ms <= primo + 48 * 3_600_000; ms += 5 * 60_000) {
+        const istante = new Date(ms)
+        const { date, timeMinutes } = localInstant(istante)
+        expect(timeMinutes).toBeGreaterThanOrEqual(0)
+        expect(timeMinutes).toBeLessThan(MINUTES_PER_DAY)
+        // Il giorno e' quello dell'orologio locale, e i minuti sono i suoi.
+        expect(date).toBe(today(istante))
+        expect(timeMinutes).toBe(istante.getHours() * 60 + istante.getMinutes())
+      }
+    }
+  })
+
+  it('rifiuta un istante non valido invece di produrre NaN', () => {
+    expect(() => minutesOfDay(new Date('non-una-data'))).toThrow(RangeError)
+    expect(() => localInstant(new Date('non-una-data'))).toThrow(RangeError)
   })
 })

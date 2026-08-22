@@ -15,7 +15,7 @@
  * definizione) e la fusione con i dati esistenti. L'import sostituisce tutto.
  */
 
-import { isIsoDate } from './date'
+import { isIsoDate, isTimeMinutes } from './date'
 import type { IsoDate } from './date'
 import { buildDefaultSettings } from './defaults'
 import { SCHEMA_VERSION, SchemaTooNewError, emptyRawDataSet, migrateRawData } from './schema'
@@ -119,6 +119,22 @@ function optionalIsoDate(value: unknown): IsoDate | undefined | false {
   return isoDate(value) ?? false
 }
 
+/**
+ * `timeMinutes`: assente e' la norma, sbagliato si butta.
+ *
+ * Un orario fuori scala o non intero non giustifica la perdita della spesa —
+ * l'importo, la data e la categoria sono intatti e sono cio' che conta — ma non
+ * si aggiusta nemmeno: arrotondare `1500` a `1439` vorrebbe dire inventare le
+ * 23:59, e il campo assente e' gia' il modo che il modello ha per dire "di
+ * questa spesa non sappiamo l'ora". Si scarta e si dice che si e' scartato.
+ */
+function optionalTimeMinutes(value: unknown, path: string, c: Collector): number | undefined {
+  if (value === undefined || value === null) return undefined
+  if (isTimeMinutes(value)) return value
+  c.warn(path, `orario non valido (${String(value)}): la spesa entra senza orario`)
+  return undefined
+}
+
 interface BaseFields {
   readonly id: string
   readonly createdAt: Timestamp
@@ -152,12 +168,14 @@ function parseExpense(raw: RawRecord, path: string, c: Collector): Expense | nul
   if (note === false || recurringId === false || deletedAt === false) {
     return c.error(path, 'campi opzionali di tipo sbagliato')
   }
+  const timeMinutes = optionalTimeMinutes(raw['timeMinutes'], `${path}.timeMinutes`, c)
   return {
     ...b,
     amountCents,
     categoryId,
     date,
     source,
+    ...(timeMinutes !== undefined ? { timeMinutes } : {}),
     ...(note !== undefined ? { note } : {}),
     ...(recurringId !== undefined ? { recurringId } : {}),
     ...(deletedAt !== undefined ? { deletedAt } : {}),

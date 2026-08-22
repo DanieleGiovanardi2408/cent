@@ -65,7 +65,7 @@
  * cosi' chi chiama puo' dire all'utente "esporta subito" invece di far finta.
  */
 
-import { isAfter, isIsoDate, today as todayFrom } from './date'
+import { isAfter, isIsoDate, localInstant } from './date'
 import type { IsoDate } from './date'
 import { buildDefaultCategories, buildDefaultSettings } from './defaults'
 import type { Cents } from './money'
@@ -98,14 +98,33 @@ import { newId as defaultNewId, nowTimestamp } from './types'
 export interface NewExpense {
   readonly amountCents: Cents
   readonly categoryId: string
-  /** Default: oggi. E' il caso normale, e non deve costare un tap. */
+  /**
+   * Default: oggi. E' il caso normale, e non deve costare un tap.
+   *
+   * Una data diversa da oggi e' una spesa retrodatata, e una spesa retrodatata
+   * non riceve `timeMinutes`: l'orologio sa che ore sono adesso, non che ore
+   * erano allora.
+   */
   readonly date?: IsoDate
   readonly note?: string
 }
 
+/*
+ * Nota su un campo che non c'e': `timeMinutes` in `NewExpense`.
+ *
+ * L'orario non e' un ingresso, e' un'osservazione: lo legge `addExpense`
+ * dall'orologio, e chi chiama non ha modo di dettarlo. Se fosse un parametro
+ * esisterebbe subito il modo di scrivere un orario che non e' mai accaduto —
+ * una schermata che "ricorda" l'ora di ieri, un import che la inventa — e da
+ * quel momento le fasce orarie della fase 6 non avrebbero piu' modo di sapere
+ * quali orari sono veri. I test lo controllano da `RepositoryOptions.nowInstant`,
+ * cioe' spostando l'orologio, che e' l'unica cosa che nella realta' lo sposta.
+ */
+
 export interface ExpensePatch {
   readonly amountCents?: Cents
   readonly categoryId?: string
+  /** Cambiare giorno fa cadere `timeMinutes`: vedi `updateExpense`. */
   readonly date?: IsoDate
   /** `null` cancella la nota. */
   readonly note?: string | null
@@ -156,6 +175,21 @@ export interface SettingsPatch {
 export interface RepositoryOptions {
   readonly now?: () => Timestamp
   readonly newId?: () => string
+  /**
+   * L'istante da cui si ricavano **la data civile e l'ora** di cio' che nasce
+   * adesso: la data di default di una spesa, il suo `timeMinutes`, e il giorno
+   * fino a cui materializzare le ricorrenze.
+   *
+   * E' separato da `now` perche' `now` produce un timestamp (una stringa), e da
+   * una stringa non si torna indietro a un giorno locale senza riparsarla. Qui
+   * serve l'istante intero, che si legge **una volta sola** per chiamata: e' la
+   * stessa disciplina di `today(now?)` in `date.ts`, ed e' l'unico modo perche'
+   * un test possa dire "sono le 20:40 del 22 agosto" senza toccare l'orologio
+   * globale.
+   *
+   * Default: l'orologio di sistema.
+   */
+  readonly nowInstant?: () => Date
   /**
    * Chiamata quando una scrittura fallisce dopo che il mirror e' gia' cambiato.
    * E' una notifica, non lo stato: lo stato e' `getState().writeFailures`.
@@ -402,6 +436,7 @@ export async function openRepository(
 ): Promise<Repository> {
   const clock = options.now ?? nowTimestamp
   const makeId = options.newId ?? defaultNewId
+  const readInstant = options.nowInstant ?? (() => new Date())
 
   const loaded = await persistence.loadAll()
   let settings = loaded.settings
@@ -683,7 +718,12 @@ export async function openRepository(
 
     addExpense(input) {
       assertCents(input.amountCents, 'amountCents')
-      const date = input.date ?? todayFrom()
+      // Una lettura sola dell'orologio: la data di default e l'orario vengono
+      // dallo stesso istante. Chiederli separatamente vorrebbe dire che a
+      // cavallo della mezzanotte la spesa puo' finire datata ieri con l'orario
+      // di oggi — un dato falso, plausibile e irriproducibile.
+      const instant = localInstant(readInstant())
+      const date = input.date ?? instant.date
       assertDate(date, 'date')
       const timestamp = clock()
       return commitExpense({
@@ -693,6 +733,11 @@ export async function openRepository(
         amountCents: input.amountCents,
         categoryId: input.categoryId,
         date,
+        // L'orario si scrive **solo** se la spesa sta nel giorno in cui la si
+        // sta inserendo. Su una spesa retrodatata l'orologio non sa niente
+        // dell'ora in cui e' stata fatta: l'unica cosa vera da scrivere e'
+        // niente. Vedi `Expense.timeMinutes`.
+        ...(date === instant.date ? { timeMinutes: instant.timeMinutes } : {}),
         source: 'manual',
         ...(input.note !== undefined ? { note: input.note } : {}),
       })
@@ -704,12 +749,19 @@ export async function openRepository(
       if (patch.amountCents !== undefined) assertCents(patch.amountCents, 'amountCents')
       if (patch.date !== undefined) assertDate(patch.date, 'date')
       const note = patch.note === undefined ? current.note : (patch.note ?? undefined)
-      const { note: _dropped, ...rest } = current
+      // `timeMinutes` sono i minuti **del giorno `date`**: spostare la spesa a
+      // un altro giorno lo rende un orario che nessuno ha osservato, quindi
+      // sparisce insieme al giorno a cui apparteneva. Restare sullo stesso
+      // giorno (correggere l'importo, la categoria, la nota) non lo tocca.
+      const keepsDay = patch.date === undefined || patch.date === current.date
+      const timeMinutes = keepsDay ? current.timeMinutes : undefined
+      const { note: _dropped, timeMinutes: _time, ...rest } = current
       return commitExpense({
         ...rest,
         ...(patch.amountCents !== undefined ? { amountCents: patch.amountCents } : {}),
         ...(patch.categoryId !== undefined ? { categoryId: patch.categoryId } : {}),
         ...(patch.date !== undefined ? { date: patch.date } : {}),
+        ...(timeMinutes !== undefined ? { timeMinutes } : {}),
         ...(note !== undefined ? { note } : {}),
         updatedAt: clock(),
       })
@@ -857,7 +909,7 @@ export async function openRepository(
     },
 
     materializeRecurring(day) {
-      const target = day ?? todayFrom()
+      const target = day ?? localInstant(readInstant()).date
       // Ottimizzazione, non correttezza: due chiamate per lo stesso giorno si
       // dividono lo stesso lavoro invece di rifarlo. Se questa memoizzazione
       // venisse tolta domani l'app resterebbe corretta — l'identita'

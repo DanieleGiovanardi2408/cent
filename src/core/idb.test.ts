@@ -17,7 +17,15 @@ import type { MigrationStep } from './schema'
 import { openRepository } from './repository'
 import type { Persistence, WriteBatch } from './persistence'
 import { recurringExpenseId } from './recurrence'
-import { makeExpense, makeRule, makeSettings, sequentialIds, tickingClock } from './testing'
+import {
+  makeBudget,
+  makeCategory,
+  makeExpense,
+  makeRule,
+  makeSettings,
+  sequentialIds,
+  tickingClock,
+} from './testing'
 import type { Expense } from './types'
 import type { RecurringMarkerAdvance } from './persistence'
 
@@ -566,21 +574,27 @@ describe('morte a meta su un database vero', () => {
 })
 
 describe('migrazioni di schema', () => {
-  /** Un passo alla versione 2 che tocca i record: e' il ramo `transform`. */
-  const toV2: MigrationStep = {
-    to: 2,
+  /**
+   * Un passo finto **oltre** la versione corrente. I passi finti servono ancora,
+   * anche adesso che una migrazione vera esiste: coprono i casi che nessun passo
+   * pubblicato ha — una trasformazione che riscrive tutte le spese, una che
+   * esplode a meta' — e continueranno a coprirli quando la versione corrente
+   * sara' la 5. Il passo vero ha i suoi test qui sotto, sui dati veri.
+   */
+  const toV3: MigrationStep = {
+    to: 3,
     summary: 'Prova: normalizza la nota delle spese',
     transform: (data) => ({
       ...data,
       expenses: data.expenses.map((e) => ({ ...e, note: 'migrata' })),
     }),
   }
-  const V2 = [...MIGRATIONS, toV2]
+  const V3 = [...MIGRATIONS, toV3]
 
   it('da N-1 a N: i record passano dalla trasformazione e non ne sparisce nessuno', async () => {
     const name = dbName()
-    const v1 = createIdbPersistence({ name })
-    await v1.write({
+    const corrente = createIdbPersistence({ name })
+    await corrente.write({
       settings: makeSettings(),
       expenses: [
         expense({ id: 'e-1', date: '2026-08-01', amountCents: 100 }),
@@ -600,10 +614,10 @@ describe('migrazioni di schema', () => {
         },
       ],
     })
-    v1.close()
+    corrente.close()
 
-    const v2 = createIdbPersistence({ name, version: 2, migrations: V2 })
-    const loaded = await v2.loadAll()
+    const v3 = createIdbPersistence({ name, version: 3, migrations: V3 })
+    const loaded = await v3.loadAll()
 
     expect(loaded.expenses).toHaveLength(3)
     expect(loaded.expenses.map((e) => e.amountCents).sort((a, b) => a - b)).toEqual([100, 200, 300])
@@ -611,31 +625,31 @@ describe('migrazioni di schema', () => {
     // Gli store che la trasformazione non tocca restano come sono.
     expect(loaded.categories).toHaveLength(1)
     expect(loaded.settings?.weekStartsOn).toBe(1)
-    v2.close()
+    v3.close()
   })
 
   it('una trasformazione che fallisce abortisce l upgrade invece di lasciare meta lavoro', async () => {
     const name = dbName()
-    const v1 = createIdbPersistence({ name })
-    await v1.write({
+    const corrente = createIdbPersistence({ name })
+    await corrente.write({
       settings: makeSettings(),
       expenses: [expense({ id: 'e-1', date: '2026-08-01', amountCents: 100 })],
     })
-    v1.close()
+    corrente.close()
 
     const esplosiva: MigrationStep = {
-      to: 2,
+      to: 3,
       summary: 'Prova: una migrazione che si rompe',
       transform: () => {
         throw new Error('migrazione rotta')
       },
     }
     await expect(
-      openCentDatabase({ name, version: 2, migrations: [...MIGRATIONS, esplosiva] }),
+      openCentDatabase({ name, version: 3, migrations: [...MIGRATIONS, esplosiva] }),
     ).rejects.toBeTruthy()
 
-    // Il database e' rimasto alla versione 1, con i suoi record intatti: meglio
-    // un'app che non si apre di un archivio migrato a meta'.
+    // Il database e' rimasto alla versione precedente, con i suoi record intatti:
+    // meglio un'app che non si apre di un archivio migrato a meta'.
     const riletto = createIdbPersistence({ name })
     const loaded = await riletto.loadAll()
     expect(loaded.expenses).toHaveLength(1)
@@ -645,13 +659,115 @@ describe('migrazioni di schema', () => {
 
   it('aprire dati piu nuovi dell app non li tocca: rifiuta e basta', async () => {
     const name = dbName()
-    const v2 = createIdbPersistence({ name, version: 2, migrations: V2 })
-    await v2.write({ settings: makeSettings(), expenses: [expense({ id: 'e-1', date: '2026-08-01' })] })
-    v2.close()
+    const v3 = createIdbPersistence({ name, version: 3, migrations: V3 })
+    await v3.write({ settings: makeSettings(), expenses: [expense({ id: 'e-1', date: '2026-08-01' })] })
+    v3.close()
 
     const vecchia = createIdbPersistence({ name })
     await expect(vecchia.loadAll()).rejects.toBeTruthy()
     vecchia.close()
+  })
+})
+
+/**
+ * La prima migrazione vera (1 -> 2, `Expense.timeMinutes`), sul percorso vero:
+ * un database scritto alla versione 1 che viene riaperto dall'app aggiornata.
+ *
+ * Il punto di questi test non e' che la trasformazione faccia qualcosa: e' che
+ * **non faccia niente alle spese**. Un campo nuovo e opzionale non ha nessun
+ * diritto di riscrivere un archivio, e "non ha riscritto" e' una cosa che si
+ * verifica solo guardando i record uno per uno.
+ */
+describe('migrazione 1 -> 2: il campo nuovo non tocca cio che c era', () => {
+  const V1 = MIGRATIONS.filter((s) => s.to <= 1)
+
+  /** Un database fermo alla versione 1, come quello di chi aggiorna l'app. */
+  async function scriviV1(name: string): Promise<void> {
+    const v1 = createIdbPersistence({ name, version: 1, migrations: V1 })
+    await v1.write({
+      settings: makeSettings({ schemaVersion: 1, lastBackupAt: '2026-08-01T09:00:00.000Z' }),
+      expenses: [
+        expense({ id: 'e-1', date: '2026-08-01', amountCents: 100, note: 'vecchia' }),
+        expense({ id: 'e-2', date: '2026-08-02', amountCents: 200 }),
+        expense({ id: 'e-3', date: '2026-08-03', amountCents: 300, deletedAt: '2026-08-03T10:00:00.000Z' }),
+      ],
+      categories: [makeCategory({ id: 'cat-1', name: 'Spesa' })],
+      recurringRules: [makeRule({ id: 'r-1', startDate: '2026-01-01', lastMaterializedDate: '2026-08-02' })],
+      budgets: [makeBudget({ id: 'b-1', amountCents: 100_000, effectiveFrom: '2026-01-01' })],
+    })
+    v1.close()
+  }
+
+  it('le spese gia scritte restano identiche e senza orario', async () => {
+    const name = dbName()
+    await scriviV1(name)
+
+    const aggiornata = createIdbPersistence({ name })
+    const loaded = await aggiornata.loadAll()
+
+    expect(loaded.expenses).toHaveLength(3)
+    expect(loaded.expenses.every((e) => e.timeMinutes === undefined)).toBe(true)
+    expect(loaded.expenses.every((e) => !('timeMinutes' in e))).toBe(true)
+    // Niente e' stato "aggiornato": stessi importi, stesse note, stessi timestamp.
+    expect(loaded.expenses.map((e) => [e.id, e.amountCents, e.updatedAt])).toEqual([
+      ['e-1', 100, '2020-01-01T00:00:00.000Z'],
+      ['e-2', 200, '2020-01-01T00:00:00.000Z'],
+      ['e-3', 300, '2020-01-01T00:00:00.000Z'],
+    ])
+    expect(loaded.expenses[0]?.note).toBe('vecchia')
+    expect(loaded.expenses[2]?.deletedAt).toBe('2026-08-03T10:00:00.000Z')
+    // E nemmeno gli altri store: categorie, regole e budget passano interi.
+    expect(loaded.categories).toHaveLength(1)
+    expect(loaded.recurringRules[0]?.lastMaterializedDate).toBe('2026-08-02')
+    expect(loaded.budgets[0]?.amountCents).toBe(100_000)
+    aggiornata.close()
+  })
+
+  it('le impostazioni smettono di dichiarare la versione 1, e il resto resta', async () => {
+    const name = dbName()
+    await scriviV1(name)
+
+    const aggiornata = createIdbPersistence({ name })
+    const loaded = await aggiornata.loadAll()
+    expect(loaded.settings?.schemaVersion).toBe(2)
+    expect(loaded.settings?.lastBackupAt).toBe('2026-08-01T09:00:00.000Z')
+    expect(loaded.settings?.theme).toBe('auto')
+    aggiornata.close()
+  })
+
+  it('e idempotente: riaprire una seconda volta non fa piu niente', async () => {
+    const name = dbName()
+    await scriviV1(name)
+
+    const prima = createIdbPersistence({ name })
+    const dopoUpgrade = await prima.loadAll()
+    prima.close()
+
+    const seconda = createIdbPersistence({ name })
+    const riletto = await seconda.loadAll()
+    expect(riletto).toEqual(dopoUpgrade)
+    seconda.close()
+  })
+
+  it('una spesa inserita dopo l aggiornamento ha l orario, quelle di prima no', async () => {
+    const name = dbName()
+    await scriviV1(name)
+
+    const persistence = createIdbPersistence({ name })
+    const repo = await openRepository(persistence, {
+      now: tickingClock(),
+      newId: sequentialIds('nuovo'),
+      nowInstant: () => new Date(2026, 7, 22, 20, 40),
+    })
+    repo.addExpense({ amountCents: 500, categoryId: 'cat-1' })
+    await repo.flush()
+
+    const loaded = await persistence.loadAll()
+    const nuova = loaded.expenses.find((e) => e.id === 'nuovo-1')
+    expect(nuova?.date).toBe('2026-08-22')
+    expect(nuova?.timeMinutes).toBe(20 * 60 + 40)
+    expect(loaded.expenses.filter((e) => e.timeMinutes !== undefined)).toHaveLength(1)
+    persistence.close()
   })
 })
 

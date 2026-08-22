@@ -19,7 +19,7 @@ import type { StoreName } from './types'
 export const DB_NAME = 'cent'
 
 /** Versione corrente. Si incrementa aggiungendo un passo a `MIGRATIONS`. */
-export const SCHEMA_VERSION = 1
+export const SCHEMA_VERSION = 2
 
 export const STORE_NAMES: readonly StoreName[] = [
   'expenses',
@@ -101,6 +101,32 @@ export const MIGRATIONS: readonly MigrationStep[] = [
     to: 1,
     summary: 'Schema iniziale: expenses, categories, recurringRules, budgets, settings',
     createStores: INITIAL_STORES,
+  },
+  {
+    to: 2,
+    summary: 'Expense.timeMinutes (opzionale); le impostazioni dichiarano la versione 2',
+    /**
+     * `timeMinutes` e' **opzionale**, quindi le spese gia' scritte non hanno
+     * niente da ricevere: una spesa inserita prima di questa versione non ha un
+     * orario, e l'unica cosa vera da scrivere sarebbe nessuna. Riempirle con uno
+     * zero (mezzanotte) o con l'ora di `createdAt` significherebbe fabbricare a
+     * tavolino un dato che nessuno ha mai osservato, e le statistiche per fascia
+     * oraria della fase 6 non avrebbero modo di distinguerlo da uno vero.
+     *
+     * Quello che invece va aggiornato e' il record delle impostazioni: porta
+     * scritto con quale versione dello schema questi dati sono stati scritti, e
+     * dopo l'upgrade continuerebbe a dire 1 per sempre — l'unico campo che
+     * mentirebbe. E' un record solo, il singleton.
+     *
+     * Le altre sezioni escono da qui **con lo stesso riferimento** con cui sono
+     * entrate: e' cosi' che `idb.ts` sa di non doverle riscrivere (vedi
+     * `applyTransforms`), ed e' la forma verificabile di "la migrazione non tocca
+     * i record esistenti".
+     */
+    transform: (data) => ({
+      ...data,
+      settings: data.settings.map((raw) => ({ ...raw, schemaVersion: 2 })),
+    }),
   },
 ]
 

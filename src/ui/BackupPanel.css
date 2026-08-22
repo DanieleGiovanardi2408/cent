@@ -1,0 +1,80 @@
+/* L'ultima strada del backup: il JSON a schermo. Copre tutto perche' quando si
+ * arriva qui l'unica cosa da fare e' mettere in salvo i dati. */
+
+.panel {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-panel);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding-block: max(var(--sp-3), var(--safe-top)) max(var(--sp-4), var(--safe-bottom));
+  padding-inline: max(var(--sp-4), var(--safe-left)) max(var(--sp-4), var(--safe-right));
+  background-color: var(--bg);
+}
+
+.panel__head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-block-size: var(--tap-min);
+}
+
+.panel__title {
+  flex: 1;
+  min-inline-size: 0;
+  font-family: var(--font-numeric);
+  font-size: var(--fs-200);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.panel__close {
+  flex: none;
+  display: grid;
+  place-items: center;
+  inline-size: var(--tap-min);
+  block-size: var(--tap-min);
+  border-radius: var(--radius-full);
+}
+
+.panel__close svg {
+  fill: none;
+  stroke: var(--text-muted);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.panel__lead {
+  font-size: var(--fs-200);
+  line-height: var(--lh-body);
+  color: var(--text-muted);
+}
+
+.panel__data {
+  flex: 1;
+  min-block-size: 0;
+  padding: var(--sp-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-2);
+  background-color: var(--surface);
+  color: var(--text);
+  font-family: var(--font-numeric);
+  line-height: var(--lh-snug);
+  resize: none;
+}
+
+.panel__copy {
+  min-block-size: var(--tap-min);
+  padding-inline: var(--sp-4);
+  border-radius: var(--radius-2);
+  background-color: var(--brand);
+  color: var(--on-brand);
+  font-size: var(--fs-300);
+  font-weight: var(--fw-semibold);
+}
+
+.panel__copy:active {
+  opacity: 0.9;
+}

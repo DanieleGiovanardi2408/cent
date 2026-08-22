@@ -5,9 +5,14 @@ import './UpdateBanner.css'
 type BannerState = 'hidden' | 'ready' | 'applying'
 
 /**
- * Avviso di aggiornamento. Sta in alto, ancorato allo schermo: il basso e'
- * riservato a FAB, bottom sheet e tastierino (fase 2) e questo avviso non deve
- * mai coprirli. E' `position: fixed`, quindi comparire non sposta nulla: CLS 0.
+ * Avviso di aggiornamento.
+ *
+ * Stava in alto, `position: fixed`, e copriva la barra del titolo: a 375px
+ * "Esporta" e il bottone che ricarica occupavano lo stesso rettangolo, quindi
+ * toccare dove c'era scritto "Esporta" ricaricava l'app — e con delle scritture
+ * non riuscite in coda un reload butta via record di cui il mirror e' l'unica
+ * copia. Ora e' contenuto in flusso in fondo alla colonna: **sposta** la lista
+ * invece di coprirla (regola "Sovrapposizioni" in CLAUDE.md).
  *
  * Chi non lo tocca resta sulla versione vecchia, e va bene (ADR 005).
  */

@@ -1,17 +1,44 @@
-/* Guscio dell'app: una colonna sola, alta quanto lo schermo utile,
- * con i margini di sicurezza del telefono gia' scontati. */
+/* Guscio dell'app: una colonna sola, alta quanto lo schermo utile.
+ *
+ * L'altezza e' fissa (`100dvh`) e **non e' la pagina a scorrere**: scorre solo
+ * la lista. E' quello che tiene la barra in alto e il FAB in basso sempre allo
+ * stesso posto, e che impedisce il rimbalzo elastico di iOS sotto al bottom
+ * sheet — se scorresse il documento, aprire il foglio sposterebbe la pagina
+ * dietro e chiuderlo la ritroverebbe altrove.
+ *
+ * ## Perche' avvisi e toast stanno qui dentro, in flusso
+ *
+ * La regola "Sovrapposizioni" (CLAUDE.md) dice che un overlay o sposta il
+ * contenuto o vive dove non c'e' niente di toccabile. Toast e avviso di
+ * aggiornamento facevano ne' l'uno ne' l'altro: erano `position: fixed` sopra
+ * il tastierino e sopra il bottone di export. Ora sono **figli in colonna**,
+ * dopo la lista: comparire accorcia la lista, non copre niente. La lista si
+ * accorcia dal basso e le righe non si spostano di un pixel.
+ *
+ * In fondo resta una sola fascia riservata, --fab-lane, dove vive il FAB e
+ * dove non entra nessun altro contenuto.
+ */
 
 .app {
   display: flex;
   flex-direction: column;
-  min-height: 100dvh; /* 100vh su iOS lascia il contenuto sotto la barra */
-  max-width: var(--app-max);
+  block-size: 100dvh; /* 100vh su iOS lascia il contenuto sotto la barra */
+  max-inline-size: var(--app-max);
   margin-inline: auto;
   /* Notch, Dynamic Island e barra gesti: mai contenuto sotto. */
-  padding-top: max(var(--sp-3), var(--safe-top));
-  padding-bottom: max(var(--sp-4), var(--safe-bottom));
-  padding-left: max(var(--sp-5), var(--safe-left));
-  padding-right: max(var(--sp-5), var(--safe-right));
+  padding-block-start: max(var(--sp-2), var(--safe-top));
+  /* La fascia del FAB: riservata sempre, anche quando la lista e' lunga. Cosi'
+   * nessuna riga finisce sotto al FAB — nemmeno mentre si scorre. */
+  padding-block-end: var(--fab-lane);
+}
+
+/* Il padding orizzontale sta sui figli, non qui: il contenitore che scorre
+ * deve poter arrivare fino al bordo, altrimenti l'ombra dello scroll si ferma
+ * a meta' schermo. */
+.app__bar,
+.alert,
+.list {
+  padding-inline: max(var(--sp-4), var(--safe-left)) max(var(--sp-4), var(--safe-right));
 }
 
 /* --- barra del titolo ---------------------------------------------------- */
@@ -20,13 +47,45 @@
   display: flex;
   align-items: center;
   gap: var(--sp-2);
-  min-height: var(--tap-min);
+  min-block-size: var(--tap-min);
 }
 
 .app__name {
+  flex: 1;
   font-size: var(--fs-400);
   font-weight: var(--fw-semibold);
   letter-spacing: var(--tracking-tight);
+}
+
+.app__action {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-block-size: var(--tap-min);
+  min-inline-size: var(--tap-min);
+  padding-inline: var(--sp-3);
+  margin-inline-end: calc(var(--sp-3) * -1); /* il bersaglio arriva al bordo */
+  border-radius: var(--radius-2);
+  color: var(--brand);
+  font-size: var(--fs-200);
+  font-weight: var(--fw-semibold);
+}
+
+.app__action svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Nessuna transizione sul premuto: il colore cambia nel frame del tap. */
+.app__action:active {
+  background-color: var(--brand-soft);
+}
+
+.app__action:disabled {
+  opacity: 0.4;
 }
 
 .mark__bg {
@@ -40,68 +99,113 @@
   stroke-linecap: round;
 }
 
+/* --- avviso: scritture non arrivate al disco ----------------------------- */
+/* Non e' un errore da rimuovere con un tap: finche' il contatore non torna a
+ * zero (solo un import lo azzera) il mirror e' l'unica copia di quei record.
+ * L'unica cosa vera da dire e' "esporta adesso". */
+
+.alert {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding-block: var(--sp-2);
+  color: var(--danger);
+}
+
+/* Contesto non sicuro (http://): non e' un dato in pericolo, e' una build che
+ * non e' quella vera. Permanente e senza bottoni — non c'e' niente da toccare,
+ * c'e' da saperlo mentre si misura. */
+.alert--env {
+  color: var(--text-muted);
+  border-block-end: 1px solid var(--line);
+}
+
+.alert__text {
+  flex: 1;
+  font-size: var(--fs-100);
+  line-height: var(--lh-snug);
+}
+
+.alert__action {
+  flex: none;
+  min-block-size: var(--tap-min);
+  padding-inline: var(--sp-3);
+  border: 1px solid currentColor;
+  border-radius: var(--radius-2);
+  color: var(--danger);
+  font-size: var(--fs-200);
+  font-weight: var(--fw-semibold);
+}
+
 /* --- contenuto ----------------------------------------------------------- */
 
 .app__main {
   flex: 1;
+  min-block-size: 0; /* senza, il figlio che scorre spinge fuori il layout */
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  align-items: flex-start;
-  gap: var(--sp-4);
-  padding-block: var(--sp-6);
 }
 
-.greeting {
-  font-size: var(--fs-display);
-  font-weight: var(--fw-bold);
-  line-height: var(--lh-tight);
-  letter-spacing: var(--tracking-tight);
-}
+/* --- il FAB: l'unico ingresso al flusso che vale piu' di tutto il resto --- */
+/* E' `fixed`, ma non copre niente: `.app` gli riserva --fab-lane in fondo alla
+ * colonna, e in quella fascia non arriva nessun altro contenuto. */
 
-.lead {
-  max-width: 24ch;
-  font-size: var(--fs-400);
-  line-height: var(--lh-snug);
-  color: var(--text-muted);
-}
-
-.facts {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--sp-2);
-}
-
-.fact {
-  padding: var(--sp-1) var(--sp-3);
+.fab {
+  position: fixed;
+  inset-block-end: max(var(--sp-4), var(--safe-bottom));
+  /* Sui monitor larghi resta agganciato alla colonna, non al bordo dello
+   * schermo: il pollice non attraversa mezza scrivania. */
+  inset-inline-end: max(
+    var(--sp-4),
+    var(--safe-right),
+    calc(50% - var(--app-max) / 2 + var(--sp-4))
+  );
+  z-index: var(--z-fab);
+  display: grid;
+  place-items: center;
+  inline-size: var(--fab-size);
+  block-size: var(--fab-size);
   border-radius: var(--radius-full);
-  background-color: var(--brand-soft);
-  color: var(--brand);
-  font-size: var(--fs-100);
-  font-weight: var(--fw-semibold);
+  background-color: var(--brand);
+  color: var(--on-brand);
+  box-shadow: var(--shadow-1);
+  transition: transform var(--dur-1) var(--ease-out);
 }
 
-/* --- piede --------------------------------------------------------------- */
-
-.app__foot {
-  padding-top: var(--sp-3);
-  border-top: 1px solid var(--line);
+.fab svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.4;
+  stroke-linecap: round;
 }
 
-.hint {
-  font-size: var(--fs-100);
-  line-height: var(--lh-body);
-  color: var(--text-muted);
+/* Solo transform: nessun reflow, e il dito vede il tasto cedere. */
+.fab:active {
+  transform: scale(0.93);
+}
+
+.fab:disabled {
+  opacity: 0.5;
+}
+
+/* --- utilita' ------------------------------------------------------------ */
+
+.visually-hidden {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 /* Il suggerimento giusto per come l'app e' stata aperta: in standalone
  * "Aggiungi a Home" non ha piu' senso. L'attributo lo scrive main.tsx. */
-.hint--install,
-.hint--standalone {
+.hint--install {
   display: none;
 }
 
-:root[data-display="browser"] .hint--install,
-:root[data-display="standalone"] .hint--standalone {
+:root[data-display="browser"] .hint--install {
   display: block;
 }

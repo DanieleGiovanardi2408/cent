@@ -55,6 +55,40 @@ Tutte le entita': `id` (crypto.randomUUID), `createdAt`, `updatedAt`.
   budget di oggi non deve riscrivere i totali dei periodi passati.
 - **Settings**: `weekStartsOn: 1`, `theme`, `lastBackupAt?`, `schemaVersion`.
 
+## Ordinamento delle categorie
+La griglia serve al momento del pagamento. Si ordina **per frequenza di tap, non
+per importo**: l'affitto e' la spesa piu' grande e dalla fase 5 sara' inserito da
+una ricorrenza, cioe' con zero tap. Non merita un posto in griglia.
+
+La griglia e' **stabile**: non si riordina mai in base all'ora, al giorno o
+all'uso recente. Dopo pochi giorni l'utente tocca per posizione senza leggere
+l'etichetta, e una griglia che si muove produce spese categorizzate male senza
+che se ne accorga. E' la stessa ragione per cui ADR 004 rifiuta la categoria
+preselezionata: un errore silenzioso e permanente e' peggio di un tap in piu'.
+
+Ordine dei default (4x2):
+
+    Spesa · Fuori · Coffeeshop · Sigarette
+    Trasporti · Svago · Casa · Extra
+
+Tutte e otto devono stare in griglia insieme al tastierino, senza scroll, sul
+viewport piu' piccolo supportato. Se non ci stanno si ripensa il layout: non si
+aggiunge uno scroll e non si nasconde niente dietro un "Altre" — sarebbero i due
+tap promessi che diventano tre in silenzio.
+
+## Colori delle categorie
+Gli otto colori sono **un sistema, non otto scelte separate**: diventeranno la
+palette dei grafici in fase 6. Requisiti: distinguibili fra loro anche con una
+carenza sul rosso-verde, contrasto AA sul testo del chip in entrambi i temi, e
+leggibili anche come aree adiacenti in un grafico, non solo come chip distanziati.
+
+## Chiavi di storage ritirate
+Le chiavi `localStorage` non piu' usate vanno rimosse a runtime, non
+dimenticate: vivono in un elenco esplicito in `src/app/legacy-cleanup`, che le
+cancella al primo avvio. Chi ritira una chiave la aggiunge a quell'elenco.
+Ritirata finora: `cent.storagePersisted.v1` (fase 0, sostituita da
+`navigator.storage.persisted()` come unica fonte di verita').
+
 ## Motore delle ricorrenze — la parte che si sbaglia sempre
 Le regole ricorrenti NON sono spese: generano spese reali in modo pigro,
 all'apertura dell'app (da `lastMaterializedDate` a oggi), con `source:'recurring'`.
@@ -110,6 +144,34 @@ Sequenza: **guscio -> apertura repository -> dati.**
 Ogni schermata ha uno stato "guscio senza dati" gia' definitivo per layout e
 dimensioni, cosi' l'arrivo dei dati non sposta nulla (CLS = 0).
 
+## Sovrapposizioni
+Nessun elemento in overlay puo' coprire un bersaglio interattivo. Un overlay o
+**sposta il contenuto** (e allora e' layout, non sovrapposizione), o vive in una
+**fascia riservata** dove non c'e' niente di toccabile.
+
+Non esistono eccezioni motivate dallo spazio: se non c'e' spazio, l'overlay e' la
+cosa da ripensare.
+
+Questa regola nasce da due bug identici trovati insieme: il toast con "Annulla"
+finiva sopra il tastierino — a 757px di altezza il bottone "Annulla" cadeva dentro
+il tasto "9", centrato, quindi digitare 9 cancellava la spesa precedente — e
+l'avviso di aggiornamento copriva l'unico bottone di export, dove toccare
+"Esporta" ricaricava l'app. Non erano due sviste: mancava la regola.
+
+**Il test che la sorveglia**: per ogni bersaglio interattivo, su piu' viewport e
+con gli overlay **attivi**, `elementFromPoint(centro del bersaglio)` deve
+restituire quel bersaglio o un suo discendente. La sonda che ha trovato i due bug
+e' quella, ed era stata eseguita una volta a mano.
+
+## Stato dell'interfaccia e sospensione
+Nessuno stato dell'interfaccia sopravvive a una sospensione senza essere
+riconciliato. I timer basati su `setTimeout` **si congelano in background**: al
+risveglio ogni durata va confrontata con l'orologio o azzerata — altrimenti il
+toast di ieri sera e' ancora li' stamattina, con "Annulla" agganciato a una spesa
+di dodici ore fa.
+
+E' lo stesso principio del mirror che e' una cache, applicato alla UI.
+
 ## Calcolo budget
 Metriche della dashboard: speso / budget / rimanente del periodo, giorni rimanenti,
 **disponibile al giorno = rimanente / giorni rimanenti** (il numero piu' utile),
@@ -128,6 +190,14 @@ calma, senza allarmi aggressivi.
 ## Backup
 Export JSON (reimportabile) e CSV. Import **con anteprima e conferma**, mai
 sovrascrittura silenziosa. Banner discreto se `lastBackupAt` > 14 giorni.
+
+**Un indicatore di sicurezza che puo' sbagliare deve sbagliare verso l'allarme.**
+Un banner che tace a torto e' peggio di uno che insiste a torto: il primo lascia
+senza copia chi crede di averla. Quindi `lastBackupAt` si scrive **solo** sugli
+esiti che l'app ha davvero osservato — una condivisione andata a buon fine, una
+copia negli appunti confermata — mai su un percorso il cui successo non e'
+verificabile, come `<a download>` che in PWA standalone puo' non fare nulla senza
+errore.
 Migrazioni di schema versionate, senza perdita di record.
 
 ## Trappole iOS / Safari PWA

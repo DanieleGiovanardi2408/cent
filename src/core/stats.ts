@@ -21,23 +21,20 @@ export function isLive(expense: Expense): boolean {
   return expense.deletedAt === undefined
 }
 
-/**
- * Le spese vive di un intervallo, dalla piu' recente alla piu' vecchia.
- * A parita' di giorno vince l'inserita per ultima: e' l'ordine in cui l'utente
- * si aspetta di rivedere quello che ha appena scritto.
+/*
+ * Nota su una funzione che non c'e' piu': `expensesInRange`.
+ *
+ * Filtrava le spese vive di un intervallo e le ordinava. Non l'ha mai chiamata
+ * nessuno, e il suo comparatore era identico carattere per carattere a quello di
+ * `groupByDay`: due copie della stessa decisione — l'ordine in cui l'utente
+ * rivede le proprie spese — nello stesso file, di cui una mai eseguita. La prima
+ * volta che una fosse cambiata, sarebbe cambiata solo una.
+ *
+ * Cancellata con i suoi test, stessa dottrina di `parseAmountToCents` in
+ * `money.ts`. Quando le Statistiche della fase 6 ne avranno bisogno si scrivera'
+ * insieme a chi la chiama: il filtro per intervallo esiste gia', vivo e
+ * verificato, dentro `spentByCategory` e `lastWeeksTotals`.
  */
-export function expensesInRange(
-  expenses: readonly Expense[],
-  range: PeriodRange,
-): readonly Expense[] {
-  return expenses
-    .filter(
-      (e) => isLive(e) && !isBefore(e.date, range.start) && !isAfter(e.date, range.end),
-    )
-    .sort(
-      (a, b) => compareIsoDates(b.date, a.date) || (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0),
-    )
-}
 
 export interface DayGroup {
   readonly date: IsoDate
@@ -48,6 +45,11 @@ export interface DayGroup {
 /**
  * Raggruppa per giorno, dal piu' recente. E' la forma esatta che serve allo
  * Storico: intestazione con la data, totale del giorno, righe sotto.
+ *
+ * A parita' di giorno vince l'inserita per ultima (`createdAt` decrescente): e'
+ * l'ordine in cui l'utente si aspetta di rivedere quello che ha appena scritto.
+ * Il comparatore sta scritto qui e solo qui — e' l'unico posto dell'app che
+ * decide quest'ordine, e finche' resta uno non ha bisogno di un nome proprio.
  *
  * Ordina una volta sola e poi scorre: su 5.000 spese e' un sort e una passata.
  */

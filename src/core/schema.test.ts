@@ -11,15 +11,16 @@ import {
 import type { MigrationStep, RawDataSet } from './schema'
 
 /**
- * Alla versione 1 non esiste ancora nessuna migrazione di dati da eseguire: e'
- * lo schema iniziale. Il requisito "da N-1 a N senza perdita di record" e' quindi
- * verificato sul **motore**, con passi finti che rappresentano un cambio di forma
- * vero (importo da stringa in euro a intero in centesimi).
+ * Due gruppi di test, e fanno due mestieri diversi.
  *
- * Non e' un trucco per far passare un test: e' esattamente il codice che eseguira'
- * la prima migrazione vera, chiamato dagli stessi due punti (apertura del
- * database e import di un backup vecchio). Quando arrivera' la versione 2, il suo
- * passo si aggiungera' a `MIGRATIONS` e avra' il suo test sui dati veri.
+ * 1. **Il motore**, con passi finti che rappresentano un cambio di forma vero
+ *    (importo da stringa in euro a intero in centesimi). Servono a coprire cio'
+ *    che i passi pubblicati non hanno ancora: la conversione di un campo, il
+ *    salto di due versioni. Restano utili anche quando la versione corrente sara'
+ *    la 5.
+ * 2. **Il passo vero alla versione 2** (`Expense.timeMinutes`), sui dati veri e
+ *    con `MIGRATIONS` di produzione. E' l'unico modo per verificare cio' che di
+ *    quel passo conta: che non tocchi niente di cio' che c'era.
  */
 const passoV2: MigrationStep = {
   to: 2,
@@ -129,5 +130,61 @@ describe('schema corrente', () => {
     const dati = emptyRawDataSet()
     dati.expenses = [{ id: 'e1' }]
     expect(migrateRawData(dati, SCHEMA_VERSION)).toEqual(dati)
+  })
+})
+
+describe('il passo vero alla versione 2', () => {
+  /** Dati scritti dalla versione 1, cioe' prima che `timeMinutes` esistesse. */
+  function datiVersione1(): RawDataSet {
+    const data = emptyRawDataSet()
+    data.expenses = [
+      { id: 'e1', date: '2026-08-01', amountCents: 1_250, categoryId: 'c1', source: 'manual' },
+      { id: 'e2', date: '2026-08-02', amountCents: 300, categoryId: 'c1', source: 'manual' },
+    ]
+    data.categories = [{ id: 'c1', name: 'Spesa', order: 10 }]
+    data.recurringRules = [{ id: 'r1', startDate: '2026-01-01' }]
+    data.budgets = [{ id: 'b1', amountCents: 100_000, effectiveFrom: '2026-01-01' }]
+    data.settings = [{ id: 'settings', weekStartsOn: 1, theme: 'auto', schemaVersion: 1 }]
+    return data
+  }
+
+  it('le spese escono esattamente come sono entrate: nessun orario inventato', () => {
+    const prima = datiVersione1()
+    const dopo = migrateRawData(prima, 1, 2)
+
+    expect(dopo.expenses).toEqual(prima.expenses)
+    expect(dopo.expenses.every((e) => !('timeMinutes' in e))).toBe(true)
+    // Piu' forte di `toEqual`: non e' stato riscritto nemmeno un record. E' il
+    // riferimento su cui `idb.ts` decide di non toccare lo store (applyTransforms).
+    expect(dopo.expenses).toBe(prima.expenses)
+    expect(dopo.categories).toBe(prima.categories)
+    expect(dopo.recurringRules).toBe(prima.recurringRules)
+    expect(dopo.budgets).toBe(prima.budgets)
+  })
+
+  it('aggiorna solo le impostazioni, e solo il numero di versione', () => {
+    const prima = datiVersione1()
+    const dopo = migrateRawData(prima, 1, 2)
+
+    expect(dopo.settings).toHaveLength(1)
+    expect(dopo.settings[0]).toEqual({
+      id: 'settings',
+      weekStartsOn: 1,
+      theme: 'auto',
+      schemaVersion: 2,
+    })
+    // L'insieme di partenza non e' stato mutato.
+    expect(prima.settings[0]?.['schemaVersion']).toBe(1)
+  })
+
+  it('un archivio senza impostazioni non diventa un errore', () => {
+    const vuoto = emptyRawDataSet()
+    expect(() => migrateRawData(vuoto, 1, 2)).not.toThrow()
+    expect(migrateRawData(vuoto, 1, 2).settings).toEqual([])
+  })
+
+  it('applicarlo due volte da lo stesso risultato', () => {
+    const unaVolta = migrateRawData(datiVersione1(), 1, 2)
+    expect(migrateRawData(unaVolta, 1, 2)).toEqual(unaVolta)
   })
 })

@@ -27,6 +27,23 @@ export interface Expense extends EntityBase {
   readonly amountCents: Cents
   readonly categoryId: string
   readonly date: IsoDate
+  /**
+   * Minuti dalla mezzanotte **locale** del giorno `date`: intero 0..1439.
+   *
+   * Stessa disciplina dei centesimi e delle date civili: un intero, nessun fuso,
+   * nessun `Date` che sopravviva al calcolo. 20:40 e' `1240`.
+   *
+   * **Opzionale, e la sua assenza e' un dato.** Viene impostato solo quando la
+   * spesa nasce nel giorno in cui viene inserita, cioe' quando l'orologio sa
+   * davvero che ora era: una spesa retrodatata (Ieri, o una data scelta a mano)
+   * non ha un orario, e inventarglielo sarebbe peggio che lasciarlo vuoto —
+   * le statistiche per fascia oraria della fase 6 lo tratterebbero come vero.
+   * Per la stessa ragione non ce l'hanno le spese generate da una ricorrenza.
+   *
+   * Non e' modificabile dalla UI: e' un'informazione che il telefono ha gia', e
+   * che non deve costare un tap a nessuno.
+   */
+  readonly timeMinutes?: number
   readonly note?: string
   readonly source: ExpenseSource
   /** Presente solo se `source === 'recurring'`: la regola che l'ha generata. */
@@ -127,9 +144,41 @@ export interface DataSet {
 
 export type StoreName = 'expenses' | 'categories' | 'recurringRules' | 'budgets' | 'settings'
 
-/** Genera un id. Estratto per poterlo rendere deterministico nei test. */
+/**
+ * UUID v4 costruito a mano da 16 byte casuali.
+ *
+ * Esiste perche' `crypto.randomUUID` e' `[SecureContext]`: su
+ * `http://192.168.1.x:5173` — cioe' `npm run dev -- --host`, il modo piu' corto
+ * per provare l'app su un iPhone vero — in Safari e' `undefined`. Senza questo
+ * fallback il primo avvio muore in `buildDefaultCategories` con un `TypeError` e
+ * l'app non parte proprio nel percorso in cui la si va a misurare.
+ *
+ * `crypto.getRandomValues` invece c'e' anche fuori da un contesto sicuro, ed e'
+ * la stessa sorgente di entropia che `randomUUID` userebbe. Restano da imporre a
+ * mano i due campi che l'RFC 4122 non lascia casuali: i 4 bit alti del byte 6
+ * sono la versione (`0100` = 4), i 2 bit alti del byte 8 sono la variante (`10`).
+ */
+function uuidV4(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(16))
+  let hex = ''
+  for (let i = 0; i < 16; i += 1) {
+    let byte = bytes[i] ?? 0
+    if (i === 6) byte = (byte & 0x0f) | 0x40
+    if (i === 8) byte = (byte & 0x3f) | 0x80
+    hex += byte.toString(16).padStart(2, '0')
+    if (i === 3 || i === 5 || i === 7 || i === 9) hex += '-'
+  }
+  return hex
+}
+
+/**
+ * Genera un id. Estratto per poterlo rendere deterministico nei test.
+ *
+ * `randomUUID` quando c'e' (e' l'implementazione del browser, non la nostra);
+ * `uuidV4` quando non c'e', cioe' fuori da un contesto sicuro.
+ */
 export function newId(): string {
-  return crypto.randomUUID()
+  return typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : uuidV4()
 }
 
 export function nowTimestamp(): Timestamp {

@@ -79,11 +79,20 @@ function applyStructure(
 /**
  * Applica le trasformazioni dei record dentro la transazione di upgrade.
  *
- * Nessun passo pubblicato ha oggi un `transform`: alla versione 1 c'e' solo la
- * creazione degli store. Il trasporto da e verso gli object store e' pero'
- * esercitato dai test, che iniettano dei passi finti (`migrations` in
- * `OpenOptions`) — un ramo che gira solo il giorno della prima migrazione vera
- * e' un ramo che quel giorno non funziona.
+ * Dalla versione 2 un passo pubblicato ha un `transform` (vedi `MIGRATIONS`),
+ * quindi questo percorso e' quello che gira davvero all'aggiornamento dell'app,
+ * non solo con i passi finti che i test iniettano (`migrations` in
+ * `OpenOptions`) — che restano, perche' servono a esercitare anche i casi che
+ * nessun passo vero ha ancora, tipo una trasformazione che esplode a meta'.
+ *
+ * **Si riscrive solo cio' che la trasformazione ha davvero cambiato.** Un passo
+ * e' una funzione pura che restituisce un `RawDataSet` nuovo, ma le sezioni che
+ * non ha toccato le restituisce con lo stesso riferimento (`{...data, settings:
+ * ...}`); qui quel riferimento vale come prova che non c'e' niente da scrivere.
+ * Senza questo controllo l'aggiornamento a una versione che cambia solo il
+ * singleton delle impostazioni riscriverebbe comunque 5.000 spese: tempo speso
+ * a rimettere sul disco byte identici, dentro la transazione di upgrade, cioe'
+ * davanti al primo avvio dopo l'aggiornamento.
  */
 async function applyTransforms(
   tx: UpgradeTx,
@@ -95,14 +104,16 @@ async function applyTransforms(
   if (withTransform.length === 0) return
 
   const existing = STORE_NAMES.filter((name) => tx.objectStoreNames.contains(name))
-  let data: RawDataSet = emptyRawDataSet()
+  const before: RawDataSet = emptyRawDataSet()
   for (const name of existing) {
-    data[name] = (await tx.objectStore(name).getAll()) as unknown as RawRecord[]
+    before[name] = (await tx.objectStore(name).getAll()) as unknown as RawRecord[]
   }
+  let data: RawDataSet = before
   for (const step of withTransform) {
     if (step.transform) data = step.transform(data)
   }
   for (const name of existing) {
+    if (data[name] === before[name]) continue
     const store = tx.objectStore(name)
     await store.clear()
     for (const record of data[name]) await store.put(record as never)

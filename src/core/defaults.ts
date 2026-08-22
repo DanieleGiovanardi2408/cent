@@ -18,16 +18,39 @@ export interface CategorySeed {
   readonly color: string
 }
 
-/** Otto, in ordine di frequenza d'uso attesa: i primi chip sono i piu' vicini. */
+/**
+ * Otto categorie, nell'ordine esatto in cui la griglia 4x2 le mostra.
+ *
+ * L'ordine e' **per frequenza di tap alla cassa, non per peso sul budget**: il
+ * secondo tap dell'inserimento e' un chip, quindi il posto migliore va a cio'
+ * che si tocca piu' spesso, non a cio' che costa di piu'. L'affitto e' la voce
+ * piu' grossa dell'anno e non e' qui: dalla fase 5 lo inserira' una ricorrenza,
+ * cioe' con zero tap, e un chip che non si tocca mai occuperebbe un posto in
+ * griglia togliendolo a uno che si tocca ogni giorno.
+ *
+ * I `color` qui sotto sono **definitivi**, e sono un sistema unico: non otto
+ * scelte separate. Sono stati ricavati per ricerca su OKLCH massimizzando il
+ * ΔE00 minimo fra tutte le 28 coppie, valutato anche sulle viste simulate per
+ * deuteranopia, protanopia e tritanopia — non a occhio. Dalla fase 6 sono la
+ * palette dei grafici, quindi devono restare distinguibili anche come aree
+ * adiacenti, non solo come chip distanziati.
+ *
+ * Il colore **non tinge mai il testo** del chip: nessun singolo esadecimale puo'
+ * stare in contrasto AA sia sul fondo chiaro sia su quello scuro. Il colore vive
+ * come superficie, l'etichetta usa `--text`. Chi cambia questi valori cambia
+ * anche i grafici della fase 6: non e' una scelta estetica locale.
+ */
 export const DEFAULT_CATEGORY_SEEDS: readonly CategorySeed[] = [
-  { name: 'Spesa', emoji: '🛒', color: '#4c9f70' },
-  { name: 'Ristorante', emoji: '🍝', color: '#e07a5f' },
-  { name: 'Caffe', emoji: '☕', color: '#8d6e63' },
-  { name: 'Trasporti', emoji: '🚇', color: '#3d84a8' },
-  { name: 'Casa', emoji: '🏠', color: '#7b6cd9' },
-  { name: 'Svago', emoji: '🎬', color: '#d4a017' },
-  { name: 'Salute', emoji: '💊', color: '#c05a7a' },
-  { name: 'Altro', emoji: '🔖', color: '#6b7280' },
+  // Riga 1
+  { name: 'Spesa', emoji: '🛒', color: '#81a369' },
+  { name: 'Fuori', emoji: '🍽️', color: '#f26b00' },
+  { name: 'Coffeeshop', emoji: '🌿', color: '#06b0a0' },
+  { name: 'Sigarette', emoji: '🚬', color: '#845e23' },
+  // Riga 2
+  { name: 'Trasporti', emoji: '🚇', color: '#3f5db6' },
+  { name: 'Svago', emoji: '🎬', color: '#b90e5c' },
+  { name: 'Casa', emoji: '🏠', color: '#bc85ec' },
+  { name: 'Extra', emoji: '🔖', color: '#676c75' },
 ]
 
 export function buildDefaultCategories(

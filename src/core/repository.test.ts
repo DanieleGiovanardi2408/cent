@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { parseBackup } from './backup'
 import { computeBudgetMetrics } from './budget'
-import { today } from './date'
+import { isTimeMinutes, today } from './date'
 import { DEFAULT_CATEGORY_SEEDS } from './defaults'
 import { createMemoryPersistence, SimulatedCrashError } from './memory-persistence'
 import type { MemoryDisk } from './memory-persistence'
@@ -145,6 +145,152 @@ describe('spese: scrittura ottimistica', () => {
     // Il mirror resta ottimista: e' la UI a decidere cosa dire, non il repository.
     expect(repo.getState().expenses).toHaveLength(1)
     expect(disk.expenses).toHaveLength(0)
+  })
+})
+
+describe("l orario dell inserimento", () => {
+  /** Un repository con l'orologio fermo su un istante deciso dal test. */
+  async function apriAlle(istante: Date, disk: MemoryDisk = emptyDisk()): Promise<Fixture> {
+    const repo = await openRepository(createMemoryPersistence(disk), {
+      now: tickingClock(),
+      newId: sequentialIds('id'),
+      nowInstant: () => istante,
+    })
+    return { repo, disk }
+  }
+
+  const alle2040 = (): Date => new Date(2026, 7, 22, 20, 40, 12, 345)
+
+  it('una spesa di oggi porta l ora in minuti dalla mezzanotte, senza chiederla', async () => {
+    const { repo, disk } = await apriAlle(alle2040())
+    const spesa = repo.addExpense({ amountCents: 1_250, categoryId: 'cat-1' })
+
+    expect(spesa.date).toBe('2026-08-22')
+    expect(spesa.timeMinutes).toBe(20 * 60 + 40)
+    expect(Number.isInteger(spesa.timeMinutes)).toBe(true)
+
+    // Ed e' un campo come gli altri: arriva al disco.
+    await repo.flush()
+    expect(disk.expenses[0]?.timeMinutes).toBe(1240)
+  })
+
+  it('vale anche quando la data di oggi e passata esplicitamente', async () => {
+    const { repo } = await apriAlle(alle2040())
+    const spesa = repo.addExpense({ amountCents: 100, categoryId: 'cat-1', date: '2026-08-22' })
+    expect(spesa.timeMinutes).toBe(1240)
+  })
+
+  it('una spesa retrodatata non ha orario, e il campo non c e proprio', async () => {
+    const { repo, disk } = await apriAlle(alle2040())
+    const ieri = repo.addExpense({ amountCents: 100, categoryId: 'cat-1', date: '2026-08-21' })
+    const altroGiorno = repo.addExpense({ amountCents: 100, categoryId: 'cat-1', date: '2026-01-03' })
+
+    expect(ieri.timeMinutes).toBeUndefined()
+    expect('timeMinutes' in ieri).toBe(false)
+    expect(altroGiorno.timeMinutes).toBeUndefined()
+
+    await repo.flush()
+    expect(disk.expenses.every((e) => e.timeMinutes === undefined)).toBe(true)
+  })
+
+  it('una data futura non riceve un orario inventato', async () => {
+    const { repo } = await apriAlle(alle2040())
+    const domani = repo.addExpense({ amountCents: 100, categoryId: 'cat-1', date: '2026-08-23' })
+    expect('timeMinutes' in domani).toBe(false)
+  })
+
+  it('legge l orologio una volta sola: a mezzanotte data e orario non si dividono', async () => {
+    // Il bug che questo test esclude: chiedere prima il giorno e poi l'ora sono
+    // due letture, e fra le due puo' passare la mezzanotte — spesa datata ieri
+    // con l'orario di oggi, cioe' `2026-08-22` alle 00:00.
+    const istanti = [
+      new Date(2026, 7, 22, 23, 59, 59, 999),
+      new Date(2026, 7, 23, 0, 0, 0, 0),
+    ]
+    let letture = 0
+    const repo = await openRepository(createMemoryPersistence(emptyDisk()), {
+      now: tickingClock(),
+      newId: sequentialIds('id'),
+      nowInstant: () => {
+        const istante = istanti[Math.min(letture, istanti.length - 1)] as Date
+        letture += 1
+        return istante
+      },
+    })
+
+    const spesa = repo.addExpense({ amountCents: 100, categoryId: 'cat-1' })
+    expect(letture).toBe(1)
+    expect(spesa.date).toBe('2026-08-22')
+    expect(spesa.timeMinutes).toBe(1439)
+  })
+
+  it('mezzanotte in punto e 0, non "assente"', async () => {
+    const { repo } = await apriAlle(new Date(2026, 7, 22, 0, 0, 0, 0))
+    const spesa = repo.addExpense({ amountCents: 100, categoryId: 'cat-1' })
+    expect(spesa.timeMinutes).toBe(0)
+    expect('timeMinutes' in spesa).toBe(true)
+  })
+
+  it('correggere importo, categoria o nota non tocca l orario', async () => {
+    const { repo } = await apriAlle(alle2040())
+    const spesa = repo.addExpense({ amountCents: 100, categoryId: 'cat-1' })
+
+    expect(repo.updateExpense(spesa.id, { amountCents: 250 })?.timeMinutes).toBe(1240)
+    expect(repo.updateExpense(spesa.id, { categoryId: 'cat-2' })?.timeMinutes).toBe(1240)
+    expect(repo.updateExpense(spesa.id, { note: 'poi' })?.timeMinutes).toBe(1240)
+    // Anche riscrivere la stessa data e' restare sullo stesso giorno.
+    expect(repo.updateExpense(spesa.id, { date: '2026-08-22' })?.timeMinutes).toBe(1240)
+  })
+
+  it('spostare la spesa a un altro giorno fa cadere l orario invece di portarselo dietro', async () => {
+    const { repo, disk } = await apriAlle(alle2040())
+    const spesa = repo.addExpense({ amountCents: 100, categoryId: 'cat-1' })
+    expect(spesa.timeMinutes).toBe(1240)
+
+    const spostata = repo.updateExpense(spesa.id, { date: '2026-08-20' })
+    expect(spostata?.date).toBe('2026-08-20')
+    expect(spostata?.timeMinutes).toBeUndefined()
+    expect(spostata && 'timeMinutes' in spostata).toBe(false)
+
+    // E non resuscita rimettendo la data di prima: quell'ora non e' mai stata
+    // osservata sul giorno 22 piu' di quanto lo sia sul 20.
+    const tornata = repo.updateExpense(spesa.id, { date: '2026-08-22' })
+    expect(tornata && 'timeMinutes' in tornata).toBe(false)
+
+    await repo.flush()
+    expect(disk.expenses[0]?.timeMinutes).toBeUndefined()
+  })
+
+  it('cancellare e ripristinare non perdono l orario', async () => {
+    const { repo } = await apriAlle(alle2040())
+    const spesa = repo.addExpense({ amountCents: 100, categoryId: 'cat-1' })
+    expect(repo.deleteExpense(spesa.id)?.timeMinutes).toBe(1240)
+    expect(repo.restoreExpense(spesa.id)?.timeMinutes).toBe(1240)
+  })
+
+  it('le spese generate da una ricorrenza non hanno orario: nessuno le ha inserite', async () => {
+    const { repo } = await apriAlle(alle2040())
+    repo.addRecurringRule({
+      amountCents: 900,
+      categoryId: 'cat-1',
+      cadence: 'daily',
+      interval: 1,
+      startDate: '2026-08-20',
+    })
+    await repo.materializeRecurring()
+
+    const generate = repo.getState().expenses.filter((e) => e.source === 'recurring')
+    expect(generate.length).toBeGreaterThan(0)
+    expect(generate.every((e) => !('timeMinutes' in e))).toBe(true)
+    // Anche quella di oggi: la regola l'avrebbe generata comunque, a qualunque ora.
+    expect(generate.some((e) => e.date === '2026-08-22')).toBe(true)
+  })
+
+  it('senza orologio iniettato la data di default resta quella di sistema', async () => {
+    const { repo } = await open()
+    const spesa = repo.addExpense({ amountCents: 100, categoryId: 'cat-1' })
+    expect(spesa.date).toBe(today())
+    expect(isTimeMinutes(spesa.timeMinutes)).toBe(true)
   })
 })
 

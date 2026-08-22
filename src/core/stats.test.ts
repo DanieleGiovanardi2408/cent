@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { expensesInRange, groupByDay, isLive, lastWeeksTotals, spentByCategory } from './stats'
+import { groupByDay, isLive, lastWeeksTotals, spentByCategory } from './stats'
 import { makeExpense } from './testing'
 import type { Expense } from './types'
 
@@ -54,14 +54,6 @@ describe('groupByDay (lo Storico)', () => {
     const groups = groupByDay(molte)
     expect(performance.now() - started).toBeLessThan(500)
     expect(groups.reduce((n, g) => n + g.expenses.length, 0)).toBe(5_000)
-  })
-})
-
-describe('expensesInRange', () => {
-  const spese = [ex('2026-07-31', 100), ex('2026-08-01', 200), ex('2026-08-31', 300), ex('2026-09-01', 400)]
-
-  it('include gli estremi ed esclude il resto', () => {
-    expect(expensesInRange(spese, agosto).map((e) => e.amountCents)).toEqual([300, 200])
   })
 })
 

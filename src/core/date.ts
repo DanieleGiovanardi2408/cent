@@ -141,6 +141,45 @@ export function today(now: Date = new Date()): IsoDate {
   return toIsoDate(now)
 }
 
+export const MINUTES_PER_DAY = 1440
+
+/** `true` solo per un intero 0..1439: la forma di `Expense.timeMinutes`. */
+export function isTimeMinutes(value: unknown): value is number {
+  return (
+    typeof value === 'number' &&
+    Number.isInteger(value) &&
+    value >= 0 &&
+    value < MINUTES_PER_DAY
+  )
+}
+
+/** Minuti dalla mezzanotte locale, 0..1439. Secondi e millisecondi si buttano. */
+export function minutesOfDay(now: Date = new Date()): number {
+  if (Number.isNaN(now.getTime())) throw new RangeError('Date non valida')
+  return now.getHours() * 60 + now.getMinutes()
+}
+
+/**
+ * Un istante letto **una volta sola**, spezzato nelle due sole cose che il
+ * dominio conosce: la data civile locale e i minuti dalla mezzanotte.
+ *
+ * Esiste per chiudere una gara di un minuto all'anno che sarebbe impossibile da
+ * riprodurre: chiedere prima `today()` e poi `minutesOfDay()` sono due letture
+ * dell'orologio, e fra le due puo' passare la mezzanotte — la spesa finirebbe
+ * datata ieri con l'orario di oggi (`0` o `1`), cioe' un dato falso e
+ * plausibile. Qui i due valori vengono dallo stesso oggetto `Date`, quindi non
+ * possono appartenere a giorni diversi. Il `Date` non esce da questa funzione.
+ */
+export interface LocalInstant {
+  readonly date: IsoDate
+  /** 0..1439. */
+  readonly timeMinutes: number
+}
+
+export function localInstant(now: Date = new Date()): LocalInstant {
+  return { date: toIsoDate(now), timeMinutes: minutesOfDay(now) }
+}
+
 /** Somma (o sottrae) giorni di calendario. Immune ai cambi di ora legale. */
 export function addDays(iso: IsoDate, days: number): IsoDate {
   if (!Number.isInteger(days)) throw new RangeError(`Giorni non intero: ${days}`)

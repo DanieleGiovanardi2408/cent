@@ -7,7 +7,8 @@
  * la soglia era 800". Se cambiare il numero riscrivesse il record, luglio
  * cambierebbe risposta a posteriori e lo storico direbbe una cosa diversa ogni
  * volta che lo si guarda. Quindi un record non si tocca mai: si **chiude** con
- * `effectiveTo` e se ne apre uno nuovo (`planBudgetChange`).
+ * `effectiveTo` e se ne apre uno nuovo. Chi decide quali record scrivere e'
+ * `planResolvedBudgetChange`, e gira **dentro la transazione** di scrittura.
  *
  * ## Quale record vale per un periodo
  *
@@ -79,8 +80,8 @@ function prevails(candidate: Budget, best: Budget): boolean {
  *
  * ## La risoluzione e' totale: mai un throw, mai una scelta arbitraria
  *
- * Le sovrapposizioni non dovrebbero esistere — `planBudgetChange` chiude il
- * record vecchio nella stessa transazione in cui apre il nuovo — ma possono
+ * Le sovrapposizioni non dovrebbero esistere — `planResolvedBudgetChange` chiude
+ * il record vecchio nella stessa transazione in cui apre il nuovo — ma possono
  * arrivare lo stesso: un JSON modificato a mano e reimportato, un bug futuro.
  * Di fronte a due record aperti sullo stesso `period` e la stessa categoria
  * questa funzione applica `prevails`, che e' un ordine totale: stesso dato,
@@ -290,12 +291,25 @@ export function planResolvedBudgetChange(
 }
 
 /**
- * `planResolvedBudgetChange` che si genera da sola istante e id.
+ * `planResolvedBudgetChange` con istante e id generati da qui invece che ricevuti.
  *
- * E' la forma comoda, quella con cui si ragiona e si testa la logica: `now` e
- * `newId` esistono perche' un test possa fissarli. Il percorso di scrittura vero
- * non passa di qui — risolve istante e id una volta sola e manda la richiesta al
- * disco, dove la pianificazione viene rifatta sui budget che ci sono davvero.
+ * **Non e' una seconda copia della pianificazione**: non decide niente, risolve
+ * `now` e `newId` e delega. La logica esiste in un posto solo, ed e' quella che
+ * gira dentro la transazione — `idb.ts` e `memory-persistence.ts` chiamano
+ * `planResolvedBudgetChange` sui budget riletti dal disco.
+ *
+ * Oggi in produzione non la chiama nessuno: `Repository.setBudget` risolve
+ * istante e id da se' (gli servono comunque, per il piano ottimistico del
+ * mirror e per rendere ripetibile il ritentativo) e chiama direttamente la
+ * funzione risolta. Resta esportata come forma comoda per ragionare sulla
+ * pianificazione a ingressi fissi, ed e' li' che la usano i test di `budget.ts`.
+ *
+ * **Chi ne trovasse un uso in produzione, si fermi**: pianificare su un elenco
+ * di budget letto dal mirror e poi scrivere il risultato e' esattamente il bug
+ * di ADR 008 — un contesto stantio non vede il record aperto dall'altro, non lo
+ * chiude, e restano due record sovrapposti che nessuna schermata mostra. Il
+ * risultato di questa funzione si guarda; quello che si scrive lo decide il
+ * disco.
  */
 export function planBudgetChange(
   budgets: readonly Budget[],

@@ -40,10 +40,12 @@ body {
   user-select: none;
 }
 
-/* Il testo che l'utente ha scritto lui resta selezionabile. */
+/* Il testo che l'utente ha scritto lui resta selezionabile.
+ * C'era anche `[data-selectable]`, per la nota dentro la riga dello Storico:
+ * ora la riga e' un bottone che apre le azioni, e una selezione li' litigherebbe
+ * col tap invece di aggiungere qualcosa. Nessuno usava piu' quell'aggancio. */
 input,
-textarea,
-[data-selectable] {
+textarea {
   -webkit-user-select: text;
   user-select: text;
 }

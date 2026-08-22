@@ -67,9 +67,32 @@
   --safe-right: env(safe-area-inset-right, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --safe-left: env(safe-area-inset-left, 0px);
-  /* Unico livello sovrapposto della fase 0: l'avviso di aggiornamento. Sta
-   * basso di proposito, cosi' bottom sheet e toast (fase 2) gli passano sopra. */
-  --z-banner: 10;
+  /* I livelli sovrapposti, dal piu' basso al piu' alto.
+   *
+   * Sono tre, e sono tutti **modali**: velo, foglio, pannello. Non esiste un
+   * livello per gli avvisi, e non e' una dimenticanza: toast e avviso di
+   * aggiornamento sono contenuto in flusso dentro `.app` (regola
+   * "Sovrapposizioni" in CLAUDE.md). Un livello per loro sarebbe l'invito a
+   * rimetterli sopra a qualcosa di toccabile.
+   *
+   * Il FAB e' `fixed` ma non e' un overlay: vive nella fascia riservata in
+   * fondo a `.app` (--fab-lane), dove non arriva nessun altro contenuto. */
+  --z-fab: 20;
+  --z-scrim: 30;
+  --z-sheet: 31;
+  --z-panel: 50;
+
+  /* --- misure del flusso di inserimento -------------------------------- */
+  /* Un tasto del tastierino: sopra il minimo tattile, perche' si preme al buio
+   * e sotto la pioggia. Il chip di categoria puo' stare piu' basso perche' e'
+   * largo il doppio. */
+  --key-min: 3.25rem; /* 52px */
+  --chip-min: 3.25rem;
+  --fab-size: 3.5rem;
+  /* La fascia riservata al FAB, in fondo allo schermo. Nessun contenuto ci
+   * entra: e' quello che rende il FAB un elemento di layout invece che un
+   * overlay sopra le righe della lista. */
+  --fab-lane: calc(max(var(--sp-4), var(--safe-bottom)) + var(--fab-size) + var(--sp-3));
 }
 
 /* --- tema chiaro (default, esplicito) ----------------------------------- */
@@ -88,7 +111,11 @@
   --on-brand: #ffffff; /*  6.5:1 su --brand */
   --danger: #b3261e; /*  6.0:1 su --bg */
   --focus: #0d6b4f;
+  /* Velo sotto il bottom sheet: abbastanza scuro da staccare il foglio, non
+   * tanto da nascondere che la lista dietro si e' gia' aggiornata. */
+  --scrim: rgb(18 24 31 / 0.42);
   --shadow-1: 0 1px 2px rgb(18 24 31 / 0.08), 0 4px 12px rgb(18 24 31 / 0.06);
+  --shadow-2: 0 -1px 3px rgb(18 24 31 / 0.06), 0 -8px 28px rgb(18 24 31 / 0.14);
 }
 
 /* --- tema scuro --------------------------------------------------------- */
@@ -112,7 +139,9 @@
     --on-brand: #06221a; /*  7.8:1 su --brand */
     --danger: #ff8a80; /*  8.1:1 su --bg */
     --focus: #35c795;
+    --scrim: rgb(0 0 0 / 0.62);
     --shadow-1: 0 1px 2px rgb(0 0 0 / 0.5), 0 4px 12px rgb(0 0 0 / 0.35);
+    --shadow-2: 0 -1px 3px rgb(0 0 0 / 0.5), 0 -8px 28px rgb(0 0 0 / 0.55);
   }
 }
 

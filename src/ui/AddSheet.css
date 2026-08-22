@@ -1,0 +1,390 @@
+/* Il bottom sheet dell'inserimento.
+ *
+ * ## La regola che comanda su tutto il resto
+ *
+ * **Le otto categorie e il tastierino devono stare insieme, senza scroll, sul
+ * viewport piu' piccolo che supportiamo (375x667).** Se il chip da toccare
+ * richiedesse uno scroll, i due tap diventerebbero scroll + tap e la promessa
+ * dell'app morirebbe in silenzio, senza che nessuna misura se ne accorga.
+ *
+ * Da qui discende tutto: le altezze sono ridotte al minimo tattile (44px per i
+ * chip di contorno, 52px per i tasti), la data e la nota condividono **una
+ * riga**, e la nota aperta prende il posto di quella riga invece di
+ * aggiungersene una.
+ *
+ * ## Ordine dall'alto: perche' il tastierino sta in fondo
+ *
+ * L'ultima cosa che si tocca deve stare piu' vicina al pollice della penultima:
+ * si digita, poi si sceglie. Le categorie stanno subito sopra i tasti, non in
+ * cima, cosi' il pollice fa un passo corto.
+ */
+
+/* Il velo e le due animazioni d'entrata stanno in sheet.css: sono condivisi con
+ * il foglio delle azioni sulla spesa. */
+
+.sheet {
+  position: fixed;
+  inset-block-end: 0;
+  inset-inline: 0;
+  z-index: var(--z-sheet);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  max-inline-size: var(--app-max);
+  margin-inline: auto;
+  /* Alto quanto serve, con un minimo che su un telefono grande fa crescere i
+   * tasti invece di lasciare mezzo schermo vuoto, e un tetto che su un telefono
+   * piccolo non sfonda mai il viewport. */
+  min-block-size: min(100dvh, 38rem);
+  max-block-size: 100dvh;
+  overflow: hidden;
+  padding-block: var(--sp-2) max(var(--sp-3), var(--safe-bottom));
+  padding-inline: max(var(--sp-3), var(--safe-left)) max(var(--sp-3), var(--safe-right));
+  border-start-start-radius: var(--radius-3);
+  border-start-end-radius: var(--radius-3);
+  background-color: var(--surface);
+  box-shadow: var(--shadow-2);
+  animation: sheet-in var(--dur-2) var(--ease-out) both;
+}
+
+/* Solo transform e opacity, 200 ms. Mentre esce non accetta piu' tap: il foglio
+ * resta nel DOM per la durata dell'animazione e un secondo chip toccato li'
+ * salverebbe una spesa in piu'. */
+.scrim[data-leaving],
+.sheet[data-leaving] {
+  pointer-events: none;
+  animation-direction: reverse;
+}
+
+/* --- il testo che dice cosa fare adesso ---------------------------------- */
+/* Qui c'era anche una X per chiudere. Tolta: era la terza via d'uscita (ci sono
+ * gia' il velo ed Escape), stava nell'unico angolo che il pollice non raggiunge
+ * e occupava 25px di altezza in un layout dove l'altezza e' la risorsa scarsa. */
+
+.sheet__hint {
+  min-inline-size: 0;
+  min-block-size: 1.25rem;
+  font-size: var(--fs-200);
+  font-weight: var(--fw-medium);
+  color: var(--text-muted);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* Il salvataggio non e' andato: il foglio resta aperto, l'importo resta
+ * digitato e il messaggio compare qui, dove l'occhio gia' guarda per sapere
+ * cosa fare. I chip restano vivi: "Riprova" dev'essere una cosa che si puo'
+ * fare davvero. */
+.sheet__hint[data-tone="error"] {
+  color: var(--danger);
+  font-weight: var(--fw-semibold);
+}
+
+/* --- l'importo ----------------------------------------------------------- */
+/* Allineato a destra perche' e' da destra che si riempie: l'ultima cifra
+ * digitata resta ferma sotto lo stesso punto dello schermo. */
+
+.amount {
+  font-variant-numeric: tabular-nums;
+  /* Al tetto (99.999,99 EUR) undici caratteri devono stare in 375px meno i
+   * margini: sotto quella larghezza il numero rimpicciolisce invece di essere
+   * tagliato. Sui telefoni normali resta 40px. */
+  font-size: min(var(--fs-600), 10vw);
+  font-weight: var(--fw-semibold);
+  line-height: var(--lh-tight);
+  letter-spacing: var(--tracking-tight);
+  text-align: end;
+  padding-inline-end: var(--sp-1);
+  padding-block: var(--sp-1);
+}
+
+/* Zero non e' un segnaposto: e' il valore vero prima che si digiti. Smorzato,
+ * non finto. */
+.amount[data-empty] {
+  color: var(--text-muted);
+}
+
+/* --- riga di data e nota ------------------------------------------------- */
+
+.meta {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.chip {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-1);
+  min-block-size: var(--tap-min);
+  padding-inline: var(--sp-3);
+  border-radius: var(--radius-full);
+  background-color: var(--surface-sunken);
+  color: var(--text);
+  font-size: var(--fs-200);
+  line-height: var(--lh-snug);
+}
+
+.chip:active {
+  background-color: var(--brand-soft);
+}
+
+.chip[aria-pressed="true"],
+.chip[data-on] {
+  background-color: var(--brand-soft);
+  color: var(--brand);
+  font-weight: var(--fw-semibold);
+}
+
+.chip svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+}
+
+/* Il chip della data e' un `label`: l'input trasparente lo copre tutto, cosi'
+ * il tap apre direttamente il selettore di sistema. */
+.chip--date {
+  position: relative;
+}
+
+.chip__input {
+  position: absolute;
+  inset: 0;
+  inline-size: 100%;
+  block-size: 100%;
+  opacity: 0;
+}
+
+.chip--note,
+.meta__note {
+  flex: 1;
+  min-inline-size: 0;
+  justify-content: flex-start;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  display: block;
+  line-height: var(--tap-min);
+  text-align: start;
+}
+
+.meta__note {
+  min-block-size: var(--tap-min);
+  padding-inline: var(--sp-3);
+  border-radius: var(--radius-full);
+  background-color: var(--surface-sunken);
+}
+
+.meta__note::placeholder {
+  color: var(--text-muted);
+}
+
+.chip--done {
+  background-color: var(--brand);
+  color: var(--on-brand);
+  font-weight: var(--fw-semibold);
+}
+
+/* --- le categorie: il secondo tap, quello che salva ---------------------- */
+
+.cats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--sp-2);
+}
+
+.cat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-1);
+  min-block-size: var(--chip-min);
+  padding: var(--sp-1) var(--sp-1);
+  border-radius: var(--radius-2);
+  background-color: var(--surface-sunken);
+  overflow: hidden;
+}
+
+/* Il colore della categoria e' un dato, non un token: arriva come `--cat` sul
+ * bordo del chip. Non tinge mai il testo — nessun colore fisso puo' avere
+ * contrasto AA sia su fondo chiaro sia su fondo scuro — quindi resta una
+ * superficie e l'etichetta resta `--text`. */
+.cat__emoji {
+  display: grid;
+  place-items: center;
+  inline-size: 1.625rem;
+  block-size: 1.625rem;
+  border-radius: var(--radius-full);
+  background-color: color-mix(in srgb, var(--cat) 40%, var(--surface));
+  font-size: 0.9375rem;
+  line-height: 1;
+}
+
+.cat__name {
+  max-inline-size: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: var(--fs-100);
+  line-height: var(--lh-snug);
+  letter-spacing: -0.01em;
+}
+
+.cat:active {
+  background-color: color-mix(in srgb, var(--cat) 22%, var(--surface-sunken));
+}
+
+/* Senza importo non c'e' niente da salvare: i chip lo dicono spegnendosi,
+ * invece di accettare un tap che produrrebbe una spesa da zero euro. */
+.cat:disabled {
+  opacity: 0.45;
+}
+
+/* --- il tastierino ------------------------------------------------------- */
+
+.pad {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-auto-rows: minmax(var(--key-min), 1fr);
+  gap: var(--sp-2);
+  min-block-size: 0;
+}
+
+.pad__key {
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-2);
+  background-color: var(--surface-sunken);
+  color: var(--text);
+  /* Sans, non il font degli importi: sui tasti servono cifre larghe e amichevoli,
+   * e lo zero tagliato del monospaziato su un tastierino sembra un terminale. */
+  font-size: var(--fs-500);
+  font-weight: var(--fw-medium);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Lo zero e' la cifra piu' battuta: due colonne. */
+.pad__key--zero {
+  grid-column: span 2;
+}
+
+/* Nessuna transizione: il tasto deve cambiare colore nel frame del tap, non
+ * entro 150 ms. */
+.pad__key:active {
+  background-color: var(--brand-soft);
+  color: var(--brand);
+}
+
+.pad__key:disabled {
+  opacity: 0.35;
+}
+
+.pad__key--erase svg {
+  fill: none;
+  stroke: var(--text);
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Schermi stretti: 320 punti non e' solo il vecchio SE, e' anche quello che si
+ * ottiene attivando lo Zoom schermo di iOS su un telefono normale. A quella
+ * larghezza il chip scende sotto i 70px e "Coffeeshop" verrebbe tagliato: il
+ * nome di una categoria non si abbrevia, si rimpicciolisce. */
+@media (max-width: 359px) {
+  .cat__name {
+    font-size: 0.6875rem; /* 11px */
+    letter-spacing: -0.02em;
+  }
+}
+
+/* Telefoni corti (SE con la barra di stato, oppure testo di sistema ingrandito):
+ * i tasti scendono al minimo tattile invece di spingere le categorie fuori. */
+@media (max-height: 660px) {
+  .sheet {
+    --key-min: var(--tap-min);
+    --chip-min: 3rem;
+    gap: var(--sp-1);
+  }
+}
+
+/* --- il telefono girato --------------------------------------------------- */
+/*
+ * In orizzontale la colonna non ci sta: a 800x327 il tastierino veniva alto
+ * 35px e le file da "4" in giu' — zero e cancellazione comprese — finivano
+ * fuori dal foglio, tagliate da `overflow: hidden` e senza scroll. A 800x288
+ * il tastierino aveva altezza zero. Il manifest dichiara `orientation:
+ * portrait`, ma **in Safari non installato il manifest non si applica**, ed e'
+ * esattamente la modalita' da cui parte ogni verifica manuale.
+ *
+ * La risposta non e' un cartello "ruota il telefono": costa un'app che si
+ * rifiuta di funzionare proprio quando ci si e' appoggiati al bancone. Sono due
+ * colonne — importo e tastierino a sinistra, contorno e categorie a destra —
+ * cioe' la stessa gerarchia della verticale ruotata di novanta gradi, con le
+ * otto categorie ancora tutte visibili e senza scroll.
+ *
+ * `orientation: landscape` e non solo `max-height`: una finestra bassa e
+ * stretta sul desktop resta una colonna, che li' e' la forma giusta.
+ */
+@media (max-height: 480px) and (orientation: landscape) {
+  .sheet {
+    /* I chip scendono al minimo tattile: e' l'altezza che manca, non la
+     * larghezza, e sotto i 44px non si va. */
+    --chip-min: var(--tap-min);
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto auto 1fr;
+    grid-template-areas:
+      "hint   meta"
+      "amount cats"
+      "pad    cats";
+    column-gap: var(--sp-3);
+    row-gap: var(--sp-1);
+    /* Girato, lo spazio che avanza e' orizzontale: il foglio se lo prende e
+     * lascia ai lati due strisce di velo da 48px per chiudere — che in
+     * orizzontale sono l'unica via d'uscita, visto che il foglio e' alto quanto
+     * lo schermo. */
+    max-inline-size: min(48rem, calc(100dvw - 6rem));
+    min-block-size: 100dvh;
+    padding-block: var(--sp-1) max(var(--sp-1), var(--safe-bottom));
+  }
+
+  .sheet__hint {
+    grid-area: hint;
+    align-self: center;
+  }
+
+  /* Mezza larghezza: qui `10vw` varrebbe 80px e "99.999,99 €" sfonderebbe la
+   * colonna. */
+  .amount {
+    grid-area: amount;
+    align-self: end;
+    padding-block: 0;
+    font-size: min(var(--fs-500), 6vw);
+  }
+
+  .meta {
+    grid-area: meta;
+  }
+
+  /* Quattro file da due invece di due file da quattro: le otto categorie
+   * restano tutte visibili e nessuna scende sotto il minimo tattile. */
+  .cats {
+    grid-area: cats;
+    grid-template-columns: repeat(2, 1fr);
+    grid-auto-rows: minmax(var(--chip-min), 1fr);
+    gap: var(--sp-1);
+  }
+
+  .pad {
+    grid-area: pad;
+    gap: var(--sp-1);
+  }
+}

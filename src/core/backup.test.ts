@@ -7,7 +7,13 @@ import type { DataSet } from './types'
 function dataset(): DataSet {
   return {
     expenses: [
-      makeExpense({ id: 'e1', date: '2026-08-01', amountCents: 1_250, note: 'Caffe e brioche' }),
+      makeExpense({
+        id: 'e1',
+        date: '2026-08-01',
+        amountCents: 1_250,
+        note: 'Caffe e brioche',
+        timeMinutes: 1_240,
+      }),
       makeExpense({
         id: 'e2',
         date: '2026-08-02',
@@ -61,6 +67,7 @@ describe('round-trip export -> import', () => {
     const preview = roundTrip(dataset())
     const data = preview.data
     expect(data?.expenses[0]?.note).toBe('Caffe e brioche')
+    expect(data?.expenses[0]?.timeMinutes).toBe(1_240)
     expect(data?.expenses[1]?.recurringId).toBe('r1')
     expect(data?.expenses[2]?.deletedAt).toBe('2026-08-03T10:00:00.000Z')
     expect(data?.recurringRules[0]?.anchorDay).toBe(31)
@@ -73,6 +80,8 @@ describe('round-trip export -> import', () => {
   it('i campi assenti restano assenti, non diventano undefined espliciti', () => {
     const preview = roundTrip(dataset())
     expect('note' in (preview.data?.expenses[1] ?? {})).toBe(false)
+    // La spesa senza orario resta senza: nessun `undefined` esplicito, nessuno zero.
+    expect('timeMinutes' in (preview.data?.expenses[1] ?? {})).toBe(false)
     expect('effectiveTo' in (preview.data?.budgets[1] ?? {})).toBe(false)
   })
 
@@ -205,5 +214,97 @@ describe('file rotti: si racconta il problema, non si esplode', () => {
     expect(preview.ok).toBe(true)
     expect(preview.counts.budgets).toBe(0)
     expect(preview.counts.expenses).toBe(3)
+  })
+})
+
+describe('orario: opzionale, validato, e se e sbagliato si butta', () => {
+  const valido = (): Record<string, unknown> =>
+    JSON.parse(JSON.stringify(buildBackup(dataset(), tickingClock()))) as Record<string, unknown>
+
+  function conOrario(value: unknown): ReturnType<typeof parseBackup> {
+    const file = valido()
+    const data = file['data'] as Record<string, unknown[]>
+    const prima = data['expenses']![0] as Record<string, unknown>
+    data['expenses'] = [{ ...prima, timeMinutes: value }, ...data['expenses']!.slice(1)]
+    return parseBackup(file)
+  }
+
+  it('accetta gli estremi validi', () => {
+    for (const buono of [0, 1_240, 1_439]) {
+      const preview = conOrario(buono)
+      expect(preview.data?.expenses[0]?.timeMinutes).toBe(buono)
+      expect(preview.issues).toEqual([])
+    }
+  })
+
+  it('un orario impossibile non fa perdere la spesa: entra senza orario, con un avviso', () => {
+    for (const brutto of [1_440, -1, 12.5, NaN, '1240', true, {}]) {
+      const preview = conOrario(brutto)
+      expect(preview.ok).toBe(true)
+      // La spesa c'e' tutta: importo, data, categoria, nota.
+      expect(preview.counts.expenses).toBe(3)
+      expect(preview.discarded).toBe(0)
+      expect(preview.data?.expenses[0]?.amountCents).toBe(1_250)
+      expect(preview.data?.expenses[0]?.note).toBe('Caffe e brioche')
+      // L'orario no, e non viene nemmeno "aggiustato" a 1439 o a 0.
+      expect('timeMinutes' in (preview.data?.expenses[0] ?? {})).toBe(false)
+      expect(
+        preview.issues.some(
+          (i) => i.severity === 'warning' && i.path === 'expenses[0].timeMinutes',
+        ),
+      ).toBe(true)
+    }
+  })
+
+  it('null e assente sono la stessa cosa, e non sono un problema', () => {
+    for (const vuoto of [null, undefined]) {
+      const preview = conOrario(vuoto)
+      expect(preview.issues).toEqual([])
+      expect('timeMinutes' in (preview.data?.expenses[0] ?? {})).toBe(false)
+    }
+  })
+
+  it('non lancia mai, nemmeno sugli orari piu ostili', () => {
+    for (const brutto of [Infinity, -0.5, Number.MAX_SAFE_INTEGER, [], 'ciao']) {
+      expect(() => conOrario(brutto)).not.toThrow()
+    }
+  })
+})
+
+describe('un backup della versione 1 entra nella versione corrente', () => {
+  /** Il file com'era prima che `timeMinutes` esistesse. */
+  function fileV1(): Record<string, unknown> {
+    return {
+      app: 'cent',
+      schemaVersion: 1,
+      exportedAt: '2026-08-01T09:00:00.000Z',
+      data: {
+        expenses: [
+          { id: 'e1', date: '2026-08-01', amountCents: 1_250, categoryId: 'cat-1', source: 'manual' },
+          { id: 'e2', date: '2026-08-02', amountCents: 900, categoryId: 'cat-1', source: 'manual' },
+        ],
+        categories: [
+          { id: 'cat-1', name: 'Spesa', emoji: '🛒', color: '#4c9f70', order: 10, archived: false },
+        ],
+        recurringRules: [],
+        budgets: [],
+        settings: { id: 'settings', weekStartsOn: 1, theme: 'auto', schemaVersion: 1 },
+      },
+    }
+  }
+
+  it('non perde nessun record e non inventa nessun orario', () => {
+    const preview = parseBackup(fileV1())
+    expect(preview.ok).toBe(true)
+    expect(preview.fromSchemaVersion).toBe(1)
+    expect(preview.discarded).toBe(0)
+    expect(preview.counts.expenses).toBe(2)
+    expect(preview.data?.expenses.every((e) => !('timeMinutes' in e))).toBe(true)
+    expect(preview.data?.expenses.map((e) => e.amountCents)).toEqual([1_250, 900])
+  })
+
+  it('i dati entrati dichiarano la versione corrente, non quella del file', () => {
+    const preview = parseBackup(fileV1())
+    expect(preview.data?.settings.schemaVersion).toBe(SCHEMA_VERSION)
   })
 })
