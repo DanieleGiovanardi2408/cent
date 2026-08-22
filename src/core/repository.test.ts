@@ -314,6 +314,113 @@ describe('budget dal repository', () => {
     })
     expect(luglio.budgetCents).toBe(100_000)
   })
+
+  it('il piano ottimistico e quello del disco coincidono quando nessuno ha scritto altrove', async () => {
+    const { repo, disk } = await open()
+    repo.setBudget({ period: 'monthly', amountCents: 100_000, effectiveFrom: '2026-01-01' })
+    await repo.flush()
+    const restituito = repo.setBudget({
+      period: 'monthly',
+      amountCents: 80_000,
+      effectiveFrom: '2026-08-22',
+    })
+    const mirrorPrimaDelDisco = repo.getState().budgets
+    await repo.flush()
+
+    // Il valore restituito serve al feedback immediato; a scrittura conclusa il
+    // mirror non si e' mosso di nuovo, perche' il disco ha deciso lo stesso.
+    expect(restituito).toHaveLength(2)
+    expect(repo.getState().budgets).toEqual(mirrorPrimaDelDisco)
+    expect(disk.budgets).toHaveLength(2)
+  })
+})
+
+/**
+ * La sovrapposizione di budget e' l'unico dato sporco di quest'app che l'utente
+ * non ha nessun modo di correggere: nessuna schermata mostra i record
+ * storicizzati, e la Home continua a mostrare un numero plausibile scelto fra i
+ * due. Per questo il piano non si fa piu' sul mirror.
+ */
+describe('budget: quali record chiudere lo decide il disco', () => {
+  it('un contesto con il mirror vecchio chiude comunque il budget aperto altrove', async () => {
+    const disk = emptyDisk()
+    const a = await open(disk, 'a')
+    // B apre e resta viva: da qui il suo mirror invecchia.
+    const b = await open(disk, 'b')
+
+    a.repo.setBudget({ period: 'monthly', amountCents: 100_000, effectiveFrom: '2026-08-01' })
+    await a.repo.flush()
+
+    // B quel record non l'ha mai visto. Pianificando dal proprio mirror apriva
+    // il secondo senza chiudere il primo: due record aperti sovrapposti, sul
+    // disco, per sempre.
+    b.repo.setBudget({ period: 'monthly', amountCents: 80_000, effectiveFrom: '2026-08-22' })
+    await b.repo.flush()
+
+    expect(disk.budgets).toHaveLength(2)
+    const aperti = disk.budgets.filter((x) => x.effectiveTo === undefined)
+    expect(aperti).toHaveLength(1)
+    expect(aperti[0]?.amountCents).toBe(80_000)
+    expect(disk.budgets.find((x) => x.amountCents === 100_000)?.effectiveTo).toBe('2026-08-21')
+
+    // E il mirror di B si allinea a cio' che la transazione ha scritto davvero:
+    // si ritrova anche il record che non sapeva di aver chiuso.
+    expect(b.repo.getState().budgets).toHaveLength(2)
+    expect(b.repo.getState().budgets.filter((x) => x.effectiveTo === undefined)).toHaveLength(1)
+  })
+
+  it('due contesti, lo stesso giorno: un record solo, e nessun fantasma nel mirror', async () => {
+    const disk = emptyDisk()
+    const a = await open(disk, 'a')
+    const b = await open(disk, 'b')
+
+    a.repo.setBudget({ period: 'monthly', amountCents: 100_000, effectiveFrom: '2026-08-22' })
+    await a.repo.flush()
+    b.repo.setBudget({ period: 'monthly', amountCents: 80_000, effectiveFrom: '2026-08-22' })
+    await b.repo.flush()
+
+    // Stesso `effectiveFrom`: il disco aggiorna sul posto invece di aprirne un
+    // altro, altrimenti resterebbero due record che valgono dallo stesso giorno.
+    expect(disk.budgets).toHaveLength(1)
+    expect(disk.budgets[0]?.amountCents).toBe(80_000)
+
+    // B aveva aperto un record in via ottimistica: il disco non l'ha aperto, e
+    // il mirror se ne libera invece di tenersi la sovrapposizione in casa.
+    const suB = b.repo.getState().budgets
+    expect(suB).toHaveLength(1)
+    expect(suB[0]?.id).toBe(disk.budgets[0]?.id)
+    expect(suB[0]?.amountCents).toBe(80_000)
+  })
+
+  it('due cambi di fila nello stesso contesto restano un record solo', async () => {
+    const { repo, disk } = await open()
+    repo.setBudget({ period: 'monthly', amountCents: 100_000, effectiveFrom: '2026-08-22' })
+    repo.setBudget({ period: 'monthly', amountCents: 90_000, effectiveFrom: '2026-08-22' })
+    await repo.flush()
+
+    expect(disk.budgets).toHaveLength(1)
+    expect(disk.budgets[0]?.amountCents).toBe(90_000)
+    expect(repo.getState().budgets).toHaveLength(1)
+    expect(repo.getState().budgets[0]?.amountCents).toBe(90_000)
+  })
+
+  it('se la scrittura non arriva al disco il mirror tiene il piano ottimistico', async () => {
+    const disk = emptyDisk()
+    const persistence = createMemoryPersistence(disk)
+    const repo = await openRepository(persistence, {
+      now: tickingClock(),
+      newId: sequentialIds('x'),
+    })
+    persistence.crashAfter(1)
+    repo.setBudget({ period: 'monthly', amountCents: 100_000, effectiveFrom: '2026-08-22' })
+    await expect(repo.flush()).rejects.toBeInstanceOf(SimulatedCrashError)
+
+    // Nessuna riconciliazione: il mirror e' l'unica copia di quel record, come
+    // per ogni altra scrittura persa, e lo stato lo dice.
+    expect(repo.getState().budgets).toHaveLength(1)
+    expect(repo.getState().writeFailures.count).toBe(1)
+    expect(disk.budgets).toHaveLength(0)
+  })
 })
 
 describe('ricorrenze dal repository', () => {

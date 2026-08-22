@@ -375,6 +375,80 @@ describe('due contesti sullo stesso database', () => {
   })
 })
 
+describe('il budget si pianifica dentro la transazione', () => {
+  /** Una richiesta di cambio budget, con istante e id gia' risolti. */
+  function cambio(effectiveFrom: string, amountCents: number, newRecordId: string): WriteBatch {
+    return {
+      budgetChange: {
+        period: 'monthly',
+        amountCents,
+        effectiveFrom,
+        timestamp: `${effectiveFrom}T09:00:00.000Z`,
+        newRecordId,
+      },
+    }
+  }
+
+  it('chiude il record che sta sul disco, anche se chi scrive non l ha mai visto', async () => {
+    const name = dbName()
+    const primo = createIdbPersistence({ name })
+    const apertura = await primo.write(cambio('2026-08-01', 100_000, 'b-1'))
+    expect(apertura.budgets.map((b) => b.id)).toEqual(['b-1'])
+
+    // Un secondo contesto che non ha mai letto il database: e' il mirror vecchio
+    // portato all'estremo. La pianificazione avviene qui dentro, sul disco.
+    const secondo = createIdbPersistence({ name })
+    const cambiato = await secondo.write(cambio('2026-08-22', 80_000, 'b-2'))
+    expect(cambiato.budgets.map((b) => b.id)).toEqual(['b-1', 'b-2'])
+    expect(cambiato.budgets[0]?.effectiveTo).toBe('2026-08-21')
+
+    const suDisco = await primo.loadAll()
+    expect(suDisco.budgets).toHaveLength(2)
+    expect(suDisco.budgets.filter((b) => b.effectiveTo === undefined)).toHaveLength(1)
+
+    primo.close()
+    secondo.close()
+  })
+
+  it('la stessa richiesta scritta due volte non apre due record', async () => {
+    // E' la rete del ritentativo: quando la connessione muore, `idb.ts` riapre e
+    // rifa' la stessa scrittura. L'id del record nuovo viaggia dentro la
+    // richiesta proprio per questo.
+    const name = dbName()
+    const persistence = createIdbPersistence({ name })
+    const richiesta = cambio('2026-08-22', 80_000, 'b-1')
+    await persistence.write(richiesta)
+    const seconda = await persistence.write(richiesta)
+
+    expect(seconda.budgets.map((b) => b.id)).toEqual(['b-1'])
+    const suDisco = await persistence.loadAll()
+    expect(suDisco.budgets).toHaveLength(1)
+    expect(suDisco.budgets[0]?.amountCents).toBe(80_000)
+    persistence.close()
+  })
+
+  it('i budget di categoria e quello complessivo non si chiudono a vicenda', async () => {
+    const name = dbName()
+    const persistence = createIdbPersistence({ name })
+    await persistence.write(cambio('2026-08-01', 100_000, 'b-generale'))
+    await persistence.write({
+      budgetChange: {
+        period: 'monthly',
+        amountCents: 20_000,
+        categoryId: 'cat-spesa',
+        effectiveFrom: '2026-08-10',
+        timestamp: '2026-08-10T09:00:00.000Z',
+        newRecordId: 'b-categoria',
+      },
+    })
+
+    const suDisco = await persistence.loadAll()
+    expect(suDisco.budgets).toHaveLength(2)
+    expect(suDisco.budgets.every((b) => b.effectiveTo === undefined)).toBe(true)
+    persistence.close()
+  })
+})
+
 describe('il segnaposto viaggia da solo', () => {
   it('avanza senza portarsi dietro la copia vecchia della regola', async () => {
     // Il contesto che materializza legge la regola dal proprio mirror. Se

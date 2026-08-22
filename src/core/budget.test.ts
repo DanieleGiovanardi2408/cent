@@ -7,6 +7,7 @@ import {
   totalSpent,
 } from './budget'
 import { daysBetween } from './date'
+import type { IsoDate } from './date'
 import { makeBudget, makeExpense, sequentialIds, tickingClock } from './testing'
 import type { Budget } from './types'
 
@@ -79,6 +80,131 @@ describe('resolveBudget', () => {
     expect(resolveBudget([...budgets, sovrapposto], 'monthly', '2026-08-10')?.id).toBe(
       'b-sovrapposto',
     )
+  })
+
+  /**
+   * Due record aperti sullo stesso `period` e la stessa categoria non
+   * dovrebbero esistere. Se esistono lo stesso — un JSON modificato a mano e
+   * reimportato, una scrittura morta a meta' — la risposta non puo' dipendere
+   * dall'ordine in cui l'array li presenta: la Home mostrerebbe due numeri
+   * diversi per lo stesso dato. Ogni caso qui sotto viene quindi provato in
+   * entrambi gli ordini.
+   */
+  describe('sovrapposizioni: la scelta e deterministica, mai arbitraria', () => {
+    function inEntrambiGliOrdini(uno: Budget, due: Budget, onDay: IsoDate): (Budget | null)[] {
+      return [
+        resolveBudget([uno, due], 'monthly', onDay, 'cat-casa'),
+        resolveBudget([due, uno], 'monthly', onDay, 'cat-casa'),
+      ]
+    }
+
+    it('due record aperti sovrapposti: vince l effectiveFrom piu recente', () => {
+      const vecchio = makeBudget({
+        id: 'b-vecchio-aperto',
+        categoryId: 'cat-casa',
+        amountCents: 100_000,
+        effectiveFrom: '2026-08-01',
+        // Creato dopo, apposta: non e' `createdAt` a decidere quando i giorni
+        // sono diversi, altrimenti un import riordinerebbe la storia.
+        createdAt: '2026-08-20T10:00:00.000Z',
+      })
+      const recente = makeBudget({
+        id: 'b-recente-aperto',
+        categoryId: 'cat-casa',
+        amountCents: 50_000,
+        effectiveFrom: '2026-08-05',
+        createdAt: '2026-08-02T10:00:00.000Z',
+      })
+      for (const scelto of inEntrambiGliOrdini(vecchio, recente, '2026-08-10')) {
+        expect(scelto?.id).toBe('b-recente-aperto')
+        expect(scelto?.amountCents).toBe(50_000)
+      }
+      // E prima del secondo record vale il primo: la sovrapposizione non
+      // cancella il passato, lo lascia dov e.
+      for (const scelto of inEntrambiGliOrdini(vecchio, recente, '2026-08-03')) {
+        expect(scelto?.id).toBe('b-vecchio-aperto')
+      }
+    })
+
+    it('a parita di effectiveFrom vince il creato per ultimo', () => {
+      const prima = makeBudget({
+        id: 'b-prima',
+        categoryId: 'cat-casa',
+        amountCents: 100_000,
+        effectiveFrom: '2026-08-01',
+        createdAt: '2026-08-01T09:00:00.000Z',
+      })
+      const dopo = makeBudget({
+        id: 'b-dopo',
+        categoryId: 'cat-casa',
+        amountCents: 70_000,
+        effectiveFrom: '2026-08-01',
+        createdAt: '2026-08-01T09:00:01.000Z',
+      })
+      for (const scelto of inEntrambiGliOrdini(prima, dopo, '2026-08-10')) {
+        expect(scelto?.id).toBe('b-dopo')
+        expect(scelto?.amountCents).toBe(70_000)
+      }
+    })
+
+    it('a parita anche di createdAt sceglie l id piu grande: sempre lo stesso, e non lancia', () => {
+      const alfa = makeBudget({
+        id: 'b-alfa',
+        categoryId: 'cat-casa',
+        amountCents: 100_000,
+        effectiveFrom: '2026-08-01',
+        createdAt: '2026-08-01T09:00:00.000Z',
+      })
+      const beta = makeBudget({
+        id: 'b-beta',
+        categoryId: 'cat-casa',
+        amountCents: 70_000,
+        effectiveFrom: '2026-08-01',
+        createdAt: '2026-08-01T09:00:00.000Z',
+      })
+      expect(() => resolveBudget([alfa, beta], 'monthly', '2026-08-10', 'cat-casa')).not.toThrow()
+      for (const scelto of inEntrambiGliOrdini(alfa, beta, '2026-08-10')) {
+        expect(scelto?.id).toBe('b-beta')
+      }
+    })
+
+    it('tre record sovrapposti: la stessa risposta per tutte le permutazioni', () => {
+      const record = [
+        makeBudget({
+          id: 'b-1',
+          categoryId: 'cat-casa',
+          amountCents: 100_000,
+          effectiveFrom: '2026-08-01',
+          createdAt: '2026-08-01T09:00:00.000Z',
+        }),
+        makeBudget({
+          id: 'b-2',
+          categoryId: 'cat-casa',
+          amountCents: 70_000,
+          effectiveFrom: '2026-08-03',
+          createdAt: '2026-08-03T09:00:00.000Z',
+        }),
+        makeBudget({
+          id: 'b-3',
+          categoryId: 'cat-casa',
+          amountCents: 40_000,
+          effectiveFrom: '2026-08-03',
+          createdAt: '2026-08-03T09:00:01.000Z',
+        }),
+      ] as const
+      const permutazioni: Budget[][] = [
+        [record[0], record[1], record[2]],
+        [record[0], record[2], record[1]],
+        [record[1], record[0], record[2]],
+        [record[1], record[2], record[0]],
+        [record[2], record[0], record[1]],
+        [record[2], record[1], record[0]],
+      ]
+      const scelti = permutazioni.map(
+        (p) => resolveBudget(p, 'monthly', '2026-08-10', 'cat-casa')?.id,
+      )
+      expect(new Set(scelti)).toEqual(new Set(['b-3']))
+    })
   })
 })
 

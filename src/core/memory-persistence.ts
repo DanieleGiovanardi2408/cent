@@ -23,6 +23,7 @@
  *   iOS. I dati sopravvissuti restano ispezionabili e riapribili.
  */
 
+import { planResolvedBudgetChange } from './budget'
 import { isAfter } from './date'
 import { NOTHING_SKIPPED } from './persistence'
 import type { LoadedData, Persistence, RecurringMarkerAdvance, WriteBatch, WriteResult } from './persistence'
@@ -131,6 +132,7 @@ export function createMemoryPersistence(disk: MemoryDisk = emptyDisk()): MemoryP
       // Applicazione "tutto o niente": si costruisce a parte e si sostituisce.
       const next = structuredClone(disk)
       const skippedIds: string[] = []
+      let budgetsWritten: readonly Budget[] = []
       if (batch.addExpenses) {
         // Semantica add, identica a quella di `idb.ts`: l'id gia' presente si
         // salta, non si sovrascrive. Qui non serve nessuna transazione perche'
@@ -151,6 +153,13 @@ export function createMemoryPersistence(disk: MemoryDisk = emptyDisk()): MemoryP
         advanceMarkers(next.recurringRules, batch.advanceRecurringMarkers)
       }
       if (batch.budgets) upsert(next.budgets, batch.budgets)
+      if (batch.budgetChange) {
+        // Pianificazione sui budget del "disco", come in `idb.ts`: il doppio
+        // deve sbagliare le stesse cose e indovinare le stesse, altrimenti i
+        // test verificano un'altra app.
+        budgetsWritten = planResolvedBudgetChange(next.budgets, batch.budgetChange)
+        upsert(next.budgets, budgetsWritten)
+      }
       if (batch.settings) next.settings = structuredClone(batch.settings)
       disk.expenses = next.expenses
       disk.categories = next.categories
@@ -158,7 +167,9 @@ export function createMemoryPersistence(disk: MemoryDisk = emptyDisk()): MemoryP
       disk.budgets = next.budgets
       disk.settings = next.settings
       writes += 1
-      return skippedIds.length === 0 ? NOTHING_SKIPPED : { skippedIds }
+      return skippedIds.length === 0 && budgetsWritten.length === 0
+        ? NOTHING_SKIPPED
+        : { skippedIds, budgets: budgetsWritten }
     },
     async replaceAll(data: DataSet): Promise<void> {
       guard()

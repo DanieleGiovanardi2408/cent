@@ -12,6 +12,7 @@
  * questo doppio.
  */
 
+import type { BudgetChangeRequest } from './budget'
 import type { IsoDate } from './date'
 import type { Budget, Category, DataSet, Expense, RecurringRule, Settings, Timestamp } from './types'
 
@@ -83,6 +84,32 @@ export interface WriteBatch {
    */
   readonly advanceRecurringMarkers?: readonly RecurringMarkerAdvance[]
   readonly budgets?: readonly Budget[]
+  /**
+   * Cambia un budget **pianificando dentro la transazione**.
+   *
+   * Non e' un elenco di record da scrivere: e' l'intenzione ("da oggi il mese
+   * vale 800"). Quali record ne seguano — chiudere quello aperto, aggiornarne
+   * uno esistente con lo stesso `effectiveFrom`, aprirne uno nuovo — lo decide
+   * l'implementazione rileggendo i budget dal disco e chiamando
+   * `planResolvedBudgetChange`, come per `advanceRecurringMarkers`.
+   *
+   * Perche' non basta pianificare fuori e mandare i record gia' pronti: chi
+   * pianifica legge i budget dal mirror, e un mirror puo' essere vecchio di ore.
+   * Se in quelle ore un altro contesto ha aperto un budget, il piano fatto sul
+   * mirror non lo vede e quindi non lo chiude: restano due record aperti
+   * sovrapposti. E' l'unico dato dell'app che l'utente non ha nessun modo di
+   * correggere dall'interfaccia — nessuna schermata mostra i record storicizzati
+   * — mentre la Home continua a mostrare un numero plausibile scelto fra i due.
+   *
+   * L'istante e l'id del record nuovo viaggiano dentro la richiesta e non
+   * vengono generati qui: cosi' un ritentativo della stessa scrittura (la
+   * connessione morta che `idb.ts` riapre) riusa lo stesso id invece di aprire
+   * un secondo record.
+   *
+   * I record effettivamente scritti tornano in `WriteResult.budgets`: sono
+   * l'unica versione autorevole, e chi tiene un mirror ci si allinea.
+   */
+  readonly budgetChange?: BudgetChangeRequest
   readonly settings?: Settings
 }
 
@@ -92,6 +119,11 @@ export interface WriteResult {
    * Vuoto quando il batch non usa la semantica add.
    */
   readonly skippedIds: readonly string[]
+  /**
+   * I record che `budgetChange` ha scritto, nella forma in cui sono finiti sul
+   * disco. Vuoto quando il batch non contiene un cambio di budget.
+   */
+  readonly budgets: readonly Budget[]
 }
 
 export interface Persistence {
@@ -113,4 +145,4 @@ export interface Persistence {
   close(): void
 }
 
-export const NOTHING_SKIPPED: WriteResult = { skippedIds: [] }
+export const NOTHING_SKIPPED: WriteResult = { skippedIds: [], budgets: [] }

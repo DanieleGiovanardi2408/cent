@@ -48,12 +48,48 @@ function coversDay(budget: Budget, day: IsoDate): boolean {
 }
 
 /**
+ * Vero se `candidate` deve prevalere su `best`. **Ordine totale**: due record
+ * distinti non sono mai a pari merito, quindi l'esito non dipende dall'ordine in
+ * cui l'array li presenta.
+ *
+ * 1. `effectiveFrom` piu' recente. E' la regola vera: l'ultima decisione
+ *    dell'utente vince sulle precedenti.
+ * 2. A parita' di giorno, `createdAt` piu' recente. Confronto lessicografico su
+ *    ISO 8601 in UTC (`nowTimestamp`), che per queste stringhe coincide con
+ *    l'ordine cronologico.
+ * 3. A parita' anche di quello, `id` piu' grande. Non ha nessun significato di
+ *    dominio: e' li' perche' due record scritti nello stesso millisecondo
+ *    esistono (un import generato a macchina, un orologio a bassa risoluzione) e
+ *    un pareggio residuo riporterebbe la scelta a dipendere dall'ordine
+ *    dell'array — cioe' la Home mostrerebbe due numeri diversi a seconda di come
+ *    IndexedDB ha restituito i record.
+ */
+function prevails(candidate: Budget, best: Budget): boolean {
+  if (candidate.effectiveFrom !== best.effectiveFrom) {
+    return isAfter(candidate.effectiveFrom, best.effectiveFrom)
+  }
+  if (candidate.createdAt !== best.createdAt) return candidate.createdAt > best.createdAt
+  return candidate.id > best.id
+}
+
+/**
  * Il record di budget in vigore il giorno `onDay`, o `null` se non ce n'e'.
  *
- * `categoryId` assente = budget complessivo. Se piu' record si sovrappongono
- * (import fatto male, orologio spostato) vince quello con `effectiveFrom` piu'
- * recente, a parita' il creato per ultimo: la sovrapposizione e' un dato sporco,
- * non una condizione da segnalare all'utente mentre guarda quanto puo' spendere.
+ * `categoryId` assente = budget complessivo.
+ *
+ * ## La risoluzione e' totale: mai un throw, mai una scelta arbitraria
+ *
+ * Le sovrapposizioni non dovrebbero esistere — `planBudgetChange` chiude il
+ * record vecchio nella stessa transazione in cui apre il nuovo — ma possono
+ * arrivare lo stesso: un JSON modificato a mano e reimportato, un bug futuro.
+ * Di fronte a due record aperti sullo stesso `period` e la stessa categoria
+ * questa funzione applica `prevails`, che e' un ordine totale: stesso dato,
+ * stessa risposta, sempre.
+ *
+ * Non lancia. Un comparatore che lancia rende inutilizzabile l'intera vista che
+ * lo usa: qui vorrebbe dire la Home bianca al posto di "quanto posso spendere",
+ * per un dato sporco che l'utente non ha modo di aver causato e non ha modo di
+ * correggere. E' la stessa dottrina di `compareIsoDates`.
  */
 export function resolveBudget(
   budgets: readonly Budget[],
@@ -66,13 +102,7 @@ export function resolveBudget(
     if (budget.period !== period) continue
     if (budget.categoryId !== categoryId) continue
     if (!coversDay(budget, onDay)) continue
-    if (
-      best === null ||
-      isAfter(budget.effectiveFrom, best.effectiveFrom) ||
-      (budget.effectiveFrom === best.effectiveFrom && budget.createdAt > best.createdAt)
-    ) {
-      best = budget
-    }
+    if (best === null || prevails(budget, best)) best = budget
   }
   return best
 }
@@ -191,6 +221,27 @@ export interface BudgetChange {
 }
 
 /**
+ * La stessa richiesta di `BudgetChange` con orologio e id **gia' risolti**.
+ *
+ * E' la forma che viaggia fino alla transazione di scrittura (vedi
+ * `WriteBatch.budgetChange`): la pianificazione va fatta sui budget che stanno
+ * sul disco in quel momento, ma l'istante della modifica e l'id del record nuovo
+ * restano decisi da chi ha premuto il tasto. Cosi' la pianificazione e' una
+ * funzione pura dei suoi ingressi, e rifare la stessa scrittura dopo una
+ * connessione caduta riusa lo stesso id invece di creare un secondo record.
+ */
+export interface BudgetChangeRequest {
+  readonly period: BudgetPeriod
+  readonly amountCents: Cents
+  readonly categoryId?: string
+  readonly effectiveFrom: IsoDate
+  /** L'istante della modifica: finisce in `updatedAt`, e in `createdAt` del nuovo. */
+  readonly timestamp: Timestamp
+  /** L'id del record da aprire. Usato solo se un record nuovo serve davvero. */
+  readonly newRecordId: string
+}
+
+/**
  * I record da scrivere per cambiare un budget senza riscrivere il passato.
  *
  * Restituisce sempre l'insieme completo dei record modificati o creati: chiude
@@ -200,14 +251,19 @@ export interface BudgetChange {
  * cambiato idea due volte nello stesso giorno) quello viene aggiornato sul posto.
  * Chiuderlo produrrebbe un record di durata negativa, cioe' spazzatura che non
  * vale per nessun giorno.
+ *
+ * **`budgets` deve essere lo stato su cui la scrittura andra' davvero ad
+ * atterrare.** Pianificare su un mirror vecchio significa non vedere il record
+ * aperto da un altro contesto e quindi non chiuderlo: restano due record aperti
+ * sovrapposti, per sempre e senza che nessuna schermata li mostri. Per questo il
+ * repository non chiama questa funzione per decidere cosa scrivere: manda la
+ * richiesta al disco e la pianificazione avviene dentro la transazione.
  */
-export function planBudgetChange(
+export function planResolvedBudgetChange(
   budgets: readonly Budget[],
-  change: BudgetChange,
+  change: BudgetChangeRequest,
 ): readonly Budget[] {
-  const clock = change.now ?? nowTimestamp
-  const makeId = change.newId ?? defaultNewId
-  const timestamp = clock()
+  const timestamp = change.timestamp
   const sameKey = budgets.filter(
     (b) => b.period === change.period && b.categoryId === change.categoryId,
   )
@@ -222,7 +278,7 @@ export function planBudgetChange(
   const closed = toClose.map<Budget>((b) => ({ ...b, effectiveTo: previousDay, updatedAt: timestamp }))
 
   const created: Budget = {
-    id: makeId(),
+    id: change.newRecordId,
     createdAt: timestamp,
     updatedAt: timestamp,
     period: change.period,
@@ -231,4 +287,26 @@ export function planBudgetChange(
     ...(change.categoryId !== undefined ? { categoryId: change.categoryId } : {}),
   }
   return [...closed, created]
+}
+
+/**
+ * `planResolvedBudgetChange` che si genera da sola istante e id.
+ *
+ * E' la forma comoda, quella con cui si ragiona e si testa la logica: `now` e
+ * `newId` esistono perche' un test possa fissarli. Il percorso di scrittura vero
+ * non passa di qui — risolve istante e id una volta sola e manda la richiesta al
+ * disco, dove la pianificazione viene rifatta sui budget che ci sono davvero.
+ */
+export function planBudgetChange(
+  budgets: readonly Budget[],
+  change: BudgetChange,
+): readonly Budget[] {
+  return planResolvedBudgetChange(budgets, {
+    period: change.period,
+    amountCents: change.amountCents,
+    ...(change.categoryId !== undefined ? { categoryId: change.categoryId } : {}),
+    effectiveFrom: change.effectiveFrom,
+    timestamp: (change.now ?? nowTimestamp)(),
+    newRecordId: (change.newId ?? defaultNewId)(),
+  })
 }

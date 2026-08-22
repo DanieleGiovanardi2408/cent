@@ -47,6 +47,48 @@ Contesto: senza `navigator.storage.persist()` concesso, la policy WebKit cancell
 tutto lo storage scrivibile da script (IndexedDB, localStorage, registrazione del
 service worker) dopo 7 giorni di Safari senza interazione con quel sito.
 
+## Rischi noti: contesto stantio che scrive
+
+Due contesti sullo stesso database sono normali ma mai simultanei su iOS (quello
+in secondo piano e' congelato). La cura generale e' la **rilettura al risveglio**:
+[ADR 007](adr/007-rilettura-al-risveglio.md). Questi quattro punti sono coperti
+da quella, non da una difesa loro. Sono scritti qui perche' un rischio noto e non
+scritto e' un rischio che si avvera.
+
+Tutti e quattro sono **last-writer-wins su record che l'utente ha toccato
+consapevolmente**: il danno e' visibile e correggibile dalla UI. E' il criterio
+che li separa da `setBudget`, che ha avuto una correzione vera perche' li' il
+record sporco non era correggibile da nessuna schermata.
+
+1. **`updateExpense` / `deleteExpense` / `restoreExpense`** fanno `put` del record
+   intero costruito dalla copia nel mirror. Con un mirror vecchio, correggere
+   l'importo riscrive anche `date`, `note`, `categoryId` e l'assenza di
+   `deletedAt` con i valori di ore prima. Dopo la rilettura l'utente agisce su
+   quello che c'e' davvero; il residuo e' accettabile per un'app single-user.
+   L'alternativa sarebbe un patch per campo su ogni scrittura, cioe' un modello
+   di merge.
+2. **`updateRecurringRule`**: stesso profilo. La materializzazione non ci passa
+   piu' (usa `advanceRecurringMarkers`), ma una modifica utente da mirror vecchio si'.
+3. **`updateSettings`** riscrive il record intero: due contesti che toccano tema e
+   `lastBackupAt` si sovrascrivono. Danno minimo.
+4. **Primo avvio contemporaneo di due contesti** su database vuoto: entrambi
+   vedono `settings === null` e scrivono le categorie di default con id diversi,
+   quindi 16 categorie invece di 8.
+
+**Residuo che la rilettura non copre: due finestre desktop affiancate**, entrambe
+in primo piano davvero. Li' non c'e' nessun risveglio da agganciare, e il punto 4
+diventa raggiungibile. E' lo stesso confine tracciato da ADR 007 per rifiutare
+`BroadcastChannel`: non e' un caso d'uso di questa app — single-user, mobile-first,
+installata sul telefono — e se lo diventasse la risposta sarebbe `BroadcastChannel`,
+non un lock.
+
+## Decisioni rimandate a una fase precisa
+
+- **Se l'app debba aprirsi sul tastierino invece che sulla lista** — decisione di
+  **fase 4**. Oggi la domanda e' malposta: non esiste la Home, quindi manca meta'
+  del confronto. Si decide quando esistono entrambi i motivi per aprire l'app —
+  segnare una spesa, oppure vedere quanto resta — e non prima.
+
 ## Rimandato consapevolmente
 
 - **Agganciare la rilettura al risveglio agli eventi del documento** — fase 2.

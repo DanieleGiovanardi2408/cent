@@ -31,6 +31,7 @@ import { openDB } from 'idb'
 import type { DBSchema, IDBPDatabase, IDBPTransaction, StoreNames } from 'idb'
 import { DB_NAME, MIGRATIONS, SCHEMA_VERSION, STORE_NAMES, emptyRawDataSet, pendingMigrations } from './schema'
 import type { MigrationStep, RawDataSet, RawRecord } from './schema'
+import { planResolvedBudgetChange } from './budget'
 import { isAfter } from './date'
 import { NOTHING_SKIPPED } from './persistence'
 import type { LoadedData, Persistence, WriteBatch, WriteResult } from './persistence'
@@ -159,7 +160,7 @@ function storesOf(batch: WriteBatch): StoreName[] {
   if (batch.expenses || batch.addExpenses) names.push('expenses')
   if (batch.categories) names.push('categories')
   if (batch.recurringRules || batch.advanceRecurringMarkers) names.push('recurringRules')
-  if (batch.budgets) names.push('budgets')
+  if (batch.budgets || batch.budgetChange) names.push('budgets')
   if (batch.settings) names.push('settings')
   return names
 }
@@ -193,6 +194,7 @@ type WriteTx = IDBPTransaction<CentDB, StoreName[], 'readwrite'>
 /** Il corpo di una scrittura, dentro una transazione gia' aperta. */
 async function runBatch(tx: WriteTx, batch: WriteBatch): Promise<WriteResult> {
   const skippedIds: string[] = []
+  let budgetsWritten: readonly Budget[] = []
   const writes: Promise<unknown>[] = []
 
   /**
@@ -267,11 +269,24 @@ async function runBatch(tx: WriteTx, batch: WriteBatch): Promise<WriteResult> {
     const store = tx.objectStore('budgets')
     for (const record of batch.budgets) enqueue(store.put(record))
   }
+  if (batch.budgetChange) {
+    const store = tx.objectStore('budgets')
+    // Pianificazione **dentro** la transazione, sui budget che stanno sul disco
+    // adesso. Chi ha premuto il tasto ha deciso l'importo e il giorno, non quali
+    // record chiudere: quella decisione ha bisogno dello stato vero, e un mirror
+    // vecchio non vede il record aperto da un altro contesto — non lo chiude, e
+    // la sovrapposizione che ne resta non e' correggibile da nessuna schermata.
+    //
+    // IndexedDB serializza le readwrite sullo stesso store, quindi fra questo
+    // `getAll` e i `put` che ne seguono non si infila nessun altro contesto.
+    budgetsWritten = planResolvedBudgetChange(await store.getAll(), batch.budgetChange)
+    for (const record of budgetsWritten) enqueue(store.put(record))
+  }
   if (batch.settings) enqueue(tx.objectStore('settings').put(batch.settings))
 
   await Promise.all(writes)
   await tx.done
-  return { skippedIds }
+  return { skippedIds, budgets: budgetsWritten }
 }
 
 /**

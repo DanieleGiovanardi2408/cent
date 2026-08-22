@@ -77,8 +77,8 @@ import type {
 } from './persistence'
 import { materializeRecurring } from './recurrence'
 import type { MaterializeResult } from './recurrence'
-import { planBudgetChange } from './budget'
-import type { BudgetChange } from './budget'
+import { planResolvedBudgetChange } from './budget'
+import type { BudgetChange, BudgetChangeRequest } from './budget'
 import { buildBackup } from './backup'
 import type { BackupFile } from './backup'
 import { createObservable } from './store'
@@ -261,7 +261,22 @@ export interface Repository {
   addRecurringRule(input: NewRecurringRule): RecurringRule
   updateRecurringRule(id: string, patch: RecurringRulePatch): RecurringRule | null
 
-  /** Chiude il budget in vigore e ne apre uno nuovo. Vedi `budget.ts`. */
+  /**
+   * Chiude il budget in vigore e ne apre uno nuovo. Vedi `budget.ts`.
+   *
+   * **Quali record scrivere lo decide il disco, non il mirror.** Qui parte
+   * l'intenzione ("da questo giorno l'importo e' questo"); la pianificazione
+   * vera avviene dentro la transazione, sui budget che ci sono in quel momento
+   * (`WriteBatch.budgetChange`). Un mirror vecchio che pianificasse da solo non
+   * vedrebbe il budget aperto da un altro contesto e non lo chiuderebbe: due
+   * record aperti sovrapposti restano li' per sempre, nessuna schermata li
+   * mostra e la Home continua a dare un numero plausibile.
+   *
+   * Il valore restituito e' il piano **ottimistico**, quello con cui il mirror
+   * si muove subito. Se il disco decide diversamente, il mirror si allinea a
+   * scrittura conclusa: cio' che questa funzione restituisce serve al feedback
+   * immediato, non a essere memorizzato come verita'.
+   */
   setBudget(change: Omit<BudgetChange, 'now' | 'newId'>): readonly Budget[]
 
   updateSettings(patch: SettingsPatch): Settings
@@ -357,6 +372,20 @@ function assertCents(value: Cents, field: string): void {
 
 function assertDate(value: IsoDate, field: string): void {
   if (!isIsoDate(value)) throw new RangeError(`${field}: data non valida "${value}"`)
+}
+
+/** Due record di budget con lo stesso contenuto. Serve a non notificare a vuoto. */
+function sameBudget(a: Budget, b: Budget): boolean {
+  return (
+    a.id === b.id &&
+    a.period === b.period &&
+    a.amountCents === b.amountCents &&
+    a.categoryId === b.categoryId &&
+    a.effectiveFrom === b.effectiveFrom &&
+    a.effectiveTo === b.effectiveTo &&
+    a.createdAt === b.createdAt &&
+    a.updatedAt === b.updatedAt
+  )
 }
 
 function replace<T extends { readonly id: string }>(list: readonly T[], record: T): T[] {
@@ -602,6 +631,43 @@ export async function openRepository(
     })
   }
 
+  /**
+   * Allinea il mirror ai record che la transazione ha davvero scritto.
+   *
+   * Il piano ottimistico e' fatto sui budget del mirror; quello che conta e'
+   * quello fatto sul disco. Quando i due coincidono — il caso normale — qui non
+   * cambia niente e nessuno viene notificato. Quando non coincidono, il disco
+   * vince: i record scritti entrano nel mirror, e il record che il mirror aveva
+   * aperto in via ottimistica viene **tolto** se il disco non l'ha aperto (li'
+   * c'era gia' un record con lo stesso `effectiveFrom`, aggiornato sul posto).
+   * Senza questa rimozione il mirror si terrebbe un fantasma che il disco non ha
+   * — cioe' proprio la sovrapposizione che si e' appena evitata sul disco.
+   *
+   * Resta fuori un caso, e ci resta apposta: se il mirror ha chiuso in via
+   * ottimistica un record che sul disco era gia' chiuso, quel record nel mirror
+   * ha un `effectiveTo` che il disco non ha. Non produce sovrapposizioni (chiude
+   * di piu', non di meno) e sparisce alla prima rilettura al risveglio.
+   */
+  function reconcileBudgets(
+    written: readonly Budget[],
+    optimisticId: string,
+    startedAt: number,
+  ): void {
+    // Un import ha sostituito tutto: questi record non c'entrano piu' niente.
+    if (generation !== startedAt || importing) return
+    mutate((state) => {
+      const opened = written.some((b) => b.id === optimisticId)
+      const base = opened ? state.budgets : state.budgets.filter((b) => b.id !== optimisticId)
+      const aligned =
+        base === state.budgets && written.every((w) => state.budgets.some((b) => sameBudget(b, w)))
+      if (aligned) return state
+      return {
+        ...state,
+        budgets: written.reduce<readonly Budget[]>((acc, b) => replace(acc, b), base),
+      }
+    })
+  }
+
   function commitRule(rule: RecurringRule): RecurringRule {
     mutate((state) => ({
       ...state,
@@ -750,17 +816,33 @@ export async function openRepository(
     },
 
     setBudget(change) {
-      const written = planBudgetChange(observable.get().budgets, {
-        ...change,
-        now: clock,
-        newId: makeId,
-      })
+      // L'istante e l'id del record nuovo si decidono **qui**, una volta sola, e
+      // viaggiano fino alla transazione: la pianificazione la rifa' il disco, ma
+      // su ingressi fissi. Cosi' il piano ottimistico e quello vero coincidono
+      // ogni volta che disco e mirror sono d'accordo, e un ritentativo della
+      // scrittura riusa lo stesso id invece di aprire un secondo record.
+      const request: BudgetChangeRequest = {
+        period: change.period,
+        amountCents: change.amountCents,
+        ...(change.categoryId !== undefined ? { categoryId: change.categoryId } : {}),
+        effectiveFrom: change.effectiveFrom,
+        timestamp: clock(),
+        newRecordId: makeId(),
+      }
+      const planned = planResolvedBudgetChange(observable.get().budgets, request)
       mutate((state) => ({
         ...state,
-        budgets: written.reduce<readonly Budget[]>((acc, b) => replace(acc, b), state.budgets),
+        budgets: planned.reduce<readonly Budget[]>((acc, b) => replace(acc, b), state.budgets),
       }))
-      push({ budgets: written })
-      return written
+      const startedAt = generation
+      void schedule({ budgetChange: request }, true).then(
+        (result) => reconcileBudgets(result.budgets, request.newRecordId, startedAt),
+        // L'errore e' gia' registrato dentro `schedule`. Il mirror resta col
+        // piano ottimistico: e' l'unica copia di quei record, come per ogni
+        // altra scrittura persa.
+        () => undefined,
+      )
+      return planned
     },
 
     updateSettings(patch) {
