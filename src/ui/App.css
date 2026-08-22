@@ -1,0 +1,107 @@
+/* Guscio dell'app: una colonna sola, alta quanto lo schermo utile,
+ * con i margini di sicurezza del telefono gia' scontati. */
+
+.app {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh; /* 100vh su iOS lascia il contenuto sotto la barra */
+  max-width: var(--app-max);
+  margin-inline: auto;
+  /* Notch, Dynamic Island e barra gesti: mai contenuto sotto. */
+  padding-top: max(var(--sp-3), var(--safe-top));
+  padding-bottom: max(var(--sp-4), var(--safe-bottom));
+  padding-left: max(var(--sp-5), var(--safe-left));
+  padding-right: max(var(--sp-5), var(--safe-right));
+}
+
+/* --- barra del titolo ---------------------------------------------------- */
+
+.app__bar {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-height: var(--tap-min);
+}
+
+.app__name {
+  font-size: var(--fs-400);
+  font-weight: var(--fw-semibold);
+  letter-spacing: var(--tracking-tight);
+}
+
+.mark__bg {
+  fill: var(--brand);
+}
+
+.mark__fg {
+  fill: none;
+  stroke: var(--on-brand);
+  stroke-width: 6.4;
+  stroke-linecap: round;
+}
+
+/* --- contenuto ----------------------------------------------------------- */
+
+.app__main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  gap: var(--sp-4);
+  padding-block: var(--sp-6);
+}
+
+.greeting {
+  font-size: var(--fs-display);
+  font-weight: var(--fw-bold);
+  line-height: var(--lh-tight);
+  letter-spacing: var(--tracking-tight);
+}
+
+.lead {
+  max-width: 24ch;
+  font-size: var(--fs-400);
+  line-height: var(--lh-snug);
+  color: var(--text-muted);
+}
+
+.facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+
+.fact {
+  padding: var(--sp-1) var(--sp-3);
+  border-radius: var(--radius-full);
+  background-color: var(--brand-soft);
+  color: var(--brand);
+  font-size: var(--fs-100);
+  font-weight: var(--fw-semibold);
+}
+
+/* --- piede --------------------------------------------------------------- */
+
+.app__foot {
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--line);
+}
+
+.hint {
+  font-size: var(--fs-100);
+  line-height: var(--lh-body);
+  color: var(--text-muted);
+}
+
+/* Il suggerimento giusto per come l'app e' stata aperta: in standalone
+ * "Aggiungi a Home" non ha piu' senso. L'attributo lo scrive main.tsx. */
+.hint--install,
+.hint--standalone {
+  display: none;
+}
+
+:root[data-display="browser"] .hint--install,
+:root[data-display="standalone"] .hint--standalone {
+  display: block;
+}

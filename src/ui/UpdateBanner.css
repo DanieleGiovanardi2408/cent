@@ -1,0 +1,113 @@
+/* Avviso di aggiornamento.
+ *
+ * Posizione: in alto, fisso. Il basso dello schermo appartiene al FAB, al
+ * bottom sheet e al tastierino (fase 2): coprirli per annunciare una versione
+ * nuova costerebbe un tap sul flusso che vale piu' di tutto il resto.
+ * Essendo `fixed` non entra nel flusso: appare senza spostare una riga (CLS 0).
+ */
+
+.updater {
+  position: fixed;
+  inset-block-start: 0;
+  inset-inline: 0;
+  z-index: var(--z-banner);
+  background-color: var(--surface);
+  border-block-end: 1px solid var(--line);
+  box-shadow: var(--shadow-1);
+  /* Notch e Dynamic Island: il contenuto non ci finisce mai sotto. */
+  padding-block-start: max(var(--sp-2), var(--safe-top));
+  padding-block-end: var(--sp-2);
+  padding-inline-start: max(var(--sp-3), var(--safe-left));
+  padding-inline-end: max(var(--sp-3), var(--safe-right));
+  animation: updater-in var(--dur-1) var(--ease-out) both;
+}
+
+/* Quando non c'e' niente da annunciare la regione live resta nel DOM ma sparisce
+ * dal layout: nessun riquadro, nessuna ombra, nessun pixel occupato. */
+.updater:empty {
+  display: none;
+}
+
+/* Solo opacity e transform, e una distanza cosi' corta che il bersaglio e'
+ * fermo prima che un dito lo raggiunga. Sotto prefers-reduced-motion i token
+ * di durata valgono zero e l'avviso appare e basta. */
+@keyframes updater-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, -8px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+.updater__inner {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  max-width: var(--app-max);
+  margin-inline: auto;
+}
+
+.updater__action {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  min-height: var(--tap-min);
+  padding-inline: var(--sp-2);
+  border-radius: var(--radius-2);
+  text-align: start;
+}
+
+/* Nessuna transizione sul premuto: il colore deve cambiare nel frame del tap,
+ * non entro 150 ms. */
+.updater__action:active,
+.updater__dismiss:active {
+  background-color: var(--surface-sunken);
+}
+
+.updater__icon {
+  flex: none;
+  fill: none;
+  stroke: var(--brand);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.updater__text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.updater__title {
+  font-size: var(--fs-200);
+  font-weight: var(--fw-semibold);
+  line-height: var(--lh-snug);
+  color: var(--text);
+}
+
+.updater__hint {
+  font-size: var(--fs-100);
+  line-height: var(--lh-snug);
+  color: var(--text-muted);
+}
+
+.updater__dismiss {
+  flex: none;
+  display: grid;
+  place-items: center;
+  inline-size: var(--tap-min);
+  block-size: var(--tap-min);
+  border-radius: var(--radius-full);
+}
+
+.updater__dismiss svg {
+  fill: none;
+  stroke: var(--text-muted);
+  stroke-width: 2;
+  stroke-linecap: round;
+}

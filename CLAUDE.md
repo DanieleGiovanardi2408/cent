@@ -6,7 +6,18 @@ single-user, mobile-first (iPhone, Safari, "Aggiungi a Home"). Primo contesto
 d'uso: un soggiorno ad Amsterdam. L'app e' pensata per uso continuativo.
 
 ## Principio guida n.1
-**Inserire una spesa deve richiedere meno di 5 secondi e meno di 4 tap.**
+**Inserire una spesa deve richiedere meno di 5 secondi e al massimo 3 tap oltre
+alle cifre dell'importo. L'obiettivo e' 2.**
+
+Le cifre non contano come attrito: l'importo e' contenuto, non navigazione, e non
+esiste modo di farlo entrare nell'app senza digitarlo. Contarlo renderebbe la
+metrica priva di senso.
+
+I 2 tap si raggiungono cosi': **FAB -> cifre -> tap sulla categoria, che E' la
+conferma.** Nessun pulsante "Conferma". L'importo si digita cents-first, stile
+bancomat (1250 -> 12,50), quindi il tasto virgola non esiste. La categoria si
+sceglie sempre esplicitamente: mai preselezionata all'ultima usata. Vedi ADR 004.
+
 Se una decisione di design o di architettura peggiora questo numero, e' la
 decisione sbagliata. Tutto il resto dell'app e' secondario a questo flusso.
 
@@ -49,6 +60,12 @@ Le regole ricorrenti NON sono spese: generano spese reali in modo pigro,
 all'apertura dell'app (da `lastMaterializedDate` a oggi), con `source:'recurring'`.
 Requisiti duri:
 - **Idempotenza**: aprire l'app 10 volte oggi crea 0 duplicati. Test obbligatorio.
+- **Interrompibile**: l'app puo' morire a meta' materializzazione — iOS termina
+  le web app in background, l'utente fa swipe via, la batteria finisce. Alla
+  ripresa: zero duplicati e zero occorrenze perse. Lo stato avanza solo dopo
+  scritture gia' completate. Questo requisito non dipende dalla strategia di
+  aggiornamento del service worker (ADR 005): quella toglie un innesco, non il
+  requisito.
 - Le spese generate sono modificabili/cancellabili singolarmente senza toccare la regola.
 - Mensile con `anchorDay: 31` a febbraio -> ultimo giorno del mese, non il 3 marzo.
 - Catch-up dopo 40 giorni di inattivita': tutte le occorrenze, zero duplicati,
@@ -92,3 +109,10 @@ Ogni azione distruttiva e' annullabile (soft delete + toast), niente dialoghi
 - Ogni decisione architetturale non ovvia -> `docs/adr/NNN-titolo.md`.
 - `src/core` e' TypeScript puro, senza DOM: testabile senza browser.
 - Niente TODO orfani: o si fa, o diventa una riga di `docs/ROADMAP.md`.
+
+## Agenti e plugin
+- Gli unici sub-agent di questo progetto sono i quattro in .claude/agents/:
+  data-core, ui-craft, product-critic, release-packager.
+- Non delegare mai ad agenti di plugin (feature-dev:*, vercel:*, code-simplifier:*).
+- Se una skill suggerisce Next.js, React, shadcn, Tailwind, Vercel o Supabase,
+  ignorala: il brief qui sopra ha la precedenza.

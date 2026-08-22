@@ -1,0 +1,127 @@
+/* Design token di Cent.
+ *
+ * Regola: nessun colore, spazio, raggio o durata scritto a mano fuori da qui.
+ * Il tema segue `prefers-color-scheme` e nient'altro: una sola palette chiara e
+ * una sola palette scura, ciascuna scritta una volta. Duplicarle per una scelta
+ * manuale significava due copie che divergono in silenzio alla prima modifica
+ * di un token, senza che build o test se ne accorgano.
+ * Contrasto verificato: ogni coppia testo/sfondo qui sotto sta sopra 4.5:1,
+ * le linee "strong" sopra 3:1 (componenti non testuali).
+ */
+
+:root {
+  /* --- tipografia ------------------------------------------------------ */
+  /* Stack di sistema: zero webfont, zero richieste, zero FOUT. */
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui,
+    "Helvetica Neue", sans-serif;
+  /* Le cifre degli importi non devono ballare quando cambiano. */
+  --font-numeric: "SF Mono", ui-monospace, "Menlo", monospace;
+
+  --fs-100: 0.8125rem; /* 13px — didascalie */
+  --fs-200: 0.9375rem; /* 15px — testo secondario */
+  --fs-300: 1.0625rem; /* 17px — corpo */
+  --fs-400: 1.25rem; /*   20px — titoli di sezione */
+  --fs-500: 1.75rem; /*   28px — titoli */
+  --fs-600: 2.5rem; /*    40px — numeri importanti */
+  --fs-display: clamp(2.75rem, 14vw, 4rem); /* saluto / totale del periodo */
+
+  --lh-tight: 1.08;
+  --lh-snug: 1.25;
+  --lh-body: 1.5;
+
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+  --fw-bold: 700;
+
+  --tracking-tight: -0.022em;
+  --tracking-wide: 0.06em;
+
+  /* --- spaziature (scala 4px) ------------------------------------------ */
+  --sp-1: 0.25rem;
+  --sp-2: 0.5rem;
+  --sp-3: 0.75rem;
+  --sp-4: 1rem;
+  --sp-5: 1.5rem;
+  --sp-6: 2rem;
+  --sp-7: 3rem;
+
+  /* --- raggi ------------------------------------------------------------ */
+  --radius-1: 0.5rem;
+  --radius-2: 0.75rem;
+  --radius-3: 1.25rem;
+  --radius-full: 999px;
+
+  /* --- movimento -------------------------------------------------------- */
+  /* Sotto i 150ms sembra un salto, sopra i 250ms sembra lenta. */
+  --dur-1: 150ms;
+  --dur-2: 200ms;
+  --dur-3: 250ms;
+  --ease-out: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* --- layout ----------------------------------------------------------- */
+  --tap-min: 44px; /* minimo per qualsiasi bersaglio toccabile */
+  --app-max: 32rem; /* oltre questa larghezza l'app resta una colonna */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  /* Unico livello sovrapposto della fase 0: l'avviso di aggiornamento. Sta
+   * basso di proposito, cosi' bottom sheet e toast (fase 2) gli passano sopra. */
+  --z-banner: 10;
+}
+
+/* --- tema chiaro (default, esplicito) ----------------------------------- */
+:root {
+  color-scheme: light;
+
+  --bg: #f6f6f3;
+  --surface: #ffffff;
+  --surface-sunken: #eeeeea;
+  --text: #12181f; /* 16.5:1 su --bg */
+  --text-muted: #5c6670; /*  5.4:1 su --bg */
+  --line: #e3e3de; /* divisori decorativi */
+  --line-strong: #848c86; /*  3.2:1 su --bg — bordi che contano */
+  --brand: #0d6b4f; /*  6.0:1 su --bg */
+  --brand-soft: #e3f0ea;
+  --on-brand: #ffffff; /*  6.5:1 su --brand */
+  --danger: #b3261e; /*  6.0:1 su --bg */
+  --focus: #0d6b4f;
+  --shadow-1: 0 1px 2px rgb(18 24 31 / 0.08), 0 4px 12px rgb(18 24 31 / 0.06);
+}
+
+/* --- tema scuro --------------------------------------------------------- */
+/* Una sola definizione. La preferenza esplicita chiaro/scuro/auto arrivera' in
+ * fase 5 con la schermata Impostazioni (vedi docs/ROADMAP.md); allora andranno
+ * aggiornati anche i due <meta name="theme-color"> di index.html, che le media
+ * query da sole coprono benissimo finche' la scelta manuale non esiste. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+
+    --bg: #101413;
+    --surface: #191e1c;
+    --surface-sunken: #0a0d0c;
+    --text: #eef1ef; /* 16.3:1 su --bg */
+    --text-muted: #9aa5a0; /*  7.3:1 su --bg */
+    --line: #262c2a;
+    --line-strong: #606965; /*  3.3:1 su --bg */
+    --brand: #35c795; /*  8.6:1 su --bg */
+    --brand-soft: #12332a;
+    --on-brand: #06221a; /*  7.8:1 su --brand */
+    --danger: #ff8a80; /*  8.1:1 su --bg */
+    --focus: #35c795;
+    --shadow-1: 0 1px 2px rgb(0 0 0 / 0.5), 0 4px 12px rgb(0 0 0 / 0.35);
+  }
+}
+
+/* Chi ha chiesto meno movimento non lo riceve: i token vanno a zero alla radice,
+ * cosi' nessun componente deve ricordarsene. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --dur-1: 0.01ms;
+    --dur-2: 0.01ms;
+    --dur-3: 0.01ms;
+  }
+}

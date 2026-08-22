@@ -1,0 +1,12 @@
+{
+  "enabledPlugins": {
+    "vercel@claude-plugins-official": false,
+    "supabase@claude-plugins-official": false,
+    "figma@claude-plugins-official": false,
+    "n8n-mcp-skills@n8n-mcp-skills": false,
+    "frontend-design@claude-plugins-official": false,
+    "feature-dev@claude-plugins-official": false,
+    "code-simplifier@claude-plugins-official": false,
+    "superpowers@claude-plugins-official": false
+  }
+}

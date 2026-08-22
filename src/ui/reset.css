@@ -1,0 +1,134 @@
+/* Reset minimo + le trappole di Safari iOS in PWA standalone.
+ * Ogni regola qui e' una cosa che, senza, si rompe sul telefono. */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  /* Safari ingrandisce i caratteri in landscape se non lo si blocca. */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  /* Niente rimbalzo elastico: in standalone sembra che l'app si stacchi. */
+  overscroll-behavior: none;
+  height: 100%;
+}
+
+body {
+  min-height: 100dvh; /* mai 100vh: su iOS include la barra che poi sparisce */
+  overscroll-behavior: none;
+  background-color: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: var(--fs-300);
+  line-height: var(--lh-body);
+  font-weight: var(--fw-regular);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  /* Il flash grigio al tocco fa sembrare tutto un sito web. */
+  -webkit-tap-highlight-color: transparent;
+  /* Niente lente d'ingrandimento e niente menu "Copia" sul long press della UI. */
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Il testo che l'utente ha scritto lui resta selezionabile. */
+input,
+textarea,
+[data-selectable] {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+img,
+svg,
+picture,
+canvas {
+  display: block;
+  max-width: 100%;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  border-radius: 0;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+button,
+[role="button"] {
+  cursor: pointer;
+  /* Toglie i 300ms di attesa del doppio tap: il feedback deve stare sotto i 100ms. */
+  touch-action: manipulation;
+}
+
+/* Sotto i 16px Safari zooma sul focus e il layout salta.
+ * Regola valida anche quando l'utente ha ingrandito il testo di sistema. */
+input,
+select,
+textarea {
+  font-size: max(16px, var(--fs-300));
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-size: inherit;
+  font-weight: inherit;
+  line-height: var(--lh-snug);
+  text-wrap: balance;
+}
+
+p {
+  text-wrap: pretty;
+}
+
+ul,
+ol {
+  list-style: none;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* Il focus si vede solo a tastiera, ma quando si vede si vede davvero. */
+:focus {
+  outline: none;
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: var(--radius-1);
+}
+
+/* Rete di sicurezza: se un componente dimentica i token di durata,
+ * qui il movimento si spegne comunque. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

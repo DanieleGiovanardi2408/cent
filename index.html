@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="it">
+  <head>
+    <meta charset="utf-8" />
+    <!-- viewport-fit=cover: senza, iOS lascia bande bianche ai lati del notch.
+         Niente maximum-scale/user-scalable=no: bloccare lo zoom e' una barriera. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Cent — le spese di ogni giorno</title>
+    <meta name="description" content="Traccia le spese quotidiane. Offline, sul tuo telefono." />
+
+    <!-- Dice al browser di dipingere la tela scura prima ancora del CSS:
+         niente lampo bianco all'avvio in tema scuro. -->
+    <meta name="color-scheme" content="light dark" />
+    <!-- Devono restare allineati a --bg in src/ui/tokens.css. -->
+    <meta name="theme-color" content="#f6f6f3" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#101413" media="(prefers-color-scheme: dark)" />
+
+    <link rel="icon" type="image/svg+xml" href="%BASE_URL%favicon.svg" />
+    <!-- 180x180 e OPACA: con il canale alpha iOS riempie di nero. -->
+    <link rel="apple-touch-icon" href="%BASE_URL%apple-touch-icon.png" />
+
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <!-- 'default' e non 'black-translucent': la barra di stato segue il tema
+         di sistema, quindi resta leggibile sia in chiaro sia in scuro. -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Cent" />
+    <!-- Gli importi non sono numeri di telefono: niente link azzurri automatici. -->
+    <meta name="format-detection" content="telephone=no" />
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/app/main.tsx"></script>
+  </body>
+</html>

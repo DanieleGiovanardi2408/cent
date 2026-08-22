@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Cent">
+  <style>
+    .bg { fill: #0D6B4F }
+    .fg { fill: none; stroke: #FFFFFF; stroke-width: 6.4; stroke-linecap: round }
+    @media (prefers-color-scheme: dark) {
+      .bg { fill: #35C795 }
+      .fg { stroke: #06221A }
+    }
+  </style>
+  <rect class="bg" width="64" height="64" rx="14.3"/>
+  <path class="fg" d="M43.9 22.0A15.5 15.5 0 1 0 43.9 42.0"/>
+  <path class="fg" d="M32 11V53"/>
+</svg>
