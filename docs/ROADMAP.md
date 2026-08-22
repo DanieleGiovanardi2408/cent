@@ -49,6 +49,31 @@ service worker) dopo 7 giorni di Safari senza interazione con quel sito.
 
 ## Rimandato consapevolmente
 
+- **Agganciare la rilettura al risveglio agli eventi del documento** — fase 2.
+  `src/core` espone l'API; `src/app` deve chiamarla su `visibilitychange`
+  (`visible`) e `pageshow` (`persisted`). Senza l'aggancio la regola di
+  CLAUDE.md "il mirror e' una cache" non ha effetto. Vedi
+  [ADR 007](adr/007-rilettura-al-risveglio.md).
+- **Undo dell'import persistito** — fase 7. Oggi il backup restituito da
+  `importBackup` per l'annullamento vive solo in memoria: se l'app muore nella
+  finestra del toast, l'annullamento non c'e' piu'. La finestra e' di secondi e
+  l'evento e' raro, quindi oggi e' accettabile — ma quando l'import esistera'
+  nella UI va persistito, perche' l'import e' l'operazione piu' distruttiva
+  dell'app. Costo: un record con dentro un dataset intero.
+- **Avviso "esporta subito" per le scritture non riuscite** — fase 2. Quando
+  `writeFailures` non e' vuoto, mirror e disco divergono e l'app non sa **quali**
+  record non sono arrivati: non esiste un "riprova" onesto ne' un elenco. L'unica
+  cosa vera che la UI puo' dire e' *"alcune modifiche non sono state salvate:
+  esporta subito"*, perche' `exportBackup()` legge dal mirror e quindi il dato
+  c'e' ancora. In quello stato la rilettura al risveglio resta disattivata
+  (ADR 007), altrimenti cancellerebbe proprio i dati da salvare.
+- **`sumCents` lancia su importi non interi** — nessuna fase assegnata. E'
+  chiamata da `groupByDay` e `totalSpent`: un solo record corrotto renderebbe
+  bianche Home e Storico insieme, e una delle due e' la schermata da cui si
+  cancellerebbe il record. Oggi non e' raggiungibile (tutti gli ingressi
+  validano). E' la stessa dottrina applicata a `compareIsoDates`, resa totale
+  proprio perche' un comparatore che lancia rende inutilizzabile l'intera vista.
+
 - **Riguardare la posizione dell'avviso di aggiornamento** — fase 4. Oggi il
   banner e' in alto, fisso, e copre la barra con marchio e nome: il pezzo di
   schermo meno prezioso. In fase 4 in cima ci sara' il numero grande di quanto

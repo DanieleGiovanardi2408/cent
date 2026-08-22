@@ -1,103 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import {
-  formatCents,
-  parseAmountToCents,
-  sumCents,
-  type Cents,
-} from './money'
-
-/** Estrae i centesimi o fa fallire il test: niente `as` nei test. */
-function cents(input: string): Cents {
-  const result = parseAmountToCents(input)
-  if (!result.ok) throw new Error(`parse fallito su "${input}": ${result.error}`)
-  return result.cents
-}
+import { divideCents, formatCents, sumCents } from './money'
 
 /** Gli spazi di Intl sono non-breaking: li normalizziamo per confronti esatti. */
 function norm(text: string): string {
   return text.replace(/[\u00a0\u202f]/g, ' ')
 }
 
-describe('parseAmountToCents', () => {
-  it('accetta la virgola come separatore decimale', () => {
-    expect(parseAmountToCents('12,50')).toEqual({ ok: true, cents: 1250 })
-  })
-
-  it('accetta anche il punto come separatore decimale', () => {
-    expect(parseAmountToCents('12.50')).toEqual({ ok: true, cents: 1250 })
-  })
-
-  it('gestisce gli importi sotto l euro', () => {
-    expect(parseAmountToCents('0,05')).toEqual({ ok: true, cents: 5 })
-    expect(parseAmountToCents(',5')).toEqual({ ok: true, cents: 50 })
-    expect(parseAmountToCents('0,5')).toEqual({ ok: true, cents: 50 })
-  })
-
-  it('accetta un importo senza decimali e uno con la virgola pendente', () => {
-    expect(parseAmountToCents('12')).toEqual({ ok: true, cents: 1200 })
-    expect(parseAmountToCents('12,')).toEqual({ ok: true, cents: 1200 })
-  })
-
-  it('rifiuta la stringa vuota con un errore esplicito', () => {
-    expect(parseAmountToCents('')).toEqual({ ok: false, error: 'empty' })
-    expect(parseAmountToCents('   ')).toEqual({ ok: false, error: 'empty' })
-    expect(parseAmountToCents('€')).toEqual({ ok: false, error: 'empty' })
-    expect(parseAmountToCents('-')).toEqual({ ok: false, error: 'empty' })
-  })
-
-  it('rifiuta il testo non numerico senza mai restituire NaN', () => {
-    for (const bad of ['abc', '12a', '1e3', '--1', '12 34x', ',', '.']) {
-      const result = parseAmountToCents(bad)
-      expect(result.ok).toBe(false)
-      expect(result).not.toHaveProperty('cents')
-    }
-  })
-
-  it("rifiuta piu' di due decimali invece di arrotondare in silenzio", () => {
-    expect(parseAmountToCents('1234,567')).toEqual({ ok: false, error: 'too-many-decimals' })
-    expect(parseAmountToCents('0,001')).toEqual({ ok: false, error: 'too-many-decimals' })
-    // Corollario della regola "separatore singolo = decimale".
-    expect(parseAmountToCents('1.234')).toEqual({ ok: false, error: 'too-many-decimals' })
-  })
-
-  it('ignora spazi (anche non-breaking) e simbolo di valuta', () => {
-    expect(cents(' 12,50 ')).toBe(1250)
-    expect(cents('12,50 €')).toBe(1250)
-    expect(cents('€ 1 2 , 5 0')).toBe(1250)
-  })
-
-  it('riconosce il separatore delle migliaia in entrambe le convenzioni', () => {
-    expect(cents('1.234,56')).toBe(123456)
-    expect(cents('1,234.56')).toBe(123456)
-    expect(cents('1.234.567')).toBe(123456700)
-    expect(cents('1,234,567')).toBe(123456700)
-  })
-
-  it('rifiuta i raggruppamenti malformati', () => {
-    for (const bad of ['1.2345,00', '12.34.567', '1,2.3', '1.234,5,6', '1..2']) {
-      expect(parseAmountToCents(bad)).toEqual({ ok: false, error: 'invalid-format' })
-    }
-  })
-
-  it('gestisce il segno negativo e non produce mai -0', () => {
-    expect(cents('-3,20')).toBe(-320)
-    expect(cents('+3,20')).toBe(320)
-    expect(Object.is(cents('-0,00'), 0)).toBe(true)
-  })
-
-  it('rifiuta i valori oltre gli interi sicuri', () => {
-    expect(parseAmountToCents('999999999999999999,99')).toEqual({
-      ok: false,
-      error: 'out-of-range',
-    })
-  })
-})
-
 describe('sumCents', () => {
   it('somma 0,10 + 0,20 come interi: esattamente 30 centesimi', () => {
-    const total = sumCents([cents('0,10'), cents('0,20')])
+    const total = sumCents([10, 20])
     expect(total).toBe(30)
-    expect(total).toBe(cents('0,30'))
     // Lo stesso calcolo in float non ci arriva: e' il motivo di questo modulo.
     expect(0.1 + 0.2).not.toBe(0.3)
   })
@@ -140,10 +52,50 @@ describe('formatCents', () => {
     expect(() => formatCents(12.5)).toThrow(TypeError)
     expect(() => formatCents(Number.POSITIVE_INFINITY)).toThrow(TypeError)
   })
+})
 
-  it('round-trip format -> parse su valori campione', () => {
-    for (const value of [0, 5, 99, 100, 1250, 123456, 123456789, -1250]) {
-      expect(cents(formatCents(value))).toBe(value)
+describe('divideCents (politica: floor, mai promettere piu di quanto c e)', () => {
+  it('divide esattamente quando non c e resto', () => {
+    expect(divideCents(30000, 10)).toBe(3000)
+    expect(divideCents(0, 7)).toBe(0)
+    expect(divideCents(100, 1)).toBe(100)
+  })
+
+  it('scarta il resto invece di distribuirlo', () => {
+    // 10,00 euro in 3 giorni: 3,33 al giorno, un centesimo resta come margine.
+    expect(divideCents(1000, 3)).toBe(333)
+    expect(divideCents(1000, 7)).toBe(142)
+    expect(divideCents(1, 2)).toBe(0)
+  })
+
+  it('sui negativi arrotonda in basso, non verso lo zero', () => {
+    // Il caso che distingue floor da trunc: sforato di 1,00 su 3 giorni.
+    expect(divideCents(-100, 3)).toBe(-34)
+    expect(divideCents(-1, 2)).toBe(-1)
+    expect(divideCents(-300, 3)).toBe(-100)
+  })
+
+  it('mantiene l invariante quoziente * parti <= totale, segno qualunque', () => {
+    for (let total = -500; total <= 500; total += 7) {
+      for (let parts = 1; parts <= 31; parts += 1) {
+        expect(divideCents(total, parts) * parts).toBeLessThanOrEqual(total)
+      }
     }
+  })
+
+  it('resta esatto vicino al limite degli interi sicuri', () => {
+    const total = Number.MAX_SAFE_INTEGER
+    expect(divideCents(total, 3) * 3).toBeLessThanOrEqual(total)
+    expect(divideCents(total, 2)).toBe(Math.floor(total / 2))
+  })
+
+  it('rifiuta zero parti: e un periodo finito, non una divisione', () => {
+    expect(() => divideCents(1000, 0)).toThrow(RangeError)
+    expect(() => divideCents(1000, -3)).toThrow(RangeError)
+    expect(() => divideCents(1000, 2.5)).toThrow(RangeError)
+  })
+
+  it('rifiuta un totale non intero', () => {
+    expect(() => divideCents(10.5, 2)).toThrow(TypeError)
   })
 })

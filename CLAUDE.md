@@ -62,14 +62,53 @@ Requisiti duri:
 - **Idempotenza**: aprire l'app 10 volte oggi crea 0 duplicati. Test obbligatorio.
 - **Interrompibile**: l'app puo' morire a meta' materializzazione — iOS termina
   le web app in background, l'utente fa swipe via, la batteria finisce. Alla
-  ripresa: zero duplicati e zero occorrenze perse. Lo stato avanza solo dopo
-  scritture gia' completate. Questo requisito non dipende dalla strategia di
-  aggiornamento del service worker (ADR 005): quella toglie un innesco, non il
-  requisito.
+  ripresa: zero duplicati e zero occorrenze perse. Questo requisito non dipende
+  dalla strategia di aggiornamento del service worker (ADR 005): quella toglie
+  un innesco, non il requisito.
+- **La correttezza non dipende da un lock.** Una spesa generata ha
+  un'**identita' deterministica**: il suo id e' funzione pura della coppia
+  (regola, giorno), non un UUID. L'inserimento ha semantica *add*, non *put*: su
+  conflitto si salta, non si sovrascrive — cosi' sopravvivono sia le modifiche
+  dell'utente alla singola istanza (canone 920 invece di 900) sia la
+  cancellazione, perche' un record con `deletedAt` esiste e quindi non viene
+  resuscitato.
+  Un lock in memoria impedirebbe la collisione solo dentro un contesto
+  JavaScript. Non serve a niente fra contesti diversi — la PWA aperta dalla Home
+  mentre una scheda Safari sullo stesso sito e' ancora viva sono due contesti,
+  due lock separati, una sola IndexedDB — ne' dopo una morte a meta', perche' il
+  processo che teneva il lock non esiste piu'. Serializzare le chiamate resta
+  un'ottimizzazione utile per non sprecare lavoro, ma la correttezza deve reggere
+  anche senza. Vedi ADR 006.
 - Le spese generate sono modificabili/cancellabili singolarmente senza toccare la regola.
 - Mensile con `anchorDay: 31` a febbraio -> ultimo giorno del mese, non il 3 marzo.
 - Catch-up dopo 40 giorni di inattivita': tutte le occorrenze, zero duplicati,
   senza bloccare la UI.
+
+## Il mirror e' una cache, non la fonte di verita'
+La fonte di verita' e' IndexedDB. Il mirror in memoria e' una cache di lettura che
+esiste solo per rendere sincrone le letture della UI.
+
+Dopo ogni sospensione il mirror e' **scaduto**: su `visibilitychange` con
+`visibilityState === 'visible'` (e su `pageshow` con `persisted === true`) il
+repository rilegge lo stato dal disco **prima di qualunque scrittura**,
+materializzazione compresa.
+
+**Vincolo di sicurezza**: la rilettura NON deve girare se ci sono scritture
+pendenti o fallite in coda. In quel caso il mirror contiene dati che il disco non
+ha, e rileggere li cancellerebbe. Se `writeFailures` non e' vuoto: niente
+rilettura, si resta nello stato "esporta subito".
+
+Perche' questo e non un lock o un BroadcastChannel: vedi ADR 007.
+
+## Ordine di pittura (non negoziabile)
+Il guscio si dipinge **prima** che i dati siano letti. `main.tsx` non deve mai
+attendere `openRepository()` prima del primo render: la lettura di 5.000 record
+finirebbe davanti al primo frame.
+
+Sequenza: **guscio -> apertura repository -> dati.**
+
+Ogni schermata ha uno stato "guscio senza dati" gia' definitivo per layout e
+dimensioni, cosi' l'arrivo dei dati non sposta nulla (CLS = 0).
 
 ## Calcolo budget
 Metriche della dashboard: speso / budget / rimanente del periodo, giorni rimanenti,

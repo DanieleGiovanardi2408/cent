@@ -17,11 +17,11 @@
  * peggiore e' una Promise che ritorna `false`; non chiamarla e' l'unico modo
  * garantito per non ottenerlo mai. Il display-mode non condiziona la chiamata.
  *
- * Fase 0 non ha ancora IndexedDB ne' Settings: l'esito vive in localStorage.
- * FASE 1: spostare questo flag dentro Settings, insieme a schemaVersion.
+ * L'esito non viene mai memorizzato da noi: `navigator.storage.persisted()` e'
+ * la fonte di verita' e risponde in fretta a ogni avvio. Una nostra copia
+ * potrebbe solo divergere — il permesso si revoca, i dati del sito si
+ * cancellano, e resteremmo a credere che sia ancora concesso.
  */
-
-const STORAGE_KEY = 'cent.storagePersisted.v1'
 
 /** True se l'app gira come applicazione a se' (Home Screen iOS, PWA installata). */
 export function isStandaloneDisplay(): boolean {
@@ -31,40 +31,17 @@ export function isStandaloneDisplay(): boolean {
   return legacy === true || window.matchMedia('(display-mode: standalone)').matches
 }
 
-function readFlag(): boolean {
-  try {
-    return localStorage.getItem(STORAGE_KEY) === 'true'
-  } catch {
-    // Safari in navigazione privata puo' lanciare: non e' un errore fatale.
-    return false
-  }
-}
-
-function writeFlag(): void {
-  try {
-    localStorage.setItem(STORAGE_KEY, 'true')
-  } catch {
-    /* senza flag rifaremo il controllo al prossimo avvio: costa poco */
-  }
-}
-
 /**
- * Chiede (una volta concesso, mai piu') che i dati locali non siano sfrattabili.
+ * Chiede che i dati locali non siano sfrattabili.
  * Non blocca l'avvio e non mostra nulla: se fallisce, l'app funziona lo stesso.
  *
  * @returns true se lo storage e' persistente.
  */
 export async function requestPersistentStorage(): Promise<boolean> {
-  if (readFlag()) return true
   if (!navigator.storage || typeof navigator.storage.persist !== 'function') return false
 
   // `persisted()` non mostra prompt e non consuma il "tentativo": si puo' sempre.
-  if (await navigator.storage.persisted()) {
-    writeFlag()
-    return true
-  }
+  if (await navigator.storage.persisted()) return true
 
-  const granted = await navigator.storage.persist()
-  if (granted) writeFlag()
-  return granted
+  return navigator.storage.persist()
 }

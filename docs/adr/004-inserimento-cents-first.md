@@ -33,10 +33,17 @@ Conseguenze:
   fra `,` e `.`, il doppio separatore, il separatore in prima posizione e i tre
   decimali. Non esiste piu' un input malformato da gestire: l'unico stato
   possibile e' una sequenza di cifre.
-- `parseAmountToCents` in `src/core/money.ts` resta comunque necessaria, ma per
-  un altro consumatore: l'import di dati esterni (fase 7), dove le stringhe
-  arrivano da un file e possono essere malformate davvero. Non e' piu' sulla via
-  del tastierino.
+- `parseAmountToCents` in `src/core/money.ts` e' stata **cancellata**.
+  Quando questa ADR e' stata scritta l'avevamo tenuta, motivandola cosi': "serve
+  all'import di dati esterni in fase 7, dove le stringhe arrivano da un file e
+  possono essere malformate davvero". **Quella motivazione e' caduta appena il
+  codice e' esistito**: l'import JSON della fase 1 legge gli importi come numeri
+  con `intCents`, non come stringhe, e l'unico formato con importi testuali —
+  il CSV — e' dichiarato non reimportabile sia in CLAUDE.md sia in
+  `src/core/backup.ts`. Restavano 50 righe con quattro codici di errore per un
+  chiamante che il codice stesso dichiarava inesistente.
+  Con l'inserimento cents-first non esiste piu' nessun punto dell'app in cui il
+  denaro entra come stringa: entra come sequenza di cifre e resta un intero.
 - Il tastierino resta custom, non quello di iOS: serve solo 0-9 e cancella.
 
 ### 2. Il chip della categoria E' il tasto di conferma

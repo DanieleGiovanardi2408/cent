@@ -28,6 +28,14 @@ radice di un dominio ma sotto un sottopercorso.
 - **vite-plugin-pwa** per manifest e service worker.
 - Nessuna libreria UI, nessun CSS-in-JS runtime, nessuna dipendenza da CDN.
 
+**`fake-indexeddb` e' l'unica dipendenza di test aggiunta** (devDependency: non
+entra nel bundle, ~1 MB in `node_modules`). Motivo: `src/core/idb.ts` e' l'unico
+file che tocca il disco, e da lui dipende ogni garanzia di non perdere spese —
+atomicita' delle transazioni, migrazioni di schema, comportamento con due contesti
+aperti sullo stesso database. Testarlo su un'implementazione in memoria scritta da
+noi verificava il nostro sostituto, non IndexedDB. La regola "zero dipendenze senza
+ADR" vale sul peso a runtime: qui il peso a runtime e' zero.
+
 `idb` non e' installato in fase 0: entra in fase 1, quando c'e' del codice che
 lo usa. Installare una dipendenza prima del codice che la giustifica e' il modo
 piu' semplice per accumulare peso che nessuno rimuovera' mai.

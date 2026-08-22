@@ -13,10 +13,12 @@
     "icons": "node scripts/generate-icons.mjs"
   },
   "dependencies": {
+    "idb": "^8.0.3",
     "preact": "^10.29.8"
   },
   "devDependencies": {
     "@preact/preset-vite": "^2.10.6",
+    "fake-indexeddb": "^6.2.5",
     "typescript": "^7.0.2",
     "vite": "^8.2.2",
     "vite-plugin-pwa": "^1.3.0",
