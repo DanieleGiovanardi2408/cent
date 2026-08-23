@@ -1,0 +1,31 @@
+/* L'etichetta che tiene la larghezza massima fra le lingue.
+ *
+ * Una cella sola: il testo vero e la variante nell'altra lingua ci finiscono
+ * sopra, quindi la larghezza del contenitore e' quella della parola piu' larga,
+ * in qualunque lingua si stia dipingendo. La variante spenta resta nel flusso —
+ * `visibility`, non `display` — perche' e' proprio il suo ingombro che serve.
+ *
+ * E' contenuto generato: non sta in `textContent`, non e' un nodo, e siccome non
+ * si dipinge non entra nemmeno nell'albero di accessibilita'.
+ *
+ * `justify-items: center`: le schede sono centrate nel proprio bersaglio, quindi
+ * la parola non balla dentro il rettangolo quando la lingua cambia davvero.
+ */
+
+.fit {
+  display: inline-grid;
+  grid-template-columns: auto;
+  justify-items: center;
+}
+
+.fit__real {
+  grid-area: 1 / 1;
+  white-space: nowrap;
+}
+
+.fit::after {
+  grid-area: 1 / 1;
+  content: attr(data-alt);
+  visibility: hidden;
+  white-space: nowrap;
+}

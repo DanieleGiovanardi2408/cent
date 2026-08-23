@@ -80,6 +80,17 @@ export const it = {
   'toast.backupFileFailed': 'Il file non si è salvato.',
   'toast.showData': 'Mostra i dati',
   'toast.languageFailed': 'Non sono riuscito a cambiare lingua. Riprova.',
+  // Le categorie: cosa e' successo, con i nomi veri dentro. Archiviare si
+  // annulla (la griglia ha appena liberato un posto, quindi rimetterla non fa
+  // la nona); cancellare no, e il foglio lo dice prima.
+  'toast.catAdded': '«{name}» è in griglia',
+  'toast.catSwapped': '«{name}» al posto di «{old}»',
+  'toast.catArchived': '«{name}» è in archivio',
+  'toast.catBack': '«{name}» è tornata in griglia',
+  'toast.catDeleted': '«{name}» eliminata',
+  'toast.catSaved': '«{name}» aggiornata',
+  'toast.catInUse': 'Qualche spesa la usa ancora: non si può cancellare.',
+  'toast.catFailed': 'Non sono riuscito a cambiare le categorie. Riprova.',
 
   /* --- Home -------------------------------------------------------------- */
   'hero.spent': 'Spesi',
@@ -229,4 +240,81 @@ export const it = {
   'settings.data.text':
     'Le spese restano su questo telefono: non c’è nessun account e nessun server. L’export è l’unica copia che sopravvive a un telefono perso o a un’app disinstallata.',
   'settings.data.export': 'Esporta tutto',
+  // Due righe di stato, non una decorazione: sono la stessa informazione che
+  // accende il promemoria, detta dove si esporta.
+  'settings.data.last': 'Ultimo backup: {days} fa.',
+  'settings.data.never': 'Non hai ancora esportato niente.',
+
+  /* --- Impostazioni: categorie -------------------------------------------- */
+  'settings.cats.title': 'Categorie',
+  'settings.cats.text':
+    'Otto in griglia, e otto è il massimo: sono i chip che tocchi quando paghi, e devono starci tutti senza scorrere. Archiviarne una la toglie dalla griglia, non dalle spese che l’hanno usata.',
+  'settings.cats.grid': 'Categorie in griglia',
+  'settings.cats.editOne': 'Modifica {name}',
+  'settings.cats.add': 'Aggiungi una categoria',
+  'settings.cats.archivedTitle': 'In archivio',
+  'settings.cats.archivedText':
+    'Fuori dalla griglia, non fuori dai dati: Storico e statistiche continuano a mostrarle. Tocca una categoria per rimetterla in griglia al posto di un’altra.',
+  'settings.cats.placeOne': 'Rimetti {name} in griglia',
+
+  /* --- foglio della categoria --------------------------------------------- */
+  'cat.new.label': 'Nuova categoria',
+  'cat.edit.label': 'Modifica categoria',
+  'cat.place.label': 'Rimetti in griglia',
+  'cat.name': 'Nome',
+  'cat.name.placeholder': 'Come si chiama?',
+  // Le tre righe del foglio stanno su **una riga sola** anche a 320 punti:
+  // `.sheet__hint` ha l'altezza riservata di una riga e taglia con i puntini,
+  // e una frase tagliata a meta' e' peggio di una frase corta.
+  'cat.hint.name': 'Un nome, e scegli emoji e colore.',
+  'cat.hint.replace': 'Tocca la categoria che sostituisce.',
+  'cat.hint.failed': 'Non sono riuscito a salvare. Riprova.',
+  'cat.emoji': 'Emoji',
+  'cat.color': 'Colore',
+  'cat.color.note':
+    'Otto colori e non uno qualunque: è la stessa scala dei grafici, scelta perché resti distinguibile anche a chi confonde rosso e verde.',
+  'cat.swap.title': 'Quale sostituisce?',
+  'cat.swap.text':
+    'Il tap salva. Quella che tocchi va in archivio: resta su tutte le spese che l’hanno usata, e la puoi rimettere quando vuoi.',
+  'cat.add.free': 'Aggiungi alla griglia',
+  'cat.place.free': 'Rimetti in griglia',
+  'cat.save': 'Salva',
+  'cat.archive': 'Archivia',
+  'cat.archive.note':
+    'La toglie dalla griglia e basta: resta su ogni spesa che l’ha usata, e continui a vederla nello Storico.',
+  'cat.delete': 'Elimina del tutto',
+  'cat.delete.note': 'Non la usa nessuna spesa e nessuna ricorrenza. Questa non si annulla.',
+  'cat.inUse.expenses.one': '1 spesa',
+  'cat.inUse.expenses.other': '{count} spese',
+  'cat.inUse.rules.one': '1 spesa ricorrente',
+  'cat.inUse.rules.other': '{count} spese ricorrenti',
+  'cat.inUse.both': '{a} e {b}',
+  'cat.inUse.text':
+    'La usa {what}: cancellarla lascerebbe quelle righe senza nome, quindi non si può. Archiviarla fa quello che ti serve — sparisce dalla griglia e lo Storico resta intero.',
+  'cat.preview': 'Come sarà la griglia',
+  'cat.position': 'Posizione {index} di {total}',
+  'cat.move.back': 'Sposta indietro',
+  'cat.move.on': 'Sposta avanti',
+  // Due cose in una riga: l'avviso (la memoria muscolare) e il fatto che lo
+  // spostamento non aspetta "Salva" — il bottone li' sotto e' per nome, emoji e
+  // colore, e senza dirlo resterebbe da indovinare quale delle due valga.
+  'cat.order.note':
+    'Dopo qualche giorno tocchi per posizione, senza leggere il nome: spostare una categoria costa più di quanto sembri. Lo spostamento vale subito.',
+  'color.green': 'Verde',
+  'color.orange': 'Arancio',
+  'color.teal': 'Turchese',
+  'color.brown': 'Marrone',
+  'color.blue': 'Blu',
+  'color.magenta': 'Magenta',
+  'color.lilac': 'Lilla',
+  'color.grey': 'Grigio',
+
+  /* --- promemoria di backup ------------------------------------------------ */
+  // Corte perche' la banda deve restare **discreta**: due righe di testo e un
+  // bottone, non un cartello. La frase lunga la dice Impostazioni, dove c'e'
+  // spazio e dove si arriva di propria volonta'.
+  'nudge.never': 'Non hai mai esportato',
+  'nudge.since': 'Ultimo backup: {days} fa',
+  'nudge.hint': 'I dati stanno solo qui.',
+  'nudge.action': 'Esporta',
 } as const

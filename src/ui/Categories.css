@@ -1,0 +1,436 @@
+/* Le categorie: la sezione in Impostazioni e il foglio che le modifica.
+ *
+ * La griglia `.cats` e il chip `.cat` **non sono qui**: stanno in AddSheet.css e
+ * sono gli stessi dell'inserimento, di proposito. Quello che si modifica deve
+ * avere la faccia esatta di quello che poi si tocca alla cassa — un chip
+ * diverso qui vorrebbe dire scoprire in cassa che il nome non ci sta.
+ *
+ * Qui c'e' solo cio' che le due varianti aggiungono: la griglia in Impostazioni
+ * (dove il chip apre invece di salvare), l'anteprima non toccabile, le
+ * pastiglie di emoji e colore, la riga della posizione e l'elenco archiviate.
+ */
+
+/* --- la griglia dentro Impostazioni -------------------------------------- */
+
+.cats--edit {
+  margin-block-start: var(--sp-3);
+  /* Due righe di chip riservate, sempre.
+   *
+   * Impostazioni non e' la schermata iniziale, quindi ci si arriva quasi sempre
+   * a dati gia' letti — ma "quasi sempre" non e' la regola: il guscio si dipinge
+   * prima dei dati, e senza questa riserva l'arrivo delle categorie farebbe
+   * scendere di 116px il budget e l'export. La riserva e' esattamente
+   * l'altezza delle due file, non un numero tondo. */
+  min-block-size: calc(2 * var(--chip-min) + var(--sp-2));
+}
+
+/* Un accenno di rilievo: qui i chip si aprono, e senza un bordo sembrerebbero
+ * otto etichette stampate. Non e' il colore a dirlo — il bordo e' un token di
+ * linea, sopra 3:1 in entrambi i temi. */
+.cats--edit .cat {
+  border: 1px solid var(--line);
+}
+
+/* L'anteprima nel foglio: stessa griglia, nessun bersaglio. Sono `div`, non
+ * bottoni disabilitati: un bottone spento resta un bottone per chi legge con
+ * VoiceOver, e qui non c'e' niente da toccare — c'e' da vedere dove finisce
+ * quella che si sta spostando. */
+/* La cella che si sta spostando si distingue con un contorno, non smorzando le
+ * altre: abbassare l'opacita' dei sette nomi accanto li porterebbe sotto il
+ * contrasto AA per far risaltare l'ottavo, cioe' pagherebbe un'evidenza con
+ * sette etichette meno leggibili. */
+.cats--preview .cat[data-self] {
+  outline: 2px solid var(--brand);
+  outline-offset: -2px;
+}
+
+/* --- l'elenco delle archiviate ------------------------------------------- */
+
+.prefs__sub {
+  margin-block-start: var(--sp-5);
+  font-size: var(--fs-300);
+  font-weight: var(--fw-semibold);
+}
+
+.arch {
+  margin-block-start: var(--sp-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-2);
+  overflow: hidden;
+  list-style: none;
+}
+
+.arch__row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  inline-size: 100%;
+  min-block-size: var(--tap-min);
+  padding: var(--sp-2) var(--sp-3);
+  text-align: start;
+  color: var(--text);
+}
+
+.arch li + li .arch__row {
+  border-block-start: 1px solid var(--line);
+}
+
+.arch__row:active {
+  background-color: var(--surface-sunken);
+}
+
+.arch__row:disabled {
+  opacity: 0.45;
+}
+
+.arch__row svg {
+  flex: none;
+  fill: none;
+  stroke: var(--text-muted);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.arch__dot,
+.editor__chip {
+  flex: none;
+  display: grid;
+  place-items: center;
+  inline-size: 1.75rem;
+  block-size: 1.75rem;
+  border-radius: var(--radius-full);
+  /* Il colore resta superficie e non tinge mai il testo: nessun esadecimale
+   * puo' stare in AA sia sul chiaro sia sullo scuro. */
+  background-color: color-mix(in srgb, var(--cat) 40%, var(--surface));
+  font-size: 0.9375rem;
+  line-height: 1;
+}
+
+.arch__name {
+  flex: 1;
+  min-inline-size: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: var(--fs-300);
+}
+
+/* --- il foglio ------------------------------------------------------------ */
+/*
+ * Piu' basso del foglio d'inserimento: in `place` il contenuto e' una riga e
+ * una griglia, e 38rem lascerebbero mezzo schermo vuoto sopra il piede.
+ */
+.sheet--cat {
+  --sheet-min: 30rem;
+}
+
+/* Il corpo scorre, il piede no.
+ *
+ * E' l'unico foglio dell'app in cui lo scroll e' ammesso, e la ragione e' che
+ * non e' il percorso dei due tap: qui c'e' un modulo di testo, e con la
+ * tastiera di sistema aperta l'alternativa allo scroll e' contenuto tagliato da
+ * `overflow: hidden`. Quello che **conferma** resta comunque fuori dallo
+ * scroll, nel piede: la griglia dello scambio o il bottone non finiscono mai
+ * sotto la linea di galleggiamento. */
+.editor {
+  flex: 1;
+  min-block-size: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding-block-end: var(--sp-1);
+}
+
+.editor__foot {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding-block-start: var(--sp-2);
+  border-block-start: 1px solid var(--line);
+}
+
+.editor__lead {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  min-block-size: var(--tap-min);
+  font-size: var(--fs-400);
+  font-weight: var(--fw-semibold);
+}
+
+/* 17px, non un pixel meno di 16: sotto quella soglia Safari ingrandisce la
+ * pagina all'apertura della tastiera e non la riporta piu' indietro. */
+.editor__name {
+  min-block-size: var(--tap-min);
+  padding-inline: var(--sp-3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-2);
+  background-color: var(--surface);
+  color: var(--text);
+  font-size: var(--fs-300);
+  font-weight: var(--fw-medium);
+}
+
+.editor__name::placeholder {
+  color: var(--text-muted);
+  font-weight: var(--fw-regular);
+}
+
+.editor__note {
+  font-size: var(--fs-100);
+  line-height: var(--lh-snug);
+  color: var(--text-muted);
+}
+
+.editor__note--foot {
+  text-align: center;
+}
+
+/* --- pastiglie: emoji e colori ------------------------------------------- */
+/*
+ * Colonne da 44px minimo, non un numero fisso: a 320 punti ne entrano sei, a
+ * 390 sette, e nessuna scende mai sotto il bersaglio tattile. `auto-fill`
+ * lascia decidere alla larghezza vera invece che a un breakpoint indovinato.
+ */
+.picker {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(var(--tap-min), 1fr));
+  gap: var(--sp-1);
+}
+
+.picker__key {
+  display: grid;
+  place-items: center;
+  min-inline-size: var(--tap-min);
+  min-block-size: var(--tap-min);
+  border-radius: var(--radius-2);
+  background-color: var(--surface-sunken);
+  font-size: 1.375rem;
+  line-height: 1;
+}
+
+.picker__key:active {
+  background-color: var(--brand-soft);
+}
+
+/* Il selezionato ha due segnali, non uno: la superficie e il contorno.
+ *
+ * `:not(.picker__key--color)` non e' pignoleria: senza, questa regola vinceva
+ * per specificita' sulla pastiglia colorata e **la spegneva proprio quando la
+ * si sceglieva** — il colore selezionato diventava verde marchio, cioe' la sola
+ * cosa che quel bottone deve mostrare spariva nell'istante del tap. */
+.picker__key:not(.picker__key--color)[aria-pressed="true"] {
+  background-color: var(--brand-soft);
+  outline: 2px solid var(--brand);
+  outline-offset: -2px;
+}
+
+/* I colori sono quattro per riga: otto pastiglie da 44px in fila sfonderebbero
+ * i 320 punti, e sotto i 44 non si scende. */
+.picker--color {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+.picker__key--color {
+  background-color: color-mix(in srgb, var(--cat) 55%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--cat) 70%, var(--text));
+}
+
+.picker__key--color svg {
+  visibility: hidden;
+  fill: none;
+  /* La spunta e' del colore del testo, non del brand: deve leggersi sopra otto
+   * superfici diverse, e --text sta in AA su tutte e otto in entrambi i temi. */
+  stroke: var(--text);
+  stroke-width: 2.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Selezionato = spunta. Il solo colore non basta mai, e qui meno che altrove:
+ * la scelta **e'** un colore. */
+.picker__key--color[aria-pressed="true"] {
+  outline: 2px solid var(--text);
+  outline-offset: -2px;
+}
+
+.picker__key--color[aria-pressed="true"] svg {
+  visibility: visible;
+}
+
+/* --- la posizione in griglia --------------------------------------------- */
+
+.move {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.move__key {
+  flex: none;
+  display: grid;
+  place-items: center;
+  inline-size: var(--tap-min);
+  block-size: var(--tap-min);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-2);
+}
+
+.move__key svg {
+  fill: none;
+  stroke: var(--text);
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.move__key:active {
+  background-color: var(--brand-soft);
+}
+
+.move__key:disabled {
+  opacity: 0.35;
+}
+
+.move__label {
+  flex: 1;
+  text-align: center;
+  font-size: var(--fs-200);
+  font-weight: var(--fw-medium);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- il piede: cio' che conferma ----------------------------------------- */
+
+.swap__title {
+  font-size: var(--fs-300);
+  font-weight: var(--fw-semibold);
+  line-height: var(--lh-snug);
+}
+
+.swap__text {
+  font-size: var(--fs-100);
+  line-height: var(--lh-snug);
+  color: var(--text-muted);
+  margin-block-end: var(--sp-1);
+}
+
+.editor__row {
+  display: flex;
+  gap: var(--sp-2);
+}
+
+.editor__primary,
+.editor__second {
+  flex: 1;
+  min-block-size: var(--tap-min);
+  padding-inline: var(--sp-4);
+  border-radius: var(--radius-2);
+  font-size: var(--fs-300);
+  font-weight: var(--fw-semibold);
+}
+
+.editor__primary {
+  background-color: var(--brand);
+  color: var(--on-brand);
+}
+
+.editor__primary:active {
+  /* Solo transform: nessun reflow, e il dito vede il tasto cedere. */
+  transform: scale(0.98);
+}
+
+.editor__primary:disabled {
+  opacity: 0.45;
+}
+
+.editor__second {
+  border: 1px solid var(--line-strong);
+  color: var(--text);
+}
+
+.editor__second:active {
+  background-color: var(--surface-sunken);
+}
+
+.editor__second:disabled {
+  opacity: 0.45;
+}
+
+/* --- cancellare davvero --------------------------------------------------- */
+/*
+ * Sta in fondo al corpo che scorre, non nel piede: e' l'unica azione
+ * irreversibile dell'app, e non deve trovarsi sotto il pollice di chi sta
+ * facendo altro. Il bottone **esiste solo se il piano lo permette**
+ * (`planCategoryDeletion`), altrimenti al suo posto ci sono le parole con
+ * dentro i numeri: "3 spese la usano".
+ */
+.danger {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  margin-block-start: var(--sp-2);
+  padding-block-start: var(--sp-3);
+  border-block-start: 1px solid var(--line);
+}
+
+.danger__action {
+  align-self: flex-start;
+  min-block-size: var(--tap-min);
+  padding-inline: var(--sp-4);
+  border: 1px solid var(--danger);
+  border-radius: var(--radius-2);
+  color: var(--danger);
+  font-size: var(--fs-200);
+  font-weight: var(--fw-semibold);
+}
+
+.danger__action:active {
+  background-color: color-mix(in srgb, var(--danger) 12%, var(--surface));
+}
+
+.danger__action:disabled {
+  opacity: 0.45;
+}
+
+/* --- il telefono girato --------------------------------------------------- */
+/*
+ * A 800x327 la colonna non ci sta: corpo e piede diventano due colonne, come
+ * nel foglio d'inserimento. Il piede — cioe' cio' che conferma — resta intero e
+ * visibile, e il corpo scorre nella sua meta'.
+ */
+@media (max-height: 480px) and (orientation: landscape) {
+  .sheet--cat {
+    --chip-min: var(--tap-min);
+    --sheet-min: 0;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto 1fr;
+    grid-template-areas:
+      "hint hint"
+      "body foot";
+    column-gap: var(--sp-3);
+    max-inline-size: min(48rem, calc(100dvw - 6rem));
+    min-block-size: 100dvh;
+  }
+
+  .sheet--cat .sheet__hint {
+    grid-area: hint;
+  }
+
+  .editor {
+    grid-area: body;
+  }
+
+  .editor__foot {
+    grid-area: foot;
+    justify-content: center;
+    border-block-start: none;
+    padding-block-start: 0;
+  }
+}

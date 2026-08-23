@@ -291,6 +291,43 @@ decisione puo' diventare sbagliata senza che il suo codice cambi, e senza che
 nessuno la stia guardando: e' il motivo per cui il controllo 0 del critico esiste,
 e questo e' il caso che lo dimostra meglio della regola astratta.
 
+## Il lampo di lingua all'avvio: si riserva la larghezza, non si cachea
+
+Chi ha scelto una lingua **diversa** da quella rilevata dal telefono vede il guscio
+nella lingua rilevata per i pochi frame fra il primo render e l'apertura del
+database — conseguenza diretta della regola "Ordine di pittura", che dipinge il
+guscio prima dei dati.
+
+**La cura non e' una copia sincrona della lingua.** La regola non chiede che il
+primo frame sia definitivo: chiede che l'arrivo dei dati **non sposti nulla**,
+CLS = 0. Il difetto misurabile e' lo spostamento delle schede, non il cambio di
+parole.
+
+Quindi: alle etichette si riserva **la larghezza massima fra le due lingue**.
+Deterministica, calcolabile, nessuna seconda copia di niente. Il lampo resta ed e'
+cosmetico.
+
+Il caso va nella sonda e2e — **lingua scelta diversa da quella rilevata** — perche'
+oggi non e' misurato: chi non ha scelto niente non lo vede mai, e **un difetto che
+nessun test guarda torna**.
+
+### L'escalation, gia' argomentata: quando una cache sincrona sarebbe legittima
+
+Se un giorno la riserva di larghezza non bastasse, la copia sincrona della lingua
+fuori da IndexedDB torna sul tavolo — e passa il nostro stesso test, quindi non si
+ridiscute da capo:
+
+**Una cache che compra qualcosa e' legittima; una che non compra niente e' solo
+divergenza.** Qui comprerebbe una **lettura sincrona che IndexedDB non puo' dare**
+— a differenza del flag di `persisted()`, cancellato nella fase 2, che duplicava
+uno stato **gia' disponibile** dal browser a ogni avvio.
+
+E ha una proprieta' rara: **quando e' stantia degrada esattamente al comportamento
+di oggi** — cioe' il guscio nella lingua sbagliata per pochi frame. Non puo'
+introdurre un difetto che non esista gia'. E' la differenza fra una cache che, se
+sbaglia, produce uno stato nuovo e sconosciuto, e una che al peggio torna al punto
+di partenza.
+
 ## Fase 3 — Prerequisiti per condividere
 
 Non e' piu' "categorie modificabili". Contiene **quattro cose interdipendenti**, e
@@ -299,6 +336,27 @@ categorie e "rivedi la guida", quindi nessuna delle altre tre sta in piedi senza
 
 **Di conseguenza la fase 5 si alleggerisce**: la schermata Impostazioni non arriva
 piu' li'.
+
+### Promemoria di backup — anticipato dalla fase 7, ed e' una condizione
+
+L'export **esce dalla barra e va in Impostazioni** (a 320 punti barra, due schede e
+due bottoni non ci stanno). Ma il bottone in barra non era solo un accesso: **era
+un promemoria**. Vederlo faceva esportare. Sepolto in Impostazioni, la frequenza di
+backup scende — e da adesso non sono piu' i dati di una persona sola.
+
+Quindi il promemoria che ROADMAP metteva in fase 7 si anticipa: **se non si esporta
+da piu' di 14 giorni, un avviso discreto.** Non nella barra, non modale.
+
+**E' una condizione, non un'aggiunta**: senza il promemoria, l'export resta in
+barra. Togliere una rete senza metterne un'altra non e' un compromesso, e' una
+perdita.
+
+Nota gia' nota e voluta: `lastBackupAt` **non** viene scritto sul ramo di download
+non confermabile (`<a download>` in standalone puo' non fare nulla, senza errore),
+quindi l'avviso si accendera' a volte a torto. **E' la direzione giusta**, per la
+regola gia' scritta in CLAUDE.md: un indicatore di sicurezza che puo' sbagliare
+deve sbagliare **verso l'allarme**. Un banner che tace a torto lascia senza copia
+chi crede di averla.
 
 ### 1. Categorie modificabili, con tetto di otto attive
 Regole complete in CLAUDE.md, "Tetto di otto categorie attive". In sintesi:

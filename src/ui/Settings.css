@@ -5,12 +5,19 @@
  * fermi, quindi lo slancio non deve propagarsi al documento o iOS fa rimbalzare
  * tutta la pagina.
  *
- * Qui **non c'e' nessuna altezza riservata**, e non e' una svista rispetto alla
- * Home: la Home dipinge il guscio prima dei dati e il contenuto ci arriva dentro
- * dopo (CLS = 0 sta li'). Qui il contenuto e' tutto noto al primo frame tranne
- * un importo e una spunta, e nessuno dei due cambia l'altezza della riga che lo
- * contiene: la spunta e' sempre nel DOM (`visibility`), e la riga del budget e'
- * pinnata a due righe di testo.
+ * Le altezze che dipendono dai dati sono **riservate**, una per una, e sono
+ * poche: la riga del budget e quella dello stato del backup sono pinnate a due
+ * righe di testo (`.prefs__text`), la spunta della lingua e' sempre nel DOM
+ * (`visibility`), e la griglia delle categorie ha le sue due file riservate in
+ * Categories.css. Impostazioni non e' la schermata iniziale, quindi quasi
+ * sempre ci si arriva a dati letti — ma "quasi sempre" non e' la regola, e il
+ * guscio si dipinge comunque prima dei dati.
+ *
+ * L'unica cosa che compare **senza** spazio riservato e' l'elenco delle
+ * archiviate, e sta in fondo alla sezione di proposito: nasce da un'azione
+ * dell'utente (archiviare), quindi non e' CLS, ed essendo l'ultimo blocco della
+ * sua sezione spinge in giu' solo cio' che sta sotto in un contenitore che
+ * scorre.
  */
 
 .prefs {

@@ -607,3 +607,158 @@ test('la Home spiega il budget nato a meta settimana, e non salta lo stesso', as
   expect(m.cls, `spostamenti: ${JSON.stringify(m.shifts)}`).toBe(0)
   expect(m.overflowX, 'scroll orizzontale in pagina').toBeLessThanOrEqual(0)
 })
+
+/**
+ * Il lampo di lingua, misurato: **lingua scelta diversa da quella rilevata**.
+ *
+ * E' lo stato che nessun test guardava, e la ragione per cui non lo guardava e'
+ * proprio quella che lo rendeva pericoloso: chi non ha mai scelto una lingua non
+ * lo vede mai, quindi il difetto vive solo addosso a chi ha fatto una scelta —
+ * cioe' a chi ha gia' detto che l'impostazione predefinita non gli andava bene.
+ *
+ * Il browser di questa suite dichiara `it-IT` (playwright.config.ts) e qui si
+ * sceglie **English**: al ricaricamento il guscio si dipinge in italiano per i
+ * pochi frame che separano il primo render dall'apertura del database, poi
+ * passa all'inglese. Il lampo resta, ed e' cosmetico. Quello che deve restare
+ * zero e' il **CLS**: le etichette della barra tengono la larghezza massima
+ * fra le due lingue (`Fit`), quindi le schede non si spostano di un pixel
+ * quando le parole cambiano.
+ *
+ * **Cosa prova davvero, misurato e non supposto**: su Chromium con lo stack di
+ * font di sistema, "Storico" e "History" differiscono di **1px**, e uno
+ * spostamento cosi' piccolo non produce nessuna voce `layout-shift` — questo
+ * test resta a zero anche togliendo la riserva. E' stato verificato di
+ * proposito, togliendola: un test che non cade quando la cosa che sorveglia
+ * sparisce non sorveglia niente, e saperlo vale piu' del verde.
+ *
+ * Quindi qui si misura la **conseguenza** (il CLS resta zero anche nello stato
+ * che nessuno guardava, con dati veri da aspettare e la barra che cambia
+ * lingua), e nel test subito sotto si misura la **causa** — la larghezza. La
+ * riserva serve comunque: su iOS le metriche di SF Pro non sono quelle di
+ * Chromium, e 1px qui possono essere 6 li'.
+ */
+test('la Home non salta nemmeno con la lingua scelta diversa da quella del telefono', async ({
+  page,
+}, testInfo) => {
+  await page.goto('./')
+  await expect(page.locator('.budget')).toBeEnabled()
+
+  // La scelta si fa dalla schermata vera, non scrivendo nel database: quello
+  // che si vuole provare e' il percorso che fara' una persona.
+  await page.locator('.app__action').tap()
+  await expect(page.locator('.prefs')).toBeVisible()
+  await page.locator('.pick').nth(2).tap()
+  await expect(page.locator('.nav__tab').nth(1)).toHaveText('History')
+
+  // Qualche spesa: cosi' il ricaricamento ha davvero dei dati da aspettare.
+  await seed(page, 200)
+
+  await watch(page)
+  await page.reload()
+  await expect(page.locator('.row').first()).toBeVisible()
+  // La barra e' passata all'inglese: il momento dopo il lampo, cioe' quello in
+  // cui uno spostamento sarebbe gia' avvenuto.
+  await expect(page.locator('.nav__tab').nth(1)).toHaveText('History')
+  await settled(page)
+
+  const m = await measure(page)
+  console.log(`\n  [${testInfo.project.name}] home con lingua scelta ≠ rilevata  CLS=${m.cls}  primo frame utile: "${m.firstHero?.text ?? '(nessun numero)'}" top ${m.firstHero?.top}px  finale: "${m.finalHero?.text}" top ${m.finalHero?.top}px`)
+
+  expect(m.cls, `spostamenti: ${JSON.stringify(m.shifts)}`).toBe(0)
+  expect(m.firstHero?.top).toBe(m.finalHero?.top)
+  expect(m.firstHero?.height).toBe(m.finalHero?.height)
+  expect(m.overflowX, 'scroll orizzontale in pagina').toBeLessThanOrEqual(0)
+})
+
+/**
+ * E la controprova della riserva, senza passare dal CLS: la barra e' **larga
+ * uguale** nelle due lingue.
+ *
+ * Serve perche' il CLS misura la conseguenza, non la causa: se un giorno le
+ * schede smettessero di essere ancorate a destra, il test qui sopra
+ * continuerebbe a dire zero mentre la riserva non serve piu' a niente. Questo
+ * dice se la riserva **c'e'**, e cade appena qualcuno toglie `Fit` da
+ * un'etichetta del guscio.
+ */
+test('le etichette della barra sono larghe uguale nelle due lingue', async ({ page }) => {
+  await page.goto('./')
+  await expect(page.locator('.budget')).toBeEnabled()
+
+  const misura = (): Promise<readonly number[]> =>
+    page.evaluate(() =>
+      [...document.querySelectorAll('.nav, .app__action')].map((el) =>
+        Math.round(el.getBoundingClientRect().width),
+      ),
+    )
+
+  const inItaliano = await misura()
+
+  await page.locator('.app__action').tap()
+  await expect(page.locator('.prefs')).toBeVisible()
+  await page.locator('.pick').nth(2).tap()
+  await expect(page.locator('.nav__tab').nth(1)).toHaveText('History')
+
+  const inInglese = await misura()
+
+  expect(inItaliano.length).toBeGreaterThan(0)
+  expect(inInglese, `italiano ${inItaliano.join('/')} contro inglese ${inInglese.join('/')}`).toEqual(
+    inItaliano,
+  )
+})
+
+/**
+ * Il promemoria di backup compare **quando i dati arrivano**, cioe' nell'istante
+ * esatto in cui la regola "Ordine di pittura" vieta di spostare qualcosa.
+ *
+ * E' una banda in fondo alla colonna: accorcia il contenitore che scorre invece
+ * di coprirlo, e i suoi figli restano ancorati in alto. Detta cosi' sembra
+ * ovvia; e' esattamente il tipo di cosa che questo progetto ha gia' sbagliato
+ * due volte, quindi si misura.
+ */
+test('il promemoria di backup non fa saltare la Home quando compare', async ({
+  page,
+}, testInfo) => {
+  await page.goto('./')
+  await expect(page.locator('.budget')).toBeEnabled()
+  await setBudget(page, '20000', 'A settimana')
+  await seed(page, 200)
+
+  // Due settimane e mezzo dal primo avvio, e nessun export mai fatto: e' la
+  // condizione vera del promemoria, ottenuta invecchiando il dato e non
+  // abbassando la soglia.
+  await page.evaluate(async () => {
+    const db: IDBDatabase = await new Promise((resolve, reject) => {
+      const request = indexedDB.open('cent')
+      request.onsuccess = () => resolve(request.result)
+      request.onerror = () => reject(request.error)
+    })
+    const record: Record<string, unknown> | undefined = await new Promise((resolve, reject) => {
+      const request = db.transaction('settings').objectStore('settings').get('settings')
+      request.onsuccess = () => resolve(request.result)
+      request.onerror = () => reject(request.error)
+    })
+    if (record === undefined) throw new Error('le impostazioni non sono sul disco')
+    const back = new Date(Date.now() - 18 * 24 * 60 * 60 * 1000).toISOString()
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction('settings', 'readwrite')
+      tx.objectStore('settings').put({ ...record, createdAt: back })
+      tx.oncomplete = () => resolve()
+      tx.onerror = () => reject(tx.error)
+    })
+    db.close()
+  })
+
+  await watch(page)
+  await page.reload()
+  await expect(page.locator('.nudge')).toBeVisible()
+  await expect(page.locator('.row').first()).toBeVisible()
+  await settled(page)
+
+  const m = await measure(page)
+  console.log(`\n  [${testInfo.project.name}] home + promemoria di backup  CLS=${m.cls}  primo frame utile: top ${m.firstHero?.top}px  finale: top ${m.finalHero?.top}px`)
+
+  expect(m.cls, `spostamenti: ${JSON.stringify(m.shifts)}`).toBe(0)
+  expect(m.firstHero?.top).toBe(m.finalHero?.top)
+  expect(m.overflowX, 'scroll orizzontale in pagina').toBeLessThanOrEqual(0)
+  expect(m.homeOverflowX, 'scroll orizzontale dentro la Home').toBeLessThanOrEqual(0)
+})

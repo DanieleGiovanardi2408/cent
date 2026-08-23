@@ -1,0 +1,101 @@
+/* Il promemoria di backup.
+ *
+ * Stessa fascia e stessa forma dell'avviso di aggiornamento — contenuto in
+ * flusso in fondo alla colonna — ma **piu' silenzioso**: nessun colore d'allarme
+ * e nessun bordo colorato. Non e' successo niente di male, manca una copia.
+ *
+ * Il colore e' quello del testo smorzato per la riga, il marchio solo sul
+ * bottone: e' l'unica cosa da fare, quindi e' l'unica cosa che si accende.
+ * Contrasto verificato in entrambi i temi: --text 16:1, --text-muted 5.4:1
+ * (chiaro) e 7.3:1 (scuro), il bordo del bottone e' --line-strong (>3:1).
+ */
+
+.nudge {
+  flex: none;
+  background-color: var(--surface);
+  border-block-start: 1px solid var(--line);
+  padding-block: var(--sp-2);
+  padding-inline-start: max(var(--sp-3), var(--safe-left));
+  padding-inline-end: max(var(--sp-3), var(--safe-right));
+  animation: nudge-in var(--dur-1) var(--ease-out) both;
+}
+
+/* Solo opacity e transform, e otto pixel: il bersaglio e' fermo prima che un
+ * dito lo raggiunga. Sotto prefers-reduced-motion i token di durata valgono
+ * zero e la banda compare e basta. */
+@keyframes nudge-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 8px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+.nudge__inner {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  max-inline-size: var(--app-max);
+  margin-inline: auto;
+  padding-inline: var(--sp-2);
+}
+
+.nudge__icon {
+  flex: none;
+  fill: none;
+  stroke: var(--text-muted);
+  stroke-width: 1.8;
+  stroke-linejoin: round;
+}
+
+.nudge__text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-inline-size: 0;
+}
+
+.nudge__title {
+  font-size: var(--fs-200);
+  font-weight: var(--fw-semibold);
+  line-height: var(--lh-snug);
+  color: var(--text);
+}
+
+.nudge__hint {
+  font-size: var(--fs-100);
+  line-height: var(--lh-snug);
+  color: var(--text-muted);
+}
+
+.nudge__action {
+  flex: none;
+  min-block-size: var(--tap-min);
+  padding-inline: var(--sp-3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-2);
+  color: var(--brand);
+  font-size: var(--fs-200);
+  font-weight: var(--fw-semibold);
+}
+
+/* Nessuna transizione: il colore cambia nel frame del tap. */
+.nudge__action:active {
+  background-color: var(--brand-soft);
+  border-color: var(--brand);
+}
+
+/* A 320 punti la riga con icona, due testi e il bottone sfonda: sparisce
+ * l'icona, che e' l'unica delle quattro che non porta informazione. */
+@media (max-width: 359px) {
+  .nudge__icon {
+    display: none;
+  }
+
+  .nudge__action {
+    padding-inline: var(--sp-3);
+  }
+}

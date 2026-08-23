@@ -1,14 +1,20 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import { backupFilename, exportBackupFile, serializeBackup } from '../app/backup-file'
 import { getAppState, refreshDay } from '../app/boot'
+import { activeCategories, archivedCategories, planCategoryDeletion } from '../core/categories'
 import type { Repository } from '../core/repository'
 import { nowTimestamp } from '../core/types'
 import type { BudgetPeriod, Category, Expense, Language } from '../core/types'
 import { AddSheet } from './AddSheet'
 import type { SaveInput } from './AddSheet'
+import { BackupNudge } from './BackupNudge'
+import { backupNudge, daysSince } from './backup-nudge'
 import { BackupPanel } from './BackupPanel'
 import { BudgetSheet } from './BudgetSheet'
+import { CategorySheet } from './CategorySheet'
+import type { CategoryDraft, CategoryMode } from './CategorySheet'
 import { ExpenseActions } from './ExpenseActions'
+import { Fit } from './Fit'
 import { History } from './History'
 import { Home } from './Home'
 import { Mark } from './Mark'
@@ -44,6 +50,11 @@ type Sheet = { readonly kind: 'add' | 'budget'; readonly leaving: boolean } | nu
  */
 type View = 'home' | 'history' | 'settings'
 
+/** Il foglio delle categorie: quale gesto, su quale categoria. */
+type CatSheet =
+  | { readonly mode: CategoryMode; readonly id: string | null; readonly leaving: boolean }
+  | null
+
 let toastSeq = 0
 
 /** Quanto vive un toast: sei secondi se c'e' qualcosa da annullare, se no quattro. */
@@ -66,14 +77,18 @@ export function App() {
    * per essere dipinto. In un `useEffect` girerebbe **dopo** il primo render,
    * cioe' l'app dipingerebbe un frame nella lingua sbagliata a ogni cambio.
    *
-   * Costo accettato, e va detto: chi ha scelto una lingua **diversa** da quella
-   * del telefono vede il guscio nella lingua rilevata per i pochi frame che
-   * separano il primo render dall'apertura del database (regola "Ordine di
-   * pittura": il guscio non aspetta i dati). Le tre parole che cambiano sono
-   * nella barra, e cambiando larghezza spostano le schede. Toglierlo del tutto
-   * vorrebbe dire tenere una copia sincrona della lingua fuori da IndexedDB,
-   * cioe' una seconda fonte di verita' che puo' divergere: e' un baratto che va
-   * deciso con una ADR, non di straforo dentro una schermata.
+   * Chi ha scelto una lingua **diversa** da quella del telefono vede il guscio
+   * nella lingua rilevata per i pochi frame che separano il primo render
+   * dall'apertura del database (regola "Ordine di pittura": il guscio non
+   * aspetta i dati). Quel lampo **resta**, ed e' cosmetico.
+   *
+   * Cio' che non resta e' la sua conseguenza misurabile: le parole della barra
+   * sono larghe diversamente nelle due lingue, e le schede si spostavano
+   * quando i dati arrivavano — CLS > 0 in uno stato che nessun test guardava.
+   * Adesso ogni etichetta del guscio occupa la larghezza massima fra le due
+   * lingue (`Fit`), che e' deterministica e non introduce nessuna seconda
+   * fonte di verita' fuori da IndexedDB. La regola non chiede che il primo
+   * frame sia definitivo: chiede che l'arrivo dei dati non sposti nulla.
    */
   const chosenLanguage = app.data?.settings.language
   setLanguage(resolveLanguage(chosenLanguage))
@@ -86,21 +101,57 @@ export function App() {
   const [panel, setPanel] = useState<string | null>(null)
   /** La spesa su cui si e' toccato nello Storico: apre il foglio delle azioni. */
   const [picked, setPicked] = useState<Expense | null>(null)
+  /**
+   * L'editor delle categorie. Tiene **l'id**, non la categoria: dopo uno
+   * spostamento o una modifica il record e' cambiato, e un oggetto congelato
+   * qui dentro mostrerebbe lo stato di prima del tap mentre la griglia dietro
+   * ha gia' quello nuovo.
+   */
+  const [catSheet, setCatSheet] = useState<CatSheet>(null)
   const closeTimer = useRef(0)
+  const catTimer = useRef(0)
   const toastTimer = useRef(0)
   /** Quando il toast corrente deve sparire, in ora dell'orologio (non di un timer). */
   const toastUntil = useRef(0)
 
+  /**
+   * Le otto della griglia e tutte le altre.
+   *
+   * Non e' piu' un `filter` scritto qui: `activeCategories` e' **totale**
+   * (`src/core/categories.ts`), cioe' di fronte a nove non archiviate — un JSON
+   * scritto a mano, una versione futura — ne restituisce otto per regola invece
+   * di produrre una griglia che scorre. Chiamarla anche qui vuol dire che il
+   * foglio d'inserimento, la griglia di Impostazioni e la domanda "quale
+   * sostituisce?" mostrano **le stesse otto**: tre risposte diverse alla stessa
+   * domanda sarebbero il modo esatto in cui si archivia la categoria sbagliata.
+   */
   const categories = useMemo(
-    () =>
-      (app.data?.categories ?? [])
-        .filter((category) => !category.archived)
-        .slice()
-        .sort((a, b) => a.order - b.order),
+    () => activeCategories(app.data?.categories ?? []),
+    [app.data?.categories],
+  )
+
+  const archived = useMemo(
+    () => archivedCategories(app.data?.categories ?? []),
     [app.data?.categories],
   )
 
   const failures = app.data?.writeFailures.count ?? 0
+
+  /**
+   * Il promemoria di backup, cioe' la **condizione** a cui l'export ha potuto
+   * lasciare la barra: senza, la rete tolta non sarebbe stata rimpiazzata.
+   *
+   * Tace quando c'e' gia' l'avviso delle scritture non arrivate al disco: quello
+   * dice "esporta adesso" per una ragione piu' urgente, e due bande che
+   * chiedono la stessa cosa insegnano a ignorarle entrambe.
+   */
+  const lastBackupAt = app.data?.settings.lastBackupAt
+
+  const nudge = useMemo(() => {
+    const data = app.data
+    if (data === null || failures > 0) return null
+    return backupNudge(data.settings, data.expenses, nowTimestamp())
+  }, [app.data, failures])
 
   /**
    * Il periodo che la Home sta mostrando — cioe' quello dell'ultimo budget
@@ -363,6 +414,171 @@ export function App() {
     }
   }
 
+  /* --- le categorie ------------------------------------------------------ *
+   *
+   * Cinque gesti e una regola sola dietro tutti: **la griglia tiene otto**, e
+   * chi la fa salire passa dal disco (ADR 012). Qui non si decide niente, si
+   * chiede — e si dice all'utente cos'e' successo con i nomi veri dentro.
+   */
+
+  function openCategory(mode: CategoryMode, id: string | null): void {
+    // Come per gli altri fogli: un "Annulla" appeso a una spesa che non si sta
+    // piu' guardando non deve sopravvivere dietro al velo.
+    clearToast()
+    clearTimeout(catTimer.current)
+    setSession((current) => current + 1)
+    setCatSheet({ mode, id, leaving: false })
+  }
+
+  function closeCategory(): void {
+    setCatSheet((current) => (current === null ? null : { ...current, leaving: true }))
+    clearTimeout(catTimer.current)
+    catTimer.current = window.setTimeout(() => setCatSheet(null), motionMs(200))
+  }
+
+  /**
+   * Mette una categoria in griglia: quella nuova, o quella che sta in archivio.
+   *
+   * **Una scrittura sola**, con dentro l'archiviazione di chi esce: lo scambio
+   * non puo' restare a meta', o resterebbero sette categorie in griglia — lo
+   * stato peggiore, perche' e' l'unico che nessuno si aspetta.
+   *
+   * Non e' ottimistica, ed e' l'unica dell'app a non esserlo: il tetto si conta
+   * sulle categorie che stanno sul disco, quindi non esiste nessun istante in
+   * cui la UI mostra nove chip. Nessuno spinner comunque — la scrittura e'
+   * locale e il foglio da' il suo riscontro nel frame del tap.
+   */
+  async function placeCategory(
+    draft: CategoryDraft | null,
+    replacing?: string,
+  ): Promise<boolean> {
+    const repo = app.repo
+    const sheet = catSheet
+    if (repo === null || sheet === null) return false
+    const leaving = replacing === undefined ? undefined : categoryOf(replacing)
+    try {
+      const result =
+        draft === null
+          ? sheet.id === null
+            ? null
+            : await repo.unarchiveCategory(sheet.id, replacing)
+          : await repo.addCategory(draft, replacing)
+      if (result === null || !result.ok) return false
+      closeCategory()
+      showToast(
+        leaving === undefined
+          ? t(draft === null ? 'toast.catBack' : 'toast.catAdded', { name: result.placed.name })
+          : t('toast.catSwapped', { name: result.placed.name, old: leaving.name }),
+      )
+      return true
+    } catch {
+      // Un import in corso: il foglio resta aperto e lo dice dove si riprova.
+      return false
+    }
+  }
+
+  /** Nome, emoji, colore. Sincrona: cambia solo cose che non toccano il tetto. */
+  function saveCategory(draft: CategoryDraft): boolean {
+    const repo = app.repo
+    const id = catSheet?.id
+    if (repo === null || id === undefined || id === null) return false
+    try {
+      const saved = repo.updateCategory(id, draft)
+      if (saved === null) return false
+      closeCategory()
+      showToast(t('toast.catSaved', { name: saved.name }))
+      return true
+    } catch {
+      return false
+    }
+  }
+
+  /**
+   * Archivia. **Non e' una cancellazione**: la categoria resta su tutte le spese
+   * che l'hanno usata.
+   *
+   * Si annulla, e l'annullamento non e' un caso fortunato: archiviando si e'
+   * appena liberato un posto in griglia, quindi rimetterla dentro non fa la
+   * nona e non ha bisogno di chiedere niente a nessuno.
+   */
+  function archiveCategory(): void {
+    const repo = app.repo
+    const id = catSheet?.id
+    if (repo === null || id === undefined || id === null) return
+    let done: Category | null
+    try {
+      done = repo.archiveCategory(id)
+    } catch {
+      showToast(t('toast.catFailed'))
+      return
+    }
+    closeCategory()
+    if (done === null) {
+      showToast(t('toast.catFailed'))
+      return
+    }
+    const name = done.name
+    showToast(t('toast.catArchived', { name }), {
+      label: t('toast.undo'),
+      run: () => {
+        void repo
+          .unarchiveCategory(id)
+          .then((result) => {
+            showToast(result.ok ? t('toast.catBack', { name }) : t('toast.catFailed'))
+          })
+          .catch(() => showToast(t('toast.catFailed')))
+      },
+    })
+  }
+
+  /**
+   * Cancella davvero. Il foglio offre questo bottone **solo** quando
+   * `planCategoryDeletion` ha gia' detto di si' sul mirror; qui il permesso lo
+   * ridà il disco, che e' l'unico a saperlo con certezza.
+   *
+   * Nessun "Annulla": ricrearla produrrebbe un record con un altro id, cioe'
+   * un'altra categoria con lo stesso nome. Il foglio lo dice prima di far
+   * toccare il bottone, che e' il momento in cui l'informazione serve.
+   */
+  function deleteCategory(): void {
+    const repo = app.repo
+    const id = catSheet?.id
+    const target = id === undefined || id === null ? undefined : categoryOf(id)
+    if (repo === null || id === undefined || id === null || target === undefined) return
+    closeCategory()
+    void repo
+      .deleteCategory(id)
+      .then((result) => {
+        if (result.ok) showToast(t('toast.catDeleted', { name: target.name }))
+        else showToast(t(result.reason === 'in-use' ? 'toast.catInUse' : 'toast.catFailed'))
+      })
+      .catch(() => showToast(t('toast.catFailed')))
+  }
+
+  /**
+   * Sposta di una cella. Ottimistica e immediata: l'anteprima dentro al foglio
+   * si ridisegna nello stesso frame, ed e' li' che si vede l'effetto — la
+   * griglia di Impostazioni sta dietro al velo.
+   */
+  function moveCategory(delta: number): void {
+    const repo = app.repo
+    const id = catSheet?.id
+    if (repo === null || id === undefined || id === null) return
+    const ids = categories.map((category) => category.id)
+    const from = ids.indexOf(id)
+    const to = from + delta
+    if (from < 0 || to < 0 || to >= ids.length) return
+    const next = [...ids]
+    const [moved] = next.splice(from, 1)
+    if (moved === undefined) return
+    next.splice(to, 0, moved)
+    try {
+      repo.reorderCategories(next)
+    } catch {
+      showToast(t('toast.catFailed'))
+    }
+  }
+
   function markBackup(repo: Repository): void {
     try {
       repo.updateSettings({ lastBackupAt: nowTimestamp() })
@@ -376,7 +592,31 @@ export function App() {
   // tecnologie assistive. Il foglio che sta uscendo non conta: sta gia'
   // sparendo, e tenerlo qui zittirebbe il toast che nasce proprio in
   // quell'istante.
-  const modal = (sheet !== null && !sheet.leaving) || picked !== null || panel !== null
+  const modal =
+    (sheet !== null && !sheet.leaving) ||
+    (catSheet !== null && !catSheet.leaving) ||
+    picked !== null ||
+    panel !== null
+
+  /** La categoria che il foglio sta mostrando, **riletta dal mirror** a ogni render. */
+  const catTarget = catSheet?.id === undefined || catSheet.id === null ? null : categoryOf(catSheet.id) ?? null
+
+  /**
+   * Il permesso di cancellare, chiesto **prima** di mostrare il bottone.
+   *
+   * `planCategoryDeletion` e' pura e il rifiuto porta con se' i numeri ("3 spese
+   * la usano"): chiederglielo qui vuol dire che chi non puo' cancellare legge
+   * una frase con dentro il motivo, invece di toccare un bottone e ricevere un
+   * errore. Le spese contano tutte, cancellate comprese: un soft delete resta
+   * nello Storico e nell'export, quindi il riferimento e' vivo.
+   */
+  const catDeletion = useMemo(() => {
+    const data = app.data
+    if (data === null || catTarget === null) return null
+    return planCategoryDeletion(data.categories, data.expenses, data.recurringRules, {
+      id: catTarget.id,
+    })
+  }, [app.data, catTarget])
 
   return (
     <>
@@ -418,7 +658,9 @@ export function App() {
               <circle cx="15" cy="8" r="2.2" />
               <circle cx="9" cy="16" r="2.2" />
             </svg>
-            <span class="app__label">{t('settings.open')}</span>
+            <span class="app__label">
+              <Fit k="settings.open" />
+            </span>
           </button>
 
           {/* La navigazione sta in barra e non in fondo allo schermo: in fondo
@@ -433,7 +675,7 @@ export function App() {
               aria-current={view === 'home' ? 'page' : undefined}
               onClick={() => setView('home')}
             >
-              {t('nav.home')}
+              <Fit k="nav.home" />
             </button>
             <button
               type="button"
@@ -441,7 +683,7 @@ export function App() {
               aria-current={view === 'history' ? 'page' : undefined}
               onClick={() => setView('history')}
             >
-              {t('nav.history')}
+              <Fit k="nav.history" />
             </button>
           </nav>
         </header>
@@ -494,6 +736,14 @@ export function App() {
               onLanguage={saveLanguage}
               budgetCents={currentBudgetCents(app.data?.budgets ?? [], homePeriod, app.day)}
               budgetPeriod={homePeriod}
+              activeCategories={categories}
+              archivedCategories={archived}
+              onEditCategory={(category) => openCategory('edit', category.id)}
+              onPlaceCategory={(category) => openCategory('place', category.id)}
+              onNewCategory={() => openCategory('new', null)}
+              backupDays={
+                lastBackupAt === undefined ? null : daysSince(lastBackupAt, nowTimestamp())
+              }
               ready={app.repo !== null}
               onEditBudget={() => openSheet('budget')}
               onExport={exportNow}
@@ -501,8 +751,11 @@ export function App() {
           )}
         </main>
 
-        {/* Le due bande in fondo. Sono contenuto, non overlay: comparire accorcia
-            la lista invece di coprire quello che c'e' sotto. */}
+        {/* Le bande in fondo. Sono contenuto, non overlay: comparire accorcia la
+            lista invece di coprire quello che c'e' sotto — e siccome il
+            contenuto resta ancorato in alto, non si sposta niente (CLS = 0
+            anche quando il promemoria compare all'arrivo dei dati). */}
+        <BackupNudge nudge={nudge} onExport={exportNow} />
         <UpdateBanner />
         <Toast toast={toast} />
 
@@ -545,6 +798,23 @@ export function App() {
           onClose={closeSheet}
         />
       ) : null}
+
+      {catSheet === null ? null : (
+        <CategorySheet
+          key={session}
+          mode={catSheet.mode}
+          target={catTarget}
+          active={categories}
+          deletion={catDeletion}
+          leaving={catSheet.leaving}
+          onPlace={placeCategory}
+          onSave={saveCategory}
+          onArchive={archiveCategory}
+          onDelete={deleteCategory}
+          onMove={moveCategory}
+          onClose={closeCategory}
+        />
+      )}
 
       {picked === null ? null : (
         <ExpenseActions

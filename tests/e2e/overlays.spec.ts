@@ -82,6 +82,38 @@ async function seed(page: Page, howMany: number): Promise<void> {
   }, howMany)
 }
 
+/**
+ * Invecchia l'installazione: sposta indietro `settings.createdAt` di `giorni`.
+ *
+ * E' il modo onesto di provare il promemoria di backup — la soglia e' due
+ * settimane, e l'unica alternativa sarebbe aspettarle. Si tocca **il dato**,
+ * non la soglia: un test che abbassa la soglia proverebbe un'app che nessuno
+ * usa.
+ */
+async function ageInstall(page: Page, giorni: number): Promise<void> {
+  await page.evaluate(async (days: number) => {
+    const db: IDBDatabase = await new Promise((resolve, reject) => {
+      const request = indexedDB.open('cent')
+      request.onsuccess = () => resolve(request.result)
+      request.onerror = () => reject(request.error)
+    })
+    const record: Record<string, unknown> | undefined = await new Promise((resolve, reject) => {
+      const request = db.transaction('settings').objectStore('settings').get('settings')
+      request.onsuccess = () => resolve(request.result)
+      request.onerror = () => reject(request.error)
+    })
+    if (record === undefined) throw new Error('le impostazioni non sono sul disco')
+    const back = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString()
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction('settings', 'readwrite')
+      tx.objectStore('settings').put({ ...record, createdAt: back })
+      tx.oncomplete = () => resolve()
+      tx.onerror = () => reject(tx.error)
+    })
+    db.close()
+  }, giorni)
+}
+
 /** La schermata attiva e' stato, non una rotta (ADR 002): si cambia col tap. */
 async function go(page: Page, tab: 'Home' | 'Storico'): Promise<void> {
   await page.locator('.nav__tab', { hasText: tab }).tap()
@@ -627,4 +659,306 @@ test('Impostazioni: nessun bersaglio coperto, e le tre voci della lingua fanno q
   }))
   expect(scroll.page, 'c\'e\' scroll orizzontale in pagina').toBeLessThanOrEqual(0)
   expect(scroll.prefs, 'c\'e\' scroll orizzontale dentro Impostazioni').toBeLessThanOrEqual(0)
+})
+
+/**
+ * Le categorie: la sonda sui **tre stati nuovi** — l'editor aperto, il foglio
+ * "quale sostituisce?" e l'elenco delle archiviate — e la prova che i gesti
+ * fanno quello che dicono.
+ *
+ * ## Perche' la sonda anche qui
+ *
+ * Perche' sono stati nuovi, e la regola "Sovrapposizioni" non ha eccezioni per
+ * le schermate che sembrano innocue: **il piede del foglio** — dove sta la
+ * griglia che conferma — e' l'unico posto dell'app in cui otto bersagli da 52px
+ * vivono sotto un corpo che scorre. Se il corpo crescesse (una lingua piu'
+ * lunga, un telefono corto), il primo pezzo a finire fuori sarebbe proprio cio'
+ * che salva.
+ *
+ * ## Cosa prova, oltre alla geometria
+ *
+ * Che lo **scambio** e' un gesto solo (il tap sul chip archivia e mette in
+ * griglia insieme), che l'archiviata **non e' cancellata** (torna in griglia
+ * dallo stesso gesto dell'aggiunta, senza nessun bottone "ripristina"), e che
+ * la **cancellazione rifiutata** porta le parole con dentro i numeri invece di
+ * un errore dopo il tap.
+ */
+test('Categorie: scambio, archivio e cancellazione, senza bersagli coperti', async ({
+  page,
+}, testInfo) => {
+  const viewport = `${testInfo.project.use.viewport?.width}x${testInfo.project.use.viewport?.height}`
+  const rows: string[] = []
+  const failures: Target[] = []
+
+  const check = async (state: string): Promise<void> => {
+    const targets = await probe(page)
+    expect(targets.length, `nessun bersaglio misurato in "${state}": la sonda non prova niente`)
+      .toBeGreaterThan(0)
+    rows.push(...report(viewport, state, targets))
+    failures.push(...targets.filter((t) => t.status === 'coperto' || t.status === 'piccolo'))
+  }
+
+  await page.goto('./')
+  await expect(page.locator('.fab')).toBeEnabled()
+
+  // Una spesa vera sulla prima categoria: serve al ramo che conta, cioe' la
+  // cancellazione **rifiutata**. Senza dati veri quel ramo non esiste.
+  await openSheet(page, '.fab')
+  for (const digit of ['4', '5', '0']) {
+    await page.locator('.pad__key', { hasText: new RegExp(`^${digit}$`) }).first().tap()
+  }
+  await page.locator('.cat').first().tap()
+  await expect(page.locator('.sheet')).toHaveCount(0)
+
+  await page.locator('.app__action').tap()
+  await expect(page.locator('.prefs')).toBeVisible()
+  await still(page)
+  await expect(page.locator('.cats--edit .cat')).toHaveCount(8)
+  await check('Impostazioni con le categorie')
+
+  // --- Aggiungere la nona non esiste: le otto di default riempiono il tetto,
+  //     quindi il primo gesto di chiunque e' uno scambio. Ed e' li' che si vede
+  //     se lo scambio e' un percorso o un errore.
+  await page.locator('.cats__add').tap()
+  await expect(page.locator('.sheet--cat')).toBeVisible()
+  await still(page)
+  // Senza nome i chip sono spenti e la riga dice cosa fare: la sonda salta i
+  // `:disabled`, quindi questo stato misura il resto del foglio.
+  await expect(page.locator('.sheet__hint')).toHaveText('Un nome, e scegli emoji e colore.')
+  await check('foglio "nuova categoria", nome vuoto')
+
+  await page.locator('.editor__name').fill('Caffè')
+  await page.locator('.picker__key').nth(8).tap() // ☕
+  await page.locator('.picker__key--color').nth(2).tap()
+  await expect(page.locator('.sheet__hint')).toHaveText('Tocca la categoria che sostituisce.')
+  await expect(page.locator('.swap__title')).toHaveText('Quale sostituisce?')
+  // Le otto attuali, mostrate e toccabili: e' la domanda, non un errore.
+  await expect(page.locator('.editor__foot .cat')).toHaveCount(8)
+  await check('foglio "quale sostituisce?", con le otto toccabili')
+
+  // --- Il tap sul chip **e'** il salvataggio: una scrittura sola, che archivia
+  //     e mette in griglia insieme. In mezzo non esiste uno stato a nove.
+  const uscente = await page.locator('.editor__foot .cat').nth(2).locator('.cat__name').innerText()
+  await page.locator('.editor__foot .cat').nth(2).tap()
+  await expect(page.locator('.sheet--cat')).toHaveCount(0)
+  await expect(page.locator('.toast__box')).toContainText(`«Caffè» al posto di «${uscente}»`)
+  await expect(page.locator('.cats--edit .cat')).toHaveCount(8)
+  await expect(page.locator('.cats--edit .cat__name').nth(2)).toHaveText('Caffè')
+
+  // --- Archiviare non e' cancellare: quella che e' uscita e' nell'elenco, e
+  //     l'elenco lo dice a parole.
+  await expect(page.locator('.arch__row')).toHaveCount(1)
+  await expect(page.locator('.arch__name')).toHaveText(uscente)
+  await expect(page.locator('.prefs')).toContainText('Storico e statistiche continuano a mostrarle')
+  await still(page)
+  await check('Impostazioni con l\'elenco delle archiviate')
+
+  // --- E dall'archivio il gesto e' **lo stesso dell'aggiunta**: si tocca e
+  //     l'app chiede quale sostituisce. Nessun bottone "ripristina", perche'
+  //     non esiste come operazione (ADR 012).
+  await page.locator('.arch__row').tap()
+  await expect(page.locator('.sheet--cat')).toBeVisible()
+  await still(page)
+  await expect(page.locator('.editor__foot .cat')).toHaveCount(8)
+  await expect(page.getByRole('button', { name: /ripristina/i })).toHaveCount(0)
+  await check('foglio dall\'archivio, "quale sostituisce?"')
+
+  await page.locator('.editor__foot .cat').nth(3).tap()
+  await expect(page.locator('.sheet--cat')).toHaveCount(0)
+  await expect(page.locator('.cats--edit .cat__name').nth(3)).toHaveText(uscente)
+
+  // --- L'editor di una categoria che **e' usata**: niente bottone per
+  //     cancellare, e al suo posto le parole con dentro il numero vero.
+  await page.locator('.cats--edit .cat').first().tap()
+  await expect(page.locator('.sheet--cat')).toBeVisible()
+  await still(page)
+  await expect(page.locator('.danger__action')).toHaveCount(0)
+  await expect(page.locator('.danger')).toContainText('La usa 1 spesa')
+  await expect(page.locator('.move__label')).toHaveText('Posizione 1 di 8')
+  await check('foglio di modifica, categoria in uso')
+
+  // Spostare e' possibile, e l'anteprima si muove nello stesso frame.
+  await page.locator('.move__key').nth(1).tap()
+  await expect(page.locator('.move__label')).toHaveText('Posizione 2 di 8')
+  await expect(page.locator('.editor')).toContainText('costa più di quanto sembri')
+  await page.locator('.editor__primary').tap()
+  await expect(page.locator('.sheet--cat')).toHaveCount(0)
+  await expect(page.locator('.cats--edit .cat__name').nth(1)).toHaveText('Spesa')
+
+  // --- E quella che **non** e' usata si puo' cancellare davvero: il bottone
+  //     c'e' solo qui, e c'e' perche' il piano ha gia' detto di si'.
+  await page.locator('.cats--edit .cat', { hasText: 'Caffè' }).tap()
+  await expect(page.locator('.sheet--cat')).toBeVisible()
+  await still(page)
+  await expect(page.locator('.danger__action')).toHaveText('Elimina del tutto')
+  await check('foglio di modifica, categoria cancellabile')
+
+  await page.locator('.danger__action').tap()
+  await expect(page.locator('.sheet--cat')).toHaveCount(0)
+  await expect(page.locator('.toast__box')).toContainText('«Caffè» eliminata')
+  await expect(page.locator('.cats--edit .cat')).toHaveCount(7)
+
+  // --- Archiviare si annulla, e l'annullamento non e' un caso fortunato:
+  //     archiviando si e' appena liberato un posto, quindi rimetterla in
+  //     griglia non fa la nona e non ha bisogno di chiedere niente.
+  await page.locator('.cats--edit .cat', { hasText: 'Casa' }).tap()
+  await expect(page.locator('.sheet--cat')).toBeVisible()
+  await page.locator('.editor__second').tap()
+  await expect(page.locator('.sheet--cat')).toHaveCount(0)
+  await expect(page.locator('.cats--edit .cat')).toHaveCount(6)
+  await expect(page.locator('.toast__box')).toContainText('«Casa» è in archivio')
+  await page.locator('.toast__action').tap()
+  await expect(page.locator('.toast__box')).toContainText('«Casa» è tornata in griglia')
+  await expect(page.locator('.cats--edit .cat')).toHaveCount(7)
+
+  console.log(`\n${rows.join('\n')}\n`)
+
+  expect(
+    failures.map((t) => `${t.status}: ${t.label} (${t.rect}) risponde ${t.hit}`),
+    'un overlay copre un bersaglio, o un bersaglio e\' sotto i 44px',
+  ).toEqual([])
+
+  const scroll = await page.evaluate(() => ({
+    page: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    prefs: (() => {
+      const el = document.querySelector('.prefs')
+      return el === null ? 0 : el.scrollWidth - el.clientWidth
+    })(),
+  }))
+  expect(scroll.page, 'c\'e\' scroll orizzontale in pagina').toBeLessThanOrEqual(0)
+  expect(scroll.prefs, 'c\'e\' scroll orizzontale dentro Impostazioni').toBeLessThanOrEqual(0)
+})
+
+/**
+ * Il promemoria di backup: e' **contenuto in flusso**, quindi non puo' coprire
+ * niente — ma "non puo'" e' esattamente cio' che si diceva del toast prima che
+ * finisse dentro il tasto "9". Qui si misura invece di dedurlo, nello stato
+ * peggiore: promemoria **e** avviso di aggiornamento insieme, sopra una Home
+ * con dati, cioe' due bande nella stessa fascia in fondo alla colonna.
+ */
+test('il promemoria di backup non copre niente, nemmeno insieme all\'avviso', async ({
+  page,
+}, testInfo) => {
+  const viewport = `${testInfo.project.use.viewport?.width}x${testInfo.project.use.viewport?.height}`
+  const rows: string[] = []
+  const failures: Target[] = []
+
+  await page.goto('./')
+  await expect(page.locator('.fab')).toBeEnabled()
+  await seed(page, 40)
+  await ageInstall(page, 30)
+  await page.reload()
+
+  await expect(page.locator('.nudge')).toBeVisible()
+  await expect(page.locator('.nudge__title')).toHaveText('Non hai mai esportato')
+  await showUpdateBanner(page)
+  await still(page)
+
+  const targets = await probe(page)
+  expect(targets.length).toBeGreaterThan(0)
+  rows.push(...report(viewport, 'home + promemoria di backup + avviso', targets))
+  failures.push(...targets.filter((t) => t.status === 'coperto' || t.status === 'piccolo'))
+
+  // Lo stesso dato, detto due volte con due voci diverse: in Impostazioni e'
+  // uno stato, in fondo alla colonna e' un richiamo.
+  await page.locator('.app__action').tap()
+  await expect(page.locator('.prefs')).toContainText('Non hai ancora esportato niente.')
+  await still(page)
+  const inPrefs = await probe(page)
+  rows.push(...report(viewport, 'Impostazioni + promemoria + avviso', inPrefs))
+  failures.push(...inPrefs.filter((t) => t.status === 'coperto' || t.status === 'piccolo'))
+
+  console.log(`\n${rows.join('\n')}\n`)
+  expect(
+    failures.map((t) => `${t.status}: ${t.label} (${t.rect}) risponde ${t.hit}`),
+    'un overlay copre un bersaglio, o un bersaglio e\' sotto i 44px',
+  ).toEqual([])
+})
+
+/**
+ * Le otto categorie e il tastierino a **320 punti**, che non e' un viewport dei
+ * progetti: e' il vecchio SE, ed e' anche quello che si ottiene attivando lo
+ * Zoom schermo di iOS su un telefono normale.
+ *
+ * E' il vincolo che protegge i due tap, quindi si rimisura ogni volta che
+ * qualcosa tocca le categorie — anche quando a cambiare e' un'altra schermata,
+ * perche' il chip e' lo stesso oggetto in tutte e due.
+ */
+test('a 320 punti le otto categorie e il tastierino ci stanno lo stesso', async ({
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== 'iphone-se', 'la larghezza la impone il test')
+
+  await page.setViewportSize({ width: 320, height: 568 })
+  await page.goto('./')
+  await expect(page.locator('.fab')).toBeEnabled()
+  await openSheet(page, '.fab')
+
+  await expect(page.locator('.pad__key')).toHaveCount(11)
+  await expect(page.locator('.cat')).toHaveCount(8)
+
+  const measure = await page.evaluate(() => {
+    const sheet = document.querySelector('.sheet')
+    if (sheet === null) return { out: ['il foglio non c\'e\''], small: [] as string[], scroll: 0, pageX: 0 }
+    const box = sheet.getBoundingClientRect()
+    const out: string[] = []
+    const small: string[] = []
+    for (const el of sheet.querySelectorAll('.pad__key, .cat, .chip, .amount')) {
+      const r = el.getBoundingClientRect()
+      if (r.bottom > box.bottom + 0.5 || r.top < box.top - 0.5 || r.right > box.right + 0.5) {
+        out.push(`${el.className} esce dal foglio`)
+      }
+      if (el.matches('.cat') && Math.round(Math.min(r.width, r.height)) < 44) {
+        small.push(`${el.textContent} e' ${Math.round(r.width)}x${Math.round(r.height)}`)
+      }
+    }
+    return {
+      out,
+      small,
+      scroll: sheet.scrollHeight - sheet.clientHeight,
+      pageX: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    }
+  })
+
+  expect(measure.out, 'qualcosa e\' tagliato dal foglio a 320 punti').toEqual([])
+  expect(measure.small, 'un chip di categoria e\' sotto i 44px a 320 punti').toEqual([])
+  expect(measure.scroll, 'il contenuto del foglio non ci sta a 320 punti').toBeLessThanOrEqual(0)
+  expect(measure.pageX, 'scroll orizzontale a 320 punti').toBeLessThanOrEqual(0)
+})
+
+/**
+ * Il foglio delle categorie a 320 punti: la parte che **conferma** deve restare
+ * visibile senza scorrere. Il corpo puo' scorrere (c'e' un modulo di testo, e
+ * con la tastiera di sistema aperta l'alternativa e' contenuto tagliato); il
+ * piede no, mai.
+ */
+test('a 320 punti il piede del foglio categorie resta intero', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'iphone-se', 'la larghezza la impone il test')
+
+  await page.setViewportSize({ width: 320, height: 568 })
+  await page.goto('./')
+  await expect(page.locator('.fab')).toBeEnabled()
+  await page.locator('.app__action').tap()
+  await page.locator('.cats__add').tap()
+  await expect(page.locator('.sheet--cat')).toBeVisible()
+  await page.locator('.editor__name').fill('Caffè')
+  await still(page)
+
+  const foot = await page.evaluate(() => {
+    const sheet = document.querySelector('.sheet--cat')
+    const foot = document.querySelector('.editor__foot')
+    if (sheet === null || foot === null) return ['il foglio non c\'e\'']
+    const box = sheet.getBoundingClientRect()
+    const out: string[] = []
+    const f = foot.getBoundingClientRect()
+    if (f.bottom > box.bottom + 0.5 || f.top < box.top - 0.5) out.push('il piede esce dal foglio')
+    for (const el of foot.querySelectorAll('.cat')) {
+      const r = el.getBoundingClientRect()
+      if (r.bottom > box.bottom + 0.5) out.push(`${el.textContent} esce dal foglio`)
+      if (Math.round(Math.min(r.width, r.height)) < 44) out.push(`${el.textContent} sotto i 44px`)
+    }
+    return out
+  })
+
+  expect(foot, 'la griglia che conferma non ci sta a 320 punti').toEqual([])
 })

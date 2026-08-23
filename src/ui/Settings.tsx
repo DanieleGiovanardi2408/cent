@@ -1,5 +1,6 @@
-import type { BudgetPeriod, Language } from '../core/types'
-import { LANGUAGE_NAMES, cadenceLabel, money, t } from './i18n'
+import type { BudgetPeriod, Category, Language } from '../core/types'
+import { Categories } from './Categories'
+import { LANGUAGE_NAMES, cadenceLabel, daysLabel, money, t } from './i18n'
 import './Settings.css'
 
 /**
@@ -20,11 +21,6 @@ import './Settings.css'
  *
  * ## Cosa non c'e' ancora, e dove andra'
  *
- * - **le categorie** (passo 3): una sezione fra Lingua e Budget. Il posto e'
- *   quello, e la nota che serve a chi la costruira' e' in ADR 012 — non esiste
- *   un "ripristina dall'archivio", perche' farebbe la nona: dall'elenco delle
- *   archiviate il gesto e' lo stesso dell'aggiunta, si tocca e l'app chiede
- *   quale sostituisce;
  * - **"rivedi la guida"** (passo 4): una riga in fondo. Oggi non esiste
  *   nemmeno la guida da rivedere, e un bottone che non fa niente e' un TODO
  *   travestito da funzione (CLAUDE.md, "Niente TODO orfani");
@@ -59,6 +55,20 @@ interface Props {
   /** Il budget in vigore oggi per il periodo che la Home sta mostrando. */
   readonly budgetCents: number | null
   readonly budgetPeriod: BudgetPeriod
+  /** Le otto in griglia, nell'ordine vero. */
+  readonly activeCategories: readonly Category[]
+  /** Tutte le altre: l'archivio non ha tetto. */
+  readonly archivedCategories: readonly Category[]
+  readonly onEditCategory: (category: Category) => void
+  readonly onPlaceCategory: (category: Category) => void
+  readonly onNewCategory: () => void
+  /**
+   * Giorni dall'ultimo backup **osservato**, `null` se non ce n'e' mai stato
+   * uno. E' lo stesso dato che accende il promemoria in fondo alla colonna,
+   * detto qui in forma di stato invece che di richiamo: chi arriva qui di sua
+   * volonta' non ha bisogno di essere sollecitato, ha bisogno di sapere.
+   */
+  readonly backupDays: number | null
   /** Il database e' aperto: prima non c'e' niente da scrivere. */
   readonly ready: boolean
   readonly onEditBudget: () => void
@@ -71,6 +81,12 @@ export function Settings({
   onLanguage,
   budgetCents,
   budgetPeriod,
+  activeCategories,
+  archivedCategories,
+  onEditCategory,
+  onPlaceCategory,
+  onNewCategory,
+  backupDays,
   ready,
   onEditBudget,
   onExport,
@@ -120,6 +136,19 @@ export function Settings({
         </div>
       </section>
 
+      {/* Le categorie stanno fra la lingua e il budget, e non e' un ordine
+          alfabetico: e' l'ordine in cui si arriva qui la prima volta. Chi
+          installa l'app da un link ricevuto cambia prima la lingua, poi si
+          trova due chip che non c'entrano niente con la sua vita. */}
+      <Categories
+        active={activeCategories}
+        archived={archivedCategories}
+        ready={ready}
+        onEdit={onEditCategory}
+        onPlace={onPlaceCategory}
+        onNew={onNewCategory}
+      />
+
       <section class="prefs__group" aria-labelledby="prefs-budget">
         <h2 class="prefs__title" id="prefs-budget">
           {t('settings.budget.title')}
@@ -145,6 +174,17 @@ export function Settings({
           {t('settings.data.title')}
         </h2>
         <p class="prefs__text">{t('settings.data.text')}</p>
+        {/* Lo stato dell'ultima copia, qui e non solo nel promemoria: e' la
+            risposta alla domanda che si fa arrivando in questa sezione ("ce
+            l'ho un backup?"), e senza di essa il bottone non dice se serve
+            toccarlo. Sull'assenza non si mente: `lastBackupAt` si scrive solo
+            sugli esiti osservati, quindi "mai esportato" a volte e' pessimista
+            — ed e' la direzione giusta. */}
+        <p class="prefs__text">
+          {backupDays === null
+            ? t('settings.data.never')
+            : t('settings.data.last', { days: daysLabel(backupDays) })}
+        </p>
         <button type="button" class="prefs__action" disabled={!ready} onClick={onExport}>
           {t('settings.data.export')}
         </button>

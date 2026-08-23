@@ -79,6 +79,14 @@ export const en: Record<keyof typeof it, string> = {
   'toast.backupFileFailed': 'The file was not saved.',
   'toast.showData': 'Show the data',
   'toast.languageFailed': 'I could not change the language. Try again.',
+  'toast.catAdded': '“{name}” is on the grid',
+  'toast.catSwapped': '“{name}” in place of “{old}”',
+  'toast.catArchived': '“{name}” is archived',
+  'toast.catBack': '“{name}” is back on the grid',
+  'toast.catDeleted': '“{name}” deleted',
+  'toast.catSaved': '“{name}” updated',
+  'toast.catInUse': 'Some expenses still use it: it cannot be deleted.',
+  'toast.catFailed': 'I could not change the categories. Try again.',
 
   /* --- Home -------------------------------------------------------------- */
   'hero.spent': 'Spent',
@@ -219,4 +227,70 @@ export const en: Record<keyof typeof it, string> = {
   'settings.data.text':
     'Your expenses stay on this phone: there is no account and no server. The export is the only copy that survives a lost phone or an app you delete.',
   'settings.data.export': 'Export everything',
+  'settings.data.last': 'Last backup: {days} ago.',
+  'settings.data.never': 'You have not exported anything yet.',
+
+  /* --- Impostazioni: categorie -------------------------------------------- */
+  'settings.cats.title': 'Categories',
+  'settings.cats.text':
+    'Eight on the grid, and eight is the limit: they are the chips you tap while paying, and they all have to fit without scrolling. Archiving one takes it off the grid, not off the expenses that used it.',
+  'settings.cats.grid': 'Categories on the grid',
+  'settings.cats.editOne': 'Edit {name}',
+  'settings.cats.add': 'Add a category',
+  'settings.cats.archivedTitle': 'Archived',
+  'settings.cats.archivedText':
+    'Off the grid, not out of your data: History and stats still show them. Tap one to put it back on the grid in place of another.',
+  'settings.cats.placeOne': 'Put {name} back on the grid',
+
+  /* --- foglio della categoria --------------------------------------------- */
+  'cat.new.label': 'New category',
+  'cat.edit.label': 'Edit category',
+  'cat.place.label': 'Back on the grid',
+  'cat.name': 'Name',
+  'cat.name.placeholder': 'What is it called?',
+  'cat.hint.name': 'A name, then emoji and colour.',
+  'cat.hint.replace': 'Tap the category it replaces.',
+  'cat.hint.failed': 'I could not save it. Try again.',
+  'cat.emoji': 'Emoji',
+  'cat.color': 'Colour',
+  'cat.color.note':
+    'Eight colours, not any colour: it is the same scale the charts use, picked so they stay apart even if you mix up red and green.',
+  'cat.swap.title': 'Which one does it replace?',
+  'cat.swap.text':
+    'The tap saves. The one you tap goes to the archive: it stays on every expense that used it, and you can bring it back whenever you want.',
+  'cat.add.free': 'Add it to the grid',
+  'cat.place.free': 'Put it back on the grid',
+  'cat.save': 'Save',
+  'cat.archive': 'Archive',
+  'cat.archive.note':
+    'This only takes it off the grid: it stays on every expense that used it, and you keep seeing it in History.',
+  'cat.delete': 'Delete for good',
+  'cat.delete.note': 'No expense and no recurring rule uses it. This one cannot be undone.',
+  'cat.inUse.expenses.one': '1 expense',
+  'cat.inUse.expenses.other': '{count} expenses',
+  'cat.inUse.rules.one': '1 recurring expense',
+  'cat.inUse.rules.other': '{count} recurring expenses',
+  'cat.inUse.both': '{a} and {b}',
+  'cat.inUse.text':
+    'Used by {what}: deleting it would leave those rows with no name, so it cannot go. Archiving does what you need — off the grid, History untouched.',
+  'cat.preview': 'How the grid will look',
+  'cat.position': 'Position {index} of {total}',
+  'cat.move.back': 'Move back',
+  'cat.move.on': 'Move forward',
+  'cat.order.note':
+    'After a few days you tap by position, without reading the name: moving a category costs more than it looks. A move takes effect right away.',
+  'color.green': 'Green',
+  'color.orange': 'Orange',
+  'color.teal': 'Teal',
+  'color.brown': 'Brown',
+  'color.blue': 'Blue',
+  'color.magenta': 'Magenta',
+  'color.lilac': 'Lilac',
+  'color.grey': 'Grey',
+
+  /* --- promemoria di backup ------------------------------------------------ */
+  'nudge.never': 'You have never exported',
+  'nudge.since': 'Last backup: {days} ago',
+  'nudge.hint': 'Your data lives only here.',
+  'nudge.action': 'Export',
 }

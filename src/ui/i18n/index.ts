@@ -225,6 +225,29 @@ export function t(key: Key, vars?: Vars): string {
   })
 }
 
+/**
+ * La stessa chiave in **tutte** le lingue, nell'ordine dei dizionari.
+ *
+ * Serve a una cosa sola, e non e' la traduzione: **riservare alle etichette del
+ * guscio la larghezza massima fra le due lingue** (vedi `Fit.tsx`).
+ *
+ * Il guscio si dipinge prima che il database sia aperto (regola "Ordine di
+ * pittura"), quindi chi ha scelto una lingua diversa da quella del telefono
+ * vede per pochi frame le parole della lingua rilevata. Il difetto misurabile
+ * non e' il cambio di parole — e' che "Storico" e "History" sono larghi
+ * diversamente, e le schede si spostano quando i dati arrivano: CLS > 0 in un
+ * caso che nessun test guardava.
+ *
+ * La cura e' deterministica e non introduce nessuna seconda fonte di verita':
+ * si mettono nel DOM tutte le varianti, sovrapposte nella stessa cella, e si
+ * rende visibile solo quella attiva. La larghezza la calcola il browser, che e'
+ * l'unico a sapere quanto misura una parola con il font di sistema di questo
+ * telefono.
+ */
+export function variants(key: Key): readonly string[] {
+  return Object.values(DICTIONARIES).map((entry) => entry[key])
+}
+
 /* ------------------------------------------------------------------------- *
  * I numeri e le date.
  *
