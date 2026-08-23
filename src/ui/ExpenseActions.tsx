@@ -1,8 +1,7 @@
 import { useEffect, useRef } from 'preact/hooks'
 import type { IsoDate } from '../core/date'
-import { formatCents } from '../core/money'
 import type { Category, Expense } from '../core/types'
-import { dayHeading } from './labels'
+import { dayHeading, money, t } from './i18n'
 import './sheet.css'
 import './ExpenseActions.css'
 
@@ -65,7 +64,7 @@ export function ExpenseActions({ expense, category, day, onDelete, onClose }: Pr
         class="acts"
         role="dialog"
         aria-modal="true"
-        aria-label="Azioni sulla spesa"
+        aria-label={t('acts.label')}
         tabIndex={-1}
         ref={dialog}
         onKeyDown={(event) => {
@@ -79,23 +78,23 @@ export function ExpenseActions({ expense, category, day, onDelete, onClose }: Pr
             {category?.emoji ?? '•'}
           </span>
           <span class="acts__text">
-            <span class="acts__name">{category?.name ?? 'Categoria rimossa'}</span>
+            <span class="acts__name">{category?.name ?? t('row.categoryRemoved')}</span>
             <span class="acts__when">
               {dayHeading(expense.date, day)}
               {note}
             </span>
           </span>
-          <span class="acts__amount">{formatCents(expense.amountCents)}</span>
+          <span class="acts__amount">{money(expense.amountCents)}</span>
         </div>
 
         {/* "Chiudi" e' l'ultimo, cioe' il piu' vicino al pollice: se il tap che
             ha aperto il foglio rimbalza, atterra sulla cosa che non fa niente.
             E' anche l'ordine delle action sheet di iOS, per la stessa ragione. */}
         <button type="button" class="acts__delete" onClick={onDelete}>
-          Elimina
+          {t('acts.delete')}
         </button>
         <button type="button" class="acts__close" onClick={onClose}>
-          Chiudi
+          {t('acts.close')}
         </button>
       </div>
     </>

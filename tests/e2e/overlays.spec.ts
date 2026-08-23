@@ -458,10 +458,17 @@ test('nessun overlay copre un bersaglio nella Home, in tutti i suoi stati', asyn
  * e si prende il posto buono.
  *
  * Il test non fissa "a destra" come gusto: fissa la **ragione**, cioe' che le
- * schede siano piu' vicine al FAB di quanto lo sia l'export. Se un giorno il FAB
- * cambiasse angolo, questo test direbbe da solo dove va la navigazione.
+ * schede siano piu' vicine al FAB di quanto lo sia l'altro bottone della barra.
+ * Se un giorno il FAB cambiasse angolo, questo test direbbe da solo dove va la
+ * navigazione.
+ *
+ * **In fase 3 quell'altro bottone e' cambiato**: dove c'era "Esporta" adesso c'e'
+ * l'ingresso alle Impostazioni, e l'export vive li' dentro. Il test non e'
+ * cambiato di una riga, ed e' il segno che stava misurando la ragione e non
+ * l'arredamento: la regola era "l'angolo buono va a cio' che si tocca ogni
+ * giorno", e a cambiare e' stato solo chi occupa l'angolo scomodo.
  */
-test('la navigazione sta nell\'angolo raggiungibile, non "Esporta"', async ({ page }) => {
+test('la navigazione sta nell\'angolo raggiungibile, non il bottone raro', async ({ page }) => {
   await page.goto('./')
   await expect(page.locator('.fab')).toBeEnabled()
 
@@ -473,12 +480,151 @@ test('la navigazione sta nell\'angolo raggiungibile, non "Esporta"', async ({ pa
 
   const fab = await centre('.fab')
   const nav = await centre('.nav')
-  const esporta = await centre('.app__action')
+  // Il bottone raro della barra: oggi Impostazioni, prima "Esporta". Il selettore
+  // e' lo stesso perche' e' lo stesso slot, e il ruolo dello slot non e' cambiato.
+  const raro = await centre('.app__action')
   const far = (p: { x: number; y: number }): number => Math.hypot(p.x - fab.x, p.y - fab.y)
 
-  expect(nav.x, 'le schede non sono dopo "Esporta"').toBeGreaterThan(esporta.x)
+  expect(nav.x, 'le schede non sono dopo il bottone raro').toBeGreaterThan(raro.x)
   expect(
     Math.round(far(nav)),
-    `le schede (${Math.round(far(nav))}px dal FAB) non sono piu' vicine di "Esporta" (${Math.round(far(esporta))}px)`,
-  ).toBeLessThan(Math.round(far(esporta)))
+    `le schede (${Math.round(far(nav))}px dal FAB) non sono piu' vicine del bottone raro (${Math.round(far(raro))}px)`,
+  ).toBeLessThan(Math.round(far(raro)))
+})
+
+/**
+ * Impostazioni: la sonda, e la prova che il selettore a tre voci fa quello che
+ * dice.
+ *
+ * ## Perche' la sonda anche qui
+ *
+ * Perche' e' una schermata **nuova**, e la regola "Sovrapposizioni" (CLAUDE.md)
+ * non ha eccezioni per le schermate che sembrano innocue. Ha cinque bersagli in
+ * colonna, l'ultimo dei quali sta in fondo — cioe' esattamente dove arriva la
+ * banda dell'avviso di aggiornamento, che e' uno dei due bug che hanno prodotto
+ * la regola. Una schermata che nessuno misura e' una schermata dove il prossimo
+ * overlay entrera' senza che nessuno se ne accorga.
+ *
+ * ## Perche' anche la lingua
+ *
+ * Perche' il selettore ha tre voci e la terza — Automatica — non e' una lingua:
+ * e' lo **stato "nessuno l'ha scelta"**, e sceglierla scrive la cancellazione
+ * del campo (`language: null`). E' l'unica parte di questa fase in cui una
+ * schermata e un contratto del dominio si toccano, ed e' anche l'unica che a
+ * occhio si guarderebbe una volta sola: "toccando Automatica torna a seguire il
+ * telefono" e' vero solo se la cancellazione arriva davvero sul disco, cosa che
+ * si vede solo ricaricando.
+ *
+ * Il browser dichiara `it-IT` (vedi playwright.config.ts), quindi Automatica
+ * **deve** dare l'italiano: e' la parte che distingue "assente" da "scelto".
+ */
+test('Impostazioni: nessun bersaglio coperto, e le tre voci della lingua fanno quello che dicono', async ({
+  page,
+}, testInfo) => {
+  const viewport = `${testInfo.project.use.viewport?.width}x${testInfo.project.use.viewport?.height}`
+  const rows: string[] = []
+  const failures: Target[] = []
+
+  const check = async (state: string): Promise<void> => {
+    const targets = await probe(page)
+    expect(targets.length, `nessun bersaglio misurato in "${state}": la sonda non prova niente`)
+      .toBeGreaterThan(0)
+    rows.push(...report(viewport, state, targets))
+    failures.push(...targets.filter((t) => t.status === 'coperto' || t.status === 'piccolo'))
+  }
+
+  /**
+   * Che cosa c'e' scritto **sul disco**, non nel mirror.
+   *
+   * E' la meta' che conta di "Automatica": il mirror direbbe la stessa cosa se
+   * l'app scrivesse `'it'` invece di cancellare il campo — a schermo l'italiano
+   * si vede uguale nei due casi. La differenza esiste solo nel record, e si
+   * vede solo qui: `null` = assente = ridecidi dall'ambiente, `'it'` = una
+   * scelta che nessuno ha fatto e che non si distinguerebbe piu' da una vera.
+   *
+   * Serve anche come attesa: le scritture sono ottimistiche e asincrone (niente
+   * spinner sulle scritture locali), quindi ricaricare subito dopo il tap e'
+   * una gara con IndexedDB. Aspettare **questa condizione** invece di un numero
+   * di millisecondi e' la stessa disciplina del resto della suite.
+   */
+  const linguaSuDisco = (): Promise<string | null> =>
+    page.evaluate(async () => {
+      const db: IDBDatabase = await new Promise((resolve, reject) => {
+        const request = indexedDB.open('cent')
+        request.onsuccess = () => resolve(request.result)
+        request.onerror = () => reject(request.error)
+      })
+      const record: { language?: string } | undefined = await new Promise((resolve, reject) => {
+        const request = db.transaction('settings').objectStore('settings').get('settings')
+        request.onsuccess = () => resolve(request.result)
+        request.onerror = () => reject(request.error)
+      })
+      db.close()
+      return record?.language ?? null
+    })
+
+  await page.goto('./')
+  await expect(page.locator('.fab')).toBeEnabled()
+
+  // La migrazione 2 -> 3 non scrive niente di proposito: il campo nasce assente.
+  await expect.poll(linguaSuDisco).toBeNull()
+
+  await page.locator('.app__action').tap()
+  await expect(page.locator('.prefs')).toBeVisible()
+  await still(page)
+
+  // Tre voci, non due: senza "Automatica" lo stato "nessuno l'ha scelta" non
+  // sarebbe rappresentabile, e mostrare come selezionata la lingua rilevata
+  // sarebbe gia' una bugia.
+  const voci = page.locator('.pick')
+  await expect(voci).toHaveCount(3)
+  // Nessuna scelta ancora: e' selezionata Automatica, non l'italiano.
+  await expect(voci.nth(0)).toHaveAttribute('aria-checked', 'true')
+  await expect(voci.nth(1)).toHaveAttribute('aria-checked', 'false')
+
+  await check('Impostazioni, lingua automatica')
+
+  // --- La scelta esplicita: l'app cambia lingua nello stesso frame del tap.
+  await voci.nth(2).tap()
+  await expect(voci.nth(2)).toHaveAttribute('aria-checked', 'true')
+  await expect(voci.nth(0)).toHaveAttribute('aria-checked', 'false')
+  await expect(page.locator('.nav__tab').nth(1)).toHaveText('History')
+  await expect(page.locator('html')).toHaveAttribute('lang', 'en')
+
+  await showUpdateBanner(page)
+  await check('Impostazioni in inglese + avviso di aggiornamento')
+
+  // --- E sopravvive a un giro completo: la scelta e' sul disco, non in memoria.
+  await expect.poll(linguaSuDisco).toBe('en')
+  await page.reload()
+  await expect(page.locator('.nav__tab').nth(1)).toHaveText('History')
+
+  // --- Il ritorno ad Automatica. E' il verso che il contratto esiste per
+  //     permettere: scrive la cancellazione del campo, quindi dopo un reload
+  //     l'app ridecide dall'ambiente — che qui e' italiano.
+  await page.locator('.app__action').tap()
+  await expect(page.locator('.prefs')).toBeVisible()
+  await page.locator('.pick').nth(0).tap()
+  await expect(page.locator('.nav__tab').nth(1)).toHaveText('Storico')
+  // **Cancellato, non riscritto a `'it'`.** E' tutto il punto delle tre voci.
+  await expect.poll(linguaSuDisco).toBeNull()
+  await page.reload()
+  await expect(page.locator('.nav__tab').nth(1)).toHaveText('Storico')
+
+  console.log(`\n${rows.join('\n')}\n`)
+
+  expect(
+    failures.map((t) => `${t.status}: ${t.label} (${t.rect}) risponde ${t.hit}`),
+    'un overlay copre un bersaglio, o un bersaglio e\' sotto i 44px',
+  ).toEqual([])
+
+  const scroll = await page.evaluate(() => ({
+    page: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    prefs: (() => {
+      const el = document.querySelector('.prefs')
+      return el === null ? 0 : el.scrollWidth - el.clientWidth
+    })(),
+  }))
+  expect(scroll.page, 'c\'e\' scroll orizzontale in pagina').toBeLessThanOrEqual(0)
+  expect(scroll.prefs, 'c\'e\' scroll orizzontale dentro Impostazioni').toBeLessThanOrEqual(0)
 })

@@ -24,7 +24,19 @@ export default defineConfig({
   fullyParallel: false,
   workers: 1,
   reporter: process.env['CI'] ? 'github' : 'list',
-  use: { baseURL: BASE_URL, trace: 'retain-on-failure' },
+  // La lingua e' **dichiarata**, non ereditata dal browser.
+  //
+  // Dalla fase 3 l'app ha due lingue e, senza una scelta esplicita in
+  // Impostazioni, sceglie dall'ambiente con default **inglese** (la lingua
+  // condivisa di un gruppo Erasmus). Chromium senza `locale` parte in `en-US`:
+  // ogni asserzione italiana di questa suite cadrebbe — e cadrebbe per il
+  // motivo giusto, cioe' peggio, perche' sembrerebbe una regressione del copy
+  // invece che una premessa d'ambiente mai dichiarata.
+  //
+  // Prima della fase 3 la premessa c'era lo stesso ed era invisibile: `it-IT`
+  // era cablato dentro `formatCents`, quindi `12,50 €` usciva anche con il
+  // browser in inglese. Averla tolta dal dominio l'ha resa una cosa da dire.
+  use: { baseURL: BASE_URL, locale: 'it-IT', trace: 'retain-on-failure' },
   projects: [
     { name: 'iphone-se', use: { ...MOBILE, viewport: { width: 375, height: 667 } } },
     { name: 'iphone-14', use: { ...MOBILE, viewport: { width: 390, height: 844 } } },

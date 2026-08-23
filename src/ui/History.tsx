@@ -1,12 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import type { IsoDate } from '../core/date'
-import { formatCents } from '../core/money'
 import { groupByDay } from '../core/stats'
 import type { Category, Expense } from '../core/types'
 import type { AppPhase } from '../app/boot'
 import { ArchiveError } from './Blank'
 import { ExpenseRow } from './ExpenseRow'
-import { dayHeading } from './labels'
+import { dayHeading, money, t } from './i18n'
 import './History.css'
 
 /**
@@ -77,7 +76,7 @@ export function History({ phase, expenses, categories, day, onPick }: Props) {
           <section class="day" key={group.date}>
             <h2 class="day__head">
               <span class="day__name">{dayHeading(group.date, day)}</span>
-              <span class="day__total">{formatCents(group.totalCents)}</span>
+              <span class="day__total">{money(group.totalCents)}</span>
             </h2>
             <ul>
               {group.expenses.map((expense) => (
@@ -112,14 +111,9 @@ function Blank({ phase }: { readonly phase: AppPhase }) {
 
   return (
     <div class="blank">
-      <p class="blank__title">Nessuna spesa, per ora</p>
-      <p class="blank__text">
-        Tocca il + qui sotto, digita quanto hai speso e scegli la categoria.
-        Sono due tap: si fa in cassa, con una mano.
-      </p>
-      <p class="blank__text hint--install">
-        Aggiungi Cent alla schermata Home: si apre a schermo intero e parte anche senza rete.
-      </p>
+      <p class="blank__title">{t('history.blank.title')}</p>
+      <p class="blank__text">{t('history.blank.text')}</p>
+      <p class="blank__text hint--install">{t('history.blank.install')}</p>
     </div>
   )
 }

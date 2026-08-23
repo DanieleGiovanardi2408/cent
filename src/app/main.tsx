@@ -6,12 +6,28 @@ import { readDisplayContext, writesAreBlocked } from './install-gate'
 import { clearRetiredStorageKeys } from './legacy-cleanup'
 import { requestPersistentStorage } from './persist'
 import { registerServiceWorker } from './sw-update'
+import { detectLanguage, setLanguage } from '../ui/i18n'
 import '../ui/tokens.css'
 import '../ui/reset.css'
 
 // Il tema segue `prefers-color-scheme` e basta: lo decide il CSS, prima del
 // primo frame, senza una riga di JavaScript e senza rischio di flash.
 const display = readDisplayContext()
+
+/**
+ * La lingua di partenza, prima di qualunque render.
+ *
+ * E' quella dell'ambiente, e per due schermate su due e' anche l'ultima parola:
+ * - la **pagina di installazione** non apre il database (ADR 011), quindi non
+ *   ha altra fonte e non ne avra' mai una;
+ * - l'**app** la sovrascrive con la scelta dell'utente appena il mirror arriva,
+ *   se una scelta esiste (`App.tsx`).
+ *
+ * Questa riga **non persiste niente**: la lingua rilevata resta una derivazione
+ * dell'ambiente, e scriverla in `Settings` la renderebbe indistinguibile da una
+ * scelta vera — vedi il contratto di `Settings.language` in `types.ts`.
+ */
+setLanguage(detectLanguage())
 
 // Serve alla UI per dire la cosa giusta: in standalone "Aggiungi a Home" e' rumore.
 document.documentElement.dataset['display'] = display.standalone ? 'standalone' : 'browser'

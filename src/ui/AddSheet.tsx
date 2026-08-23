@@ -1,10 +1,9 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import { addDays } from '../core/date'
 import type { IsoDate } from '../core/date'
-import { formatCents } from '../core/money'
 import type { Category } from '../core/types'
 import { Keypad } from './Keypad'
-import { dayChipLabel } from './labels'
+import { dayChipLabel, money, t } from './i18n'
 import './sheet.css'
 import './AddSheet.css'
 
@@ -124,11 +123,11 @@ export function AddSheet({ categories, day, leaving, onSave, onClose }: Props) {
    * commento li': e' l'unica cosa che tiene il salto a zero.
    */
   const hint = failed
-    ? 'Non sono riuscito a salvare. Tocca di nuovo la categoria.'
+    ? t('add.hint.failed')
     : atMax
-      ? 'Importo massimo raggiunto'
+      ? t('add.hint.max')
       : empty
-        ? 'Quanto hai speso?'
+        ? t('add.hint.empty')
         : ''
 
   return (
@@ -140,7 +139,7 @@ export function AddSheet({ categories, day, leaving, onSave, onClose }: Props) {
         data-leaving={leaving || undefined}
         role="dialog"
         aria-modal="true"
-        aria-label="Nuova spesa"
+        aria-label={t('add.label')}
         tabIndex={-1}
         ref={dialog}
         onKeyDown={(event) => {
@@ -164,16 +163,16 @@ export function AddSheet({ categories, day, leaving, onSave, onClose }: Props) {
                 type="text"
                 value={note}
                 maxLength={120}
-                placeholder="Per cosa?"
+                placeholder={t('add.note.placeholder')}
                 enterKeyHint="done"
-                aria-label="Nota"
+                aria-label={t('add.note')}
                 onInput={(event) => setNote(event.currentTarget.value)}
                 onKeyDown={(event) => {
                   if (event.key === 'Enter') setNoteOpen(false)
                 }}
               />
               <button type="button" class="chip chip--done" onClick={() => setNoteOpen(false)}>
-                Fatto
+                {t('add.note.done')}
               </button>
             </>
           ) : (
@@ -184,7 +183,7 @@ export function AddSheet({ categories, day, leaving, onSave, onClose }: Props) {
                 aria-pressed={date === day}
                 onClick={() => setDate(day)}
               >
-                Oggi
+                {t('day.today')}
               </button>
               <button
                 type="button"
@@ -192,7 +191,7 @@ export function AddSheet({ categories, day, leaving, onSave, onClose }: Props) {
                 aria-pressed={date === yesterday}
                 onClick={() => setDate(yesterday)}
               >
-                Ieri
+                {t('day.yesterday')}
               </button>
 
               {/* L'input e' il bersaglio: coprendo tutto il chip, il tap apre
@@ -203,14 +202,16 @@ export function AddSheet({ categories, day, leaving, onSave, onClose }: Props) {
                   <rect x="3" y="5" width="18" height="16" rx="3" />
                   <path d="M3 10h18M8 3v4M16 3v4" />
                 </svg>
-                <span>{date !== day && date !== yesterday ? dayChipLabel(date) : 'Altra'}</span>
+                <span>
+                  {date !== day && date !== yesterday ? dayChipLabel(date) : t('add.date.other')}
+                </span>
                 <input
                   class="chip__input"
                   type="date"
                   value={date}
                   max={day}
                   min="2000-01-01"
-                  aria-label="Scegli un'altra data"
+                  aria-label={t('add.date.pick')}
                   onChange={(event) => {
                     const chosen = event.currentTarget.value
                     if (chosen !== '') setDate(chosen)
@@ -224,7 +225,7 @@ export function AddSheet({ categories, day, leaving, onSave, onClose }: Props) {
                 data-on={trimmedNote !== '' || undefined}
                 onClick={() => setNoteOpen(true)}
               >
-                {trimmedNote === '' ? 'Nota' : trimmedNote}
+                {trimmedNote === '' ? t('add.note') : trimmedNote}
               </button>
             </>
           )}
@@ -256,7 +257,7 @@ export function AddSheet({ categories, day, leaving, onSave, onClose }: Props) {
             premuto e il chip da toccare. Il perche' per esteso, con la misura
             che l'ha deciso, sta in AddSheet.css. */}
         <p class="amount" data-empty={empty || undefined} aria-live="polite">
-          {formatCents(cents)}
+          {money(cents)}
         </p>
 
         <Keypad

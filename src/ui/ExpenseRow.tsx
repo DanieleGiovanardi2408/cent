@@ -1,5 +1,5 @@
-import { formatCents } from '../core/money'
 import type { Category, Expense } from '../core/types'
+import { money, t } from './i18n'
 import './ExpenseRow.css'
 
 /**
@@ -30,10 +30,10 @@ export function ExpenseRow({
         {category?.emoji ?? '•'}
       </span>
       <span class="row__text">
-        <span class="row__name">{category?.name ?? 'Categoria rimossa'}</span>
+        <span class="row__name">{category?.name ?? t('row.categoryRemoved')}</span>
         {expense.note === undefined ? null : <span class="row__note">{expense.note}</span>}
       </span>
-      <span class="row__amount">{formatCents(expense.amountCents)}</span>
+      <span class="row__amount">{money(expense.amountCents)}</span>
       <svg class="row__go" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
         <path d="m9 5 7 7-7 7" />
       </svg>

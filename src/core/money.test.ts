@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { divideCents, formatCents, sumCents } from './money'
+import { divideCents, sumCents } from './money'
 
-/** Gli spazi di Intl sono non-breaking: li normalizziamo per confronti esatti. */
-function norm(text: string): string {
-  return text.replace(/[\u00a0\u202f]/g, ' ')
-}
+/*
+ * Qui non si prova piu' nessuna formattazione, e non e' una perdita di
+ * copertura: `formatCents` non e' stata cancellata, e' **uscita dal dominio**.
+ * Vive in `src/ui/i18n` insieme al locale attivo, e li' ci sono i suoi test —
+ * canarino sullo spazio non separabile compreso, esteso a tutte e due le
+ * lingue. Vedi CLAUDE.md, "La formattazione esce da src/core".
+ */
 
 describe('sumCents', () => {
   it('somma 0,10 + 0,20 come interi: esattamente 30 centesimi', () => {
@@ -24,89 +27,6 @@ describe('sumCents', () => {
   it("rifiuta un importo con la virgola: e' un bug, non uno stile", () => {
     expect(() => sumCents([1250, 0.5])).toThrow(TypeError)
     expect(() => sumCents([Number.NaN])).toThrow(TypeError)
-  })
-})
-
-describe('formatCents', () => {
-  it('formatta lo zero', () => {
-    expect(norm(formatCents(0))).toBe('0,00 €')
-  })
-
-  it('formatta le migliaia con il separatore it-IT', () => {
-    expect(norm(formatCents(123456789))).toBe('1.234.567,89 €')
-    expect(norm(formatCents(1234567))).toBe('12.345,67 €')
-    // it-IT (CLDR) non raggruppa i numeri a 4 cifre: 1234,56 e non 1.234,56.
-    expect(norm(formatCents(123456))).toBe('1234,56 €')
-  })
-
-  it('formatta i negativi', () => {
-    expect(norm(formatCents(-1250))).toBe('-12,50 €')
-  })
-
-  it('mostra sempre due decimali', () => {
-    expect(norm(formatCents(5))).toBe('0,05 €')
-    expect(norm(formatCents(1000))).toBe('10,00 €')
-  })
-
-  it('rifiuta un input non intero', () => {
-    expect(() => formatCents(12.5)).toThrow(TypeError)
-    expect(() => formatCents(Number.POSITIVE_INFINITY)).toThrow(TypeError)
-  })
-})
-
-/**
- * Canarino d'ambiente, deciso al gate della fase 2 (docs/ROADMAP.md,
- * "Asserzioni sull'ambiente"). Non prova `formatCents`: prova l'ICU della
- * runtime sotto, che e' l'unica che decide come si scrive un euro.
- *
- * E' un test di **proprieta'**, non di byte: quale dei tre spazi non separabili
- * esca e' irrilevante — sono lo stesso pixel — e se ICU cambia idea fra loro
- * deve restare verde. Cade solo se diventa uno spazio normale, che e' un bug
- * visibile. Per questo `norm()` qui sopra resta: normalizzare gli spazi e' la
- * scelta giusta per il resto della suite, e qui serve un canarino, non venti
- * test fragili.
- */
-describe("canarino: lo spazio fra numero e simbolo dell'euro", () => {
-  /** U+00A0 no-break, U+202F narrow no-break, U+2007 figure space. */
-  const NON_SEPARABILI = new Map([
-    ['\u00a0', 'U+00A0 NO-BREAK SPACE'],
-    ['\u202f', 'U+202F NARROW NO-BREAK SPACE'],
-    ['\u2007', 'U+2007 FIGURE SPACE'],
-  ])
-
-  function nome(char: string): string {
-    if (char === ' ') return 'U+0020 SPACE (lo spazio normale)'
-    return (
-      NON_SEPARABILI.get(char) ??
-      `U+${(char.codePointAt(0) ?? 0).toString(16).toUpperCase().padStart(4, '0')}`
-    )
-  }
-
-  it('non e un carattere su cui si possa andare a capo', () => {
-    const reso = formatCents(123456789)
-    const posizioneEuro = reso.indexOf('€')
-    expect(
-      posizioneEuro,
-      `formatCents ha reso "${reso}", che non contiene il simbolo €. ` +
-        "Non e' cambiato il codice: e' cambiato come l'ICU della runtime scrive " +
-        "la valuta per it-IT. Prima di aggiornare questo test, guardare cosa " +
-        'mostra davvero la Home.',
-    ).toBeGreaterThan(0)
-
-    const separatore = reso.charAt(posizioneEuro - 1)
-    expect(
-      NON_SEPARABILI.has(separatore),
-      `Fra il numero e il simbolo dell'euro c'e' ${nome(separatore)} invece di uno ` +
-        'spazio non separabile (U+00A0, U+202F o U+2007). formatCents ha reso ' +
-        `"${reso}". Non e' una sottigliezza tipografica: uno spazio normale e' un ` +
-        "punto in cui il testo puo' andare a capo, quindi in una colonna stretta " +
-        "l'importo si spezza e il simbolo dell'euro finisce sulla riga dopo, " +
-        'staccato dalle cifre. Il codice non e\' cambiato: e\' cambiata l\'ICU della ' +
-        "runtime che formatta (Node qui, WebKit sull'iPhone). Se e' comparso un " +
-        "quarto spazio non separabile, aggiungerlo alla mappa qui sopra: sono lo " +
-        'stesso pixel. Se e\' uno spazio normale (U+0020), il difetto e\' nella ' +
-        'runtime e la UI va difesa, non il test aggiornato.',
-    ).toBe(true)
   })
 })
 

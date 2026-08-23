@@ -1,4 +1,5 @@
 import { useRef } from 'preact/hooks'
+import { t } from './i18n'
 import './Keypad.css'
 
 /**
@@ -81,7 +82,7 @@ export function Keypad({ onDigit, onBackspace, onClear, atMax, canDelete }: Prop
         type="button"
         class="pad__key pad__key--erase"
         disabled={!canDelete}
-        aria-label="Cancella l'ultima cifra. Tieni premuto per azzerare"
+        aria-label={t('keypad.erase')}
         onPointerDown={startHold}
         onPointerUp={endHold}
         onPointerLeave={endHold}

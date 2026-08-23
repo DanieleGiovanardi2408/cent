@@ -1,4 +1,5 @@
 import { useRef, useState } from 'preact/hooks'
+import { t } from './i18n'
 import './BackupPanel.css'
 
 /**
@@ -46,10 +47,10 @@ export function BackupPanel({ text, filename, onCopied, onClose }: Props) {
   }
 
   return (
-    <div class="panel" role="dialog" aria-modal="true" aria-label="Backup dei dati">
+    <div class="panel" role="dialog" aria-modal="true" aria-label={t('backup.label')}>
       <div class="panel__head">
         <h2 class="panel__title">{filename}</h2>
-        <button type="button" class="panel__close" aria-label="Chiudi" onClick={onClose}>
+        <button type="button" class="panel__close" aria-label={t('backup.close')} onClick={onClose}>
           <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
             <path d="m7 7 10 10M17 7 7 17" />
           </svg>
@@ -57,17 +58,13 @@ export function BackupPanel({ text, filename, onCopied, onClose }: Props) {
       </div>
 
       <p class="panel__lead">
-        {copied === 'yes'
-          ? 'Copiato. Incollalo dove vuoi tenerlo: Note, una mail a te stesso, un file.'
-          : copied === 'manual'
-            ? 'Il testo è selezionato: usa Copia del sistema e incollalo dove vuoi tenerlo.'
-            : 'Questo è tutto il tuo archivio. Copialo e incollalo dove vuoi tenerlo al sicuro.'}
+        {t(copied === 'yes' ? 'backup.copied' : copied === 'manual' ? 'backup.manual' : 'backup.lead')}
       </p>
 
       <textarea class="panel__data" ref={field} readOnly value={text} spellcheck={false} />
 
       <button type="button" class="panel__copy" onClick={() => void copy()}>
-        {copied === 'yes' ? 'Copiato' : 'Copia tutto'}
+        {t(copied === 'yes' ? 'backup.copiedShort' : 'backup.copy')}
       </button>
     </div>
   )

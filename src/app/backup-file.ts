@@ -31,6 +31,7 @@
 import { today } from '../core/date'
 import type { IsoDate } from '../core/date'
 import type { Repository } from '../core/repository'
+import { t } from '../ui/i18n'
 
 export type ExportResult =
   /** Consegnato al foglio di condivisione del sistema. */
@@ -47,7 +48,14 @@ export function serializeBackup(repo: Repository): string {
   return JSON.stringify(repo.exportBackup(), null, 2)
 }
 
-/** `cent-2026-08-22.json`: ordinabile per nome, riconoscibile in mezzo ad altri. */
+/**
+ * `cent-2026-08-22.json`: ordinabile per nome, riconoscibile in mezzo ad altri.
+ *
+ * **Non si traduce e non si localizza la data.** Il nome di un file di backup
+ * non e' interfaccia: e' una chiave che deve restare la stessa per chi ha
+ * esportato in italiano a marzo e in inglese a giugno, e ordinabile
+ * alfabeticamente in qualunque gestore di file.
+ */
 export function backupFilename(day: IsoDate = today()): string {
   return `cent-${day}.json`
 }
@@ -86,7 +94,9 @@ function tryShare(text: string, filename: string): Promise<ShareAttempt> | Share
   let payload: ShareData
   try {
     const file = new File([text], filename, { type: 'application/json' })
-    payload = { files: [file], title: 'Backup di Cent' }
+    // L'unica stringa che l'utente legge in questo file: e' il titolo che iOS
+    // mostra in cima al foglio di condivisione, quindi va nella sua lingua.
+    payload = { files: [file], title: t('backup.shareTitle') }
   } catch {
     return 'unavailable'
   }

@@ -4,6 +4,7 @@ import type { BudgetMetrics } from '../core/budget'
 import { addDays } from '../core/date'
 import { makeBudget, makeExpense } from '../core/testing'
 import type { Budget, Expense } from '../core/types'
+import { setLanguage } from './i18n'
 import type { AllowanceCopy } from './budget-view'
 import {
   activePeriod,
@@ -25,6 +26,20 @@ import {
  * Il resto (dove sta il numero grande, quanto e' alto il riquadro) e' geometria,
  * e la geometria la misura la sonda in `tests/e2e`.
  */
+
+/**
+ * Le frasi si provano in **italiano**, dichiarato.
+ *
+ * Prima della fase 3 era implicito — `formatCents` aveva `it-IT` dentro e le
+ * stringhe erano scritte nel modulo — e questa riga e' la parte visibile di
+ * quella correzione: non e' un'impalcatura di test, e' la lingua che smette di
+ * essere una premessa nascosta. L'inglese non ha un test gemello qui e non deve
+ * averlo: quello che cambia sono le parole, e la parita' delle chiavi la
+ * garantisce il compilatore. Quello che questo file prova — i due `null` di
+ * `computeBudgetMetrics`, i rami che a mano non si toccano mai — non dipende
+ * dalla lingua.
+ */
+setLanguage('it')
 
 // Lunedi' 17 agosto 2026 e' l'inizio della settimana; domenica 23 la fine.
 const LUNEDI = '2026-08-17'

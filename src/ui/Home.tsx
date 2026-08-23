@@ -2,14 +2,13 @@ import { useMemo } from 'preact/hooks'
 import { computeBudgetMetrics } from '../core/budget'
 import type { BudgetMetrics } from '../core/budget'
 import type { IsoDate } from '../core/date'
-import { formatCents } from '../core/money'
 import { groupByDay } from '../core/stats'
 import type { Budget, Category, Expense } from '../core/types'
 import type { AppPhase } from '../app/boot'
 import { ArchiveError } from './Blank'
 import { ExpenseRow } from './ExpenseRow'
 import { activePeriod, allowanceCopy, budgetStart, heroCopy, paceParts, spentRatio, startNote } from './budget-view'
-import { periodName, periodRangeLabel } from './labels'
+import { money, periodName, periodRangeLabel, t } from './i18n'
 import './Home.css'
 
 /**
@@ -132,8 +131,9 @@ export function Home({ phase, expenses, categories, budgets, day, onPick, onEdit
         ) : (
           <>
             <p class="invite">
-              Con un budget questa riga diventa <b>quanto puoi spendere oggi</b>,
-              invece di quanto hai già speso.
+              {t('home.invite.before')}
+              <b>{t('home.invite.strong')}</b>
+              {t('home.invite.after')}
             </p>
             <Pace metrics={metrics} />
           </>
@@ -144,13 +144,13 @@ export function Home({ phase, expenses, categories, budgets, day, onPick, onEdit
           finche' non esiste la schermata Impostazioni (fase 5) e' l'unica via
           per il budget, e una via che si sposta e' una via che si cerca. */}
       <button type="button" class="budget" disabled={!ready} onClick={onEditBudget}>
-        {hasBudget && ready ? 'Cambia il budget' : 'Imposta un budget'}
+        {t(hasBudget && ready ? 'home.budget.change' : 'home.budget.set')}
       </button>
 
       <section class="today">
         <h2 class="today__head">
-          <span class="today__name">Oggi</span>
-          <span class="today__total">{ready ? formatCents(view.today?.totalCents ?? 0) : ''}</span>
+          <span class="today__name">{t('day.today')}</span>
+          <span class="today__total">{ready ? money(view.today?.totalCents ?? 0) : ''}</span>
         </h2>
 
         {phase === 'failed' ? (
@@ -160,11 +160,8 @@ export function Home({ phase, expenses, categories, budgets, day, onPick, onEdit
           // 40 ms e' rumore che si vede lampeggiare.
           ready ? (
             <div class="blank">
-              <p class="blank__title">Oggi non hai segnato niente</p>
-              <p class="blank__text">
-                Tocca il + qui sotto, digita l&apos;importo e scegli la categoria.
-                Sono due tap: si fa in cassa, con una mano.
-              </p>
+              <p class="blank__title">{t('home.blank.title')}</p>
+              <p class="blank__text">{t('home.blank.text')}</p>
             </div>
           ) : (
             <div class="blank" aria-hidden="true" />

@@ -1,48 +1,49 @@
 /**
  * Denaro: sempre interi in centesimi. Nessun float attraversa questo modulo,
- * tranne l'ultimo passo della formattazione (delegato a Intl).
+ * tranne l'ultimo passo di `divideCents`, che lo corregge subito.
+ *
+ * ## Qui non si formatta piu' niente, ed e' il punto del modulo
+ *
+ * Fino alla fase 3 questo file conteneva `formatCents`, con `'it-IT'` scritto
+ * dentro. Era **presentazione dentro il dominio**, e si e' visto solo quando le
+ * lingue sono diventate due: il core avrebbe dovuto sapere quale lingua sta
+ * guardando l'utente per rispondere "quanto fa". Non e' affar suo.
+ *
+ * Ora il confine e': **il core restituisce interi, la UI li scrive**. Il
+ * formatter vive in `src/ui/i18n`, dove sta anche il locale attivo.
+ *
+ * Cio' che e' rimasto qui e' aritmetica e invarianti: la somma che non deriva,
+ * la divisione che non promette piu' di quanto c'e', e `assertCents` — che e'
+ * l'invariante "il denaro e' un intero", non una scelta di presentazione, e per
+ * questo lo riusa anche il formatter della UI invece di riscriverselo.
  *
  * Non c'e' nessun parser di stringhe, e non e' una dimenticanza: **in
  * quest'app il denaro non entra mai come testo**. Il tastierino e' cents-first
  * (si digitano solo cifre e l'importo si riempie da destra: `1250` -> `12,50`,
  * ADR 004), quindi la UI produce una sequenza di cifre e non una stringa da
  * interpretare; l'import JSON legge numeri interi e li valida con `intCents`
- * (`backup.ts`); il CSV e' dichiarato non reimportabile. Un `parseAmountToCents`
- * e' esistito qui con quattro codici di errore e nessun chiamante: e' stato
- * cancellato. Se un giorno servisse, va scritto insieme a chi lo usa.
+ * (`backup.ts`); il CSV e' dichiarato non reimportabile.
+ *
+ * E' anche il motivo per cui due lingue non hanno aggiunto nessun rischio:
+ * **non esiste parsing dipendente dal locale**, solo output. Un'app che
+ * accettasse `12,50` scritto a mano avrebbe dovuto decidere cosa farne in
+ * inglese, dove quella virgola separa le migliaia.
  */
 
 /** Importo in centesimi. Sempre un intero sicuro. */
 export type Cents = number
 
-const eurFormatter = new Intl.NumberFormat('it-IT', {
-  style: 'currency',
-  currency: 'EUR',
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-})
-
-function assertCents(cents: Cents): void {
+/**
+ * L'invariante del denaro: un intero sicuro di centesimi, e nient'altro.
+ *
+ * E' esportata perche' la usa anche il formatter in `src/ui/i18n`: un importo
+ * malformato deve morire dove nasce, non comparire a schermo come `NaN €`. La
+ * regola e' del dominio, la resa e' della UI — la riga che le separa passa qui.
+ */
+export function assertCents(cents: Cents): void {
   if (!Number.isSafeInteger(cents)) {
     throw new TypeError(`Importo non valido: atteso un intero in centesimi, ricevuto ${cents}`)
   }
-}
-
-/**
- * Da centesimi a stringa EUR locale it-IT (es. `1.234,56 €`).
- *
- * La divisione per 100 e' l'unico float del modulo: avviene dopo ogni calcolo,
- * su un intero sicuro, e Intl arrotonda comunque a 2 decimali.
- * Nota: it-IT non raggruppa i numeri a 4 cifre (`1234,56 €`, non `1.234,56 €`).
- *
- * E' l'unico formatter del modulo, ed e' per la UI. L'export CSV NON deve usarlo
- * ne' avere una sua variante "senza simbolo": il formato it-IT rompe qualunque
- * parser che si aspetti il punto decimale, e la virgola di `1.234,56` dentro un
- * CSV separato da virgole spacca il campo. Per il CSV: `(cents / 100).toFixed(2)`.
- */
-export function formatCents(cents: Cents): string {
-  assertCents(cents)
-  return eurFormatter.format(cents / 100)
 }
 
 /** Somma di importi in centesimi: solo aritmetica intera. */

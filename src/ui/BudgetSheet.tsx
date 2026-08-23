@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
-import { formatCents } from '../core/money'
 import type { BudgetPeriod } from '../core/types'
 import { Keypad } from './Keypad'
+import { cadenceLabel, money, t } from './i18n'
 import './sheet.css'
 import './BudgetSheet.css'
 
@@ -106,14 +106,12 @@ export function BudgetSheet({
 
   const weekly = chosen === 'weekly'
   const hint = failed
-    ? 'Non sono riuscito a salvare. Tocca di nuovo Salva.'
+    ? t('budget.hint.failed')
     : atMax
-      ? 'Importo massimo raggiunto'
+      ? t('add.hint.max')
       : empty
-        ? weekly
-          ? 'Quanto vuoi spendere in una settimana?'
-          : 'Quanto vuoi spendere in un mese?'
-        : 'Controlla il periodo, poi tocca Salva'
+        ? t(weekly ? 'budget.hint.weekly' : 'budget.hint.monthly')
+        : t('budget.hint.check')
 
   return (
     <>
@@ -124,7 +122,7 @@ export function BudgetSheet({
         data-leaving={leaving || undefined}
         role="dialog"
         aria-modal="true"
-        aria-label="Budget"
+        aria-label={t('budget.label')}
         tabIndex={-1}
         ref={dialog}
         onKeyDown={(event) => {
@@ -136,20 +134,20 @@ export function BudgetSheet({
         </p>
 
         <p class="amount" data-empty={empty || undefined} aria-live="polite">
-          {formatCents(cents)}
+          {money(cents)}
         </p>
 
         {/* Due bersagli larghi mezzo foglio. Sotto il nome, l'importo che c'e'
             adesso: cosi' si vede cosa si sta per sostituire senza aprire altro. */}
-        <div class="periods" role="group" aria-label="Periodo del budget">
+        <div class="periods" role="group" aria-label={t('budget.periods')}>
           <Period
-            label="A settimana"
+            label={t('budget.weekly')}
             current={weeklyCents}
             selected={weekly}
             onPick={() => pick('weekly')}
           />
           <Period
-            label="Al mese"
+            label={t('budget.monthly')}
             current={monthlyCents}
             selected={!weekly}
             onPick={() => pick('monthly')}
@@ -178,7 +176,12 @@ export function BudgetSheet({
           {/* Il bottone dice cosa salva, non "Salva": e' l'unico posto in cui
               importo e periodo si leggono nella stessa riga, ed e' l'ultima
               cosa che si guarda prima di scrivere un record storicizzato. */}
-          {empty ? 'Salva' : `Salva ${formatCents(cents)} ${weekly ? 'a settimana' : 'al mese'}`}
+          {empty
+            ? t('budget.save')
+            : t('budget.saveAmount', {
+                amount: money(cents),
+                cadence: cadenceLabel(chosen),
+              })}
         </button>
       </div>
     </>
@@ -206,7 +209,7 @@ function Period({
     >
       <span class="period__name">{label}</span>
       <span class="period__now">
-        {current === null ? 'nessun budget' : `ora ${formatCents(current)}`}
+        {current === null ? t('budget.none') : t('budget.now', { amount: money(current) })}
       </span>
     </button>
   )

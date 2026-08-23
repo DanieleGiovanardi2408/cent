@@ -45,7 +45,9 @@ const SCRIVONO = [
   '.row', // apre le azioni su una spesa, fra cui elimina
   '.acts__delete',
   '.toast__action', // annulla / ripristina
-  '.app__action', // "Esporta": scrive lastBackupAt
+  '.app__action', // l'ingresso alle Impostazioni, dove vivono i tre qui sotto
+  '.pick', // la lingua: scrive (o cancella) Settings.language
+  '.prefs__action', // "Esporta tutto" scrive lastBackupAt; l'altro apre il budget
   'input',
   'textarea',
   '[contenteditable]',

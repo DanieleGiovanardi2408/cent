@@ -96,13 +96,22 @@
 }
 
 /* Schermi stretti (320 punti: il vecchio SE, o lo Zoom schermo di iOS su un
- * telefono normale). Barra, due schede ed "Esporta" insieme sfondano di un
- * pelo: il marchio e' la cosa meno utile delle tre — in standalone l'icona
- * dell'app e' gia' sulla schermata Home — e si toglie per primo. */
+ * telefono normale). Barra, due schede e il bottone di sinistra insieme sfondano
+ * di un pelo, e "Impostazioni" e' cinque caratteri piu' lungo di "Esporta" che
+ * c'era prima. Si tolgono due cose, in ordine di inutilita':
+ *
+ * 1. il marchio — in standalone l'icona dell'app e' gia' sulla schermata Home,
+ *    quindi qui non identifica niente che l'utente non sappia gia';
+ * 2. l'etichetta del bottone di sinistra, che resta solo icona. Il nome
+ *    accessibile non se ne va con lei: sta in `aria-label`, sempre. */
 @media (max-width: 359px) {
   /* Solo quello in barra: sulla pagina di installazione (ADR 011) il marchio e'
    * il nome dell'app e li' lo spazio non manca. */
   .app__bar .mark {
+    display: none;
+  }
+
+  .app__label {
     display: none;
   }
 
@@ -135,6 +144,16 @@
 /* Nessuna transizione sul premuto: il colore cambia nel frame del tap. */
 .app__action:active {
   background-color: var(--brand-soft);
+}
+
+/* Impostazioni e' una schermata come le altre due, e quando e' quella aperta il
+ * suo ingresso lo dice — con una superficie, non solo col colore, esattamente
+ * come la scheda attiva qui sopra. Senza, si arriva in Impostazioni e nessuna
+ * delle tre vie di navigazione risulta attiva: in standalone, dove non c'e' il
+ * tasto Indietro, "dove sono" e' un'informazione che deve stare a schermo. */
+.app__action[aria-current="page"] {
+  background-color: var(--surface-sunken);
+  color: var(--text);
 }
 
 .app__action:disabled {

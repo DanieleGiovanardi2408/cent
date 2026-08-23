@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'preact/hooks'
 import { applyPendingUpdate, isUpdatePending, onUpdatePending } from '../app/sw-update'
+import { t } from './i18n'
 import './UpdateBanner.css'
 
 type BannerState = 'hidden' | 'ready' | 'applying'
@@ -49,9 +50,9 @@ export function UpdateBanner() {
             </svg>
             <span class="updater__text">
               <span class="updater__title">
-                {applying ? 'Aggiornamento in corso' : 'Nuova versione disponibile'}
+                {t(applying ? 'update.applying' : 'update.ready')}
               </span>
-              {applying ? null : <span class="updater__hint">Tocca per aggiornare</span>}
+              {applying ? null : <span class="updater__hint">{t('update.hint')}</span>}
             </span>
           </button>
 
@@ -59,7 +60,7 @@ export function UpdateBanner() {
             <button
               type="button"
               class="updater__dismiss"
-              aria-label="Non ora, resta su questa versione"
+              aria-label={t('update.dismiss')}
               onClick={() => setState('hidden')}
             >
               <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">

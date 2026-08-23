@@ -1,0 +1,154 @@
+/* Impostazioni.
+ *
+ * Scorre come lo Storico e la Home — e' l'unico contenitore che scorre nella
+ * sua schermata — e per la stessa ragione: la barra in alto e il FAB restano
+ * fermi, quindi lo slancio non deve propagarsi al documento o iOS fa rimbalzare
+ * tutta la pagina.
+ *
+ * Qui **non c'e' nessuna altezza riservata**, e non e' una svista rispetto alla
+ * Home: la Home dipinge il guscio prima dei dati e il contenuto ci arriva dentro
+ * dopo (CLS = 0 sta li'). Qui il contenuto e' tutto noto al primo frame tranne
+ * un importo e una spunta, e nessuno dei due cambia l'altezza della riga che lo
+ * contiene: la spunta e' sempre nel DOM (`visibility`), e la riga del budget e'
+ * pinnata a due righe di testo.
+ */
+
+.prefs {
+  flex: 1;
+  min-block-size: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding-inline: max(var(--sp-4), var(--safe-left)) max(var(--sp-4), var(--safe-right));
+  padding-block-end: var(--sp-3);
+}
+
+.prefs__group {
+  padding-block: var(--sp-4);
+  border-block-end: 1px solid var(--line);
+}
+
+/* L'ultimo gruppo non ha una riga sotto: sarebbe un divisore che non divide
+ * niente, e in fondo a una schermata si legge come "continua". */
+.prefs__group:last-child {
+  border-block-end: none;
+}
+
+.prefs__title {
+  font-size: var(--fs-400);
+  font-weight: var(--fw-semibold);
+  letter-spacing: var(--tracking-tight);
+}
+
+.prefs__text {
+  /* Due righe di testo riservate: la riga del budget passa da "nessun budget" a
+   * un importo, e a 320 punti la seconda forma va a capo. Senza questa riserva
+   * il bottone sotto salterebbe di 22px nell'istante in cui i dati arrivano. */
+  min-block-size: calc(2em * var(--lh-body));
+  margin-block-start: var(--sp-2);
+  font-size: var(--fs-200);
+  line-height: var(--lh-body);
+  color: var(--text-muted);
+}
+
+.prefs__action {
+  min-block-size: var(--tap-min);
+  margin-block-start: var(--sp-3);
+  padding-inline: var(--sp-4);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-2);
+  color: var(--text);
+  font-size: var(--fs-300);
+  font-weight: var(--fw-medium);
+}
+
+/* Nessuna transizione: il colore cambia nel frame del tap. */
+.prefs__action:active {
+  background-color: var(--brand-soft);
+  border-color: var(--brand);
+  color: var(--brand);
+}
+
+.prefs__action:disabled {
+  opacity: 0.45;
+}
+
+/* --- il selettore della lingua ------------------------------------------- */
+/* Tre righe piene, non tre chip in fila: "Automatica" porta con se' una riga di
+ * spiegazione, e a 320 punti tre bersagli affiancati con dentro "Automatica",
+ * "Italiano" e "English" sarebbero sotto i 44px o andrebbero a capo dentro il
+ * bottone. In colonna ogni voce ha tutta la larghezza e un bersaglio che non
+ * dipende dalla lunghezza della parola. */
+
+.picks {
+  margin-block-start: var(--sp-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-2);
+  overflow: hidden;
+}
+
+.pick {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  inline-size: 100%;
+  min-block-size: var(--tap-min);
+  padding: var(--sp-3) var(--sp-4);
+  text-align: start;
+  color: var(--text);
+}
+
+.pick + .pick {
+  border-block-start: 1px solid var(--line);
+}
+
+.pick__text {
+  flex: 1;
+  min-inline-size: 0;
+}
+
+.pick__label {
+  display: block;
+  font-size: var(--fs-300);
+  font-weight: var(--fw-medium);
+  line-height: var(--lh-snug);
+}
+
+.pick__note {
+  display: block;
+  margin-block-start: var(--sp-1);
+  font-size: var(--fs-100);
+  line-height: var(--lh-snug);
+  color: var(--text-muted);
+}
+
+/* La spunta occupa il suo posto sempre: `visibility` e non `display`, cosi' il
+ * testo non si allarga quando la selezione si sposta da una riga all'altra. */
+.pick__mark {
+  flex: none;
+  visibility: hidden;
+  fill: none;
+  stroke: var(--brand);
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Il selezionato ha due segnali, non uno: la superficie e la spunta. Il colore
+ * da solo sparisce a chi ha una carenza cromatica e sotto il sole. */
+.pick[aria-checked="true"] {
+  background-color: var(--brand-soft);
+  font-weight: var(--fw-semibold);
+}
+
+.pick[aria-checked="true"] .pick__mark {
+  visibility: visible;
+}
+
+.pick:active {
+  background-color: var(--surface-sunken);
+}
+
+.pick:disabled {
+  opacity: 0.45;
+}

@@ -13,10 +13,9 @@ import { resolveBudget, totalSpent } from '../core/budget'
 import type { BudgetMetrics } from '../core/budget'
 import { addDays, isAfter } from '../core/date'
 import type { IsoDate } from '../core/date'
-import { formatCents } from '../core/money'
 import type { Cents } from '../core/money'
 import type { Budget, BudgetPeriod, Expense } from '../core/types'
-import { daysLabel, fromDayLabel } from './labels'
+import { daysLabel, fromDayLabel, money, t } from './i18n'
 
 /**
  * Il periodo che la Home mostra: **quello dell'ultimo budget impostato**.
@@ -92,6 +91,11 @@ export function currentBudgetCents(
  * Regola di tono, che vale per ogni stringa di questo blocco: **sforare non e'
  * un errore, e' un'informazione** (CLAUDE.md). Niente punti esclamativi, niente
  * "attenzione", niente seconda persona accusatoria. Chi ha sforato lo sa gia'.
+ *
+ * Le stringhe non sono piu' qui: stanno in `src/ui/i18n`, e queste funzioni le
+ * chiedono con `t()`. Il modulo resta senza DOM e resta testabile in node —
+ * cambia solo che il test dichiara la lingua invece di ereditarla, il che e' un
+ * miglioramento: prima l'italiano era implicito e nessuno lo sapeva.
  * ------------------------------------------------------------------------- */
 
 
@@ -128,16 +132,16 @@ export interface HeroCopy {
 export function heroCopy(m: BudgetMetrics): HeroCopy {
   if (m.budgetCents === null || m.remainingCents === null) {
     return {
-      label: 'Spesi',
-      value: formatCents(m.spentCents),
-      note: 'nessun budget impostato per questo periodo',
+      label: t('hero.spent'),
+      value: money(m.spentCents),
+      note: t('hero.noBudget'),
       over: false,
     }
   }
   return {
-    label: 'Restano',
-    value: formatCents(m.remainingCents),
-    note: `di ${formatCents(m.budgetCents)} · ${formatCents(m.spentCents)} spesi`,
+    label: t('hero.remaining'),
+    value: money(m.remainingCents),
+    note: t('hero.note', { budget: money(m.budgetCents), spent: money(m.spentCents) }),
     over: m.remainingCents < 0,
   }
 }
@@ -219,8 +223,10 @@ export function budgetStart(m: BudgetMetrics, expenses: readonly Expense[]): Bud
  */
 export function startNote(m: BudgetMetrics, start: BudgetStart): string | null {
   if (!start.late || m.budgetEffectiveFrom === null || start.beforeCents === 0) return null
-  const since = `Budget attivo ${fromDayLabel(m.period, m.budgetEffectiveFrom)}`
-  return `${since} · prima avevi già speso ${formatCents(start.beforeCents)}`
+  return t('startNote', {
+    from: fromDayLabel(m.period, m.budgetEffectiveFrom),
+    amount: money(start.beforeCents),
+  })
 }
 
 export interface AllowanceCopy {
@@ -266,7 +272,7 @@ export interface AllowanceCopy {
  */
 export function allowanceCopy(m: BudgetMetrics, start: BudgetStart): AllowanceCopy {
   if (m.daysRemaining === 0) {
-    return { main: 'Questo periodo è chiuso.', sub: 'Il prossimo riparte da capo.', over: false }
+    return { main: t('allowance.closed.main'), sub: t('allowance.closed.sub'), over: false }
   }
   const daily = m.dailyAllowanceCents
   const exhausted = daily === null || daily === 0 || m.remainingCents === null || m.remainingCents < 0
@@ -280,18 +286,15 @@ export function allowanceCopy(m: BudgetMetrics, start: BudgetStart): AllowanceCo
     m.remainingCents + start.beforeCents > 0
   ) {
     return {
-      main:
-        m.period === 'weekly'
-          ? 'Questa settimana era già iniziata.'
-          : 'Questo mese era già iniziato.',
-      sub: `Il budget vale pieno ${fromDayLabel(m.period, addDays(m.range.end, 1))}.`,
+      main: t(m.period === 'weekly' ? 'allowance.late.weekly' : 'allowance.late.monthly'),
+      sub: t('allowance.late.sub', { from: fromDayLabel(m.period, addDays(m.range.end, 1)) }),
       over: false,
     }
   }
   if (exhausted) {
     return {
-      main: 'Il budget del periodo è finito.',
-      sub: `Restano ${daysLabel(m.daysRemaining)}: quello che spendi da qui è in più.`,
+      main: t('allowance.over.main'),
+      sub: t('allowance.over.sub', { days: daysLabel(m.daysRemaining) }),
       over: true,
     }
   }
@@ -307,14 +310,14 @@ export function allowanceCopy(m: BudgetMetrics, start: BudgetStart): AllowanceCo
   // spazio di due righe.
   if (m.daysRemaining === 1) {
     return {
-      main: `Puoi spendere ${formatCents(daily)} oggi`,
-      sub: 'Ultimo giorno del periodo: domani riparte da capo.',
+      main: t('allowance.last.main', { amount: money(daily) }),
+      sub: t('allowance.last.sub'),
       over: false,
     }
   }
   return {
-    main: `Puoi spendere ~${formatCents(daily)} al giorno`,
-    sub: `per i ${daysLabel(m.daysRemaining)} che restano, oggi compreso`,
+    main: t('allowance.main', { amount: money(daily) }),
+    sub: t('allowance.sub', { days: daysLabel(m.daysRemaining) }),
     over: false,
   }
 }
@@ -335,24 +338,24 @@ export function paceParts(m: BudgetMetrics): readonly Segment[] {
   // Prima ancora del primo giorno: senza spese il passo sarebbe `0,00 € al
   // giorno`, cioe' un numero vero e inutile. Si dice il fatto invece del numero.
   if (m.spentCents === 0) {
-    return [{ text: 'Nessuna spesa in questo periodo, per ora.' }]
+    return [{ text: t('pace.none') }]
   }
   if (m.currentPaceCents === null) {
-    return [{ text: 'È il primo giorno del periodo: la media di oggi non è ancora un passo.' }]
+    return [{ text: t('pace.firstDay') }]
   }
-  const now: Segment = { text: formatCents(m.currentPaceCents), strong: true }
+  const now: Segment = { text: money(m.currentPaceCents), strong: true }
   if (m.sustainablePaceCents === null) {
-    return [{ text: 'Finora stai spendendo ' }, now, { text: ' al giorno.' }]
+    return [{ text: t('pace.soFar.before') }, now, { text: t('pace.soFar.after') }]
   }
   // Il verdetto in testa, non in fondo: e' la prima parola che si legge, e su
   // due righe di testo grigio e' l'unica che si legge sempre. "Sopra ritmo" non
   // e' un rimprovero, e' dove sei — infatti la frase che segue e' identica.
-  const verdict = m.currentPaceCents > m.sustainablePaceCents ? 'Sopra ritmo: ' : 'Sotto ritmo: '
+  const verdict = m.currentPaceCents > m.sustainablePaceCents ? t('pace.above') : t('pace.below')
   return [
     { text: verdict },
     now,
-    { text: ' al giorno contro ' },
-    { text: formatCents(m.sustainablePaceCents), strong: true },
-    { text: ' sostenibili.' },
+    { text: t('pace.against') },
+    { text: money(m.sustainablePaceCents), strong: true },
+    { text: t('pace.sustainable') },
   ]
 }

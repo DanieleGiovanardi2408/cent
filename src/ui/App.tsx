@@ -2,9 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import { backupFilename, exportBackupFile, serializeBackup } from '../app/backup-file'
 import { getAppState, refreshDay } from '../app/boot'
 import type { Repository } from '../core/repository'
-import { formatCents } from '../core/money'
 import { nowTimestamp } from '../core/types'
-import type { BudgetPeriod, Category, Expense } from '../core/types'
+import type { BudgetPeriod, Category, Expense, Language } from '../core/types'
 import { AddSheet } from './AddSheet'
 import type { SaveInput } from './AddSheet'
 import { BackupPanel } from './BackupPanel'
@@ -13,12 +12,21 @@ import { ExpenseActions } from './ExpenseActions'
 import { History } from './History'
 import { Home } from './Home'
 import { Mark } from './Mark'
+import { Settings } from './Settings'
 import { activePeriod, currentBudgetCents } from './budget-view'
 import { Toast } from './Toast'
 import type { ToastAction, ToastData } from './Toast'
 import { UpdateBanner } from './UpdateBanner'
 import { insecureContext } from './env'
-import { dayHeading } from './labels'
+import {
+  cadenceLabel,
+  dayHeading,
+  detectLanguage,
+  money,
+  resolveLanguage,
+  setLanguage,
+  t,
+} from './i18n'
 import { motionMs } from './motion'
 import { useApp } from './useApp'
 import './App.css'
@@ -34,7 +42,7 @@ type Sheet = { readonly kind: 'add' | 'budget'; readonly leaving: boolean } | nu
  * il tasto Indietro del browser, quindi un router sincronizzerebbe la UI con una
  * history che nessuno puo' guardare. Vedi ADR 002.
  */
-type View = 'home' | 'history'
+type View = 'home' | 'history' | 'settings'
 
 let toastSeq = 0
 
@@ -43,6 +51,33 @@ const TOAST_MS = { plain: 4000, action: 6000 } as const
 
 export function App() {
   const app = useApp()
+
+  /**
+   * La lingua, decisa **qui e prima di ogni figlio**.
+   *
+   * `Settings.language` assente non significa italiano: significa "nessuno l'ha
+   * scelta", e allora si ridecide dall'ambiente a ogni avvio (vedi `types.ts` e
+   * il selettore a tre voci in `Settings.tsx`). Niente viene persistito qui: la
+   * lingua **rilevata** non si scrive, o diventerebbe indistinguibile da una
+   * scelta vera.
+   *
+   * `setLanguage` e' un effetto in fase di render, e in questo caso e' la cosa
+   * giusta: e' idempotente, sincrono, e deve valere per il sottoalbero che sta
+   * per essere dipinto. In un `useEffect` girerebbe **dopo** il primo render,
+   * cioe' l'app dipingerebbe un frame nella lingua sbagliata a ogni cambio.
+   *
+   * Costo accettato, e va detto: chi ha scelto una lingua **diversa** da quella
+   * del telefono vede il guscio nella lingua rilevata per i pochi frame che
+   * separano il primo render dall'apertura del database (regola "Ordine di
+   * pittura": il guscio non aspetta i dati). Le tre parole che cambiano sono
+   * nella barra, e cambiando larghezza spostano le schede. Toglierlo del tutto
+   * vorrebbe dire tenere una copia sincrona della lingua fuori da IndexedDB,
+   * cioe' una seconda fonte di verita' che puo' divergere: e' un baratto che va
+   * deciso con una ADR, non di straforo dentro una schermata.
+   */
+  const chosenLanguage = app.data?.settings.language
+  setLanguage(resolveLanguage(chosenLanguage))
+
   const [view, setView] = useState<View>('home')
   const [sheet, setSheet] = useState<Sheet>(null)
   /** Cambia a ogni apertura: rimonta il foglio, cosi' non eredita mai un importo. */
@@ -66,6 +101,20 @@ export function App() {
   )
 
   const failures = app.data?.writeFailures.count ?? 0
+
+  /**
+   * Il periodo che la Home sta mostrando — cioe' quello dell'ultimo budget
+   * impostato (`activePeriod`, e docs/ROADMAP.md "Il periodo della Home deriva
+   * dai budget"). Serve a due schermate: al foglio del budget, che si apre
+   * selezionato li', e a Impostazioni, che dice quale budget e' in vigore.
+   *
+   * Si calcola una volta qui e non in ognuna delle due: due chiamate sarebbero
+   * due risposte che divergono il giorno in cui la regola cambia.
+   */
+  const homePeriod = useMemo(
+    () => activePeriod(app.data?.budgets ?? [], app.day),
+    [app.data?.budgets, app.day],
+  )
 
   /**
    * Riconciliazione al risveglio (regola "Stato dell'interfaccia e sospensione").
@@ -174,9 +223,9 @@ export function App() {
     closeSheet()
     const category = categoryOf(input.categoryId)
     const when = input.date === app.day ? '' : ` · ${dayHeading(input.date, app.day).toLowerCase()}`
-    showToast(`${formatCents(expense.amountCents)} · ${category?.name ?? 'Spesa'}${when}`, {
-      label: 'Annulla',
-      run: () => remove(repo, expense.id, 'Spesa annullata'),
+    showToast(`${money(expense.amountCents)} · ${category?.name ?? t('add.label')}${when}`, {
+      label: t('toast.undo'),
+      run: () => remove(repo, expense.id, t('toast.expenseUndone')),
     })
     return true
   }
@@ -203,7 +252,7 @@ export function App() {
     // Niente "Annulla": impostare un budget non distrugge niente, e il rimedio
     // e' lo stesso gesto al contrario. Il toast conferma e basta.
     showToast(
-      `Budget: ${formatCents(amountCents)} ${period === 'weekly' ? 'a settimana' : 'al mese'}`,
+      t('toast.budgetSaved', { amount: money(amountCents), cadence: cadenceLabel(period) }),
     )
     return true
   }
@@ -227,26 +276,26 @@ export function App() {
     try {
       removed = repo.deleteExpense(id)
     } catch {
-      showToast('Non sono riuscito a eliminarla. Riprova.')
+      showToast(t('toast.deleteFailed'))
       return
     }
     if (removed === null) {
-      showToast('Questa spesa non c’è più.')
+      showToast(t('toast.gone'))
       return
     }
-    showToast(done, { label: 'Annulla', run: () => restore(repo, id) })
+    showToast(done, { label: t('toast.undo'), run: () => restore(repo, id) })
   }
 
   function restore(repo: Repository, id: string): void {
     try {
       repo.restoreExpense(id)
     } catch {
-      showToast('Non sono riuscito a rimetterla. Riprova.')
+      showToast(t('toast.restoreFailed'))
       return
     }
     // Nessun secondo "Annulla": annullare un annullamento non lo fa nessuno, e
     // il rimedio vero e' la riga nello Storico, che adesso e' tornata li'.
-    showToast('Spesa ripristinata')
+    showToast(t('toast.restored'))
   }
 
   function exportNow(): void {
@@ -259,7 +308,7 @@ export function App() {
         case 'shared':
           // Osservato davvero: la promessa di `share()` si e' risolta.
           markBackup(repo)
-          showToast('Backup condiviso.')
+          showToast(t('toast.backupShared'))
           return
         case 'downloaded':
           // **Niente markBackup qui.** `link.click()` non lancia e non
@@ -268,25 +317,50 @@ export function App() {
           // farebbe tacere per due settimane il banner di sicurezza della
           // fase 7, sull'unico dispositivo rimasto senza copia. Un indicatore
           // che puo' sbagliare deve sbagliare verso l'allarme (CLAUDE.md).
-          showToast(`Backup pronto: ${result.filename}`, {
-            label: 'Non lo trovi?',
+          showToast(t('toast.backupReady', { filename: result.filename }), {
+            label: t('toast.backupWhere'),
             run: () => setPanel(serializeBackup(repo)),
           })
           return
         case 'cancelled':
-          showToast('Esportazione annullata: nessun backup salvato.')
+          showToast(t('toast.exportCancelled'))
           return
         case 'failed':
           if (result.text === null) {
-            showToast('Non riesco a preparare il backup.')
+            showToast(t('toast.backupUnavailable'))
             return
           }
-          showToast('Il file non si è salvato.', {
-            label: 'Mostra i dati',
+          showToast(t('toast.backupFileFailed'), {
+            label: t('toast.showData'),
             run: () => setPanel(result.text),
           })
       }
     })
+  }
+
+  /**
+   * Scrive la lingua scelta. `null` **cancella** il campo, cioe' torna ad
+   * "Automatica": e' l'unico verso che rende quella voce una scelta vera invece
+   * di una porta a senso unico (vedi `SettingsPatch` e `Settings.tsx`).
+   *
+   * Ottimistica come ogni altra scrittura locale: `updateSettings` muove il
+   * mirror subito, questo render finisce e il successivo e' gia' nella lingua
+   * nuova — sotto i 100 ms, senza spinner. Se il disco non accetta, la
+   * scrittura finisce in `writeFailures` e l'avviso "esporta adesso" compare da
+   * solo: non c'e' niente di speciale da dire per la lingua.
+   *
+   * Il `catch` copre l'unico rifiuto sincrono possibile (un import in corso), e
+   * li' un messaggio serve: la schermata resterebbe nella lingua di prima senza
+   * che si capisca perche' il tap non ha fatto niente.
+   */
+  function saveLanguage(next: Language | null): void {
+    const repo = app.repo
+    if (!repo) return
+    try {
+      repo.updateSettings({ language: next })
+    } catch {
+      showToast(t('toast.languageFailed'))
+    }
   }
 
   function markBackup(repo: Repository): void {
@@ -310,23 +384,41 @@ export function App() {
         <header class="app__bar">
           <Mark />
 
-          {/* Export a sinistra, navigazione a destra: l'angolo in alto a destra
-              e' il meno scomodo dei due per un pollice destro, e va a chi si
-              tocca ogni giorno. Prima era l'opposto — le schede nell'angolo piu'
-              lontano dal FAB e "Esporta", che si tocca una volta ogni due
-              settimane, nel posto buono. */}
+          {/* Impostazioni a sinistra, navigazione a destra: l'angolo in alto a
+              destra e' il meno scomodo dei due per un pollice destro, e va a chi
+              si tocca ogni giorno.
+
+              Qui c'era "Esporta". Le Impostazioni hanno preso il suo posto
+              invece di aggiungersi: a 320 punti — il vecchio SE, o lo Zoom
+              schermo di iOS — barra, due schede **e** due bottoni non ci stanno,
+              e fra i due quello che si tocca una volta ogni due settimane e'
+              l'export. Adesso vive dentro Impostazioni, che e' anche il posto
+              dove le schermate lo mettono da sempre.
+
+              La via urgente non e' cambiata: quando ci sono scritture non
+              arrivate al disco, l'avviso qui sotto ha il suo "Esporta ora" e
+              scrive con un tap solo. E' l'unico momento in cui un tap in piu'
+              costerebbe dei dati. */}
           <button
             type="button"
             class="app__action"
-            disabled={app.repo === null}
-            onClick={exportNow}
+            // Il nome accessibile non dipende dal viewport: sotto i 360 punti
+            // l'etichetta visibile e' nascosta (vedi App.css) e senza questa
+            // riga il bottone resterebbe un rettangolo senza nome.
+            aria-label={t('settings.open')}
+            aria-current={view === 'settings' ? 'page' : undefined}
+            onClick={() => setView('settings')}
           >
-            <svg viewBox="0 0 24 24" width="19" height="19" aria-hidden="true">
-              <path d="M12 3v12" />
-              <path d="m7.5 7.5 4.5-4.5 4.5 4.5" />
-              <path d="M5 15v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4" />
+            {/* Cursori, non un ingranaggio: a 20px un ingranaggio e' una
+                macchia tonda, e la sua unica lettura sicura viene comunque
+                dall'etichetta accanto. Due righe con due manopole si leggono
+                anche a quella dimensione. */}
+            <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+              <path d="M4 8h9M17 8h3M4 16h3M11 16h9" />
+              <circle cx="15" cy="8" r="2.2" />
+              <circle cx="9" cy="16" r="2.2" />
             </svg>
-            Esporta
+            <span class="app__label">{t('settings.open')}</span>
           </button>
 
           {/* La navigazione sta in barra e non in fondo allo schermo: in fondo
@@ -334,14 +426,14 @@ export function App() {
               sarebbe un secondo bersaglio a un pollice di distanza da quello che
               vale piu' di tutti. Due schermate non hanno bisogno di piu' di due
               parole. */}
-          <nav class="nav" aria-label="Schermate">
+          <nav class="nav" aria-label={t('nav.label')}>
             <button
               type="button"
               class="nav__tab"
               aria-current={view === 'home' ? 'page' : undefined}
               onClick={() => setView('home')}
             >
-              Home
+              {t('nav.home')}
             </button>
             <button
               type="button"
@@ -349,36 +441,33 @@ export function App() {
               aria-current={view === 'history' ? 'page' : undefined}
               onClick={() => setView('history')}
             >
-              Storico
+              {t('nav.history')}
             </button>
           </nav>
         </header>
 
         {/* Permanente, non un toast: dice che questa non e' la build vera. */}
         {insecureContext ? (
-          <p class="alert alert--env">
-            Connessione non sicura (http): il service worker non viene registrato,
-            quindi qui l&apos;app non funziona offline e non è quella che girerà sul telefono.
-          </p>
+          <p class="alert alert--env">{t('alert.insecure')}</p>
         ) : null}
 
         {failures === 0 ? null : (
           <div class="alert" role="alert">
             <p class="alert__text">
               {failures === 1
-                ? 'Una modifica non è arrivata sul dispositivo.'
-                : `${failures} modifiche non sono arrivate sul dispositivo.`}{' '}
-              Il backup contiene tutto quello che vedi qui: esportalo adesso.
+                ? t('alert.failures.one')
+                : t('alert.failures.other', { count: failures })}{' '}
+              {t('alert.failures.tail')}
             </p>
             <button type="button" class="alert__action" onClick={exportNow}>
-              Esporta ora
+              {t('alert.exportNow')}
             </button>
           </div>
         )}
 
         <main class="app__main">
           <h1 class="visually-hidden">
-            {view === 'home' ? 'Quanto ti resta' : 'Le tue spese'}
+            {t(view === 'home' ? 'title.home' : view === 'history' ? 'title.history' : 'title.settings')}
           </h1>
           {view === 'home' ? (
             <Home
@@ -390,13 +479,24 @@ export function App() {
               onPick={pick}
               onEditBudget={() => openSheet('budget')}
             />
-          ) : (
+          ) : view === 'history' ? (
             <History
               phase={app.phase}
               expenses={app.data?.expenses ?? []}
               categories={app.data?.categories ?? []}
               day={app.day}
               onPick={pick}
+            />
+          ) : (
+            <Settings
+              chosen={chosenLanguage}
+              detected={detectLanguage()}
+              onLanguage={saveLanguage}
+              budgetCents={currentBudgetCents(app.data?.budgets ?? [], homePeriod, app.day)}
+              budgetPeriod={homePeriod}
+              ready={app.repo !== null}
+              onEditBudget={() => openSheet('budget')}
+              onExport={exportNow}
             />
           )}
         </main>
@@ -409,7 +509,7 @@ export function App() {
         <button
           type="button"
           class="fab"
-          aria-label="Aggiungi una spesa"
+          aria-label={t('fab.add')}
           disabled={app.repo === null}
           onClick={() => openSheet('add')}
         >
@@ -439,7 +539,7 @@ export function App() {
           key={session}
           weeklyCents={currentBudgetCents(app.data?.budgets ?? [], 'weekly', app.day)}
           monthlyCents={currentBudgetCents(app.data?.budgets ?? [], 'monthly', app.day)}
-          period={activePeriod(app.data?.budgets ?? [], app.day)}
+          period={homePeriod}
           leaving={sheet.leaving}
           onSave={saveBudget}
           onClose={closeSheet}
@@ -455,7 +555,9 @@ export function App() {
             const repo = app.repo
             const target = picked
             setPicked(null)
-            if (repo) remove(repo, target.id, `Eliminata: ${formatCents(target.amountCents)}`)
+            if (repo) {
+              remove(repo, target.id, t('toast.deleted', { amount: money(target.amountCents) }))
+            }
           }}
           onClose={() => setPicked(null)}
         />

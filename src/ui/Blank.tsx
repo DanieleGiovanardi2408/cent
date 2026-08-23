@@ -1,4 +1,5 @@
 import { insecureContext } from './env'
+import { t } from './i18n'
 import './Blank.css'
 
 /**
@@ -18,21 +19,8 @@ import './Blank.css'
 export function ArchiveError() {
   return (
     <div class="blank">
-      <p class="blank__title">Non riesco ad aprire l'archivio</p>
-      {insecureContext ? (
-        <p class="blank__text">
-          Cent è aperto su una connessione non sicura (http). Fuori da https il
-          browser toglie una parte delle API che servono all'archivio locale:
-          apri Cent da un indirizzo https, o da localhost, e i dati tornano.
-        </p>
-      ) : (
-        <p class="blank__text">
-          Può dipendere da una finestra privata, dallo spazio esaurito o da un
-          profilo che blocca l'archiviazione: non so dire quale sia. Prova a
-          riaprire Cent da una finestra normale. Finché l'archivio non si apre
-          non si possono inserire spese — quello che scrivessi qui andrebbe perso.
-        </p>
-      )}
+      <p class="blank__title">{t('archive.title')}</p>
+      <p class="blank__text">{t(insecureContext ? 'archive.insecure' : 'archive.unknown')}</p>
     </div>
   )
 }
