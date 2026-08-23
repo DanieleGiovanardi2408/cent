@@ -126,6 +126,10 @@ test('la pagina di installazione sta nel viewport e rispetta la safe area', asyn
     }
   })
 
+  // Esatto — nessuna tolleranza — ma con una premessa che dipende dal font: se
+  // qui non trabocca non vuol dire che su iOS non traboccherebbe. Caso 2 di
+  // CLAUDE.md, "Verifiche che passano perche' la macchina non e' il bersaglio":
+  // non c'e' niente da irrigidire, la copertura vera e' il telefono.
   expect(geometry.overflowX, 'c\'e\' scroll orizzontale').toBeLessThanOrEqual(0)
   expect(geometry.left).toBeGreaterThanOrEqual(0)
   expect(geometry.right).toBeLessThanOrEqual(geometry.width)

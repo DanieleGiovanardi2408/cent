@@ -25,6 +25,18 @@
  * velo: **deve** essere irraggiungibile, e' il senso di un modale. Quei
  * bersagli vengono contati a parte, e la sonda verifica che siano davvero
  * inerti invece di far finta che non esistano.
+ *
+ * ## I controlli sull'overflow: esatti qui, veri solo sul telefono
+ *
+ * Gli `scrollWidth - clientWidth <= 0` sparsi in questo file non hanno nessuna
+ * tolleranza — qualunque overflow fallisce — ma **se** l'overflow accada dipende
+ * dalle metriche del font, e qui il font non e' SF Pro. Un testo che ci sta su
+ * Chromium puo' traboccare su iOS.
+ *
+ * Non c'e' niente da rendere piu' severo: renderli piu' stretti non li
+ * avvicinerebbe al bersaglio. Sono il caso 2 di CLAUDE.md, "Verifiche che
+ * passano perche' la macchina non e' il bersaglio", e la loro copertura vera e'
+ * il dispositivo, gia' nel criterio di chiusura di ogni fase.
  */
 // Questi test provano l'app, quindi dichiarano di girare nell'app installata:
 // fuori da standalone Cent e' una pagina di installazione (ADR 011). Vedi
@@ -388,6 +400,7 @@ test('il tastierino e le otto categorie ci stanno, senza scroll', async ({ page 
   expect(spill, 'qualcosa e\' tagliato dal foglio (era il bug dell\'orizzontale)').toEqual([])
 
   // Nessuno scroll: ne' orizzontale in pagina, ne' dentro il foglio.
+  // Esatti, ma con una premessa che dipende dal font: vedi in cima al file.
   const scroll = await page.evaluate(() => ({
     page: document.documentElement.scrollWidth - document.documentElement.clientWidth,
     sheet: (() => {
@@ -650,6 +663,7 @@ test('Impostazioni: nessun bersaglio coperto, e le tre voci della lingua fanno q
     'un overlay copre un bersaglio, o un bersaglio e\' sotto i 44px',
   ).toEqual([])
 
+  // Esatti, ma con una premessa che dipende dal font: vedi in cima al file.
   const scroll = await page.evaluate(() => ({
     page: document.documentElement.scrollWidth - document.documentElement.clientWidth,
     prefs: (() => {
@@ -818,6 +832,7 @@ test('Categorie: scambio, archivio e cancellazione, senza bersagli coperti', asy
     'un overlay copre un bersaglio, o un bersaglio e\' sotto i 44px',
   ).toEqual([])
 
+  // Esatti, ma con una premessa che dipende dal font: vedi in cima al file.
   const scroll = await page.evaluate(() => ({
     page: document.documentElement.scrollWidth - document.documentElement.clientWidth,
     prefs: (() => {
@@ -920,6 +935,7 @@ test('a 320 punti le otto categorie e il tastierino ci stanno lo stesso', async 
     }
   })
 
+  // Esatti, ma con una premessa che dipende dal font: vedi in cima al file.
   expect(measure.out, 'qualcosa e\' tagliato dal foglio a 320 punti').toEqual([])
   expect(measure.small, 'un chip di categoria e\' sotto i 44px a 320 punti').toEqual([])
   expect(measure.scroll, 'il contenuto del foglio non ci sta a 320 punti').toBeLessThanOrEqual(0)

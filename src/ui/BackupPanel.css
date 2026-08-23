@@ -52,9 +52,18 @@
   color: var(--text-muted);
 }
 
+/* L'unico bersaglio toccabile dell'app che prendeva l'altezza da cio' che gli
+ * restava: `flex: 1` con `min-block-size: 0` vuol dire "quello che avanza",
+ * e quello che avanza dipende da quante righe occupa `.panel__lead` — cioe'
+ * dalle metriche del font. Su Chromium avanzava molto; su un telefono girato,
+ * con SF Pro e una riga in piu', poteva scendere sotto il minimo tattile senza
+ * che nessuna misura se ne accorgesse (CLAUDE.md, caso 3).
+ *
+ * Il pavimento e' `--tap-min`, non un numero: sotto quella soglia si tocca il
+ * testo per selezionarlo e si prende il bordo. */
 .panel__data {
   flex: 1;
-  min-block-size: 0;
+  min-block-size: var(--tap-min);
   padding: var(--sp-3);
   border: 1px solid var(--line);
   border-radius: var(--radius-2);

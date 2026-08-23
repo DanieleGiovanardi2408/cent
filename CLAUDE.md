@@ -322,6 +322,55 @@ contenuto in stage, perche' fare `git stash` mentre un agente scrive sarebbe
 distruttivo. Prende il caso che conta — si committa mentre l'albero e' a meta' —
 e non prende lo staging parziale di un albero sano.
 
+## Verifiche che passano perche' la macchina non e' il bersaglio
+I test girano su Chromium con i font di sistema; l'app gira su Safari con SF Pro.
+Una verifica puo' essere verde qui e falsa li', e non e' un caso: sono tre cose
+diverse, con tre rimedi diversi. Confonderle porta a "sistemare" cio' che e' gia'
+giusto e a lasciare stare cio' che non lo e'.
+
+Il caso che ha prodotto questa sezione: un test sul CLS restava **verde anche
+togliendo la cosa che sorvegliava**, perche' su Chromium le due etichette
+differivano di 1 px e uno spostamento cosi' piccolo non produce nessuna voce
+`layout-shift`. Su iOS quel px puo' essere di piu'.
+
+### 1. Asserzione con una SOGLIA dell'ambiente proxy
+La metrica ha una soglia interna decisa dal browser, quindi "zero" significa
+"sotto la soglia di **questo** browser", non "zero". I sei `expect(cls).toBe(0)`
+sono questo.
+
+**Rimedio: riformulare sulla causa esatta.** Il CLS approssima "qualcosa si e'
+spostato": la causa e' l'identita' delle posizioni fra guscio e dati, e quella si
+misura senza soglie. Il CLS **resta** come rete grossolana — prende spostamenti
+orizzontali e frame intermedi che un controllo sui `top` non campiona — ma non e'
+il gate.
+
+**E la differenza dev'essere nel NOME del test, non in un commento**: chi legge
+l'output deve capire quale delle due ha ceduto senza aprire il file. Un'etichetta
+lontana dall'asserzione non protegge nessuno.
+
+### 2. Asserzione ESATTA con premessa dipendente dall'ambiente
+I sedici controlli sull'overflow (`scrollWidth - clientWidth <= 0`) non hanno
+nessuna tolleranza: qualunque overflow fallisce. Ma **se** l'overflow accada
+dipende dalle metriche del font, quindi un testo che qui sta puo' traboccare li'.
+
+**Rimedio: nessuno in suite.** Il test e' giusto e la macchina e' sbagliata.
+Va **etichettata come tale**, non "sistemata": renderla piu' severa non la
+avvicinerebbe al bersaglio. La copertura vera e' il telefono, ed e' gia' nel
+criterio di chiusura di ogni fase.
+
+### 3. Costante di sistema confrontata con una misura che dipende dal font
+`Math.min(width, height) < 44` usa `--tap-min`, che e' una costante nostra — ma il
+numero **misurato** dipende dal font, per gli elementi dimensionati dal contenuto
+invece che da `min-height`.
+
+**Rimedio: nel CSS, non nel test.** A quegli elementi si da'
+`min-block-size: var(--tap-min)` invece di lasciarli dimensionare dal contenuto.
+Cosi' il numero misurato smette di dipendere dalle metriche del font e il confronto
+torna esatto su entrambe le piattaforme.
+
+E' la mossa che ricorre in tutto questo progetto: **rendere esatta la cosa
+misurata, invece di tollerare l'approssimazione nella misura.**
+
 ## Dopo una correzione, la verifica si riesegue — non si deduce
 Il posto piu' probabile in cui trovare il prossimo difetto e' **dentro la
 correzione appena fatta**. Una correzione tocca il codice in un punto delicato

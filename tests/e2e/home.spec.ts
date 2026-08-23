@@ -4,11 +4,27 @@
  * Tre cose che a occhio non si vedono e che una schermata con un numero grande
  * sbaglia sempre nello stesso modo:
  *
- * 1. **CLS = 0.** Il guscio si dipinge prima dei dati (regola "Ordine di
- *    pittura"). Se le altezze dipendessero dal contenuto, all'apertura del
- *    database il bottone del budget e le spese di oggi scenderebbero di qualche
- *    decina di pixel. E' un salto di 40 ms che nessuno riesce a vedere e che
- *    tutti sentono.
+ * 1. **Niente si sposta fra guscio e dati.** Il guscio si dipinge prima dei dati
+ *    (regola "Ordine di pittura"). Se le altezze dipendessero dal contenuto,
+ *    all'apertura del database il bottone del budget e le spese di oggi
+ *    scenderebbero di qualche decina di pixel. E' un salto di 40 ms che nessuno
+ *    riesce a vedere e che tutti sentono.
+ *
+ *    Si misura in **due modi, e sono due test separati** (CLAUDE.md, "Verifiche
+ *    che passano perche' la macchina non e' il bersaglio", caso 1):
+ *
+ *    - il **gate** e' l'identita' delle posizioni: i blocchi del guscio devono
+ *      stare **allo stesso pixel** prima e dopo l'arrivo dei dati. Nessuna
+ *      soglia, nessun browser di mezzo — due `getBoundingClientRect` e un
+ *      confronto;
+ *    - la **rete** e' il CLS: `layout-shift` viene emesso solo sopra una soglia
+ *      interna del browser, quindi `cls === 0` significa "niente si e' mosso
+ *      **abbastanza da farlo riportare a Chromium**". Resta perche' prende cio'
+ *      che il gate non campiona — spostamenti fra due frame intermedi, o di
+ *      elementi che non sono nell'elenco dei blocchi — ma non e' il gate.
+ *
+ *    I due test si chiamano `gate:` e `rete:` proprio perche' l'output di
+ *    `playwright test` dica quale delle due ha ceduto senza aprire questo file.
  * 2. **Il numero grande c'e' al primo frame**, con la geometria definitiva:
  *    quello che arriva dopo sono le cifre, non lo spazio che occupano.
  * 3. **Niente scroll orizzontale**, nemmeno col residuo negativo piu' largo che
@@ -35,23 +51,150 @@ interface FirstHero {
   readonly at: number
 }
 
+/** Un blocco misurato, nel sistema di coordinate del contenuto che scorre. */
+interface Spot {
+  readonly top: number
+  /** `null` quando di quel blocco non si guarda l'asse orizzontale. */
+  readonly left: number | null
+  readonly width: number | null
+  readonly height: number | null
+}
+
+type Geometry = Record<string, Spot | null>
+
+interface Mark {
+  readonly sel: string
+  /** Anche `left` e `width`: vero per i blocchi la cui larghezza e' layout. */
+  readonly box: boolean
+  /** Anche l'altezza: vero solo dove l'altezza e' una riserva, non contenuto. */
+  readonly height: boolean
+}
+
+/**
+ * I blocchi del guscio, e cosa si guarda di ciascuno.
+ *
+ * **Il `top` sempre**: e' l'asse su cui il guscio che si riempie sposta le cose,
+ * ed e' quello che il pollice sente mentre e' in volo verso il secondo tap.
+ *
+ * **`left` e `width` dove sono layout e non contenuto.** Sulla barra in alto lo
+ * sono: le schede stanno a destra, quindi la larghezza delle etichette decide
+ * dove cadono i bersagli — ed e' esattamente il difetto che `Fit` chiude e che
+ * il CLS non vedeva, perche' fra "Storico" e "History" c'e' **1px** e un
+ * pixel non produce nessuna voce `layout-shift`. Su `.budget` no: quel bottone
+ * cambia parola con i dati ("Imposta un budget" -> "Cambia budget") e la sua
+ * larghezza **e'** contenuto.
+ *
+ * **L'altezza solo dove e' una riserva.** `.hero__value` e `.slot` hanno un
+ * `min-block-size` scritto per contenere lo stato piu' alto: se un giorno non
+ * bastasse, l'altezza cambierebbe con i dati e tutto quello che sta sotto
+ * scenderebbe. Guardarla li' dice **quale** riserva ha ceduto invece di dire
+ * soltanto che qualcosa e' sceso.
+ */
+const LANDMARKS: readonly Mark[] = [
+  { sel: '.app__bar', box: true, height: false },
+  { sel: '.app__action', box: true, height: false },
+  { sel: '.nav', box: true, height: false },
+  { sel: '.app__main', box: true, height: false },
+  { sel: '.home', box: true, height: false },
+  { sel: '.hero', box: true, height: false },
+  { sel: '.hero__period', box: false, height: false },
+  { sel: '.hero__label', box: false, height: false },
+  { sel: '.hero__value', box: false, height: true },
+  { sel: '.hero__note', box: false, height: false },
+  { sel: '.slot', box: true, height: true },
+  { sel: '.budget', box: false, height: false },
+  { sel: '.today', box: true, height: false },
+  { sel: '.today__head', box: false, height: false },
+  { sel: '.fab', box: true, height: false },
+]
+
+/**
+ * Il gate: cosa non e' rimasto dov'era, riga per riga.
+ *
+ * Zero tolleranza e nessuna soglia — e' un confronto fra due misure prese dallo
+ * stesso browser nella stessa esecuzione, quindi una differenza e' un fatto, non
+ * rumore. Un blocco che manca nel guscio e' anch'esso un difetto: vuol dire che
+ * la schermata non ha uno stato "senza dati" gia' definitivo per layout.
+ */
+function drift(before: Geometry | null, after: Geometry | null): string[] {
+  if (before === null) return ['il guscio non e\' stato misurato: nessun frame con la Home dentro']
+  if (after === null) return ['lo stato con i dati non e\' stato misurato']
+
+  const rows: string[] = []
+  for (const { sel } of LANDMARKS) {
+    const a = before[sel] ?? null
+    const b = after[sel] ?? null
+    if (a === null) {
+      rows.push(`${sel}: non c'e' nel guscio, quindi il guscio non e' definitivo`)
+      continue
+    }
+    if (b === null) {
+      rows.push(`${sel}: c'era nel guscio e con i dati e' sparito`)
+      continue
+    }
+    for (const axis of ['top', 'left', 'width', 'height'] as const) {
+      const x = a[axis]
+      const y = b[axis]
+      if (x === null || y === null) continue
+      if (x !== y) rows.push(`${sel} ${axis}: ${x} -> ${y} (${Math.round((y - x) * 100) / 100}px)`)
+    }
+  }
+  return rows
+}
+
 /**
  * Osserva gli spostamenti di layout **da prima della navigazione**: con
  * `buffered: true` arrivano anche quelli avvenuti prima che l'osservatore
- * esistesse. Registra anche il rettangolo del numero grande al primo frame
- * utile, che e' l'unico istante in cui la domanda "c'e'?" ha una risposta
- * interessante.
+ * esistesse. Al primo frame utile registra il rettangolo del numero grande e
+ * **la geometria di tutti i blocchi**: e' l'unico istante in cui la domanda
+ * "dove sta il guscio?" ha una risposta, e va presa da dentro la pagina perche'
+ * dura pochi millisecondi.
+ *
+ * Il lettore della geometria resta appeso a `window`: cosi' la misura del guscio
+ * e quella finale sono **la stessa funzione**, e non due copie che un giorno
+ * divergono.
  */
 async function watch(page: Page): Promise<void> {
-  await page.addInitScript(() => {
+  await page.addInitScript((marks: readonly Mark[]) => {
     const w = window as unknown as {
       __shifts: Shift[]
       __firstHero: FirstHero | null
       __fcp: number | null
+      __firstGeometry: Geometry | null
+      __geometry: () => Geometry
     }
     w.__shifts = []
     w.__firstHero = null
     w.__fcp = null
+    w.__firstGeometry = null
+
+    /**
+     * Le posizioni **nel contenuto**, non nel viewport: la Home e' il
+     * contenitore che scorre, quindi a un blocco dentro di lei si somma il suo
+     * `scrollTop`. Senza, uno scroll si leggerebbe come uno spostamento di
+     * layout — e sono la cosa opposta.
+     */
+    w.__geometry = () => {
+      const home = document.querySelector('.home')
+      const px = (v: number): number => Math.round(v * 100) / 100
+      const out: Geometry = {}
+      for (const mark of marks) {
+        const el = document.querySelector(mark.sel)
+        if (el === null) {
+          out[mark.sel] = null
+          continue
+        }
+        const box = el.getBoundingClientRect()
+        const scrolled = home !== null && home !== el && home.contains(el) ? home.scrollTop : 0
+        out[mark.sel] = {
+          top: px(box.top + scrolled),
+          left: mark.box ? px(box.left) : null,
+          width: mark.box ? px(box.width) : null,
+          height: mark.height ? px(box.height) : null,
+        }
+      }
+      return out
+    }
 
     new PerformanceObserver((list) => {
       for (const entry of list.getEntries()) {
@@ -99,9 +242,10 @@ async function watch(page: Page): Promise<void> {
         frames,
         at: Math.round(performance.now()),
       }
+      w.__firstGeometry = w.__geometry()
     }
     requestAnimationFrame(look)
-  })
+  }, LANDMARKS)
 }
 
 interface Measures {
@@ -109,6 +253,9 @@ interface Measures {
   readonly shifts: readonly Shift[]
   readonly firstHero: FirstHero | null
   readonly finalHero: { top: number; height: number; text: string } | null
+  /** I blocchi al primo frame utile e a pagina ferma: il gate confronta questi. */
+  readonly firstGeometry: Geometry | null
+  readonly finalGeometry: Geometry | null
   readonly fcp: number | null
   readonly overflowX: number
   readonly homeOverflowX: number
@@ -120,6 +267,8 @@ async function measure(page: Page): Promise<Measures> {
       __shifts: Shift[]
       __firstHero: FirstHero | null
       __fcp: number | null
+      __firstGeometry: Geometry | null
+      __geometry?: () => Geometry
     }
     const hero = document.querySelector('.hero__value')
     const box = hero?.getBoundingClientRect() ?? null
@@ -136,7 +285,15 @@ async function measure(page: Page): Promise<Measures> {
               height: Math.round(box.height),
               text: (hero.textContent ?? '').trim(),
             },
+      firstGeometry: w.__firstGeometry,
+      finalGeometry: w.__geometry?.() ?? null,
       fcp: w.__fcp,
+      // Caso 2 di CLAUDE.md, "Verifiche che passano perche' la macchina non e'
+      // il bersaglio": l'asserzione qui sotto e' esatta (nessuna tolleranza),
+      // ma **se** l'overflow accada dipende dalle metriche del font, e qui il
+      // font non e' quello del telefono. Non c'e' niente da rendere piu' severo:
+      // la copertura vera e' il dispositivo, ed e' nel criterio di chiusura di
+      // ogni fase.
       overflowX: document.documentElement.scrollWidth - document.documentElement.clientWidth,
       homeOverflowX: home === null ? 0 : home.scrollWidth - home.clientWidth,
     }
@@ -275,66 +432,121 @@ async function settled(page: Page): Promise<void> {
   })
 }
 
-test.describe('la Home non salta', () => {
-  test('senza budget e senza spese', async ({ page }, testInfo) => {
-    await watch(page)
-    await page.goto('./')
-    await expect(page.locator('.budget')).toBeEnabled()
-    await settled(page)
+/**
+ * La riga di diario di una scena: gli stessi numeri sotto il gate e sotto la
+ * rete, cosi' l'output dice **cosa e' stato misurato** anche quando passa.
+ */
+function racconta(project: string, scena: string, m: Measures): void {
+  console.log(
+    `\n  [${project}] ${scena}  CLS=${m.cls}  FCP=${Math.round(m.fcp ?? -1)}ms` +
+      `  primo frame utile: ${m.firstHero?.at}ms (${m.firstHero?.frames} frame)` +
+      ` "${m.firstHero?.text ?? '(nessun numero)'}" top ${m.firstHero?.top}px h ${m.firstHero?.height}px` +
+      `  finale: "${m.finalHero?.text}" top ${m.finalHero?.top}px h ${m.finalHero?.height}px`,
+  )
+}
 
-    const m = await measure(page)
-    console.log(`\n  [${testInfo.project.name}] home vuota  CLS=${m.cls}  FCP=${Math.round(m.fcp ?? -1)}ms  primo frame utile: ${m.firstHero?.at}ms (${m.firstHero?.frames} frame) "${m.firstHero?.text ?? '(nessun numero)'}" ${m.firstHero?.height}px  finale: "${m.finalHero?.text}" ${m.finalHero?.height}px`)
+/**
+ * Le scene, una funzione per ognuna.
+ *
+ * Ogni scena prepara uno stato, ricarica con l'osservatore acceso e restituisce
+ * le misure. Le usano **due test a testa** — il gate e la rete — e stanno qui
+ * perche' e' cio' che rende i due test la stessa scena guardata con due
+ * strumenti, invece di due scene che si somigliano.
+ */
+async function scenaVuota(page: Page): Promise<Measures> {
+  await watch(page)
+  await page.goto('./')
+  await expect(page.locator('.budget')).toBeEnabled()
+  await settled(page)
+  return measure(page)
+}
 
-    // Il numero grande esiste al primo frame utile, con l'altezza definitiva.
+async function scena5000(page: Page): Promise<Measures> {
+  await page.goto('./')
+  await expect(page.locator('.budget')).toBeEnabled()
+
+  // 200,00 € a settimana contro ~3.000 € di spese seminate nel periodo: il
+  // residuo e' negativo e largo, cioe' il caso peggiore per la larghezza.
+  await setBudget(page, '20000', 'A settimana')
+  await seed(page, 5000)
+  // E una spesa grossa **di oggi**, cioe' dopo che il budget esiste. Senza,
+  // il budget e' appena nato e il negativo verrebbe solo dai giorni prima:
+  // la Home direbbe giustamente "questa settimana era gia' iniziata"
+  // (ADR 010) e questo test misurerebbe un altro stato.
+  await seedOn(page, [[todayIso(), 30_000]])
+
+  // La misura si fa sul caricamento successivo: e' quello in cui il guscio
+  // aspetta la lettura di 5.000 record, cioe' dove un salto si vedrebbe.
+  await watch(page)
+  await page.reload()
+  await expect(page.locator('.row').first()).toBeVisible()
+  await settled(page)
+  return measure(page)
+}
+
+test.describe('la Home non salta, senza budget e senza spese', () => {
+  test('gate: i blocchi stanno al pixel dove il guscio li aveva messi', async ({
+    page,
+  }, testInfo) => {
+    const m = await scenaVuota(page)
+    racconta(testInfo.project.name, 'home vuota', m)
+
+    // Il numero grande esiste al primo frame utile. Va chiesto prima del
+    // confronto: senza guscio da confrontare il gate sarebbe verde per assenza
+    // di misura, che e' il modo peggiore in cui un test puo' passare.
     expect(m.firstHero, 'al primo frame il numero grande non e\' nel DOM').not.toBeNull()
-    expect(m.firstHero?.height).toBe(m.finalHero?.height)
-    expect(m.firstHero?.top).toBe(m.finalHero?.top)
+    expect(
+      drift(m.firstGeometry, m.finalGeometry),
+      'blocchi spostati dall\'arrivo dei dati',
+    ).toEqual([])
 
-    expect(m.cls, `spostamenti: ${JSON.stringify(m.shifts)}`).toBe(0)
-    expect(m.overflowX).toBeLessThanOrEqual(0)
-    expect(m.homeOverflowX).toBeLessThanOrEqual(0)
-  })
-
-  test('con budget e 5.000 spese, sforando', async ({ page }, testInfo) => {
-    await page.goto('./')
-    await expect(page.locator('.budget')).toBeEnabled()
-
-    // 200,00 € a settimana contro ~3.000 € di spese seminate nel periodo: il
-    // residuo e' negativo e largo, cioe' il caso peggiore per la larghezza.
-    await setBudget(page, '20000', 'A settimana')
-    await seed(page, 5000)
-    // E una spesa grossa **di oggi**, cioe' dopo che il budget esiste. Senza,
-    // il budget e' appena nato e il negativo verrebbe solo dai giorni prima:
-    // la Home direbbe giustamente "questa settimana era gia' iniziata"
-    // (ADR 010) e questo test misurerebbe un altro stato.
-    await seedOn(page, [[todayIso(), 30_000]])
-
-    // La misura si fa sul caricamento successivo: e' quello in cui il guscio
-    // aspetta la lettura di 5.000 record, cioe' dove un salto si vedrebbe.
-    await watch(page)
-    await page.reload()
-    await expect(page.locator('.row').first()).toBeVisible()
-    await settled(page)
-
-    const m = await measure(page)
-    console.log(`\n  [${testInfo.project.name}] home con budget e 5.000 spese  CLS=${m.cls}  FCP=${Math.round(m.fcp ?? -1)}ms  primo frame utile: ${m.firstHero?.at}ms (${m.firstHero?.frames} frame) "${m.firstHero?.text ?? '(nessun numero)'}" ${m.firstHero?.height}px  finale: "${m.finalHero?.text}" ${m.finalHero?.height}px`)
-
-    expect(m.firstHero, 'al primo frame il numero grande non e\' nel DOM').not.toBeNull()
-    expect(m.firstHero?.height).toBe(m.finalHero?.height)
-    expect(m.firstHero?.top).toBe(m.finalHero?.top)
-
-    expect(m.cls, `spostamenti: ${JSON.stringify(m.shifts)}`).toBe(0)
     expect(m.overflowX, 'scroll orizzontale in pagina').toBeLessThanOrEqual(0)
     expect(m.homeOverflowX, 'scroll orizzontale dentro la Home').toBeLessThanOrEqual(0)
+  })
 
-    // Sforato: il residuo resta col segno e il tono cambia. Tre segnali per lo
-    // stesso fatto — segno, colore, barra piena — nessuno dei tre urla.
+  test('rete: il CLS resta zero, anche fuori dai blocchi del gate', async ({ page }, testInfo) => {
+    const m = await scenaVuota(page)
+    racconta(testInfo.project.name, 'home vuota', m)
+    expect(m.cls, `spostamenti: ${JSON.stringify(m.shifts)}`).toBe(0)
+  })
+})
+
+test.describe('la Home non salta, con budget e 5.000 spese, sforando', () => {
+  test('gate: i blocchi stanno al pixel dove il guscio li aveva messi', async ({
+    page,
+  }, testInfo) => {
+    const m = await scena5000(page)
+    racconta(testInfo.project.name, 'home con budget e 5.000 spese', m)
+
+    expect(m.firstHero, 'al primo frame il numero grande non e\' nel DOM').not.toBeNull()
+    expect(
+      drift(m.firstGeometry, m.finalGeometry),
+      'blocchi spostati dall\'arrivo dei dati',
+    ).toEqual([])
+
+    expect(m.overflowX, 'scroll orizzontale in pagina').toBeLessThanOrEqual(0)
+    expect(m.homeOverflowX, 'scroll orizzontale dentro la Home').toBeLessThanOrEqual(0)
+  })
+
+  test('rete: il CLS resta zero, anche fuori dai blocchi del gate', async ({ page }, testInfo) => {
+    const m = await scena5000(page)
+    racconta(testInfo.project.name, 'home con budget e 5.000 spese', m)
+    expect(m.cls, `spostamenti: ${JSON.stringify(m.shifts)}`).toBe(0)
+  })
+
+  test('sforare si vede in tre segnali, e nessuno urla', async ({ page }) => {
+    await scena5000(page)
+
+    // Il residuo resta col segno e il tono cambia. Tre segnali per lo stesso
+    // fatto — segno, colore, barra piena — nessuno dei tre allarma.
     await expect(page.locator('.hero__value')).toHaveAttribute('data-tone', 'over')
     await expect(page.locator('.hero__value')).toContainText('-')
     await expect(page.locator('.allowance')).toHaveText('Il budget del periodo è finito.')
     await expect(page.locator('.track')).toHaveAttribute('data-tone', 'over')
   })
+})
 
+test.describe('la Home non salta', () => {
   test('passando da senza budget a con budget', async ({ page }) => {
     // Il terzo salto possibile: non guscio -> dati, ma uno stato di dati verso
     // l'altro. Il riquadro sotto il numero cambia contenuto del tutto.
@@ -377,9 +589,7 @@ test.describe('la Home non salta', () => {
  * l'arrivo dei dati spingerebbe in giu' le spese di oggi. La larghezza la impone
  * il test, quindi basta eseguirlo su un progetto solo.
  */
-test('a 320 punti la Home non salta lo stesso', async ({ page }, testInfo) => {
-  test.skip(testInfo.project.name !== 'iphone-se', 'la larghezza la impone il test')
-
+async function scena320(page: Page): Promise<Measures> {
   await page.setViewportSize({ width: 320, height: 568 })
   await page.goto('./')
   await expect(page.locator('.budget')).toBeEnabled()
@@ -390,14 +600,35 @@ test('a 320 punti la Home non salta lo stesso', async ({ page }, testInfo) => {
   await page.reload()
   await expect(page.locator('.row').first()).toBeVisible()
   await settled(page)
+  return measure(page)
+}
 
-  const m = await measure(page)
-  console.log(`\n  [320x568] home con budget  CLS=${m.cls}  primo frame utile: "${m.firstHero?.text ?? '(nessun numero)'}" ${m.firstHero?.height}px  finale: "${m.finalHero?.text}" ${m.finalHero?.height}px`)
+test.describe('a 320 punti la Home non salta lo stesso', () => {
+  test('gate: i blocchi stanno al pixel dove il guscio li aveva messi', async ({
+    page,
+  }, testInfo) => {
+    test.skip(testInfo.project.name !== 'iphone-se', 'la larghezza la impone il test')
 
-  expect(m.cls, `spostamenti: ${JSON.stringify(m.shifts)}`).toBe(0)
-  expect(m.firstHero?.top).toBe(m.finalHero?.top)
-  expect(m.overflowX, 'scroll orizzontale in pagina').toBeLessThanOrEqual(0)
-  expect(m.homeOverflowX, 'scroll orizzontale dentro la Home').toBeLessThanOrEqual(0)
+    const m = await scena320(page)
+    racconta('320x568', 'home con budget', m)
+
+    expect(m.firstHero, 'al primo frame il numero grande non e\' nel DOM').not.toBeNull()
+    expect(
+      drift(m.firstGeometry, m.finalGeometry),
+      'blocchi spostati dall\'arrivo dei dati',
+    ).toEqual([])
+
+    expect(m.overflowX, 'scroll orizzontale in pagina').toBeLessThanOrEqual(0)
+    expect(m.homeOverflowX, 'scroll orizzontale dentro la Home').toBeLessThanOrEqual(0)
+  })
+
+  test('rete: il CLS resta zero, anche fuori dai blocchi del gate', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'iphone-se', 'la larghezza la impone il test')
+
+    const m = await scena320(page)
+    racconta('320x568', 'home con budget', m)
+    expect(m.cls, `spostamenti: ${JSON.stringify(m.shifts)}`).toBe(0)
+  })
 })
 
 test('la Home dice quanto resta e quanto al giorno, e sono numeri veri', async ({ page }) => {
@@ -570,10 +801,11 @@ test('nel foglio del budget il periodo seleziona e basta: scrive solo Salva', as
  * il budget lo ha appena creato.
  *
  * La riga in piu' deve anche stare dentro la riserva del riquadro: se la
- * sfondasse, spingerebbe in giu' le spese di oggi all'arrivo dei dati — cioe'
- * CLS > 0 proprio nel periodo in cui la frase compare.
+ * sfondasse, spingerebbe in giu' le spese di oggi all'arrivo dei dati — proprio
+ * nel periodo in cui la frase compare. Il gate lo vede sull'altezza di `.slot`
+ * e sul `top` del bottone del budget, cioe' dice **cosa** ha ceduto.
  */
-test('la Home spiega il budget nato a meta settimana, e non salta lo stesso', async ({ page }) => {
+async function scenaMetaSettimana(page: Page): Promise<Measures> {
   // Mercoledi' 19 agosto 2026: la settimana e' cominciata lunedi' 17.
   await page.clock.install({ time: new Date('2026-08-19T10:00:00') })
   await page.goto('./')
@@ -584,28 +816,64 @@ test('la Home spiega il budget nato a meta settimana, e non salta lo stesso', as
     ['2026-08-18', 12_000],
   ])
   await page.reload()
-  await expect(page.locator('.hero__label')).toHaveText('Spesi')
   await expect(page.locator('.hero__value')).toHaveText('240,00 €')
-
   await setBudget(page, '20000', 'A settimana')
+  await expect(page.locator('.since')).toBeVisible()
 
-  // Il numero non cambia significato: resta il residuo del periodo, col segno.
-  await expect(page.locator('.hero__value')).toHaveText('-40,00 €')
-  // Ma la riga che giudicava adesso racconta, e non in ambra.
-  await expect(page.locator('.allowance')).toHaveText('Questa settimana era già iniziata.')
-  await expect(page.locator('.allowance')).not.toHaveAttribute('data-tone', 'over')
-  await expect(page.locator('.allowance__sub')).toContainText('lunedì')
-  await expect(page.locator('.since')).toContainText('Budget attivo da mercoledì')
-  await expect(page.locator('.since')).toContainText('240,00')
-
-  // E lo stato con la riga in piu' non sposta niente quando i dati arrivano.
   await watch(page)
   await page.reload()
   await expect(page.locator('.since')).toBeVisible()
   await settled(page)
-  const m = await measure(page)
-  expect(m.cls, `spostamenti: ${JSON.stringify(m.shifts)}`).toBe(0)
-  expect(m.overflowX, 'scroll orizzontale in pagina').toBeLessThanOrEqual(0)
+  return measure(page)
+}
+
+test.describe('la Home con un budget nato a meta settimana', () => {
+  test('lo spiega, invece di annunciare che il budget e\' finito', async ({ page }) => {
+    // Mercoledi' 19 agosto 2026: la settimana e' cominciata lunedi' 17.
+    await page.clock.install({ time: new Date('2026-08-19T10:00:00') })
+    await page.goto('./')
+    await expect(page.locator('.budget')).toBeEnabled()
+
+    await seedOn(page, [
+      ['2026-08-17', 12_000],
+      ['2026-08-18', 12_000],
+    ])
+    await page.reload()
+    await expect(page.locator('.hero__label')).toHaveText('Spesi')
+    await expect(page.locator('.hero__value')).toHaveText('240,00 €')
+
+    await setBudget(page, '20000', 'A settimana')
+
+    // Il numero non cambia significato: resta il residuo del periodo, col segno.
+    await expect(page.locator('.hero__value')).toHaveText('-40,00 €')
+    // Ma la riga che giudicava adesso racconta, e non in ambra.
+    await expect(page.locator('.allowance')).toHaveText('Questa settimana era già iniziata.')
+    await expect(page.locator('.allowance')).not.toHaveAttribute('data-tone', 'over')
+    await expect(page.locator('.allowance__sub')).toContainText('lunedì')
+    await expect(page.locator('.since')).toContainText('Budget attivo da mercoledì')
+    await expect(page.locator('.since')).toContainText('240,00')
+  })
+
+  test('gate: i blocchi stanno al pixel dove il guscio li aveva messi', async ({
+    page,
+  }, testInfo) => {
+    const m = await scenaMetaSettimana(page)
+    racconta(testInfo.project.name, 'home con budget nato a meta settimana', m)
+
+    expect(m.firstHero, 'al primo frame il numero grande non e\' nel DOM').not.toBeNull()
+    expect(
+      drift(m.firstGeometry, m.finalGeometry),
+      'blocchi spostati dall\'arrivo dei dati',
+    ).toEqual([])
+
+    expect(m.overflowX, 'scroll orizzontale in pagina').toBeLessThanOrEqual(0)
+  })
+
+  test('rete: il CLS resta zero, anche fuori dai blocchi del gate', async ({ page }, testInfo) => {
+    const m = await scenaMetaSettimana(page)
+    racconta(testInfo.project.name, 'home con budget nato a meta settimana', m)
+    expect(m.cls, `spostamenti: ${JSON.stringify(m.shifts)}`).toBe(0)
+  })
 })
 
 /**
@@ -619,27 +887,22 @@ test('la Home spiega il budget nato a meta settimana, e non salta lo stesso', as
  * Il browser di questa suite dichiara `it-IT` (playwright.config.ts) e qui si
  * sceglie **English**: al ricaricamento il guscio si dipinge in italiano per i
  * pochi frame che separano il primo render dall'apertura del database, poi
- * passa all'inglese. Il lampo resta, ed e' cosmetico. Quello che deve restare
- * zero e' il **CLS**: le etichette della barra tengono la larghezza massima
- * fra le due lingue (`Fit`), quindi le schede non si spostano di un pixel
- * quando le parole cambiano.
+ * passa all'inglese. Il lampo resta, ed e' cosmetico. Quello che non deve
+ * restare e' il suo effetto sul layout: le etichette della barra tengono la
+ * larghezza massima fra le due lingue (`Fit`), quindi le schede non si spostano
+ * di un pixel quando le parole cambiano.
  *
- * **Cosa prova davvero, misurato e non supposto**: su Chromium con lo stack di
- * font di sistema, "Storico" e "History" differiscono di **1px**, e uno
- * spostamento cosi' piccolo non produce nessuna voce `layout-shift` — questo
- * test resta a zero anche togliendo la riserva. E' stato verificato di
- * proposito, togliendola: un test che non cade quando la cosa che sorveglia
- * sparisce non sorveglia niente, e saperlo vale piu' del verde.
+ * **E' la scena che ha prodotto la tassonomia di CLAUDE.md.** Su Chromium con
+ * lo stack di font di sistema "Storico" e "History" differiscono di **1px**, e
+ * uno spostamento cosi' piccolo non produce nessuna voce `layout-shift`: il
+ * test sul CLS restava verde **anche togliendo la riserva che sorvegliava**. Un
+ * test che non cade quando la cosa che sorveglia sparisce non sorveglia niente.
  *
- * Quindi qui si misura la **conseguenza** (il CLS resta zero anche nello stato
- * che nessuno guardava, con dati veri da aspettare e la barra che cambia
- * lingua), e nel test subito sotto si misura la **causa** — la larghezza. La
- * riserva serve comunque: su iOS le metriche di SF Pro non sono quelle di
- * Chromium, e 1px qui possono essere 6 li'.
+ * Quindi qui il gate e' la **causa**, non la conseguenza: `left` e `width` di
+ * `.nav` e di `.app__action` devono essere gli stessi prima e dopo. Quel px lo
+ * vede, e su iOS le metriche di SF Pro possono farne sei.
  */
-test('la Home non salta nemmeno con la lingua scelta diversa da quella del telefono', async ({
-  page,
-}, testInfo) => {
+async function scenaLingua(page: Page): Promise<Measures> {
   await page.goto('./')
   await expect(page.locator('.budget')).toBeEnabled()
 
@@ -660,25 +923,42 @@ test('la Home non salta nemmeno con la lingua scelta diversa da quella del telef
   // cui uno spostamento sarebbe gia' avvenuto.
   await expect(page.locator('.nav__tab').nth(1)).toHaveText('History')
   await settled(page)
+  return measure(page)
+}
 
-  const m = await measure(page)
-  console.log(`\n  [${testInfo.project.name}] home con lingua scelta ≠ rilevata  CLS=${m.cls}  primo frame utile: "${m.firstHero?.text ?? '(nessun numero)'}" top ${m.firstHero?.top}px  finale: "${m.finalHero?.text}" top ${m.finalHero?.top}px`)
+test.describe('la Home con la lingua scelta diversa da quella del telefono', () => {
+  test('gate: i blocchi stanno al pixel dove il guscio li aveva messi', async ({
+    page,
+  }, testInfo) => {
+    const m = await scenaLingua(page)
+    racconta(testInfo.project.name, 'home con lingua scelta ≠ rilevata', m)
 
-  expect(m.cls, `spostamenti: ${JSON.stringify(m.shifts)}`).toBe(0)
-  expect(m.firstHero?.top).toBe(m.finalHero?.top)
-  expect(m.firstHero?.height).toBe(m.finalHero?.height)
-  expect(m.overflowX, 'scroll orizzontale in pagina').toBeLessThanOrEqual(0)
+    expect(m.firstHero, 'al primo frame il numero grande non e\' nel DOM').not.toBeNull()
+    expect(
+      drift(m.firstGeometry, m.finalGeometry),
+      'blocchi spostati dal cambio di lingua all\'arrivo dei dati',
+    ).toEqual([])
+
+    expect(m.overflowX, 'scroll orizzontale in pagina').toBeLessThanOrEqual(0)
+  })
+
+  test('rete: il CLS resta zero, anche fuori dai blocchi del gate', async ({ page }, testInfo) => {
+    const m = await scenaLingua(page)
+    racconta(testInfo.project.name, 'home con lingua scelta ≠ rilevata', m)
+    expect(m.cls, `spostamenti: ${JSON.stringify(m.shifts)}`).toBe(0)
+  })
 })
 
 /**
  * E la controprova della riserva, senza passare dal CLS: la barra e' **larga
  * uguale** nelle due lingue.
  *
- * Serve perche' il CLS misura la conseguenza, non la causa: se un giorno le
- * schede smettessero di essere ancorate a destra, il test qui sopra
- * continuerebbe a dire zero mentre la riserva non serve piu' a niente. Questo
- * dice se la riserva **c'e'**, e cade appena qualcuno toglie `Fit` da
- * un'etichetta del guscio.
+ * Il gate qui sopra prende la riserva **nel momento in cui serve** — il lampo
+ * di lingua al caricamento. Questo la prende anche quando quel momento non
+ * c'e': se un giorno le schede smettessero di essere ancorate a destra, uno
+ * spostamento non avverrebbe piu' e la riserva resterebbe inutile senza che
+ * nessuno se ne accorga. Cade appena qualcuno toglie `Fit` da un'etichetta del
+ * guscio, in qualunque stato.
  */
 test('le etichette della barra sono larghe uguale nelle due lingue', async ({ page }) => {
   await page.goto('./')
@@ -715,9 +995,7 @@ test('le etichette della barra sono larghe uguale nelle due lingue', async ({ pa
  * ovvia; e' esattamente il tipo di cosa che questo progetto ha gia' sbagliato
  * due volte, quindi si misura.
  */
-test('il promemoria di backup non fa saltare la Home quando compare', async ({
-  page,
-}, testInfo) => {
+async function scenaPromemoria(page: Page): Promise<Measures> {
   await page.goto('./')
   await expect(page.locator('.budget')).toBeEnabled()
   await setBudget(page, '20000', 'A settimana')
@@ -753,12 +1031,29 @@ test('il promemoria di backup non fa saltare la Home quando compare', async ({
   await expect(page.locator('.nudge')).toBeVisible()
   await expect(page.locator('.row').first()).toBeVisible()
   await settled(page)
+  return measure(page)
+}
 
-  const m = await measure(page)
-  console.log(`\n  [${testInfo.project.name}] home + promemoria di backup  CLS=${m.cls}  primo frame utile: top ${m.firstHero?.top}px  finale: top ${m.finalHero?.top}px`)
+test.describe('il promemoria di backup compare senza far saltare la Home', () => {
+  test('gate: i blocchi stanno al pixel dove il guscio li aveva messi', async ({
+    page,
+  }, testInfo) => {
+    const m = await scenaPromemoria(page)
+    racconta(testInfo.project.name, 'home + promemoria di backup', m)
 
-  expect(m.cls, `spostamenti: ${JSON.stringify(m.shifts)}`).toBe(0)
-  expect(m.firstHero?.top).toBe(m.finalHero?.top)
-  expect(m.overflowX, 'scroll orizzontale in pagina').toBeLessThanOrEqual(0)
-  expect(m.homeOverflowX, 'scroll orizzontale dentro la Home').toBeLessThanOrEqual(0)
+    expect(m.firstHero, 'al primo frame il numero grande non e\' nel DOM').not.toBeNull()
+    expect(
+      drift(m.firstGeometry, m.finalGeometry),
+      'la banda del promemoria ha spostato qualcosa comparendo',
+    ).toEqual([])
+
+    expect(m.overflowX, 'scroll orizzontale in pagina').toBeLessThanOrEqual(0)
+    expect(m.homeOverflowX, 'scroll orizzontale dentro la Home').toBeLessThanOrEqual(0)
+  })
+
+  test('rete: il CLS resta zero, anche fuori dai blocchi del gate', async ({ page }, testInfo) => {
+    const m = await scenaPromemoria(page)
+    racconta(testInfo.project.name, 'home + promemoria di backup', m)
+    expect(m.cls, `spostamenti: ${JSON.stringify(m.shifts)}`).toBe(0)
+  })
 })
