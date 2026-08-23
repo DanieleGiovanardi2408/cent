@@ -204,9 +204,14 @@
 
 /* --- il budget: un bottone solo, sempre allo stesso posto ---------------- */
 
+/* La larghezza e' quella dell'etichetta, che qui cambia **due volte**: con la
+ * lingua ("Imposta un budget" / "Set a budget") e con lo stato (imposta /
+ * modifica). Il pavimento la dichiara invece di lasciarla misurare
+ * (CLAUDE.md, "Ogni bersaglio dichiara le proprie misure minime"). */
 .budget {
   align-self: flex-start;
   min-block-size: var(--tap-min);
+  min-inline-size: var(--tap-min);
   margin-block: var(--sp-2);
   /* Il rientro negativo allinea il testo al resto della colonna lasciando al
    * bersaglio i suoi 44px pieni. */

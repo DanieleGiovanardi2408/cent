@@ -325,10 +325,19 @@
   gap: var(--sp-2);
 }
 
+/* Il pavimento sulla larghezza e' dichiarato anche qui, dove il contenuto non
+ * lo decide: in riga sono due voci `flex: 1` con base 0 e si spartiscono il
+ * piede, da soli si allungano per tutta la sua larghezza. Il prezzo, detto:
+ * `min-inline-size` sostituisce il `min-width: auto` implicito dei flex item,
+ * cioe' toglie il divieto di stringersi sotto la parola piu' lunga. E' lo
+ * scambio giusto — a 320 punti ognuno ne prende 140 — perche' il difetto che
+ * quel divieto produrrebbe e' una riga che sfonda il foglio, mentre quello che
+ * previene e' un'etichetta tagliata dentro un bersaglio che resta toccabile. */
 .editor__primary,
 .editor__second {
   flex: 1;
   min-block-size: var(--tap-min);
+  min-inline-size: var(--tap-min);
   padding-inline: var(--sp-4);
   border-radius: var(--radius-2);
   font-size: var(--fs-300);
@@ -379,9 +388,15 @@
   border-block-start: 1px solid var(--line);
 }
 
+/* `align-self: flex-start` vuol dire "largo quanto l'etichetta": e' esattamente
+ * il caso che il pavimento sulla larghezza copre (CLAUDE.md, "Ogni bersaglio
+ * dichiara le proprie misure minime"). Qui conta il doppio, perche' e' l'unica
+ * azione irreversibile dell'app: un bersaglio che si stringe e' un bersaglio che
+ * si sbaglia a colpire. */
 .danger__action {
   align-self: flex-start;
   min-block-size: var(--tap-min);
+  min-inline-size: var(--tap-min);
   padding-inline: var(--sp-4);
   border: 1px solid var(--danger);
   border-radius: var(--radius-2);

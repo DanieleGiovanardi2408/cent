@@ -89,6 +89,13 @@
   gap: var(--sp-2);
 }
 
+/* Entrambe le misure sono dichiarate (CLAUDE.md, "Ogni bersaglio dichiara le
+ * proprie misure minime"). Sulla larghezza il chip "Oggi" misurava 57,9px
+ * perche' dentro c'e' scritto "Oggi": e' sopra i 44 per il conto delle lettere,
+ * non per costruzione, e in inglese "Today" e "Done" cambiano quel conto — a
+ * 320 punti "Ieri" cade a 37,1 e il pavimento e' l'unica cosa che lo tiene su.
+ * Vale per tutti i modificatori, nota compresa: vedi piu' sotto perche' li'
+ * il numero non dipendeva dalla propria etichetta ma da quella degli altri. */
 .chip {
   flex: none;
   display: flex;
@@ -96,6 +103,7 @@
   justify-content: center;
   gap: var(--sp-1);
   min-block-size: var(--tap-min);
+  min-inline-size: var(--tap-min);
   padding-inline: var(--sp-3);
   border-radius: var(--radius-full);
   background-color: var(--surface-sunken);
@@ -136,10 +144,35 @@
   opacity: 0;
 }
 
+/* Il chip della nota sembrava l'eccezione al pavimento e invece era il caso
+ * peggiore di tutti.
+ *
+ * `flex: 1` con `min-inline-size: 0` vuol dire "quello che avanza sulla riga", e
+ * quello che avanza e' 296px meno i tre chip che lo precedono — cioe' meno la
+ * **lunghezza di tre parole in una lingua**. Misurato a 320 punti:
+ *
+ *     it   Oggi 57,9 + Ieri 45,1 + data 77,2   ->  nota  91,9
+ *     en   Today 67  + Yesterday 91,6 + data 84 ->  nota  29,4
+ *
+ * Ventinove pixel e mezzo, in inglese, cioe' nella lingua che leggeranno quasi
+ * tutti, sul viewport che si ottiene attivando lo Zoom schermo di iOS. La sonda
+ * non l'ha mai visto perche' la suite gira in `it-IT`: e' esattamente il difetto
+ * che la regola descrive, con la variabile "lingua" che entra **dalla porta di
+ * fianco** invece che dal contenuto del bersaglio.
+ *
+ * Il pavimento da solo non basterebbe — a 320 in inglese la riga sfonderebbe di
+ * 15px — quindi sotto i 360 punti i chip stringono il padding (vedi in fondo al
+ * file). Il pavimento resta come garanzia per la prossima parola lunga: se un
+ * giorno non avanzasse comunque abbastanza, la riga verrebbe tagliata da
+ * `overflow: hidden` del foglio invece di consegnare un bersaglio da 29px.
+ *
+ * `min-inline-size` sta sopra il pavimento di `.chip` per specificita' uguale e
+ * posizione successiva: e' 44, non 0, e l'ellissi continua a funzionare perche'
+ * a limitare la larghezza e' `flex-basis`, non il minimo. */
 .chip--note,
 .meta__note {
   flex: 1;
-  min-inline-size: 0;
+  min-inline-size: var(--tap-min);
   justify-content: flex-start;
   overflow: hidden;
   white-space: nowrap;
@@ -235,6 +268,23 @@
   .cat__name {
     font-size: 0.6875rem; /* 11px */
     letter-spacing: -0.02em;
+  }
+
+  /* Quattro pixel per fianco in meno su tre chip: dodici punti di larghezza
+   * restituiti alla nota, che a questa larghezza e' l'unico dei quattro a
+   * pagare — gli altri tre sono `flex: none` e si prendono quello che gli
+   * serve. Il conto, in inglese, dove la riga e' piu' stretta:
+   *
+   *     prima   Today 67   Yesterday 91,6  data 84   -> nota 29,4
+   *     dopo    Today 59   Yesterday 83,6  data 76   -> nota 53,4
+   *
+   * Si stringe lo spazio intorno alle parole, non le parole: nessun chip perde
+   * la propria etichetta e nessuno scende sotto i 44, perche' sotto c'e' il
+   * pavimento di `.chip`. E' lo stesso breakpoint in cui il nome della
+   * categoria rimpicciolisce: sotto i 360 punti la larghezza e' la risorsa
+   * scarsa, come sotto i 660 lo e' l'altezza. */
+  .chip {
+    padding-inline: var(--sp-2);
   }
 }
 

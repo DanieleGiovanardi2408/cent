@@ -371,6 +371,35 @@ torna esatto su entrambe le piattaforme.
 E' la mossa che ricorre in tutto questo progetto: **rendere esatta la cosa
 misurata, invece di tollerare l'approssimazione nella misura.**
 
+## Ogni bersaglio dichiara le proprie misure minime
+Un bersaglio toccabile **dichiara** `min-block-size` e `min-inline-size`
+(`var(--tap-min)`), non le **deriva dal contenuto**. Vale su entrambi gli assi.
+
+La ragione e' nuova, e prima non c'era: **il contenuto dipende ora da due variabili
+che una settimana fa non esistevano** — la **lingua**, e **cio' che l'utente digita
+nei nomi delle categorie**. Un bottone largo 77 px perche' dentro c'e' "Annulla" e'
+sopra i 44 per caso, non per costruzione: in inglese quella parola si accorcia, e si
+accorcia **proprio dove leggeranno quasi tutti**.
+
+E' anche la condizione perche' il controllo `Math.min(width, height) < 44` sia una
+verifica esatta invece che una misura dipendente dal font — caso 3 della tassonomia
+qui sopra: **il rimedio sta nel CSS, non nel test**.
+
+## Quando si sostituisce una soglia, la propria dev'essere piu' fine dell'effetto
+Sostituendo una soglia che non controlliamo — quella interna del browser per
+`layout-shift`, per esempio — con un confronto nostro, **il confronto nostro
+dev'essere piu' fine dell'effetto che stiamo cercando**. Altrimenti si cambia il
+nome del problema e non il problema.
+
+Caso concreto: lo spostamento da intercettare valeva **0,82 px**. Un confronto
+arrotondato al pixel intero — la prima forma che viene in mente — l'avrebbe perso
+**esattamente come lo perdeva il CLS**. Il gate confronta a due decimali, e per
+questo cade dove la rete non cadeva.
+
+Corollario: prima di scrivere il confronto bisogna sapere **quanto vale l'effetto
+piu' piccolo che deve fallire**. Se non lo si sa, non si sta scegliendo una
+precisione: se ne sta ereditando una a caso.
+
 ## Dopo una correzione, la verifica si riesegue — non si deduce
 Il posto piu' probabile in cui trovare il prossimo difetto e' **dentro la
 correzione appena fatta**. Una correzione tocca il codice in un punto delicato

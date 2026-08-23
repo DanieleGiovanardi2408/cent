@@ -71,9 +71,14 @@
   color: var(--text-muted);
 }
 
+/* Entrambe le misure dichiarate: la larghezza era "Esporta" piu' due `--sp-3`,
+ * e sotto i 360 punti l'icona sparisce ma il bottone resta l'unica cosa da
+ * toccare della banda. In inglese l'etichetta si accorcia (CLAUDE.md, "Ogni
+ * bersaglio dichiara le proprie misure minime"). */
 .nudge__action {
   flex: none;
   min-block-size: var(--tap-min);
+  min-inline-size: var(--tap-min);
   padding-inline: var(--sp-3);
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-2);

@@ -58,9 +58,17 @@
   white-space: nowrap;
 }
 
+/* Le due misure sono **dichiarate**, non derivate dal contenuto (CLAUDE.md,
+ * "Ogni bersaglio dichiara le proprie misure minime"). Sulla larghezza stava
+ * sopra i 44 per caso: 77,7px erano "Annulla" piu' due `--sp-3`. In inglese la
+ * parola e' "Undo" — quattro caratteri invece di sette — e si accorcia proprio
+ * nella lingua che leggeranno quasi tutti. `flex: none` non lo restringe, ma il
+ * pavimento toglie la dipendenza dalla parola invece di verificarla ogni volta
+ * che cambia. */
 .toast__action {
   flex: none;
   min-block-size: var(--tap-min);
+  min-inline-size: var(--tap-min);
   padding-inline: var(--sp-3);
   border-radius: var(--radius-2);
   color: var(--brand);

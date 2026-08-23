@@ -187,9 +187,15 @@
   line-height: var(--lh-snug);
 }
 
+/* Stessa forma di `.toast__action` e di `.nudge__action`, e stesso pavimento su
+ * entrambi gli assi: `flex: none` piu' padding piu' testo vuol dire che la
+ * larghezza e' l'etichetta. Questo e' il bersaglio che salva dei record di cui
+ * il mirror e' l'unica copia — e' l'ultimo dell'app che possa permettersi di
+ * dipendere da quanto e' lunga la parola "Esporta". */
 .alert__action {
   flex: none;
   min-block-size: var(--tap-min);
+  min-inline-size: var(--tap-min);
   padding-inline: var(--sp-3);
   border: 1px solid currentColor;
   border-radius: var(--radius-2);

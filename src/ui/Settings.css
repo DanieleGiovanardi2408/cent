@@ -58,8 +58,13 @@
   color: var(--text-muted);
 }
 
+/* In un contenitore a blocco un `button` si stringe sul contenuto: la larghezza
+ * di questo bersaglio e' l'etichetta piu' due `--sp-4`, e l'etichetta cambia con
+ * la lingua. Il pavimento sulla larghezza la rende dichiarata invece che
+ * misurata (CLAUDE.md, "Ogni bersaglio dichiara le proprie misure minime"). */
 .prefs__action {
   min-block-size: var(--tap-min);
+  min-inline-size: var(--tap-min);
   margin-block-start: var(--sp-3);
   padding-inline: var(--sp-4);
   border: 1px solid var(--line-strong);
