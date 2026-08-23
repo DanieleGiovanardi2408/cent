@@ -28,10 +28,14 @@
  * sonde sono in OR: se qualcuno lasciasse solo `matchMedia`, tutti questi test
  * cadrebbero insieme.
  *
- * Chi vuole provare **lo stato bloccato** importa da `@playwright/test` e non da
- * qui: `install.spec.ts` fa esattamente cosi'.
+ * Chi vuole provare **lo stato bloccato** importa da `./font` e non da qui:
+ * `install.spec.ts` fa esattamente cosi'.
+ *
+ * La base non e' `@playwright/test` ma `./font`: la premessa sul font vale per
+ * **tutta** la suite, compresa la pagina di installazione, perche' vale per ogni
+ * asserzione geometrica e non solo per quelle dell'app installata.
  */
-import { test as base } from '@playwright/test'
+import { test as base } from './font'
 
 export const test = base.extend({
   page: async ({ page }, use) => {

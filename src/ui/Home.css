@@ -14,6 +14,32 @@
  * `line-height`: e' esattamente l'altezza che avra' da piena, quindi da vuota
  * occupa lo stesso spazio. E `--slot-min` copre il piu' alto dei due stati
  * (con budget e senza), cosi' anche passare da uno all'altro non sposta niente.
+ *
+ * ## E una riserva si dichiara in righe, non in `rem`
+ *
+ * `--slot-min` e' stato per due fasi un numero tondo — 9.5rem, poi 11.5rem —
+ * scelto misurando **una macchina sola**. Ha retto finche' la macchina e' stata
+ * una: al primo runner Linux, dove lo stack di font di sistema risolve in
+ * DejaVu invece che in SF Pro, la stessa frase ha preso una riga in piu' e ha
+ * sfondato la riserva (`.slot` 184 -> 197.75, e con lei tutto cio' che sta
+ * sotto). Il difetto non era il font: era una riserva che non sapeva **cosa**
+ * stava riservando, quindi non poteva reggere a un cambio di metriche — e le
+ * metriche cambiano con il font, con la lingua e con la lunghezza dell'importo.
+ *
+ * Adesso il riquadro dichiara **le righe che deve contenere**: quante ne prende
+ * ciascuna delle sue frasi (`--rows-*`) e quanto e' alta una riga di ciascuna
+ * (`--line-*`, cioe' `1lh` di quell'elemento). Il numero in pixel e' una
+ * conseguenza, non una scelta. E' la stessa dottrina di `.sheet__hint`, che e'
+ * pinnata a `1lh` invece che a un `1.25rem` vicino: rendere esatta la cosa
+ * misurata invece di tollerare l'approssimazione.
+ *
+ * I conteggi non sono stimati: sono misurati in entrambe le lingue, nei quattro
+ * stati del riquadro e a 320 / 375 / 390 / 800 punti di larghezza. Il test che
+ * li tiene onesti e' `home.spec.ts`, "la riserva del riquadro": verifica che
+ * nessuna frase superi le righe dichiarate e — cosa piu' importante — che la
+ * riserva **non** avanzi di una riga intera sullo stato piu' alto. Se avanzasse,
+ * assorbirebbe la prossima riga di troppo senza che il gate se ne accorga, cioe'
+ * il guardiano sarebbe ancora li' ma non guarderebbe piu' niente.
  */
 
 .home {
@@ -25,21 +51,56 @@
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
   padding-block-end: var(--sp-3);
+  /* L'altezza della barra del periodo. Non e' testo: e' l'unica cosa dentro il
+   * riquadro che non si misura in righe, e sta qui perche' `.track` e la
+   * riserva usino lo stesso numero invece di due copie che un giorno divergono. */
+  --track-h: 0.625rem;
+
+  /* **Una riga** di ciascuna delle frasi che vivono nel riquadro, cioe' il suo
+   * `1lh`. Scritto come `font-size * line-height` e non con l'unita' `lh`
+   * perche' `lh` risponde al font dell'elemento su cui e' scritto — qui
+   * `.home` — e non a quello dei figli, che hanno tipografie diverse. E' lo
+   * stesso ripiego che `.sheet__hint` tiene accanto al suo `1lh`, per lo stesso
+   * motivo: lo stesso numero, scritto a mano. */
+  --line-allowance: calc(var(--fs-400) * var(--lh-snug)); /* .allowance */
+  --line-note: calc(var(--fs-100) * var(--lh-snug)); /* .allowance__sub, .since */
+  --line-pace: calc(var(--fs-200) * var(--lh-body)); /* .pace, .invite */
+
+  /* **Quante** righe ciascuna puo' prendere. Sono i numeri misurati, in
+   * italiano e in inglese, su tutti gli stati del riquadro:
+   *
+   * - `.allowance` due, e non e' un margine di sicurezza: "The budget for this
+   *   period is used up." va a capo a 375 punti, e "Puoi spendere ~18.000,00 €
+   *   al giorno" pure. A una riga sola questa e' la prima cosa che sfonda;
+   * - `.allowance__sub` una: e' 13px, e la piu' lunga ("Ultimo giorno del
+   *   periodo: domani riparte da capo.") sta in una riga sopra i 360 punti;
+   * - `.since` due: la frase di ADR 010 e' la piu' lunga del riquadro in
+   *   entrambe le lingue, e a `42ch` prende sempre due righe;
+   * - `.pace` due: al massimo "Sopra ritmo: X al giorno contro Y sostenibili."
+   *   con due importi a cinque cifre.
+   *
+   * Lo stato senza budget non compare qui perche' e' piu' basso: invito (tre
+   * righe in inglese) piu' passo fanno 132,5px contro i 197,75 di questo. */
+  --rows-allowance: 2;
+  --rows-sub: 1;
+  --rows-since: 2;
+  --rows-pace: 2;
+
   /* Il riquadro sotto il numero grande. **E' l'unica altezza riservata di
    * questa parte**, e le righe dentro non ne hanno una loro: cosi' lo spazio
    * che avanza si raccoglie tutto in fondo al riquadro — prima del bottone del
    * budget, dove non si nota — invece di aprire un buco fra una riga e l'altra.
-   * Il valore copre lo stato piu' alto a questa larghezza.
    *
-   * Da 9.5rem a 11.5rem quando e' arrivata la riga che spiega un budget nato a
-   * meta' periodo (ADR 010). Misurato: a 375 e a 390 punti quello stato occupa
-   * 176px, e il resto e' margine per le metriche del font vero — la riga va a
-   * capo su `42ch`, quindi il punto in cui si spezza segue il font e non il
-   * viewport. Costa 32px di vuoto in fondo al riquadro in tutti gli altri
-   * stati, ed e' il prezzo giusto: l'alternativa era che le spese di oggi
-   * scendessero all'arrivo dei dati, per tutto il periodo in cui la frase
-   * compare. */
-  --slot-min: 11.5rem;
+   * La somma e' la colonna vera, gap per gap: aria sopra, barra, e poi le
+   * quattro frasi con lo spazio che le separa. A 375 e 390 punti fa 197,75px,
+   * ed e' **esattamente** l'altezza dello stato piu' alto misurato — non un
+   * pixel di piu', altrimenti la riserva comincerebbe a nascondere le righe di
+   * troppo invece di lasciarle vedere al gate. */
+  --slot-min: calc(
+    var(--sp-3) + var(--track-h) + var(--sp-2) + var(--rows-allowance) * var(--line-allowance) +
+      var(--sp-2) + var(--rows-sub) * var(--line-note) + var(--sp-2) + var(--rows-since) *
+      var(--line-note) + var(--sp-2) + var(--rows-pace) * var(--line-pace)
+  );
   /* Lo stato vuoto di oggi non e' mezza schermata come nello Storico: sopra c'e'
    * gia' tutto il periodo. */
   --blank-min: 22dvh;
@@ -129,7 +190,9 @@
 
 .track {
   flex: none;
-  block-size: 0.625rem; /* 10px: si legge di sfuggita, non si tocca */
+  /* 10px: si legge di sfuggita, non si tocca. Lo stesso token che la riserva
+   * somma, cosi' cambiarlo qui cambia anche cio' che il riquadro riserva. */
+  block-size: var(--track-h);
   border-radius: var(--radius-full);
   background-color: var(--surface-sunken);
   overflow: hidden;
@@ -253,20 +316,24 @@
   color: var(--text-muted);
 }
 
-/* Schermi stretti (320 punti: il vecchio SE, o lo Zoom schermo di iOS). Qui la
- * riga "Puoi spendere ~X al giorno" va a capo, il dettaglio sotto pure, e il
- * passo puo' prendere tre righe: il riquadro deve riservare **quel** caso,
- * altrimenti l'arrivo dei dati spinge in giu' le spese di oggi. La riserva
- * dipende dalla larghezza perche' il numero di righe dipende dalla larghezza —
- * e a parita' di larghezza guscio e dati riservano lo stesso.
+/* Schermi stretti (320 punti: il vecchio SE, o lo Zoom schermo di iOS). La
+ * riserva dipende dalla larghezza perche' il **numero di righe** dipende dalla
+ * larghezza — e a parita' di larghezza guscio e dati riservano lo stesso.
  *
- * Qui la riga di ADR 010 ("Budget attivo da mercoledi' · prima avevi gia'
- * speso X") si aggiunge a una disponibilita' che gia' occupa due righe:
- * misurate 210px, riservate 232 (14.5rem) per il passo che a questa larghezza
- * puo' prenderne tre. */
+ * Qui cambia una cosa sola, ed e' quella misurata: il dettaglio sotto la
+ * disponibilita' va a capo ("Ultimo giorno del periodo: domani riparte da
+ * capo.", "Restano 5 giorni: quello che spendi da qui e' in piu'"). Tutte le
+ * altre righe prendono lo stesso numero di righe di prima — a 320 punti la
+ * disponibilita' ne prende gia' due anche sopra i 360, ed e' per questo che ne
+ * dichiara due dappertutto.
+ *
+ * Prima qui c'era `14.5rem`, cioe' 232px: 18 in piu' del necessario, presi per
+ * un passo a tre righe che a questa larghezza non si e' mai misurato. La
+ * differenza fra le due scritture non e' il valore, sono i 18px che nessuno
+ * sapeva di stare pagando. */
 @media (max-width: 359px) {
   .home {
-    --slot-min: 14.5rem;
+    --rows-sub: 2;
   }
 }
 

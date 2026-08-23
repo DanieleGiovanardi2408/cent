@@ -36,6 +36,15 @@ export default defineConfig({
   // Prima della fase 3 la premessa c'era lo stesso ed era invisibile: `it-IT`
   // era cablato dentro `formatCents`, quindi `12,50 €` usciva anche con il
   // browser in inglese. Averla tolta dal dominio l'ha resa una cosa da dire.
+  //
+  // La **terza** premessa d'ambiente e' il font, e non sta qui solo perche'
+  // Playwright non ha un posto in config dove iniettare uno script di pagina:
+  // vive in `tests/e2e/font.ts`, che e' la base di ogni `test` della suite.
+  // Senza, ogni misura di altezza confrontava il testo con qualunque font fosse
+  // installato sulla macchina — SF Pro su macOS, DejaVu sul runner — e la stessa
+  // frase andava a capo a un numero diverso di righe. Le prime due premesse
+  // (`TZ` in vitest.config.ts, `locale` qui sopra) sono nate dallo stesso
+  // difetto: una cosa che l'ambiente decideva per noi, in silenzio.
   use: { baseURL: BASE_URL, locale: 'it-IT', trace: 'retain-on-failure' },
   projects: [
     { name: 'iphone-se', use: { ...MOBILE, viewport: { width: 375, height: 667 } } },

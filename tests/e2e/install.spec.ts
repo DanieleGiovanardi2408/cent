@@ -28,7 +28,10 @@
  *    del browser — cioe' proprio la cosa che ADR 011 impedisce — anche se in
  *    pagina non c'era niente da toccare.
  */
-import { expect, test } from '@playwright/test'
+// Non `./installed`: qui si prova lo stato **bloccato**, cioe' un browser che
+// non dichiara standalone. `./font` e' la base comune — la premessa sul font
+// vale anche qui, dove si misurano bersagli e larghezze.
+import { expect, test } from './font'
 import { probe } from './probe'
 
 /**

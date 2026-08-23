@@ -34,6 +34,7 @@
 // fuori da standalone Cent e' una pagina di installazione (ADR 011). Vedi
 // `installed.ts` per il perche' la cucitura sta qui e non nel codice dell'app.
 import { expect, test } from './installed'
+import { fontPronto, TEST_FONT } from './font'
 import type { Page } from '@playwright/test'
 
 interface Shift {
@@ -155,18 +156,20 @@ function drift(before: Geometry | null, after: Geometry | null): string[] {
  * divergono.
  */
 async function watch(page: Page): Promise<void> {
-  await page.addInitScript((marks: readonly Mark[]) => {
+  await page.addInitScript(({ marks, font }: { marks: readonly Mark[]; font: string }) => {
     const w = window as unknown as {
       __shifts: Shift[]
       __firstHero: FirstHero | null
       __fcp: number | null
       __firstGeometry: Geometry | null
+      __fontAtFirstFrame: boolean
       __geometry: () => Geometry
     }
     w.__shifts = []
     w.__firstHero = null
     w.__fcp = null
     w.__firstGeometry = null
+    w.__fontAtFirstFrame = false
 
     /**
      * Le posizioni **nel contenuto**, non nel viewport: la Home e' il
@@ -243,9 +246,16 @@ async function watch(page: Page): Promise<void> {
         at: Math.round(performance.now()),
       }
       w.__firstGeometry = w.__geometry()
+      // La premessa d'ambiente, presa nell'istante in cui viene usata: se il
+      // font di prova non fosse ancora arrivato, questa misura sarebbe fatta
+      // con il font di sistema della macchina — cioe' la cosa che `font.ts`
+      // esiste per togliere di mezzo — e un rosso direbbe la bugia piu' costosa
+      // possibile ("la riserva ha ceduto") al posto della verita' ("la premessa
+      // e' arrivata tardi").
+      w.__fontAtFirstFrame = document.fonts.check(`16px "${font}"`)
     }
     requestAnimationFrame(look)
-  }, LANDMARKS)
+  }, { marks: LANDMARKS, font: TEST_FONT })
 }
 
 interface Measures {
@@ -256,6 +266,8 @@ interface Measures {
   /** I blocchi al primo frame utile e a pagina ferma: il gate confronta questi. */
   readonly firstGeometry: Geometry | null
   readonly finalGeometry: Geometry | null
+  /** Il font dichiarato era gia' in pagina quando il guscio e' stato misurato. */
+  readonly fontAtFirstFrame: boolean
   readonly fcp: number | null
   readonly overflowX: number
   readonly homeOverflowX: number
@@ -268,6 +280,7 @@ async function measure(page: Page): Promise<Measures> {
       __firstHero: FirstHero | null
       __fcp: number | null
       __firstGeometry: Geometry | null
+      __fontAtFirstFrame?: boolean
       __geometry?: () => Geometry
     }
     const hero = document.querySelector('.hero__value')
@@ -287,6 +300,7 @@ async function measure(page: Page): Promise<Measures> {
             },
       firstGeometry: w.__firstGeometry,
       finalGeometry: w.__geometry?.() ?? null,
+      fontAtFirstFrame: w.__fontAtFirstFrame ?? false,
       fcp: w.__fcp,
       // Caso 2 di CLAUDE.md, "Verifiche che passano perche' la macchina non e'
       // il bersaglio": l'asserzione qui sotto e' esatta (nessuna tolleranza),
@@ -495,6 +509,7 @@ test.describe('la Home non salta, senza budget e senza spese', () => {
     // confronto: senza guscio da confrontare il gate sarebbe verde per assenza
     // di misura, che e' il modo peggiore in cui un test puo' passare.
     expect(m.firstHero, 'al primo frame il numero grande non e\' nel DOM').not.toBeNull()
+    expect(m.fontAtFirstFrame, 'il font dichiarato non era pronto al primo frame').toBe(true)
     expect(
       drift(m.firstGeometry, m.finalGeometry),
       'blocchi spostati dall\'arrivo dei dati',
@@ -519,6 +534,7 @@ test.describe('la Home non salta, con budget e 5.000 spese, sforando', () => {
     racconta(testInfo.project.name, 'home con budget e 5.000 spese', m)
 
     expect(m.firstHero, 'al primo frame il numero grande non e\' nel DOM').not.toBeNull()
+    expect(m.fontAtFirstFrame, 'il font dichiarato non era pronto al primo frame').toBe(true)
     expect(
       drift(m.firstGeometry, m.finalGeometry),
       'blocchi spostati dall\'arrivo dei dati',
@@ -613,6 +629,7 @@ test.describe('a 320 punti la Home non salta lo stesso', () => {
     racconta('320x568', 'home con budget', m)
 
     expect(m.firstHero, 'al primo frame il numero grande non e\' nel DOM').not.toBeNull()
+    expect(m.fontAtFirstFrame, 'il font dichiarato non era pronto al primo frame').toBe(true)
     expect(
       drift(m.firstGeometry, m.finalGeometry),
       'blocchi spostati dall\'arrivo dei dati',
@@ -861,6 +878,7 @@ test.describe('la Home con un budget nato a meta settimana', () => {
     racconta(testInfo.project.name, 'home con budget nato a meta settimana', m)
 
     expect(m.firstHero, 'al primo frame il numero grande non e\' nel DOM').not.toBeNull()
+    expect(m.fontAtFirstFrame, 'il font dichiarato non era pronto al primo frame').toBe(true)
     expect(
       drift(m.firstGeometry, m.finalGeometry),
       'blocchi spostati dall\'arrivo dei dati',
@@ -934,6 +952,7 @@ test.describe('la Home con la lingua scelta diversa da quella del telefono', () 
     racconta(testInfo.project.name, 'home con lingua scelta ≠ rilevata', m)
 
     expect(m.firstHero, 'al primo frame il numero grande non e\' nel DOM').not.toBeNull()
+    expect(m.fontAtFirstFrame, 'il font dichiarato non era pronto al primo frame').toBe(true)
     expect(
       drift(m.firstGeometry, m.finalGeometry),
       'blocchi spostati dal cambio di lingua all\'arrivo dei dati',
@@ -1042,6 +1061,7 @@ test.describe('il promemoria di backup compare senza far saltare la Home', () =>
     racconta(testInfo.project.name, 'home + promemoria di backup', m)
 
     expect(m.firstHero, 'al primo frame il numero grande non e\' nel DOM').not.toBeNull()
+    expect(m.fontAtFirstFrame, 'il font dichiarato non era pronto al primo frame').toBe(true)
     expect(
       drift(m.firstGeometry, m.finalGeometry),
       'la banda del promemoria ha spostato qualcosa comparendo',
@@ -1056,4 +1076,285 @@ test.describe('il promemoria di backup compare senza far saltare la Home', () =>
     racconta(testInfo.project.name, 'home + promemoria di backup', m)
     expect(m.cls, `spostamenti: ${JSON.stringify(m.shifts)}`).toBe(0)
   })
+})
+
+/**
+ * La riserva del riquadro, misurata in cio' che deve contenere.
+ *
+ * ## Perche' questi test esistono
+ *
+ * `--slot-min` e' stato per due fasi un numero tondo scelto su una macchina
+ * sola. Ha retto finche' la macchina e' stata una: al primo runner Linux —
+ * dove lo stack di font di sistema non risolve in SF Pro — una frase ha preso
+ * una riga in piu' e ha sfondato la riserva. Dichiarare il font (`font.ts`)
+ * toglie di mezzo la differenza fra le due macchine, ma da solo **nasconderebbe
+ * il difetto invece di ripararlo**: la riserva resterebbe un numero che non sa
+ * cosa sta riservando, e la prossima riga di troppo — una lingua nuova, un
+ * importo a cinque cifre, SF Pro sul telefono — la sfonderebbe di nuovo.
+ *
+ * Adesso la riserva e' la somma delle righe dichiarate in `Home.css`
+ * (`--rows-*`). Questi test la tengono onesta da due lati opposti:
+ *
+ * 1. **copre**: nessuno stato del riquadro sfonda, in nessuna delle due lingue;
+ * 2. **non avanza**: sullo stato piu' alto la riserva e' esattamente il
+ *    contenuto, quindi una riga in piu' si vede. E' la meta' che di solito
+ *    manca: una riserva generosa fa passare tutto, gate compreso, e il giorno
+ *    che il layout si rompe davvero non lo dice nessuno.
+ *
+ * Il conteggio delle righe si legge dal CSS, non e' riscritto qui: se qualcuno
+ * alza `--rows-allowance` a 3 senza che una frase lo chieda, il primo test lo
+ * lascia passare e il secondo cade dicendo che la riserva ha cominciato ad
+ * avanzare. E' il modo di far cadere un test **quando la cosa che sorveglia
+ * sparisce**, non solo quando si rompe.
+ */
+interface Riserva {
+  /** L'altezza vera del riquadro, cioe' la riserva quando il contenuto ci sta. */
+  readonly riservato: number
+  /** L'altezza che il contenuto vuole, con la riserva tolta per un istante. */
+  readonly naturale: number
+  /** Quante righe prende ogni frase, adesso. */
+  readonly righe: Readonly<Record<string, number>>
+  /** Quante ne dichiara il CSS. La chiave e' il selettore, non il token. */
+  readonly dichiarate: Readonly<Record<string, number>>
+  /** La riga piu' bassa del riquadro: l'unita' con cui si misura l'avanzo. */
+  readonly rigaMinima: number
+}
+
+/**
+ * Le righe si contano dai rettangoli del testo, non dall'altezza divisa per il
+ * `line-height`: due frasi con tipografie diverse darebbero conti diversi, e
+ * `.pace` ha dentro dei `<b>` che spezzano il testo in piu' rettangoli sulla
+ * stessa riga. Righe distinte = valori di `top` distinti.
+ */
+async function misuraRiserva(page: Page): Promise<Riserva> {
+  return page.evaluate(() => {
+    const slot = document.querySelector('.slot')
+    const home = document.querySelector('.home')
+    if (!(slot instanceof HTMLElement) || home === null) {
+      throw new Error('il riquadro non e\' in pagina: non c\'e' + ' niente da misurare')
+    }
+    const px = (v: number): number => Math.round(v * 100) / 100
+    const riservato = px(slot.getBoundingClientRect().height)
+
+    // La riserva si toglie per un istante, si legge quanto il contenuto vuole
+    // davvero e si rimette: e' l'unico modo di sapere **quanto avanza**, che e'
+    // la meta' interessante della domanda.
+    const prima = slot.style.minBlockSize
+    slot.style.minBlockSize = '0px'
+    const naturale = px(slot.getBoundingClientRect().height)
+    slot.style.minBlockSize = prima
+
+    const righe: Record<string, number> = {}
+    for (const el of [...slot.children]) {
+      const range = document.createRange()
+      range.selectNodeContents(el)
+      const tops = new Set([...range.getClientRects()].map((r) => Math.round(r.top * 10) / 10))
+      righe[`.${el.classList[0] ?? '?'}`] = Math.max(tops.size, 1)
+    }
+
+    const stile = getComputedStyle(home)
+    const conta = (token: string): number => Number(stile.getPropertyValue(token).trim())
+    const misura = (token: string): number => {
+      const probe = document.createElement('div')
+      probe.style.blockSize = `var(${token})`
+      probe.style.position = 'absolute'
+      probe.style.visibility = 'hidden'
+      home.appendChild(probe)
+      const h = px(probe.getBoundingClientRect().height)
+      probe.remove()
+      return h
+    }
+
+    return {
+      riservato,
+      naturale,
+      righe,
+      dichiarate: {
+        '.allowance': conta('--rows-allowance'),
+        '.allowance__sub': conta('--rows-sub'),
+        '.since': conta('--rows-since'),
+        '.pace': conta('--rows-pace'),
+      },
+      // La riga piu' bassa che il riquadro contenga: 13px per 1.25. Se la
+      // riserva avanzasse di tanto, assorbirebbe una riga intera di quel testo
+      // senza che nessuno se ne accorga.
+      rigaMinima: misura('--line-note'),
+    }
+  })
+}
+
+/** Passa all'inglese dalla schermata vera e torna sulla Home. */
+async function inInglese(page: Page): Promise<void> {
+  await page.locator('.app__action').tap()
+  await expect(page.locator('.prefs')).toBeVisible()
+  await page.locator('.pick').nth(2).tap()
+  await expect(page.locator('.nav__tab').nth(1)).toHaveText('History')
+  await page.locator('.nav__tab').first().tap()
+  await expect(page.locator('.home')).toBeVisible()
+}
+
+/**
+ * I tre stati del riquadro, uno dopo l'altro sulla stessa pagina — l'ordine e'
+ * quello che permette di non cancellare mai niente: prima senza budget, poi il
+ * budget nato a meta' settimana con gli importi piu' larghi che il tastierino
+ * accetta, poi l'ultimo giorno del periodo (che ha il dettaglio piu' lungo).
+ */
+async function statiDelRiquadro(
+  page: Page,
+  settimanale: string,
+): Promise<Readonly<Record<string, Riserva>>> {
+  const senzaBudget = await misuraRiserva(page)
+
+  // Il caso piu' largo raggiungibile: 99.999,99 € a settimana con quasi
+  // 10.000 € gia' spesi prima che il budget esistesse. Non e' un caso di
+  // fantasia — e' il tetto del tastierino — ed e' quello che manda a capo la
+  // riga della disponibilita'.
+  await seedOn(page, [
+    ['2026-08-17', 499_999],
+    ['2026-08-18', 499_999],
+  ])
+  await page.reload()
+  await expect(page.locator('.budget')).toBeEnabled()
+  await setBudget(page, '9999999', settimanale)
+  await expect(page.locator('.since')).toBeVisible()
+  const metaSettimana = await misuraRiserva(page)
+
+  // Domenica: "Ultimo giorno del periodo: domani riparte da capo." e' il
+  // dettaglio piu' lungo delle due lingue.
+  await page.clock.setFixedTime(new Date('2026-08-23T10:00:00'))
+  await page.reload()
+  await expect(page.locator('.allowance')).toBeVisible()
+  const ultimoGiorno = await misuraRiserva(page)
+
+  return { 'senza budget': senzaBudget, 'meta settimana': metaSettimana, 'ultimo giorno': ultimoGiorno }
+}
+
+const LINGUE = [
+  { id: 'it', nome: 'italiano', settimanale: 'A settimana' },
+  { id: 'en', nome: 'inglese', settimanale: 'Per week' },
+] as const
+
+for (const lingua of LINGUE) {
+  test(`la riserva del riquadro contiene le righe che dichiara (${lingua.nome})`, async ({
+    page,
+  }, testInfo) => {
+    await page.clock.install({ time: new Date('2026-08-19T10:00:00') })
+    await page.goto('./')
+    await expect(page.locator('.budget')).toBeEnabled()
+    expect(await fontPronto(page), 'il font dichiarato non e\' in pagina').toBe(true)
+    if (lingua.id === 'en') await inInglese(page)
+
+    const stati = await statiDelRiquadro(page, lingua.settimanale)
+
+    for (const [nome, r] of Object.entries(stati)) {
+      console.log(
+        `\n  [${testInfo.project.name}] riquadro / ${lingua.nome} / ${nome}:` +
+          ` contenuto ${r.naturale}px, riservati ${r.riservato}px, avanzo ${
+            Math.round((r.riservato - r.naturale) * 100) / 100
+          }px  ` +
+          Object.entries(r.righe)
+            .map(([sel, n]) => `${sel} ${n}r`)
+            .join(' · '),
+      )
+
+      expect(
+        r.naturale,
+        `"${nome}" sfonda la riserva: il contenuto vuole ${r.naturale}px e il riquadro ne riserva ${r.riservato}px, quindi tutto cio' che sta sotto scende all'arrivo dei dati`,
+      ).toBeLessThanOrEqual(r.riservato)
+
+      for (const [sel, righe] of Object.entries(r.righe)) {
+        const dichiarate = r.dichiarate[sel]
+        if (dichiarate === undefined) continue
+        expect(
+          righe,
+          `"${nome}": ${sel} prende ${righe} righe e Home.css ne dichiara ${dichiarate}. O la frase e' cambiata, o la riserva non sa piu' cosa contiene`,
+        ).toBeLessThanOrEqual(dichiarate)
+      }
+    }
+  })
+}
+
+/**
+ * E la controprova, che e' il punto: **una riga in piu' si deve vedere**.
+ *
+ * Gira dove la riserva e' dimensionata, cioe' alla larghezza piu' stretta dei
+ * telefoni (375 punti): li' lo stato piu' alto riempie il riquadro fino
+ * all'ultimo pixel, e allungare una frase di una riga lo fa crescere. A 390
+ * punti la stessa dichiarazione avanza di una riga della disponibilita' — e'
+ * il prezzo di coprire i 375 con un solo numero, ed e' scritto in Home.css.
+ *
+ * Il test non simula: allunga davvero il testo di `.since` finche' va a capo
+ * una volta di piu', e guarda l'altezza del riquadro. Se dopo questo la riserva
+ * assorbisse ancora tutto, vorrebbe dire che il gate non sorveglia piu' niente
+ * e che i verdi della Home sono diventati gratis.
+ */
+test('una riga di troppo sfonda la riserva, cioe\' il gate cade ancora', async ({
+  page,
+}, testInfo) => {
+  const viewport = page.viewportSize()
+  test.skip(
+    viewport?.width !== 375,
+    'la riserva e\' dimensionata sulla larghezza piu\' stretta dei telefoni: e\' li\' che si prova',
+  )
+
+  await page.clock.install({ time: new Date('2026-08-19T10:00:00') })
+  await page.goto('./')
+  await expect(page.locator('.budget')).toBeEnabled()
+  await seedOn(page, [
+    ['2026-08-17', 499_999],
+    ['2026-08-18', 499_999],
+  ])
+  await page.reload()
+  await expect(page.locator('.budget')).toBeEnabled()
+  await setBudget(page, '9999999', 'A settimana')
+  await expect(page.locator('.since')).toBeVisible()
+
+  const prima = await misuraRiserva(page)
+  console.log(
+    `\n  [${testInfo.project.name}] controprova: contenuto ${prima.naturale}px su ${prima.riservato}px riservati,` +
+      ` avanzo ${Math.round((prima.riservato - prima.naturale) * 100) / 100}px (una riga ne misura ${prima.rigaMinima})`,
+  )
+
+  // Lo stato piu' alto arriva **al pixel** della riserva: e' questa uguaglianza
+  // che rende il gate un guardiano invece di una formalita'.
+  expect(
+    prima.riservato - prima.naturale,
+    `la riserva avanza di ${Math.round((prima.riservato - prima.naturale) * 100) / 100}px sullo stato piu' alto: una riga intera (${prima.rigaMinima}px) ci sta dentro senza che il gate la veda`,
+  ).toBeLessThan(prima.rigaMinima)
+
+  // Una riga vera in piu', non un pixel inventato: la frase di ADR 010 cresce
+  // finche' non va a capo un'altra volta.
+  const dopo = await page.evaluate(() => {
+    const since = document.querySelector('.since')
+    const slot = document.querySelector('.slot')
+    if (since === null || !(slot instanceof HTMLElement)) throw new Error('scena sbagliata')
+    // Il `Range` si rifa' a ogni giro: sostituire il testo distrugge il nodo che
+    // il precedente aveva selezionato, e un range morto misura zero righe —
+    // cioe' la controprova sembrerebbe riuscita senza aver mosso niente.
+    const conta = (): number => {
+      const range = document.createRange()
+      range.selectNodeContents(since)
+      return new Set([...range.getClientRects()].map((r) => Math.round(r.top * 10) / 10)).size
+    }
+    const partenza = conta()
+    const testo = since.textContent ?? ''
+    let parole = 1
+    while (conta() === partenza && parole < 40) {
+      since.textContent = `${testo} ${'parola '.repeat(parole)}`
+      parole += 1
+    }
+    return {
+      righe: conta(),
+      partenza,
+      altezza: Math.round(slot.getBoundingClientRect().height * 100) / 100,
+    }
+  })
+
+  expect(dopo.righe, 'la frase non e\' andata a capo: la controprova non ha provato niente').toBe(
+    dopo.partenza + 1,
+  )
+  expect(
+    dopo.altezza,
+    'con una riga in piu\' il riquadro e\' rimasto identico: la riserva assorbe, quindi il gate non guarda piu\' niente',
+  ).toBeGreaterThan(prima.riservato)
 })
