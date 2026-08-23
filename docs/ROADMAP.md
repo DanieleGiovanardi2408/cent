@@ -74,6 +74,84 @@ La conseguenza prevista fin dalla fase 2 — **impedire, non sconsigliare** — 
 stata applicata: vedi
 [ADR 011](adr/011-fuori-da-standalone-e-una-pagina-di-installazione.md).
 
+## Mis-inserimenti da cents-first
+
+Dopo 24 ore d'uso vero: due importi digitati in centesimi invece che in euro
+(`0,23` per `23,00`, `0,25` per `25,00`), il secondo sopravvissuto **13 ore e 17
+minuti**. Il cents-first **resta** e il tasto virgola **non torna**: ha eliminato
+per costruzione ogni input malformato, e ADR 004 non si riapre.
+
+### Fatto: l'importo e' sceso fra le categorie e il tastierino
+
+La causa non era disattenzione, era geometria — misurata: **246 px** dal tasto
+all'importo contro **74 px** dal tasto al chip da toccare, con l'occhio che si
+ferma 172 px prima del numero. A ~30 cm sono ~7 gradi di eccentricita', dove non
+si risolve la posizione di una virgola. La controprova era gia' nel repo: in
+orizzontale sono **4 px** e il problema non esiste.
+
+Non e' stata fatta nessuna baseline prima di spedire, di proposito: **nessun esito
+di quella misura avrebbe cambiato l'azione, quindi non era una misura ma un
+rinvio.** Una misurazione vale il suo costo solo se qualche risultato cambia cosa
+fai. Il difetto era strutturale — vero anche in una settimana senza errori — e un
+difetto strutturale non si conta, si corregge.
+
+Costo accettato: il chip piu' vicino si allontana dal pollice di ~57 px, ~70 ms
+sul secondo tap.
+
+### Fermo con un innesco preciso: euro grandi, centesimi piccoli
+
+`0,23 €` e `23,00 €` hanno oggi la stessa quantita' di inchiostro, e il
+discriminante e' una virgola da 3 px. Rendendo la parte frazionaria al ~55% del
+corpo, la magnitudine smette di essere codificata in *quale* glifo e diventa
+**quanto inchiostro grande c'e'** — che si vede in periferia.
+
+**Non e' "vediamo": l'innesco e' scritto.** Si spedisce **se l'audit trova un
+altro mis-inserimento dopo che lo spostamento dell'importo e' in produzione.**
+Costo stimato ~150 byte con `formatToParts`. La decisione e' gia' presa: quando
+l'innesco scatta non va rifatta.
+
+### Scartato: qualunque avviso sotto una soglia
+
+`0,80 €` per un caffe' e' plausibile, quindi qualunque soglia o e' inutile o
+grida al lupo. Vale per la UI; **non** vale per l'audit offline, che e' un elenco
+letto in blocco e non un allarme al momento sbagliato.
+
+### Dissenso registrato: il chip "Oggi" non si toglie
+
+Era stato proposto di eliminarlo — la data e' gia' oggi, quindi e' raggiungibile
+solo come annullamento di "Ieri", e occupa lo slot piu' raggiungibile della riga.
+
+**Rifiutato, e la ragione vale piu' della decisione**: il rischio nominato (tap
+accidentale) ha **conseguenza zero**, perche' toccare il chip gia' selezionato e'
+un no-op. E toglierlo renderebbe "oggi" uno **stato implicito** — niente
+selezionato = oggi — che e' esattamente la categoria di cose che questo progetto
+ha passato la sessione a eliminare. La larghezza liberata non serve: il chip nota
+sta gia' comodo.
+
+Se la proposta torna, si riparte da qui.
+
+### L'audit: `scripts/audit.mjs`
+
+Uno **script**, non una schermata: zero byte nel bundle, zero superficie nella UI,
+e puo' essere piu' ricco di quanto una schermata potrebbe permettersi. Si lancia
+sul file di backup quando si esporta:
+
+    node scripts/audit.mjs ~/Downloads/cent-2026-08-23.json
+
+Cerca due firme, e servono entrambe:
+
+- **L'errore preso** — una cancellata `D` e una nuova `N` con stessa categoria,
+  stessa data, `N.amountCents === D.amountCents * 100`, create a pochi minuti di
+  distanza. Riporta la **latenza di accorgersi** (`deletedAt − createdAt`), che e'
+  la metrica che conta: sopra i 60 s l'errore e' sopravvissuto abbastanza da
+  sporcare le statistiche della fase 6. Non e' `N.createdAt − D.deletedAt`, che
+  misura solo quanto si e' veloci a rifarla.
+- **L'errore mai preso** — le spese **vive** sotto 1 €, da rileggere a mano. E'
+  l'unico modo di vedere gli errori che non sono mai stati notati.
+
+Non e' uno strumento d'esperimento: e' un audit permanente, e resta utile anche
+se il problema non si ripresenta piu'.
+
 ## Cosa hanno insegnato le prime 24 ore d'uso
 
 ### Anticipare la cancellazione dallo Storico e' servito davvero

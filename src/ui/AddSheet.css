@@ -12,11 +12,58 @@
  * riga**, e la nota aperta prende il posto di quella riga invece di
  * aggiungersene una.
  *
- * ## Ordine dall'alto: perche' il tastierino sta in fondo
+ * ## Ordine dall'alto: `meta` -> `cats` -> `amount` -> `pad`
  *
- * L'ultima cosa che si tocca deve stare piu' vicina al pollice della penultima:
- * si digita, poi si sceglie. Le categorie stanno subito sopra i tasti, non in
- * cima, cosi' il pollice fa un passo corto.
+ * **L'importo sta fra le categorie e il tastierino.** Non e' la posizione piu'
+ * comoda per il pollice: e' la sola che sta sul percorso dell'occhio.
+ *
+ * Qui c'era la regola opposta — "l'ultima cosa che si tocca deve stare piu'
+ * vicina al pollice della penultima", quindi categorie subito sopra i tasti e
+ * importo in cima. Ottimizzava il viaggio del dito e ignorava quello dello
+ * sguardo, e ha prodotto due spese sbagliate in 24 ore d'uso vero: 0,23 EUR
+ * invece di 23,00, e 0,25 invece di 25,00 — la seconda sopravvissuta 13 ore
+ * prima che qualcuno se ne accorgesse.
+ *
+ * La causa era geometria, non disattenzione. Misurato a 375x667 dopo aver
+ * digitato `2` `3`, con l'importo in cima:
+ *
+ *     amount  98 – 146   (centro 122)
+ *     cats   206 – 323   (riga bassa, centro ~294)
+ *     pad    331 – 655   (tasti "2"/"3", centro 368)
+ *
+ * Dal tasto all'importo 246px; dal tasto al chip da toccare 74px, nella stessa
+ * direzione. L'occhio sale, trova il bersaglio e si ferma 172px prima del
+ * numero: **non esiste un istante del flusso in cui lo sguardo attraversa
+ * l'importo.** A ~30cm quei 246px sono ~7 gradi di eccentricita', e in
+ * periferia a 7 gradi non si risolve la posizione di una virgola — che e'
+ * l'unico carattere fra `0,23` e `23,00`.
+ *
+ * La controprova stava gia' in questo file: in orizzontale il problema non
+ * esisteva, perche' li' la griglia mette `amount` e `pad` nella stessa colonna,
+ * a 4px l'uno dall'altro. Era la verticale l'unica rotta rotta, e ora ha la
+ * stessa disposizione.
+ *
+ * Rimisurato dopo, stesso metodo, `tasto -> importo` e `tasto -> chip piu'
+ * vicino`:
+ *
+ *     375x667   246 -> 70      73 -> 129
+ *     390x844   247 -> 70      72 -> 131
+ *     320x568   225 -> 61      66 -> 112
+ *     800x327    47 -> 47      30 ->  30   (l'orizzontale era gia' giusto)
+ *
+ * ## Il prezzo, dichiarato
+ *
+ * Il chip piu' vicino si allontana dal pollice di ~57px, che per Fitts sono
+ * ~70ms sul secondo tap. Su un budget di 5 secondi e' rumore; una spesa
+ * inserita a un centesimo del suo valore, che nessuna misura successiva puo'
+ * scoprire da sola, non lo e'. Il prezzo e' stato messo per iscritto e
+ * accettato: chi lo rimettesse in discussione deve prima spiegare come si
+ * accorge del prossimo `0,25`.
+ *
+ * Le altezze non cambiano: sono gli stessi blocchi con gli stessi gap, in un
+ * altro ordine. `pad` inizia allo stesso identico pixel di prima — 331 a
+ * 375x667, 509 a 390x844, 245 a 320x568 — e il foglio non scorre in nessuno dei
+ * due. Verificato, non dedotto.
  */
 
 /* Il velo, il guscio `.sheet`, la riga del suggerimento e l'importo stanno in
@@ -170,7 +217,12 @@
 }
 
 /* Senza importo non c'e' niente da salvare: i chip lo dicono spegnendosi,
- * invece di accettare un tap che produrrebbe una spesa da zero euro. */
+ * invece di accettare un tap che produrrebbe una spesa da zero euro.
+ *
+ * Ed e' **l'unico** canale che lo dice, da quando la riga in cima ha smesso di
+ * ripetere "Tocca una categoria per salvare": alla prima cifra gli otto chip si
+ * accendono tutti insieme, dentro il campo visivo di chi sta guardando i tasti.
+ * Chi togliesse questo spegnimento dovrebbe rimettere quel testo. */
 .cat:disabled {
   opacity: 0.45;
 }

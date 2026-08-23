@@ -94,10 +94,24 @@
  * pollice non raggiunge e occupava 25px di altezza in un layout dove l'altezza
  * e' la risorsa scarsa. */
 
+/* L'altezza qui e' **riservata**, non calcolata dal contenuto. Nel foglio
+ * dell'inserimento questa riga e' vuota per quasi tutto il flusso — parla solo
+ * quando ha una notizia — e se collassasse, la prima cifra digitata tirerebbe su
+ * tutto quello che sta sotto: data, categorie, importo e tastierino, cioe' i
+ * bersagli verso cui il pollice e' gia' in volo.
+ *
+ * E' **esattamente una riga**, non un valore tondo scelto a occhio. `1.25rem`
+ * (20px) era piu' basso della riga piena (15px x 1.5 = 22.5px): il salto non era
+ * 22px, erano 2.5px, ma era misurabile e cadeva nell'istante peggiore. `1lh` e'
+ * la stessa altezza in tutti e due gli stati per costruzione, e resta vera se
+ * domani cambiano i token della tipografia. Il `calc` che lo precede e' il
+ * fallback dove `lh` non c'e': lo stesso numero, scritto a mano. */
 .sheet__hint {
   min-inline-size: 0;
-  min-block-size: 1.25rem;
   font-size: var(--fs-200);
+  line-height: var(--lh-body);
+  min-block-size: calc(var(--fs-200) * var(--lh-body));
+  min-block-size: 1lh;
   font-weight: var(--fw-medium);
   color: var(--text-muted);
   overflow: hidden;

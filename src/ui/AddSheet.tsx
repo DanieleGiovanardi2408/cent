@@ -104,13 +104,32 @@ export function AddSheet({ categories, day, leaving, onSave, onClose }: Props) {
     else setFailed(true)
   }
 
+  /**
+   * La riga parla **solo quando ha una notizia**: il primo giorno non si sa cosa
+   * fare, il tetto e' una sorpresa, un salvataggio non andato e' una brutta
+   * sorpresa. Con l'importo digitato e nessun guaio, tace.
+   *
+   * Diceva anche "Tocca una categoria per salvare". Tolto: nell'istante in cui
+   * compariva, gli otto chip erano appena passati da spenti ad accesi — la
+   * stessa informazione, gia' data, nel canale che l'occhio guarda davvero. Il
+   * testo la ripeteva in cima al foglio, lontano dal pollice, ed era il secondo
+   * `aria-live` ad aggiornarsi insieme all'importo: alla prima cifra VoiceOver
+   * metteva in coda due annunci, e quello che conta e' il secondo.
+   *
+   * La riga resta nel DOM anche vuota, e la sua altezza e' riservata in
+   * sheet.css: **una stringa vuota qui non deve muovere niente.** La prima
+   * versione di questo taglio faceva salire di 2,5px data, categorie, importo e
+   * tastierino alla prima cifra, perche' l'altezza riservata era un valore tondo
+   * piu' basso di una riga piena. Chi tocca `.sheet__hint` deve rileggere il
+   * commento li': e' l'unica cosa che tiene il salto a zero.
+   */
   const hint = failed
     ? 'Non sono riuscito a salvare. Tocca di nuovo la categoria.'
     : atMax
       ? 'Importo massimo raggiunto'
       : empty
         ? 'Quanto hai speso?'
-        : 'Tocca una categoria per salvare'
+        : ''
 
   return (
     <>
@@ -130,10 +149,6 @@ export function AddSheet({ categories, day, leaving, onSave, onClose }: Props) {
       >
         <p class="sheet__hint" data-tone={failed ? 'error' : undefined} aria-live="polite">
           {hint}
-        </p>
-
-        <p class="amount" data-empty={empty || undefined} aria-live="polite">
-          {formatCents(cents)}
         </p>
 
         {/* Data e nota sulla stessa riga: due cose fuori dal percorso dei due
@@ -235,6 +250,14 @@ export function AddSheet({ categories, day, leaving, onSave, onClose }: Props) {
             </button>
           ))}
         </div>
+
+        {/* L'importo sta fra le categorie e il tastierino, e non sopra: e' la
+            sola posizione che cade sul percorso dell'occhio fra il tasto appena
+            premuto e il chip da toccare. Il perche' per esteso, con la misura
+            che l'ha deciso, sta in AddSheet.css. */}
+        <p class="amount" data-empty={empty || undefined} aria-live="polite">
+          {formatCents(cents)}
+        </p>
 
         <Keypad
           atMax={atMax}
