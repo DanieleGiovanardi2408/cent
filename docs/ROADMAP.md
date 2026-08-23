@@ -116,6 +116,26 @@ l'innesco scatta non va rifatta.
 grida al lupo. Vale per la UI; **non** vale per l'audit offline, che e' un elenco
 letto in blocco e non un allarme al momento sbagliato.
 
+### La riga "failed" resta in cima al foglio, e la ragione non e' che lo stato e' raro
+
+Dopo lo spostamento dell'importo, il messaggio di errore del salvataggio resta a
+~278 px dal pollice mentre dice *"Tocca di nuovo la categoria"* — cioe' la stessa
+distanza che per l'importo e' stata giudicata inaccettabile. Non si sposta, ma
+**"lo stato e' raro" non e' la ragione**: quell'argomento avrebbe giustificato
+anche il non correggere lo `0,25`, che era altrettanto raro.
+
+La ragione vera e' un'altra: **il messaggio dice di fare esattamente cio' che si
+fa d'istinto.** Se il salvataggio non e' andato, la reazione naturale e' toccare
+di nuovo la categoria — l'istruzione e' ridondante rispetto al gesto, quindi non
+leggerla non costa quasi niente.
+
+E' il contrario del caso dell'importo, dove **non guardare significava non
+sapere**: nessun gesto naturale avrebbe rivelato che `0,23` non era `23,00`.
+
+La distinzione e' quella che serve la prossima volta: un messaggio fuori dal
+percorso dell'occhio e' un problema quando porta un'informazione che l'utente non
+ha in nessun altro modo, non quando ripete cio' che farebbe comunque.
+
 ### Dissenso registrato: il chip "Oggi" non si toglie
 
 Era stato proposto di eliminarlo — la data e' gia' oggi, quindi e' raggiungibile

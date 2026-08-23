@@ -13,6 +13,19 @@
 //      categoria, stessa data, N.amountCents === D.amountCents * 100, create a
 //      pochi minuti di distanza. E' la coppia di correzione: si e' digitato in
 //      centesimi, ci si e' accorti, si e' rifatta.
+//
+//      IL FATTORE 100 E' LA REGOLA, NON UN DETTAGLIO DA ALLENTARE. Nel primo
+//      backup reale c'era questo caso, ed e' il motivo per cui la condizione non
+//      puo' diventare "stessa categoria, stessa data, cancellata e rifatta":
+//
+//          220b8638  2500  Spesa  creata 12:31:25  cancellata 12:31:27
+//          22e338ba  2500  Spesa  creata 12:31:38  nota "Decathlon"
+//
+//      Stessa categoria, stessa data, tredici secondi di distanza, cancella-e-
+//      rifai — ma 2500 -> 2500: non e' un errore di ordine di grandezza, si stava
+//      solo aggiungendo una nota. Segnalarlo sarebbe un falso positivo, e un
+//      audit che grida al lupo sulle cancellazioni normali smette di essere letto
+//      dopo la seconda settimana, cioe' esattamente quando servirebbe.
 //   2. L'errore NON preso. Le spese vive sotto 1 EUR. Non e' la soglia che e'
 //      stata scartata per la UI — quella gridava all'utente nel momento
 //      sbagliato. Qui e' un elenco che si legge in blocco, dove 0,80 per un

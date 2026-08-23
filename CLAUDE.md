@@ -222,6 +222,25 @@ Target touch >= 44px. Contrasto AA in entrambi i temi. `prefers-reduced-motion`.
 Ogni azione distruttiva e' annullabile (soft delete + toast), niente dialoghi
 "Sei sicuro?". Stati vuoti con copy vero in italiano.
 
+## Dopo una correzione, la verifica si riesegue — non si deduce
+Il posto piu' probabile in cui trovare il prossimo difetto e' **dentro la
+correzione appena fatta**. Una correzione tocca il codice in un punto delicato
+per definizione: e' delicato, altrimenti non ci sarebbe stato un difetto.
+
+Quindi: dopo ogni correzione la verifica che l'ha motivata va **rieseguita**, non
+data per valida perche' il cambiamento "e' piccolo" o "e' ovvio".
+
+E' successo quattro volte in questo progetto, e l'ultima e' la piu' istruttiva:
+togliendo un messaggio di una riga dal foglio, la riga svuotata collassava da 22,5
+a 20 px e alla prima cifra **tutti i blocchi salivano di 2,5 px** — cioe' un salto
+di layout nell'istante in cui il pollice e' in volo verso il secondo tap. La
+correzione aveva prodotto un difetto **della stessa famiglia** che stava
+correggendo, e proprio nell'istante che le era stato chiesto di sorvegliare.
+
+Corollario: se una correzione tocca cio' che una verifica automatica sorveglia
+(la sonda delle sovrapposizioni, il CLS, il fuso dei test), quella verifica va
+rilanciata **prima** di dichiarare fatto — e il suo esito riportato, non riassunto.
+
 ## Cuciture per i test
 Una cucitura aperta per i test nello **strato di composizione** (`src/app`) e'
 normale: comporre e' il suo mestiere, e una dipendenza passata come argomento e'
