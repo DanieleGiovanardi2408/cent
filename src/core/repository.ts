@@ -67,6 +67,11 @@
 
 import { isAfter, isIsoDate, localInstant } from './date'
 import type { IsoDate } from './date'
+import type {
+  CategoryDeletion,
+  CategoryPlacement,
+  CategoryPlacementRequest,
+} from './categories'
 import { buildDefaultCategories, buildDefaultSettings } from './defaults'
 import type { Cents } from './money'
 import type {
@@ -88,6 +93,7 @@ import type {
   Category,
   DataSet,
   Expense,
+  Language,
   RecurringRule,
   Settings,
   ThemePreference,
@@ -134,16 +140,30 @@ export interface NewCategory {
   readonly name: string
   readonly emoji: string
   readonly color: string
-  /** Default: in fondo. */
-  readonly order?: number
 }
 
+/*
+ * Nota su due campi che non ci sono: `order` in `NewCategory` e `archived` in
+ * `CategoryPatch`.
+ *
+ * `order` no perche' la posizione non e' una proprieta' della categoria nuova:
+ * o prende il posto di quella che sostituisce, o va in fondo. Chi vuole
+ * spostarla usa `reorderCategories`, che riscrive la griglia intera e quindi
+ * non puo' lasciare due categorie sulla stessa cella.
+ *
+ * `archived` no per una ragione piu' seria: e' il tetto di otto reso
+ * inesprimibile. Con quel campo qui dentro, `updateCategory(id, { archived:
+ * false })` sarebbe una riga che compila e che fa la nona categoria attiva, e
+ * l'unica difesa sarebbe ricordarsi di non scriverla. Senza, e' un **errore di
+ * compilazione**. Le due transizioni hanno ciascuna la propria porta:
+ * `archiveCategory` toglie dalla griglia (direzione sempre sicura), e le due
+ * `place*` la rimettono passando dal controllo del tetto fatto sul disco.
+ */
 export interface CategoryPatch {
   readonly name?: string
   readonly emoji?: string
   readonly color?: string
   readonly order?: number
-  readonly archived?: boolean
 }
 
 export interface NewRecurringRule {
@@ -170,6 +190,14 @@ export interface RecurringRulePatch {
 export interface SettingsPatch {
   readonly theme?: ThemePreference
   readonly lastBackupAt?: Timestamp
+  /**
+   * La lingua scelta in Impostazioni. `null` la riporta ad **assente**, cioe' a
+   * "decidila tu dall'ambiente": senza quel verso, la prima scelta sarebbe una
+   * porta a senso unico e "Automatica" non potrebbe esistere.
+   */
+  readonly language?: Language | null
+  /** Quando la guida e' stata completata o saltata. `null` la fa riapparire. */
+  readonly onboardingCompletedAt?: Timestamp | null
 }
 
 export interface RepositoryOptions {
@@ -287,7 +315,65 @@ export interface Repository {
   deleteExpense(id: string): Expense | null
   restoreExpense(id: string): Expense | null
 
-  addCategory(input: NewCategory): Category
+  /**
+   * Crea una categoria e la mette **in griglia**. Se la griglia e' piena serve
+   * `replacing`: e' lo scambio, ed e' il percorso normale, non il caso limite.
+   *
+   * Le otto categorie di default riempiono esattamente il tetto, quindi la
+   * primissima cosa che fa chi ne vuole una sua e' sostituirne una. Per questo
+   * "quale sostituisce?" e' un parametro di questa funzione e non una seconda
+   * chiamata: archiviare e aggiungere viaggiano in **una transazione sola**, e
+   * un'interruzione fra le due non puo' lasciare sette categorie in griglia.
+   *
+   * **E' asincrona, e non e' ottimistica.** Il mirror non cambia finche' il
+   * disco non ha risposto. E' l'eccezione alla scrittura ottimistica del resto
+   * del repository, ed e' deliberata: il tetto si conta sulle categorie che
+   * stanno sul disco (ADR 008), quindi un "fatto" mostrato prima della risposta
+   * sarebbe un "fatto" che a volte va disfatto — e non esiste nessun istante,
+   * nemmeno in mirror, in cui le categorie in griglia sono nove. Il costo e'
+   * nullo dove si paga: questa chiamata vive in Impostazioni, non sul percorso
+   * dei due tap.
+   *
+   * Rifiuta (`{ ok: false }`) invece di lanciare: `grid-full` **non e' un
+   * errore**, e' la domanda "quale sostituisce?" che la UI deve fare.
+   */
+  addCategory(input: NewCategory, replacing?: string): Promise<CategoryPlacement>
+
+  /**
+   * Riporta in griglia una categoria dall'archivio. Stesse regole e stessa
+   * forma di `addCategory`: se non c'e' posto, serve `replacing`.
+   *
+   * Esiste perche' archiviare non sia una porta a senso unico.
+   */
+  unarchiveCategory(id: string, replacing?: string): Promise<CategoryPlacement>
+
+  /**
+   * Toglie una categoria dalla griglia. **Non e' una cancellazione**: la
+   * categoria resta su tutte le spese che l'hanno usata, e Storico e statistiche
+   * continuano a mostrarla. E' un'azione di visualizzazione.
+   *
+   * Sincrona e ottimistica, al contrario delle due sopra: archiviare puo' solo
+   * far **scendere** il numero di categorie in griglia, quindi non ha nessun
+   * invariante da verificare sul disco e puo' rispondere nello stesso frame.
+   *
+   * `null` se l'id non esiste o se era gia' archiviata.
+   */
+  archiveCategory(id: string): Category | null
+
+  /**
+   * Cancella davvero, e **solo se nessun record la nomina** — nessuna spesa
+   * (viva o cancellata: i soft delete restano nello Storico e nell'export) e
+   * nessuna regola ricorrente. Altrimenti resterebbero riferimenti orfani che
+   * nessuna schermata sa riparare.
+   *
+   * Asincrona e non ottimistica per la stessa ragione di `addCategory`, piu'
+   * una: e' l'unica operazione irreversibile sulle categorie, e il permesso lo
+   * da' il disco. Il rifiuto porta con se' i numeri da mostrare ("3 spese la
+   * usano: puoi archiviarla").
+   */
+  deleteCategory(id: string): Promise<CategoryDeletion>
+
+  /** Nome, emoji, colore, posizione. Non `archived`: vedi `CategoryPatch`. */
   updateCategory(id: string, patch: CategoryPatch): Category | null
   /** Riscrive `order` seguendo l'elenco dato. Gli id sconosciuti sono ignorati. */
   reorderCategories(orderedIds: readonly string[]): readonly Category[]
@@ -703,6 +789,46 @@ export async function openRepository(
     })
   }
 
+  /**
+   * Manda in transazione l'intenzione "questa entra in griglia, quella esce", e
+   * porta nel mirror **solo** cio' che il disco ha davvero scritto.
+   *
+   * Il mirror non si muove prima: e' l'unico modo perche' non esista nessun
+   * istante in cui il **disco** ha nove categorie in griglia. Vedi
+   * `Repository.addCategory`.
+   *
+   * Resta un caso, e ci resta apposta. Se un altro contesto ha archiviato una
+   * categoria che il nostro mirror crede ancora attiva, il disco pianifica su
+   * sette e accetta; il mirror, applicando i record scritti, si ritrova nove
+   * record non archiviati — cioe' uno stato che il disco non ha. Non produce
+   * nessuna griglia da nove, perche' `activeCategories` e' totale e ne
+   * restituisce otto per regola, e sparisce alla prima rilettura al risveglio.
+   * E' la seconda meta' di ADR 008: una difesa impedisce, l'altra rende innocuo
+   * cio' che e' passato lo stesso.
+   */
+  async function runPlacement(request: CategoryPlacementRequest): Promise<CategoryPlacement> {
+    if (importing) throw new ImportInProgressError()
+    const startedAt = generation
+    // `divergence: false`: il mirror non contiene niente che il disco non abbia,
+    // perche' si aggiorna dopo. Se la scrittura fallisce non c'e' nessun record
+    // da salvare — solo un'operazione che non e' avvenuta, e la promise rifiuta.
+    const result = await schedule({ categoryPlacement: request }, false)
+    const outcome = result.categoryPlacement
+    if (outcome === undefined) {
+      throw new TypeError('La persistenza non ha risposto a categoryPlacement')
+    }
+    // Un import ha sostituito tutto: questi record non c'entrano piu' niente.
+    if (!outcome.ok || generation !== startedAt || importing) return outcome
+    mutate((state) => ({
+      ...state,
+      categories: outcome.written.reduce<readonly Category[]>(
+        (acc, c) => replace(acc, c),
+        state.categories,
+      ),
+    }))
+    return outcome
+  }
+
   function commitRule(rule: RecurringRule): RecurringRule {
     mutate((state) => ({
       ...state,
@@ -781,20 +907,49 @@ export async function openRepository(
       return commitExpense({ ...rest, updatedAt: clock() })
     },
 
-    addCategory(input) {
-      const timestamp = clock()
-      const orders = observable.get().categories.map((c) => c.order)
-      const order = input.order ?? (orders.length === 0 ? 10 : Math.max(...orders) + 10)
-      return commitCategory({
-        id: makeId(),
-        createdAt: timestamp,
-        updatedAt: timestamp,
-        name: input.name,
-        emoji: input.emoji,
-        color: input.color,
-        order,
-        archived: false,
+    addCategory(input, replacing) {
+      return runPlacement({
+        incoming: { kind: 'new', id: makeId(), ...input },
+        ...(replacing !== undefined ? { replacing } : {}),
+        timestamp: clock(),
       })
+    },
+
+    unarchiveCategory(id, replacing) {
+      return runPlacement({
+        incoming: { kind: 'existing', id },
+        ...(replacing !== undefined ? { replacing } : {}),
+        timestamp: clock(),
+      })
+    },
+
+    archiveCategory(id) {
+      const current = observable.get().categories.find((c) => c.id === id)
+      if (!current || current.archived) return null
+      const archived: Category = { ...current, archived: true, updatedAt: clock() }
+      mutate((state) => ({ ...state, categories: replace(state.categories, archived) }))
+      // Non un `put` della copia del mirror: l'intenzione e basta. Il record che
+      // finisce sul disco e' quello che sta sul disco con `archived: true`,
+      // quindi un mirror vecchio non riporta indietro nome, colore o posizione.
+      push({ archiveCategories: [{ id, updatedAt: archived.updatedAt }] })
+      return archived
+    },
+
+    async deleteCategory(id) {
+      if (importing) throw new ImportInProgressError()
+      const startedAt = generation
+      const result = await schedule({ categoryDeletion: { id } }, false)
+      const outcome = result.categoryDeletion
+      if (outcome === undefined) {
+        throw new TypeError('La persistenza non ha risposto a categoryDeletion')
+      }
+      if (outcome.ok && generation === startedAt && !importing) {
+        mutate((state) => ({
+          ...state,
+          categories: state.categories.filter((c) => c.id !== id),
+        }))
+      }
+      return outcome
     },
 
     updateCategory(id, patch) {
@@ -898,9 +1053,26 @@ export async function openRepository(
     },
 
     updateSettings(patch) {
+      const current = observable.get().settings
+      // `null` significa "torna assente", e l'assenza qui e' un dato: la lingua
+      // mai scelta la decide l'ambiente, la guida mai completata si rivede. Uno
+      // spread nudo scriverebbe `null` dentro un campo tipizzato `Language`.
+      const language = patch.language === undefined ? current.language : (patch.language ?? undefined)
+      const onboardingCompletedAt =
+        patch.onboardingCompletedAt === undefined
+          ? current.onboardingCompletedAt
+          : (patch.onboardingCompletedAt ?? undefined)
+      const {
+        language: _lang,
+        onboardingCompletedAt: _onboarding,
+        ...rest
+      } = current
       const next: Settings = {
-        ...observable.get().settings,
-        ...patch,
+        ...rest,
+        ...(patch.theme !== undefined ? { theme: patch.theme } : {}),
+        ...(patch.lastBackupAt !== undefined ? { lastBackupAt: patch.lastBackupAt } : {}),
+        ...(language !== undefined ? { language } : {}),
+        ...(onboardingCompletedAt !== undefined ? { onboardingCompletedAt } : {}),
         updatedAt: clock(),
       }
       mutate((state) => ({ ...state, settings: next }))

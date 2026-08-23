@@ -24,9 +24,18 @@
  */
 
 import { planResolvedBudgetChange } from './budget'
+import { planCategoryDeletion, planCategoryPlacement } from './categories'
+import type { CategoryDeletion, CategoryPlacement } from './categories'
 import { isAfter } from './date'
 import { NOTHING_SKIPPED } from './persistence'
-import type { LoadedData, Persistence, RecurringMarkerAdvance, WriteBatch, WriteResult } from './persistence'
+import type {
+  CategoryArchival,
+  LoadedData,
+  Persistence,
+  RecurringMarkerAdvance,
+  WriteBatch,
+  WriteResult,
+} from './persistence'
 import type { Budget, Category, DataSet, Expense, RecurringRule, Settings } from './types'
 
 export interface MemoryDisk {
@@ -66,6 +75,31 @@ function upsert<T extends { readonly id: string }>(target: T[], incoming: readon
     const index = target.findIndex((r) => r.id === record.id)
     if (index === -1) target.push(clone)
     else target[index] = clone
+  }
+}
+
+/**
+ * Upsert delle categorie che **non tocca `archived`**, come `idb.ts`: il valore
+ * si rilegge dal disco. E' cio' che impedisce a un mirror vecchio di riportare
+ * in griglia una categoria archiviata altrove, cioe' di farne nove.
+ */
+function upsertCategories(target: Category[], incoming: readonly Category[]): void {
+  for (const record of incoming) {
+    const index = target.findIndex((c) => c.id === record.id)
+    const current = target[index]
+    const clone = structuredClone(record)
+    if (current === undefined) target.push(clone)
+    else target[index] = { ...clone, archived: current.archived }
+  }
+}
+
+/** Toglie dalla griglia, e basta. Non esiste il verso opposto. */
+function archiveCategories(target: Category[], archivals: readonly CategoryArchival[]): void {
+  for (const archival of archivals) {
+    const index = target.findIndex((c) => c.id === archival.id)
+    const current = target[index]
+    if (current === undefined || current.archived) continue
+    target[index] = { ...current, archived: true, updatedAt: archival.updatedAt }
   }
 }
 
@@ -133,6 +167,8 @@ export function createMemoryPersistence(disk: MemoryDisk = emptyDisk()): MemoryP
       const next = structuredClone(disk)
       const skippedIds: string[] = []
       let budgetsWritten: readonly Budget[] = []
+      let placement: CategoryPlacement | undefined
+      let deletion: CategoryDeletion | undefined
       if (batch.addExpenses) {
         // Semantica add, identica a quella di `idb.ts`: l'id gia' presente si
         // salta, non si sovrascrive. Qui non serve nessuna transazione perche'
@@ -147,7 +183,27 @@ export function createMemoryPersistence(disk: MemoryDisk = emptyDisk()): MemoryP
         }
       }
       if (batch.expenses) upsert(next.expenses, batch.expenses)
-      if (batch.categories) upsert(next.categories, batch.categories)
+      if (batch.categories) upsertCategories(next.categories, batch.categories)
+      if (batch.archiveCategories) archiveCategories(next.categories, batch.archiveCategories)
+      if (batch.categoryPlacement) {
+        // Pianificazione sulle categorie del "disco", come in `idb.ts`: il tetto
+        // lo decide lo stato che c'e' li', non quello che aveva in mano chi ha
+        // chiesto la scrittura.
+        placement = planCategoryPlacement(next.categories, batch.categoryPlacement)
+        if (placement.ok) upsert(next.categories, placement.written)
+      }
+      if (batch.categoryDeletion) {
+        deletion = planCategoryDeletion(
+          next.categories,
+          next.expenses,
+          next.recurringRules,
+          batch.categoryDeletion,
+        )
+        if (deletion.ok) {
+          const id = deletion.deleted.id
+          next.categories = next.categories.filter((c) => c.id !== id)
+        }
+      }
       if (batch.recurringRules) upsert(next.recurringRules, batch.recurringRules)
       if (batch.advanceRecurringMarkers) {
         advanceMarkers(next.recurringRules, batch.advanceRecurringMarkers)
@@ -167,9 +223,20 @@ export function createMemoryPersistence(disk: MemoryDisk = emptyDisk()): MemoryP
       disk.budgets = next.budgets
       disk.settings = next.settings
       writes += 1
-      return skippedIds.length === 0 && budgetsWritten.length === 0
-        ? NOTHING_SKIPPED
-        : { skippedIds, budgets: budgetsWritten }
+      if (
+        skippedIds.length === 0 &&
+        budgetsWritten.length === 0 &&
+        placement === undefined &&
+        deletion === undefined
+      ) {
+        return NOTHING_SKIPPED
+      }
+      return {
+        skippedIds,
+        budgets: budgetsWritten,
+        ...(placement !== undefined ? { categoryPlacement: placement } : {}),
+        ...(deletion !== undefined ? { categoryDeletion: deletion } : {}),
+      }
     },
     async replaceAll(data: DataSet): Promise<void> {
       guard()

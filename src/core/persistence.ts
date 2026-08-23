@@ -42,6 +42,13 @@ export interface RecurringMarkerAdvance {
   readonly updatedAt: Timestamp
 }
 
+/** Togliere una categoria dalla griglia. Vedi `WriteBatch.archiveCategories`. */
+export interface CategoryArchival {
+  readonly id: string
+  /** Da usare solo se la categoria era davvero in griglia. */
+  readonly updatedAt: Timestamp
+}
+
 /**
  * Un gruppo di record da scrivere **insieme**. I campi assenti non vengono
  * toccati; quelli presenti sono upsert (put per chiave `id`).
@@ -67,7 +74,77 @@ export interface WriteBatch {
    * stessa transazione**: un controllo fatto fuori sarebbe di nuovo una gara.
    */
   readonly addExpenses?: readonly Expense[]
+  /**
+   * Upsert delle categorie, **tranne `archived`**.
+   *
+   * E' la via per i campi innocui: nome, emoji, colore, `order`. Su un record
+   * che esiste gia' sul disco, `archived` viene **riletto dal disco e
+   * conservato**, qualunque cosa dica il record in arrivo.
+   *
+   * Non e' una cortesia, e' il perno del tetto. Chi rinomina una categoria l'ha
+   * letta dal mirror, e un mirror puo' essere vecchio di ore: se in quelle ore
+   * un altro contesto l'ha archiviata, un `put` della copia vecchia la
+   * **riporterebbe in griglia** — e sarebbe la nona, senza che nessuno l'abbia
+   * chiesta e senza che nessun controllo la veda passare. E' lo stesso difetto
+   * di `advanceRecurringMarkers` che riaccendeva una regola spenta.
+   *
+   * Le due transizioni di `archived` hanno ciascuna la propria operazione
+   * stretta: `archiveCategories` (che va solo verso `true`) e
+   * `categoryPlacement` (l'unica che produce `false`, e che verifica il tetto).
+   */
   readonly categories?: readonly Category[]
+  /**
+   * Toglie categorie dalla griglia. **Va in una direzione sola.**
+   *
+   * Come `advanceRecurringMarkers`: porta l'intenzione e nient'altro, e il
+   * record si rilegge dal disco. Non esiste il campo per il verso opposto, e non
+   * e' una dimenticanza — e' cio' che rende il tetto irrappresentabile invece
+   * che sorvegliato. Un nome piu' generico, tipo `setArchived`, inviterebbe a
+   * farci passare un `false`, che e' esattamente la malattia.
+   *
+   * L'implementazione deve, **nella stessa transazione**: rileggere il record
+   * (se non c'e' piu', non fare niente), non toccarlo se e' gia' archiviato
+   * (`updatedAt` compreso), altrimenti scrivere `archived: true`.
+   */
+  readonly archiveCategories?: readonly CategoryArchival[]
+  /**
+   * Fa entrare una categoria in griglia, **archiviandone una se serve**, in una
+   * transazione sola.
+   *
+   * Non e' un elenco di record: e' l'intenzione ("questa entra, quella esce").
+   * Quali record ne seguano — e soprattutto **se il tetto lo permette** — lo
+   * decide l'implementazione rileggendo le categorie dal disco e chiamando
+   * `planCategoryPlacement`, come per `budgetChange`.
+   *
+   * Due ragioni, e sono entrambe necessarie:
+   *
+   * - **il tetto.** Un mirror vecchio di ore che conta sette attive mentre il
+   *   disco ne ha otto scriverebbe la nona, e la griglia 4x2 senza scroll —
+   *   cioe' i due tap del principio guida n.1 — sarebbe rotta senza che nessuno
+   *   se ne accorga;
+   * - **l'atomicita' dello scambio.** Archiviare e aggiungere sono lo stesso
+   *   gesto per l'utente. Due scritture separate, interrotte a meta' (iOS
+   *   termina le web app in background), lascerebbero sette categorie in
+   *   griglia e la nuova da nessuna parte.
+   *
+   * L'esito torna in `WriteResult.categoryPlacement`: e' la sola versione
+   * autorevole, e chi tiene un mirror ci si allinea invece di fidarsi del
+   * proprio conteggio.
+   */
+  readonly categoryPlacement?: CategoryPlacementRequest
+  /**
+   * Cancella **davvero** una categoria, se nessun record la nomina.
+   *
+   * Stessa dottrina: chi chiama porta l'intenzione ("cancella questa"), non il
+   * permesso gia' calcolato. Il conteggio delle spese che la usano — cancellate
+   * comprese — va fatto sui dati del disco dentro la stessa transazione:
+   * deciderlo sul mirror significa poter cancellare una categoria che una spesa
+   * scritta da un altro contesto sta gia' usando, e l'orfano che resta non e'
+   * correggibile da nessuna schermata.
+   *
+   * L'esito torna in `WriteResult.categoryDeletion`.
+   */
+  readonly categoryDeletion?: CategoryDeletionRequest
   readonly recurringRules?: readonly RecurringRule[]
   /**
    * Fa avanzare il segnaposto di una regola **senza portarsi dietro nient'altro
@@ -130,6 +207,13 @@ export interface WriteResult {
    * disco. Vuoto quando il batch non contiene un cambio di budget.
    */
   readonly budgets: readonly Budget[]
+  /**
+   * Esito di `categoryPlacement`, deciso sui dati del disco. Assente quando il
+   * batch non ne conteneva uno.
+   */
+  readonly categoryPlacement?: CategoryPlacement
+  /** Esito di `categoryDeletion`. Assente quando il batch non ne conteneva una. */
+  readonly categoryDeletion?: CategoryDeletion
 }
 
 export interface Persistence {

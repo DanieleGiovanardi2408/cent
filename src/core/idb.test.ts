@@ -12,7 +12,7 @@
 import 'fake-indexeddb/auto'
 import { describe, expect, it } from 'vitest'
 import { createIdbPersistence, openCentDatabase } from './idb'
-import { MIGRATIONS } from './schema'
+import { MIGRATIONS, SCHEMA_VERSION } from './schema'
 import type { MigrationStep } from './schema'
 import { openRepository } from './repository'
 import type { Persistence, WriteBatch } from './persistence'
@@ -581,15 +581,16 @@ describe('migrazioni di schema', () => {
    * esplode a meta' — e continueranno a coprirli quando la versione corrente
    * sara' la 5. Il passo vero ha i suoi test qui sotto, sui dati veri.
    */
-  const toV3: MigrationStep = {
-    to: 3,
+  const oltreLUltimo: MigrationStep = {
+    to: SCHEMA_VERSION + 1,
     summary: 'Prova: normalizza la nota delle spese',
     transform: (data) => ({
       ...data,
       expenses: data.expenses.map((e) => ({ ...e, note: 'migrata' })),
     }),
   }
-  const V3 = [...MIGRATIONS, toV3]
+  const OLTRE = [...MIGRATIONS, oltreLUltimo]
+  const VERSIONE_OLTRE = SCHEMA_VERSION + 1
 
   it('da N-1 a N: i record passano dalla trasformazione e non ne sparisce nessuno', async () => {
     const name = dbName()
@@ -616,7 +617,7 @@ describe('migrazioni di schema', () => {
     })
     corrente.close()
 
-    const v3 = createIdbPersistence({ name, version: 3, migrations: V3 })
+    const v3 = createIdbPersistence({ name, version: VERSIONE_OLTRE, migrations: OLTRE })
     const loaded = await v3.loadAll()
 
     expect(loaded.expenses).toHaveLength(3)
@@ -638,14 +639,14 @@ describe('migrazioni di schema', () => {
     corrente.close()
 
     const esplosiva: MigrationStep = {
-      to: 3,
+      to: SCHEMA_VERSION + 1,
       summary: 'Prova: una migrazione che si rompe',
       transform: () => {
         throw new Error('migrazione rotta')
       },
     }
     await expect(
-      openCentDatabase({ name, version: 3, migrations: [...MIGRATIONS, esplosiva] }),
+      openCentDatabase({ name, version: VERSIONE_OLTRE, migrations: [...MIGRATIONS, esplosiva] }),
     ).rejects.toBeTruthy()
 
     // Il database e' rimasto alla versione precedente, con i suoi record intatti:
@@ -659,7 +660,7 @@ describe('migrazioni di schema', () => {
 
   it('aprire dati piu nuovi dell app non li tocca: rifiuta e basta', async () => {
     const name = dbName()
-    const v3 = createIdbPersistence({ name, version: 3, migrations: V3 })
+    const v3 = createIdbPersistence({ name, version: VERSIONE_OLTRE, migrations: OLTRE })
     await v3.write({ settings: makeSettings(), expenses: [expense({ id: 'e-1', date: '2026-08-01' })] })
     v3.close()
 
@@ -670,15 +671,17 @@ describe('migrazioni di schema', () => {
 })
 
 /**
- * La prima migrazione vera (1 -> 2, `Expense.timeMinutes`), sul percorso vero:
- * un database scritto alla versione 1 che viene riaperto dall'app aggiornata.
+ * Le migrazioni vere sul percorso vero: un database scritto alla versione 1 che
+ * viene riaperto dall'app aggiornata, e che quindi attraversa **tutti** i passi
+ * pubblicati fino a `SCHEMA_VERSION`.
  *
- * Il punto di questi test non e' che la trasformazione faccia qualcosa: e' che
- * **non faccia niente alle spese**. Un campo nuovo e opzionale non ha nessun
- * diritto di riscrivere un archivio, e "non ha riscritto" e' una cosa che si
- * verifica solo guardando i record uno per uno.
+ * Il punto di questi test non e' che le trasformazioni facciano qualcosa: e' che
+ * **non facciano niente alle spese**. Un campo nuovo e opzionale non ha nessun
+ * diritto di riscrivere un archivio — vale per `Expense.timeMinutes` (2) come
+ * per `Settings.language` e `Settings.onboardingCompletedAt` (3) — e "non ha
+ * riscritto" e' una cosa che si verifica solo guardando i record uno per uno.
  */
-describe('migrazione 1 -> 2: il campo nuovo non tocca cio che c era', () => {
+describe('migrazioni pubblicate: i campi nuovi non toccano cio che c era', () => {
   const V1 = MIGRATIONS.filter((s) => s.to <= 1)
 
   /** Un database fermo alla versione 1, come quello di chi aggiorna l'app. */
@@ -729,7 +732,7 @@ describe('migrazione 1 -> 2: il campo nuovo non tocca cio che c era', () => {
 
     const aggiornata = createIdbPersistence({ name })
     const loaded = await aggiornata.loadAll()
-    expect(loaded.settings?.schemaVersion).toBe(2)
+    expect(loaded.settings?.schemaVersion).toBe(SCHEMA_VERSION)
     expect(loaded.settings?.lastBackupAt).toBe('2026-08-01T09:00:00.000Z')
     expect(loaded.settings?.theme).toBe('auto')
     aggiornata.close()

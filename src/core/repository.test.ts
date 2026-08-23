@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { parseBackup } from './backup'
+import { MAX_ACTIVE_CATEGORIES, activeCategories } from './categories'
 import { computeBudgetMetrics } from './budget'
 import { isTimeMinutes, today } from './date'
 import { DEFAULT_CATEGORY_SEEDS } from './defaults'
@@ -405,20 +406,164 @@ describe('soft delete e ripristino', () => {
   })
 })
 
-describe('categorie', () => {
-  it('la nuova categoria va in fondo', async () => {
-    const { repo } = await open()
-    const nuova = repo.addCategory({ name: 'Musei', emoji: '🏛️', color: '#123456' })
-    expect(nuova.order).toBe(90)
-    expect(nuova.archived).toBe(false)
+describe('categorie: il tetto di otto attive', () => {
+  it('con la griglia piena, aggiungere senza sostituire viene rifiutato', async () => {
+    const { repo, disk } = await open()
+    // Le otto di default riempiono esattamente il tetto: e' lo stato in cui si
+    // trova ogni utente al primo avvio.
+    const esito = await repo.addCategory({ name: 'Musei', emoji: '🏛️', color: '#123456' })
+
+    expect(esito.ok).toBe(false)
+    expect(esito.ok === false && esito.reason).toBe('grid-full')
+    // Rifiutata davvero: niente nel mirror e niente sul disco.
+    expect(repo.getState().categories).toHaveLength(DEFAULT_CATEGORY_SEEDS.length)
+    expect(disk.categories).toHaveLength(DEFAULT_CATEGORY_SEEDS.length)
   })
 
-  it('archiviare non cancella', async () => {
+  it('lo scambio e una scrittura sola: una esce, una entra, e prende il suo posto', async () => {
+    const { repo, disk } = await open()
+    const sigarette = repo.getState().categories.find((c) => c.name === 'Sigarette')
+
+    const esito = await repo.addCategory(
+      { name: 'Musei', emoji: '🏛️', color: '#123456' },
+      sigarette?.id,
+    )
+
+    expect(esito.ok).toBe(true)
+    if (!esito.ok) return
+    expect(esito.placed.name).toBe('Musei')
+    expect(esito.archived?.name).toBe('Sigarette')
+    // Prende la cella di chi esce: le altre sette non si spostano.
+    expect(esito.placed.order).toBe(sigarette?.order)
+    expect(activeCategories(disk.categories)).toHaveLength(MAX_ACTIVE_CATEGORIES)
+    expect(disk.categories.find((c) => c.id === sigarette?.id)?.archived).toBe(true)
+  })
+
+  it('lo scambio non puo restare a meta: se la scrittura muore, non cambia niente', async () => {
+    const { repo, disk } = await open()
+    const persistence = createMemoryPersistence(disk)
+    const secondo = await openRepository(persistence, {
+      now: tickingClock(),
+      newId: sequentialIds('due'),
+    })
+    const sigarette = secondo.getState().categories.find((c) => c.name === 'Sigarette')
+    persistence.crashAfter(1)
+
+    await expect(
+      secondo.addCategory({ name: 'Musei', emoji: '🏛️', color: '#123456' }, sigarette?.id),
+    ).rejects.toThrow(SimulatedCrashError)
+
+    // Ne' l'archiviazione ne' l'aggiunta: sono lo stesso gesto e la stessa
+    // transazione. Sette categorie in griglia sarebbero lo stato peggiore.
+    expect(disk.categories).toHaveLength(DEFAULT_CATEGORY_SEEDS.length)
+    expect(disk.categories.every((c) => !c.archived)).toBe(true)
+    expect(secondo.getState().categories).toHaveLength(DEFAULT_CATEGORY_SEEDS.length)
+    expect(activeCategories(secondo.getState().categories)).toHaveLength(MAX_ACTIVE_CATEGORIES)
+    repo.close()
+  })
+
+  it('il tetto lo conta il disco, non il mirror', async () => {
+    const { repo, disk } = await open()
+    // Due contesti sullo stesso database. Il primo archivia; il secondo ha il
+    // mirror di prima, quindi crede che ci sia posto.
+    const secondo = await openRepository(createMemoryPersistence(disk), {
+      now: tickingClock(),
+      newId: sequentialIds('due'),
+    })
+    const casa = repo.getState().categories.find((c) => c.name === 'Casa')
+    repo.archiveCategory(casa?.id ?? '')
+    await repo.flush()
+
+    // Il secondo contesto vede ancora otto attive nel proprio mirror e chiede
+    // uno scambio; il primo ne vede sette. Nessuno dei due decide: decide il disco.
+    const esito = await secondo.addCategory({ name: 'Musei', emoji: '🏛️', color: '#123456' })
+
+    expect(esito.ok).toBe(true)
+    expect(activeCategories(disk.categories)).toHaveLength(MAX_ACTIVE_CATEGORIES)
+  })
+
+  it('rinominare da un mirror vecchio non riporta in griglia cio che e stato archiviato altrove', async () => {
+    const { repo, disk } = await open()
+    const secondo = await openRepository(createMemoryPersistence(disk), {
+      now: tickingClock(),
+      newId: sequentialIds('due'),
+    })
+    const casa = repo.getState().categories.find((c) => c.name === 'Casa')
+    repo.archiveCategory(casa?.id ?? '')
+    await repo.flush()
+
+    // Il secondo ha in mirror la copia con `archived: false`: un put del record
+    // intero la rimetterebbe in griglia, e sarebbe la nona.
+    secondo.updateCategory(casa?.id ?? '', { name: 'Affitto' })
+    await secondo.flush()
+
+    const suDisco = disk.categories.find((c) => c.id === casa?.id)
+    expect(suDisco?.name).toBe('Affitto')
+    expect(suDisco?.archived).toBe(true)
+    expect(activeCategories(disk.categories)).toHaveLength(MAX_ACTIVE_CATEGORIES - 1)
+  })
+
+  it('archiviare libera un posto, e allora aggiungere basta', async () => {
     const { repo } = await open()
-    const prima = repo.getState().categories[0]
-    const archiviata = repo.updateCategory(prima?.id ?? '', { archived: true })
-    expect(archiviata?.archived).toBe(true)
-    expect(repo.getState().categories).toHaveLength(DEFAULT_CATEGORY_SEEDS.length)
+    const svago = repo.getState().categories.find((c) => c.name === 'Svago')
+    expect(repo.archiveCategory(svago?.id ?? '')?.archived).toBe(true)
+    // Archiviata due volte: la seconda non e' un cambiamento.
+    expect(repo.archiveCategory(svago?.id ?? '')).toBeNull()
+
+    const esito = await repo.addCategory({ name: 'Musei', emoji: '🏛️', color: '#123456' })
+    expect(esito.ok).toBe(true)
+    // In fondo, non nella cella liberata: senza `replacing` non c'e' nessun
+    // posto da ereditare.
+    expect(esito.ok === true && esito.placed.order).toBe(90)
+  })
+
+  it('archiviare non cancella: la categoria resta su tutte le spese', async () => {
+    const { repo, disk } = await open()
+    const svago = repo.getState().categories.find((c) => c.name === 'Svago')
+    repo.addExpense({ amountCents: 1_200, categoryId: svago?.id ?? '', date: '2026-08-22' })
+    repo.archiveCategory(svago?.id ?? '')
+    await repo.flush()
+
+    expect(disk.categories).toHaveLength(DEFAULT_CATEGORY_SEEDS.length)
+    expect(disk.expenses[0]?.categoryId).toBe(svago?.id)
+  })
+
+  it('una archiviata torna in griglia solo scambiandola', async () => {
+    const { repo } = await open()
+    const svago = repo.getState().categories.find((c) => c.name === 'Svago')
+    const casa = repo.getState().categories.find((c) => c.name === 'Casa')
+    repo.archiveCategory(svago?.id ?? '')
+    await repo.addCategory({ name: 'Musei', emoji: '🏛️', color: '#123456' })
+
+    // Griglia di nuovo piena: senza sostituzione non rientra.
+    const rifiutata = await repo.unarchiveCategory(svago?.id ?? '')
+    expect(rifiutata.ok === false && rifiutata.reason).toBe('grid-full')
+
+    const esito = await repo.unarchiveCategory(svago?.id ?? '', casa?.id)
+    expect(esito.ok).toBe(true)
+    expect(esito.ok === true && esito.placed.name).toBe('Svago')
+    expect(esito.ok === true && esito.archived?.name).toBe('Casa')
+    expect(activeCategories(repo.getState().categories)).toHaveLength(MAX_ACTIVE_CATEGORIES)
+  })
+
+  it('gli id impossibili si dicono, non si indovinano', async () => {
+    const { repo } = await open()
+    const primo = repo.getState().categories[0]
+    const perFarPosto = repo.getState().categories[1]
+
+    const sconosciuta = await repo.unarchiveCategory('non-esiste', perFarPosto?.id)
+    expect(sconosciuta.ok === false && sconosciuta.reason).toBe('unknown-category')
+
+    const giaAttiva = await repo.unarchiveCategory(primo?.id ?? '', perFarPosto?.id)
+    expect(giaAttiva.ok === false && giaAttiva.reason).toBe('already-active')
+
+    const sostituzioneIgnota = await repo.addCategory(
+      { name: 'Musei', emoji: '🏛️', color: '#123456' },
+      'non-esiste',
+    )
+    expect(sostituzioneIgnota.ok === false && sostituzioneIgnota.reason).toBe('unknown-replacement')
+
+    expect(repo.archiveCategory('non-esiste')).toBeNull()
   })
 
   it('riordinare riscrive solo quelle che cambiano posizione', async () => {
@@ -437,6 +582,87 @@ describe('categorie', () => {
   it('gli id sconosciuti nel riordino vengono ignorati', async () => {
     const { repo } = await open()
     expect(repo.reorderCategories(['non-esiste'])).toEqual([])
+  })
+})
+
+describe('categorie: cancellare davvero', () => {
+  it('si puo solo se nessuno la nomina', async () => {
+    const { repo, disk } = await open()
+    const svago = repo.getState().categories.find((c) => c.name === 'Svago')
+    const esito = await repo.deleteCategory(svago?.id ?? '')
+
+    expect(esito.ok).toBe(true)
+    expect(repo.getState().categories).toHaveLength(DEFAULT_CATEGORY_SEEDS.length - 1)
+    expect(disk.categories).toHaveLength(DEFAULT_CATEGORY_SEEDS.length - 1)
+  })
+
+  it('una spesa viva la trattiene, e il rifiuto dice quante', async () => {
+    const { repo, disk } = await open()
+    const svago = repo.getState().categories.find((c) => c.name === 'Svago')
+    repo.addExpense({ amountCents: 1_200, categoryId: svago?.id ?? '', date: '2026-08-22' })
+    repo.addExpense({ amountCents: 300, categoryId: svago?.id ?? '', date: '2026-08-22' })
+    await repo.flush()
+
+    const esito = await repo.deleteCategory(svago?.id ?? '')
+    expect(esito.ok).toBe(false)
+    expect(esito.ok === false && esito.reason).toBe('in-use')
+    expect(esito.ok === false && esito.reason === 'in-use' && esito.expenses).toBe(2)
+    expect(disk.categories).toHaveLength(DEFAULT_CATEGORY_SEEDS.length)
+  })
+
+  it('una spesa cancellata la trattiene lo stesso: resta nello Storico e nell export', async () => {
+    const { repo } = await open()
+    const svago = repo.getState().categories.find((c) => c.name === 'Svago')
+    const spesa = repo.addExpense({
+      amountCents: 1_200,
+      categoryId: svago?.id ?? '',
+      date: '2026-08-22',
+    })
+    repo.deleteExpense(spesa.id)
+    await repo.flush()
+
+    const esito = await repo.deleteCategory(svago?.id ?? '')
+    expect(esito.ok === false && esito.reason).toBe('in-use')
+    expect(esito.ok === false && esito.reason === 'in-use' && esito.expenses).toBe(1)
+  })
+
+  it('una regola ricorrente la trattiene: genererebbe orfane per sempre', async () => {
+    const { repo } = await open()
+    const svago = repo.getState().categories.find((c) => c.name === 'Svago')
+    repo.addRecurringRule({
+      amountCents: 90_000,
+      categoryId: svago?.id ?? '',
+      cadence: 'monthly',
+      interval: 1,
+      startDate: '2026-08-01',
+    })
+    await repo.flush()
+
+    const esito = await repo.deleteCategory(svago?.id ?? '')
+    expect(esito.ok === false && esito.reason).toBe('in-use')
+    expect(esito.ok === false && esito.reason === 'in-use' && esito.recurringRules).toBe(1)
+  })
+
+  it('il permesso lo da il disco: una spesa scritta da un altro contesto conta', async () => {
+    const { repo, disk } = await open()
+    const secondo = await openRepository(createMemoryPersistence(disk), {
+      now: tickingClock(),
+      newId: sequentialIds('due'),
+    })
+    const svago = repo.getState().categories.find((c) => c.name === 'Svago')
+    // Il secondo contesto scrive una spesa che il mirror del primo non vedra' mai.
+    secondo.addExpense({ amountCents: 500, categoryId: svago?.id ?? '', date: '2026-08-22' })
+    await secondo.flush()
+
+    const esito = await repo.deleteCategory(svago?.id ?? '')
+    expect(esito.ok === false && esito.reason).toBe('in-use')
+    expect(disk.categories.some((c) => c.id === svago?.id)).toBe(true)
+  })
+
+  it('un id che non esiste non e un errore, e una risposta', async () => {
+    const { repo } = await open()
+    const esito = await repo.deleteCategory('non-esiste')
+    expect(esito.ok === false && esito.reason).toBe('unknown')
   })
 })
 
@@ -871,6 +1097,46 @@ describe('impostazioni', () => {
     await repo.flush()
     expect(disk.settings?.theme).toBe('dark')
     expect(disk.settings?.schemaVersion).toBe(repo.getState().settings.schemaVersion)
+  })
+
+  it('al primo avvio lingua e guida nascono assenti, non indovinate', async () => {
+    const { repo, disk } = await open()
+    const settings = repo.getState().settings
+
+    // `src/core` non conosce `navigator`: scrivere una lingua qui vorrebbe dire
+    // registrare una scelta che nessuno ha fatto.
+    expect('language' in settings).toBe(false)
+    expect('onboardingCompletedAt' in settings).toBe(false)
+    expect(disk.settings && 'language' in disk.settings).toBe(false)
+  })
+
+  it('la lingua si sceglie, e si puo tornare a non averla scelta', async () => {
+    const { repo, disk } = await open()
+
+    expect(repo.updateSettings({ language: 'en' }).language).toBe('en')
+    await repo.flush()
+    expect(disk.settings?.language).toBe('en')
+
+    // `null` la riporta ad assente: senza questo verso, "Automatica" non
+    // potrebbe esistere in Impostazioni e la prima scelta sarebbe definitiva.
+    const azzerata = repo.updateSettings({ language: null })
+    expect('language' in azzerata).toBe(false)
+    await repo.flush()
+    expect(disk.settings && 'language' in disk.settings).toBe(false)
+  })
+
+  it('la guida si chiude una volta sola, e si puo far riapparire', async () => {
+    const { repo } = await open()
+    const chiusa = repo.updateSettings({ onboardingCompletedAt: '2026-08-23T10:00:00.000Z' })
+    expect(chiusa.onboardingCompletedAt).toBe('2026-08-23T10:00:00.000Z')
+
+    // Cambiare tema non la riapre: un patch parziale non tocca gli altri campi.
+    expect(repo.updateSettings({ theme: 'dark' }).onboardingCompletedAt).toBe(
+      '2026-08-23T10:00:00.000Z',
+    )
+    expect('onboardingCompletedAt' in repo.updateSettings({ onboardingCompletedAt: null })).toBe(
+      false,
+    )
   })
 })
 

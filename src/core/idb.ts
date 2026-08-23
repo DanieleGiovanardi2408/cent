@@ -32,6 +32,8 @@ import type { DBSchema, IDBPDatabase, IDBPTransaction, StoreNames } from 'idb'
 import { DB_NAME, MIGRATIONS, SCHEMA_VERSION, STORE_NAMES, emptyRawDataSet, pendingMigrations } from './schema'
 import type { MigrationStep, RawDataSet, RawRecord } from './schema'
 import { planResolvedBudgetChange } from './budget'
+import { planCategoryDeletion, planCategoryPlacement } from './categories'
+import type { CategoryDeletion, CategoryPlacement } from './categories'
 import { isAfter } from './date'
 import { NOTHING_SKIPPED } from './persistence'
 import type { LoadedData, Persistence, WriteBatch, WriteResult } from './persistence'
@@ -167,13 +169,28 @@ export async function openCentDatabase(options: OpenOptions = {}): Promise<IDBPD
 
 /** Gli store toccati da un batch, per aprire la transazione piu' stretta possibile. */
 function storesOf(batch: WriteBatch): StoreName[] {
-  const names: StoreName[] = []
-  if (batch.expenses || batch.addExpenses) names.push('expenses')
-  if (batch.categories) names.push('categories')
-  if (batch.recurringRules || batch.advanceRecurringMarkers) names.push('recurringRules')
-  if (batch.budgets || batch.budgetChange) names.push('budgets')
-  if (batch.settings) names.push('settings')
-  return names
+  const names = new Set<StoreName>()
+  if (batch.expenses || batch.addExpenses) names.add('expenses')
+  if (
+    batch.categories ||
+    batch.archiveCategories ||
+    batch.categoryPlacement ||
+    batch.categoryDeletion
+  ) {
+    names.add('categories')
+  }
+  if (batch.recurringRules || batch.advanceRecurringMarkers) names.add('recurringRules')
+  if (batch.budgets || batch.budgetChange) names.add('budgets')
+  if (batch.settings) names.add('settings')
+  // Cancellare una categoria dipende da chi la nomina: le due letture stanno
+  // nella stessa transazione della cancellazione, altrimenti sarebbero un
+  // controllo fatto "appena prima", cioe' la stessa gara con una finestra piu'
+  // stretta (ADR 008).
+  if (batch.categoryDeletion) {
+    names.add('expenses')
+    names.add('recurringRules')
+  }
+  return [...names]
 }
 
 function errorName(error: unknown): string {
@@ -206,6 +223,8 @@ type WriteTx = IDBPTransaction<CentDB, StoreName[], 'readwrite'>
 async function runBatch(tx: WriteTx, batch: WriteBatch): Promise<WriteResult> {
   const skippedIds: string[] = []
   let budgetsWritten: readonly Budget[] = []
+  let placement: CategoryPlacement | undefined
+  let deletion: CategoryDeletion | undefined
   const writes: Promise<unknown>[] = []
 
   /**
@@ -250,7 +269,48 @@ async function runBatch(tx: WriteTx, batch: WriteBatch): Promise<WriteResult> {
   }
   if (batch.categories) {
     const store = tx.objectStore('categories')
-    for (const record of batch.categories) enqueue(store.put(record))
+    // `archived` non passa di qui: si rilegge dal disco e si conserva. Un mirror
+    // vecchio che rinomina una categoria archiviata altrove la riporterebbe in
+    // griglia, e sarebbe la nona.
+    for (const record of batch.categories) {
+      const current = await store.get(record.id)
+      enqueue(store.put(current === undefined ? record : { ...record, archived: current.archived }))
+    }
+  }
+  if (batch.archiveCategories) {
+    const store = tx.objectStore('categories')
+    for (const archival of batch.archiveCategories) {
+      const current = await store.get(archival.id)
+      if (current === undefined || current.archived) continue
+      enqueue(store.put({ ...current, archived: true, updatedAt: archival.updatedAt }))
+    }
+  }
+  if (batch.categoryPlacement) {
+    const store = tx.objectStore('categories')
+    // Il tetto si verifica **qui**, sulle categorie che stanno sul disco adesso.
+    // Chi ha premuto il tasto ha deciso quale categoria vuole e quale sostituire,
+    // non se c'e' posto: quella risposta ha bisogno dello stato vero, e un mirror
+    // vecchio non vede l'ottava aggiunta da un altro contesto.
+    //
+    // IndexedDB serializza le readwrite sullo stesso store, quindi fra questo
+    // `getAll` e i `put` che ne seguono non si infila nessuno.
+    placement = planCategoryPlacement(await store.getAll(), batch.categoryPlacement)
+    // I due record — quella che esce e quella che entra — nella stessa
+    // transazione: o passa lo scambio intero, o non passa niente.
+    if (placement.ok) for (const record of placement.written) enqueue(store.put(record))
+  }
+  if (batch.categoryDeletion) {
+    const store = tx.objectStore('categories')
+    // La cancellazione vera e' l'unica operazione irreversibile su una
+    // categoria, ed e' anche l'unica il cui permesso dipende interamente da
+    // record che stanno in altri store. Si rileggono qui dentro.
+    deletion = planCategoryDeletion(
+      await store.getAll(),
+      await tx.objectStore('expenses').getAll(),
+      await tx.objectStore('recurringRules').getAll(),
+      batch.categoryDeletion,
+    )
+    if (deletion.ok) enqueue(store.delete(deletion.deleted.id))
   }
   if (batch.recurringRules) {
     const store = tx.objectStore('recurringRules')
@@ -297,7 +357,12 @@ async function runBatch(tx: WriteTx, batch: WriteBatch): Promise<WriteResult> {
 
   await Promise.all(writes)
   await tx.done
-  return { skippedIds, budgets: budgetsWritten }
+  return {
+    skippedIds,
+    budgets: budgetsWritten,
+    ...(placement !== undefined ? { categoryPlacement: placement } : {}),
+    ...(deletion !== undefined ? { categoryDeletion: deletion } : {}),
+  }
 }
 
 /**

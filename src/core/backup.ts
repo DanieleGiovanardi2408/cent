@@ -15,6 +15,7 @@
  * definizione) e la fusione con i dati esistenti. L'import sostituisce tutto.
  */
 
+import { MAX_ACTIVE_CATEGORIES, activeCategories } from './categories'
 import { isIsoDate, isTimeMinutes } from './date'
 import type { IsoDate } from './date'
 import { buildDefaultSettings } from './defaults'
@@ -30,7 +31,7 @@ import type {
   StoreName,
   Timestamp,
 } from './types'
-import { SETTINGS_ID, nowTimestamp } from './types'
+import { SETTINGS_ID, isLanguage, nowTimestamp } from './types'
 
 export interface BackupFile {
   readonly app: 'cent'
@@ -281,6 +282,15 @@ function parseSettings(raw: RawRecord | undefined, c: Collector): Settings {
   if (raw['weekStartsOn'] !== undefined && raw['weekStartsOn'] !== 1) {
     c.warn('settings.weekStartsOn', 'la settimana in questa app inizia sempre di lunedi')
   }
+  // Una lingua sconosciuta non entra e non viene sostituita da una a caso: il
+  // campo torna assente, che e' il modo che il modello ha per dire "nessuno
+  // l'ha scelta", e la UI la ridecide dall'ambiente.
+  const rawLanguage = raw['language']
+  const language = isLanguage(rawLanguage) ? rawLanguage : undefined
+  if (rawLanguage !== undefined && rawLanguage !== null && language === undefined) {
+    c.warn('settings.language', `lingua sconosciuta (${String(rawLanguage)}): la sceglie l app`)
+  }
+  const onboardingCompletedAt = optionalStr(raw['onboardingCompletedAt'])
   return {
     id: SETTINGS_ID,
     createdAt: typeof raw['createdAt'] === 'string' ? raw['createdAt'] : fallback.createdAt,
@@ -291,7 +301,42 @@ function parseSettings(raw: RawRecord | undefined, c: Collector): Settings {
     // dalle migrazioni e sono nella forma corrente qualunque cosa dica il file.
     schemaVersion: SCHEMA_VERSION,
     ...(lastBackupAt !== undefined && lastBackupAt !== false ? { lastBackupAt } : {}),
+    ...(language !== undefined ? { language } : {}),
+    ...(onboardingCompletedAt !== undefined && onboardingCompletedAt !== false
+      ? { onboardingCompletedAt }
+      : {}),
   }
+}
+
+/**
+ * Riporta le categorie sotto il tetto di otto attive, se il file le sfora.
+ *
+ * L'import e' l'unica porta da cui entrano dati scritti da qualcun altro — un
+ * JSON modificato a mano, una versione futura — quindi e' anche l'unico punto in
+ * cui uno stato che il resto dell'app non sa produrre puo' arrivare sul disco.
+ * `replaceAll` scrive in blocco e non passa da `planCategoryPlacement`: se non
+ * si normalizzasse qui, il tetto sarebbe garantito da tutte le vie tranne una.
+ *
+ * Si archivia il **surplus**, non si scarta niente: archiviare non perde nessun
+ * dato — la categoria resta su tutte le spese che l'hanno usata — ed e'
+ * reversibile con uno scambio. Quali restino in griglia lo decide
+ * `activeCategories`, cioe' `order` e poi due livelli deterministici: mai
+ * l'ordine in cui il file le elencava.
+ *
+ * E non e' silenzioso: l'anteprima lo dice, e l'anteprima e' il posto dove
+ * l'utente decide se importare.
+ */
+function capActiveCategories(categories: readonly Category[], c: Collector): Category[] {
+  const keep = new Set(activeCategories(categories).map((cat) => cat.id))
+  const surplus = categories.filter((cat) => !cat.archived && !keep.has(cat.id))
+  if (surplus.length === 0) return [...categories]
+  c.warn(
+    'categories',
+    `${surplus.length} categorie oltre le ${MAX_ACTIVE_CATEGORIES} della griglia: entrano in archivio, non si perde niente`,
+  )
+  return categories.map((cat) =>
+    keep.has(cat.id) || cat.archived ? cat : { ...cat, archived: true },
+  )
 }
 
 function rawArray(source: RawRecord, key: StoreName, c: Collector): RawRecord[] {
@@ -394,7 +439,8 @@ export function parseBackup(input: unknown): ImportPreview {
   const budgets = parseList(migrated.budgets, 'budgets', parseBudget, c)
   const settings = parseSettings(migrated.settings[0], c)
 
-  const knownCategories = new Set(categories.records.map((cat) => cat.id))
+  const cappedCategories = capActiveCategories(categories.records, c)
+  const knownCategories = new Set(cappedCategories.map((cat) => cat.id))
   const orphans = expenses.records.filter((e) => !knownCategories.has(e.categoryId)).length
   if (orphans > 0) {
     c.warn(
@@ -407,14 +453,14 @@ export function parseBackup(input: unknown): ImportPreview {
     ok: true,
     data: {
       expenses: expenses.records,
-      categories: categories.records,
+      categories: cappedCategories,
       recurringRules: recurringRules.records,
       budgets: budgets.records,
       settings,
     },
     counts: {
       expenses: expenses.records.length,
-      categories: categories.records.length,
+      categories: cappedCategories.length,
       recurringRules: recurringRules.records.length,
       budgets: budgets.records.length,
       settings: 1,

@@ -281,6 +281,47 @@ Target touch >= 44px. Contrasto AA in entrambi i temi. `prefers-reduced-motion`.
 Ogni azione distruttiva e' annullabile (soft delete + toast), niente dialoghi
 "Sei sicuro?". Stati vuoti con copy vero in italiano.
 
+## Non leggere l'intero albero mentre un agente lo sta scrivendo
+Nessuna operazione che legga **tutto** il working tree — una misura o un commit —
+va eseguita mentre un agente ci sta scrivendo dentro. Quello che si ottiene non e'
+uno stato: e' un'istantanea fra due salvataggi.
+
+E' successo due volte, in due forme diverse:
+
+- una caccia a un test intermittente con `--repeat-each=10` e' stata **invalidata**
+  perche' `product-critic` aveva creato e poi cancellato `__probe.spec.ts` nella
+  stessa directory mentre girava: 48 test "did not run" e un numero finale che non
+  significava niente;
+- un `git add -A` per un commit **di sola documentazione** ha raccolto il lavoro a
+  meta' di `data-core` su `src/core` — un file appena nato e un altro con gli
+  import gia' scritti ma non ancora usati — e l'ha spedito su main. La CI l'ha
+  preso in 40 secondi con `TS6192`.
+
+**Regola operativa**: mettere in stage i **percorsi espliciti** di cio' che si e'
+scritto, mai `git add -A`, finche' un agente e' in corso. E rimandare le misure
+lunghe a quando l'albero e' fermo.
+
+### La regola da sola non basta: `.githooks/pre-commit`
+Questa e' esattamente il tipo di regola che fallisce, perche' chiede di ricordarsi
+una cosa **nel momento in cui si stanno gestendo due agenti e si ha fretta**.
+Quindi e' anche strutturale: un hook `pre-commit` esegue `tsc --noEmit` quando c'e'
+qualcosa sotto `src/` in stage, e blocca il commit se non compila. Il commit che ha
+prodotto questa regola sarebbe stato fermato in locale.
+
+Attivo con `git config core.hooksPath .githooks` — se `git status` non lo mostra,
+va rieseguito dopo un clone.
+
+**Calibrazione, che e' la parte che si sbaglia**: solo il typecheck, **mai la
+suite**. Un hook lento viene aggirato con `--no-verify`, e una guardia aggirata e'
+peggio di nessuna guardia — la stessa ragione per cui un test che grida al lupo
+viene disattivato. Se un giorno `tsc` diventasse lento su questo progetto, l'hook
+si toglie: non si sopporta.
+
+Limite dichiarato nel file stesso: controlla l'**albero di lavoro**, non il
+contenuto in stage, perche' fare `git stash` mentre un agente scrive sarebbe
+distruttivo. Prende il caso che conta — si committa mentre l'albero e' a meta' —
+e non prende lo staging parziale di un albero sano.
+
 ## Dopo una correzione, la verifica si riesegue — non si deduce
 Il posto piu' probabile in cui trovare il prossimo difetto e' **dentro la
 correzione appena fatta**. Una correzione tocca il codice in un punto delicato

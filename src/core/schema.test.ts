@@ -18,9 +18,13 @@ import type { MigrationStep, RawDataSet } from './schema'
  *    che i passi pubblicati non hanno ancora: la conversione di un campo, il
  *    salto di due versioni. Restano utili anche quando la versione corrente sara'
  *    la 5.
- * 2. **Il passo vero alla versione 2** (`Expense.timeMinutes`), sui dati veri e
+ * 2. **I passi veri pubblicati** — la 2 (`Expense.timeMinutes`) e la 3
+ *    (`Settings.language`, `Settings.onboardingCompletedAt`) — sui dati veri e
  *    con `MIGRATIONS` di produzione. E' l'unico modo per verificare cio' che di
- *    quel passo conta: che non tocchi niente di cio' che c'era.
+ *    quei passi conta: che non tocchino niente di cio' che c'era.
+ *
+ * I passi finti del gruppo 1 vivono solo dentro gli array `steps` passati a
+ * mano, quindi il loro numero non collide con quelli pubblicati.
  */
 const passoV2: MigrationStep = {
   to: 2,
@@ -186,5 +190,123 @@ describe('il passo vero alla versione 2', () => {
   it('applicarlo due volte da lo stesso risultato', () => {
     const unaVolta = migrateRawData(datiVersione1(), 1, 2)
     expect(migrateRawData(unaVolta, 1, 2)).toEqual(unaVolta)
+  })
+})
+
+describe('il passo vero alla versione 3', () => {
+  /** Dati scritti dalla versione 2: la forma del backup reale del 23 agosto. */
+  function datiVersione2(): RawDataSet {
+    const data = emptyRawDataSet()
+    data.expenses = [
+      {
+        id: 'e1',
+        createdAt: '2026-08-22T23:13:38.067Z',
+        updatedAt: '2026-08-22T23:13:38.067Z',
+        amountCents: 2_300,
+        categoryId: 'c1',
+        date: '2026-08-23',
+        timeMinutes: 73,
+        source: 'manual',
+      },
+      {
+        id: 'e2',
+        createdAt: '2026-08-23T09:01:00.000Z',
+        updatedAt: '2026-08-23T09:40:00.000Z',
+        amountCents: 25,
+        categoryId: 'c1',
+        date: '2026-08-23',
+        source: 'manual',
+        deletedAt: '2026-08-23T09:40:00.000Z',
+      },
+    ]
+    data.categories = [
+      {
+        id: 'c1',
+        createdAt: '2026-08-22T23:13:13.861Z',
+        updatedAt: '2026-08-22T23:13:13.861Z',
+        name: 'Spesa',
+        emoji: '🛒',
+        color: '#81a369',
+        order: 10,
+        archived: false,
+      },
+    ]
+    data.budgets = [
+      {
+        id: 'b1',
+        createdAt: '2026-08-23T13:21:04.998Z',
+        updatedAt: '2026-08-23T13:21:04.998Z',
+        period: 'weekly',
+        amountCents: 20_000,
+        effectiveFrom: '2026-08-23',
+      },
+    ]
+    data.settings = [
+      {
+        id: 'settings',
+        createdAt: '2026-08-22T23:13:13.861Z',
+        updatedAt: '2026-08-22T23:13:13.861Z',
+        weekStartsOn: 1,
+        theme: 'auto',
+        schemaVersion: 2,
+      },
+    ]
+    return data
+  }
+
+  it('non scrive niente su nessun record esistente', () => {
+    const prima = datiVersione2()
+    const dopo = migrateRawData(prima, 2, 3)
+
+    expect(dopo.expenses).toBe(prima.expenses)
+    expect(dopo.categories).toBe(prima.categories)
+    expect(dopo.recurringRules).toBe(prima.recurringRules)
+    expect(dopo.budgets).toBe(prima.budgets)
+  })
+
+  it('i due campi nuovi nascono assenti, e l assenza e il loro default', () => {
+    const dopo = migrateRawData(datiVersione2(), 2, 3)
+    const settings = dopo.settings[0]
+
+    // Non `=== undefined`: la chiave non deve proprio esserci. Un `language:
+    // undefined` scritto su disco sarebbe indistinguibile da una scelta, e
+    // sopravviverebbe a `JSON.stringify` come chiave mancante solo per caso.
+    expect(settings && 'language' in settings).toBe(false)
+    expect(settings && 'onboardingCompletedAt' in settings).toBe(false)
+  })
+
+  it('aggiorna solo il numero di versione delle impostazioni', () => {
+    const prima = datiVersione2()
+    const dopo = migrateRawData(prima, 2, 3)
+
+    expect(dopo.settings[0]).toEqual({ ...prima.settings[0], schemaVersion: 3 })
+    // `updatedAt` compreso: la migrazione non e' una modifica dell'utente.
+    expect(dopo.settings[0]?.['updatedAt']).toBe('2026-08-22T23:13:13.861Z')
+    expect(prima.settings[0]?.['schemaVersion']).toBe(2)
+  })
+
+  it('una lingua gia scelta sopravvive al passo', () => {
+    const prima = datiVersione2()
+    prima.settings = [{ ...prima.settings[0], language: 'en', onboardingCompletedAt: 'X' }]
+    const dopo = migrateRawData(prima, 2, 3)
+
+    expect(dopo.settings[0]?.['language']).toBe('en')
+    expect(dopo.settings[0]?.['onboardingCompletedAt']).toBe('X')
+  })
+
+  it('da 1 a 3 in un colpo solo: due passi, nessun record perso', () => {
+    const prima = datiVersione2()
+    prima.settings = [{ id: 'settings', weekStartsOn: 1, theme: 'auto', schemaVersion: 1 }]
+    const dopo = migrateRawData(prima, 1, 3)
+
+    expect(dopo.expenses).toHaveLength(2)
+    expect(dopo.categories).toHaveLength(1)
+    expect(dopo.budgets).toHaveLength(1)
+    expect(dopo.settings[0]?.['schemaVersion']).toBe(3)
+  })
+
+  it('applicarlo due volte da lo stesso risultato', () => {
+    const unaVolta = migrateRawData(datiVersione2(), 2, 3)
+    expect(migrateRawData(unaVolta, 2, 3)).toEqual(unaVolta)
   })
 })

@@ -308,3 +308,74 @@ describe('un backup della versione 1 entra nella versione corrente', () => {
     expect(preview.data?.settings.schemaVersion).toBe(SCHEMA_VERSION)
   })
 })
+
+describe('lingua e guida: due campi opzionali, e l assenza e un dato', () => {
+  it('una lingua scelta fa il giro e torna identica', () => {
+    const data: DataSet = {
+      ...dataset(),
+      settings: makeSettings({
+        language: 'en',
+        onboardingCompletedAt: '2026-08-23T10:00:00.000Z',
+      }),
+    }
+    const preview = parseBackup(JSON.parse(JSON.stringify(buildBackup(data, tickingClock()))))
+
+    expect(preview.ok).toBe(true)
+    expect(preview.data?.settings.language).toBe('en')
+    expect(preview.data?.settings.onboardingCompletedAt).toBe('2026-08-23T10:00:00.000Z')
+  })
+
+  it('un file senza i due campi li lascia assenti, non li inventa', () => {
+    const preview = parseBackup(
+      JSON.parse(JSON.stringify(buildBackup(dataset(), tickingClock()))),
+    )
+    const settings = preview.data?.settings
+
+    expect(settings && 'language' in settings).toBe(false)
+    expect(settings && 'onboardingCompletedAt' in settings).toBe(false)
+  })
+
+  it('una lingua sconosciuta non viene sostituita da una a caso: torna assente', () => {
+    const file = JSON.parse(JSON.stringify(buildBackup(dataset(), tickingClock())))
+    file.data.settings.language = 'de'
+    const preview = parseBackup(file)
+    const settings = preview.data?.settings
+
+    expect(settings && 'language' in settings).toBe(false)
+    expect(preview.issues.some((i) => i.path === 'settings.language')).toBe(true)
+  })
+})
+
+describe('l import non puo essere la porta di servizio del tetto', () => {
+  function categorieAttive(n: number) {
+    return Array.from({ length: n }, (_, i) =>
+      makeCategory({ id: `c-${i + 1}`, name: `Cat ${i + 1}`, order: (i + 1) * 10 }),
+    )
+  }
+
+  it('otto passano intatte', () => {
+    const data: DataSet = { ...dataset(), categories: categorieAttive(8) }
+    const preview = parseBackup(JSON.parse(JSON.stringify(buildBackup(data, tickingClock()))))
+
+    expect(preview.data?.categories).toHaveLength(8)
+    expect(preview.data?.categories.every((c) => !c.archived)).toBe(true)
+    expect(preview.issues.some((i) => i.path === 'categories')).toBe(false)
+  })
+
+  it('undici entrano tutte, ma solo otto in griglia: si archivia il surplus e lo si dice', () => {
+    const data: DataSet = { ...dataset(), categories: categorieAttive(11) }
+    const preview = parseBackup(JSON.parse(JSON.stringify(buildBackup(data, tickingClock()))))
+
+    // Nessun record perso: e' un backup, e archiviare non cancella.
+    expect(preview.data?.categories).toHaveLength(11)
+    expect(preview.data?.categories.filter((c) => !c.archived)).toHaveLength(8)
+    // Il surplus e' quello in fondo per `order`, non quello in fondo al file.
+    expect(
+      preview.data?.categories.filter((c) => c.archived).map((c) => c.id),
+    ).toEqual(['c-9', 'c-10', 'c-11'])
+    // E non e' silenzioso: l'anteprima e' il momento in cui l'utente decide.
+    expect(
+      preview.issues.some((i) => i.path === 'categories' && i.message.includes('archivio')),
+    ).toBe(true)
+  })
+})

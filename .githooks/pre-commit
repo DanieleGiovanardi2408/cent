@@ -1,0 +1,51 @@
+#!/bin/sh
+# Blocca i commit che contengono un'istantanea parziale del codice.
+#
+# Nasce da un caso vero: un `git add -A` eseguito mentre un agente stava
+# scrivendo `src/core` ha spedito su main un file appena nato e un altro con gli
+# import gia' scritti ma non ancora usati. Il codice non era rotto: era
+# incompleto, fotografato fra due salvataggi. La CI l'ha preso in 40 secondi con
+# `TS6192: All imports in import declaration are unused` — cioe' esattamente cio'
+# che `tsc` vede, e che avrebbe potuto vedere qui invece che dopo il push.
+#
+# Copre l'intera classe, non il caso: qualunque istantanea parziale di codice
+# fallisce quasi sempre il typecheck, senza che nessuno debba ricordarsi niente.
+#
+# SOLO IL TYPECHECK, MAI LA SUITE. Un hook lento viene aggirato con --no-verify,
+# e una guardia aggirata e' peggio di nessuna guardia — la stessa ragione per cui
+# un test che grida al lupo viene disattivato. `tsc --noEmit` su questo progetto
+# dura pochi secondi. Se un giorno diventasse lento, questo hook si toglie: non
+# si sopporta.
+#
+# Limite noto, dichiarato: controlla l'albero di lavoro, non il contenuto in
+# stage. Non fa `git stash` di proposito — stashare mentre un agente scrive
+# sarebbe distruttivo, cioe' peggio del problema. Quindi prende il caso che
+# conta (si committa mentre l'albero e' a meta') e non prende lo staging
+# parziale di un albero sano.
+
+# Niente codice in stage: i commit di sola documentazione non pagano niente.
+if ! git diff --cached --name-only --diff-filter=ACM | grep -q '^src/'; then
+  exit 0
+fi
+
+printf 'pre-commit: typecheck… '
+
+if npx tsc --noEmit; then
+  printf 'ok\n'
+  exit 0
+fi
+
+cat >&2 <<'MSG'
+
+  ✗ Il typecheck fallisce: il commit e' bloccato.
+
+  Se stai committando mentre un agente sta scrivendo, quello che hai in mano e'
+  un'istantanea a meta'. Aspetta che finisca e ricommitta.
+
+  Se l'errore e' tuo, correggilo.
+
+  --no-verify esiste, ma se lo stai usando per far passare questo, stai
+  spedendo codice che non compila.
+
+MSG
+exit 1
