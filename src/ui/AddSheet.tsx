@@ -117,7 +117,7 @@ export function AddSheet({ categories, day, leaving, onSave, onClose }: Props) {
       <div class="scrim" data-leaving={leaving || undefined} onClick={onClose} />
 
       <div
-        class="sheet"
+        class="sheet sheet--add"
         data-leaving={leaving || undefined}
         role="dialog"
         aria-modal="true"

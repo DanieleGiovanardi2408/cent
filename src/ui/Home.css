@@ -1,0 +1,294 @@
+/* La Home. L'unico contenitore che scorre e' lei stessa: la barra in alto e il
+ * FAB restano fermi, come nello Storico.
+ *
+ * ## Ogni altezza di questo file e' riservata, non calcolata dal contenuto
+ *
+ * E' la schermata dove un salto si vedrebbe: il numero grande arriva dopo il
+ * guscio (regola "Ordine di pittura"), e con lui arrivano quattro righe di testo
+ * che prima erano vuote. Se le altezze dipendessero dal contenuto, all'apertura
+ * del database tutto quello che sta sotto — bottone del budget e spese di oggi —
+ * scenderebbe di qualche decina di pixel, cioe' CLS > 0 sulla prima schermata
+ * dell'app.
+ *
+ * Quindi ogni riga ha un `min-block-size` scritto in `em` e nel proprio
+ * `line-height`: e' esattamente l'altezza che avra' da piena, quindi da vuota
+ * occupa lo stesso spazio. E `--slot-min` copre il piu' alto dei due stati
+ * (con budget e senza), cosi' anche passare da uno all'altro non sposta niente.
+ */
+
+.home {
+  flex: 1;
+  min-block-size: 0;
+  overflow-y: auto;
+  /* Come nella lista: lo slancio non deve propagarsi al documento, o iOS fa
+   * rimbalzare tutta la pagina. */
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding-block-end: var(--sp-3);
+  /* Il riquadro sotto il numero grande. **E' l'unica altezza riservata di
+   * questa parte**, e le righe dentro non ne hanno una loro: cosi' lo spazio
+   * che avanza si raccoglie tutto in fondo al riquadro — prima del bottone del
+   * budget, dove non si nota — invece di aprire un buco fra una riga e l'altra.
+   * Il valore copre lo stato piu' alto a questa larghezza.
+   *
+   * Da 9.5rem a 11.5rem quando e' arrivata la riga che spiega un budget nato a
+   * meta' periodo (ADR 010). Misurato: a 375 e a 390 punti quello stato occupa
+   * 176px, e il resto e' margine per le metriche del font vero — la riga va a
+   * capo su `42ch`, quindi il punto in cui si spezza segue il font e non il
+   * viewport. Costa 32px di vuoto in fondo al riquadro in tutti gli altri
+   * stati, ed e' il prezzo giusto: l'alternativa era che le spese di oggi
+   * scendessero all'arrivo dei dati, per tutto il periodo in cui la frase
+   * compare. */
+  --slot-min: 11.5rem;
+  /* Lo stato vuoto di oggi non e' mezza schermata come nello Storico: sopra c'e'
+   * gia' tutto il periodo. */
+  --blank-min: 22dvh;
+}
+
+/* --- il periodo e il numero grande --------------------------------------- */
+
+.hero {
+  padding-block-start: var(--sp-3);
+}
+
+.hero__period {
+  min-block-size: calc(1em * var(--lh-snug));
+  font-size: var(--fs-100);
+  line-height: var(--lh-snug);
+  color: var(--text-muted);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* Una parola sopra il numero. Senza, un importo grande e solo non dice se e'
+ * quello che resta o quello che hai speso — che e' l'unica cosa che conta. */
+.hero__label {
+  min-block-size: calc(1em * var(--lh-snug));
+  font-size: var(--fs-200);
+  line-height: var(--lh-snug);
+  color: var(--text-muted);
+}
+
+/* Il numero grande. La misura la decide `--fs-hero` (vedi tokens.css): al
+ * massimo che il tastierino accetta, dodici caratteri stanno dentro 320 punti
+ * senza mai produrre scroll orizzontale.
+ *
+ * `min-block-size` in `em` per il line-height esatto: da vuoto — cioe' nel
+ * guscio, prima che il database si apra — occupa la stessa altezza che avra'
+ * da pieno. */
+.hero__value {
+  min-block-size: calc(1em * var(--lh-tight));
+  font-size: var(--fs-hero);
+  font-weight: var(--fw-bold);
+  line-height: var(--lh-tight);
+  letter-spacing: var(--tracking-tight);
+  /* Le cifre non ballano quando cambiano: e' un numero che si guarda mentre si
+   * digita dietro al foglio. */
+  font-variant-numeric: tabular-nums;
+  /* Rete di sicurezza per l'assurdo. `--fs-hero` e' tarato su dodici caratteri
+   * (`-99.999,99 €`), che coprono ogni residuo raggiungibile in un periodo
+   * vero. Oltre — servirebbero centomila euro di sforo in una settimana — il
+   * numero **non puo' andare a capo da solo**: lo spazio prima del simbolo e'
+   * insecabile (U+00A0, ed e' giusto cosi', vedi money.ts). Senza questa riga
+   * sforerebbe la colonna e comparirebbe uno scroll orizzontale, cioe' il
+   * peggiore dei due esiti. Con, va a capo dentro le cifre: brutto, visibile,
+   * e non rompe niente. */
+  overflow-wrap: anywhere;
+}
+
+/* Sforato. Non `--danger`: qui non si e' rotto niente, si e' speso piu' del
+ * previsto. Il colore cambia, la dimensione e il peso no — un numero che
+ * ingrandisse quando si sfora sarebbe un rimprovero. */
+.hero__value[data-tone="over"] {
+  color: var(--over);
+}
+
+.hero__note {
+  min-block-size: calc(1em * var(--lh-snug));
+  font-size: var(--fs-100);
+  line-height: var(--lh-snug);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* --- il riquadro che cambia contenuto ma non misura ---------------------- */
+
+.slot {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  min-block-size: var(--slot-min);
+  padding-block-start: var(--sp-3);
+}
+
+/* --- la barra del periodo ------------------------------------------------ */
+
+.track {
+  flex: none;
+  block-size: 0.625rem; /* 10px: si legge di sfuggita, non si tocca */
+  border-radius: var(--radius-full);
+  background-color: var(--surface-sunken);
+  overflow: hidden;
+}
+
+/* Si riempie con `scaleX`, mai con `width`: nessun reflow, nessun ricalcolo di
+ * layout, e sotto prefers-reduced-motion i token di durata valgono zero e la
+ * barra e' semplicemente gia' al suo posto. */
+.track__fill {
+  block-size: 100%;
+  transform-origin: 0 50%;
+  background-color: var(--brand);
+  transition: transform var(--dur-2) var(--ease-out);
+}
+
+.track[data-tone="over"] .track__fill {
+  background-color: var(--over);
+}
+
+/* --- la riga piu' utile: quanto al giorno -------------------------------- */
+
+.allowance {
+  font-size: var(--fs-400);
+  font-weight: var(--fw-semibold);
+  line-height: var(--lh-snug);
+  letter-spacing: var(--tracking-tight);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Budget finito: stesso posto, stessa dimensione, solo il colore dell'ambra.
+ * Non sparisce e non urla — e' la seconda delle tre cose che dicono lo stesso
+ * fatto (numero col segno, questa riga, barra piena). */
+.allowance[data-tone="over"] {
+  color: var(--over);
+}
+
+.allowance__sub {
+  font-size: var(--fs-100);
+  line-height: var(--lh-snug);
+  color: var(--text-muted);
+}
+
+/* Da quando vale il budget, quando e' nato a periodo gia' cominciato (ADR 010).
+ * Stessa voce del sottotitolo — muta, non allarmata: **non e' un avviso**, e'
+ * il fatto che rende leggibile un residuo che sembra uno sforamento. Niente
+ * --over qui: l'ambra direbbe "hai sforato" proprio dove si spiega che no. */
+.since {
+  font-size: var(--fs-100);
+  line-height: var(--lh-snug);
+  color: var(--text-muted);
+  max-inline-size: 42ch;
+}
+
+/* --- passo attuale contro passo sostenibile ------------------------------ */
+
+.pace,
+.invite {
+  font-size: var(--fs-200);
+  line-height: var(--lh-body);
+  color: var(--text-muted);
+  max-inline-size: 42ch;
+}
+
+/* I due numeri del passo, e la promessa dell'invito: l'occhio li trova senza
+ * leggere la frase intorno. */
+.pace__n,
+.invite b {
+  color: var(--text);
+  font-weight: var(--fw-semibold);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- il budget: un bottone solo, sempre allo stesso posto ---------------- */
+
+.budget {
+  align-self: flex-start;
+  min-block-size: var(--tap-min);
+  margin-block: var(--sp-2);
+  /* Il rientro negativo allinea il testo al resto della colonna lasciando al
+   * bersaglio i suoi 44px pieni. */
+  margin-inline-start: calc(var(--sp-3) * -1);
+  padding-inline: var(--sp-3);
+  border-radius: var(--radius-2);
+  color: var(--brand);
+  font-size: var(--fs-200);
+  font-weight: var(--fw-semibold);
+}
+
+/* Nessuna transizione: il colore cambia nel frame del tap. */
+.budget:active {
+  background-color: var(--brand-soft);
+}
+
+.budget:disabled {
+  opacity: 0.4;
+}
+
+/* --- le spese di oggi ---------------------------------------------------- */
+
+.today__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-3);
+  padding-block: var(--sp-3) var(--sp-1);
+  border-block-start: 1px solid var(--line);
+  font-size: var(--fs-200);
+}
+
+.today__name {
+  font-weight: var(--fw-semibold);
+}
+
+.today__total {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+
+/* Schermi stretti (320 punti: il vecchio SE, o lo Zoom schermo di iOS). Qui la
+ * riga "Puoi spendere ~X al giorno" va a capo, il dettaglio sotto pure, e il
+ * passo puo' prendere tre righe: il riquadro deve riservare **quel** caso,
+ * altrimenti l'arrivo dei dati spinge in giu' le spese di oggi. La riserva
+ * dipende dalla larghezza perche' il numero di righe dipende dalla larghezza —
+ * e a parita' di larghezza guscio e dati riservano lo stesso.
+ *
+ * Qui la riga di ADR 010 ("Budget attivo da mercoledi' · prima avevi gia'
+ * speso X") si aggiunge a una disponibilita' che gia' occupa due righe:
+ * misurate 210px, riservate 232 (14.5rem) per il passo che a questa larghezza
+ * puo' prenderne tre. */
+@media (max-width: 359px) {
+  .home {
+    --slot-min: 14.5rem;
+  }
+}
+
+/* Lo stato vuoto di oggi e' un vuoto **secondario**: sopra c'e' gia' il numero
+ * del periodo, che e' il titolo vero della schermata. Con la misura dello
+ * Storico (dove quel testo e' l'unica cosa in pagina) griderebbe piu' del
+ * residuo, che e' il motivo per cui si e' aperta l'app. */
+.today .blank__title {
+  font-size: var(--fs-300);
+  font-weight: var(--fw-semibold);
+  letter-spacing: normal;
+}
+
+/* --- il telefono girato --------------------------------------------------- */
+/* A 327 punti di altezza la colonna non ci sta e la Home scorre: e' il
+ * comportamento giusto, non una rottura. Qui si toglie solo l'eccesso: un
+ * numero da 56px in una finestra alta 327 e' sproporzionato.
+ *
+ * `--slot-min` invece **non** si abbassa, ed e' costato un test rosso: le
+ * altezze riservate dentro il riquadro sono in `em`, quindi non cambiano con il
+ * viewport — cambia solo quante righe il testo occupa davvero. Un riquadro piu'
+ * basso qui vorrebbe dire che il contenuto lo supera e spinge in giu' le spese
+ * di oggi appena si imposta un budget. Il prezzo e' un po' di spazio vuoto in
+ * orizzontale; l'alternativa era un salto. */
+@media (max-height: 480px) and (orientation: landscape) {
+  .home {
+    --fs-hero: 2.5rem;
+    --blank-min: 30dvh;
+  }
+}

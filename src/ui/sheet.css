@@ -1,9 +1,17 @@
-/* Le parti condivise dai due bottom sheet dell'app (inserimento e azioni su una
- * spesa): il velo e le due animazioni d'entrata.
+/* Le parti condivise dai bottom sheet dell'app: il velo, il guscio del foglio,
+ * la riga che dice cosa fare adesso e l'importo digitato.
  *
  * Stanno in un file loro perche' erano identiche e duplicarle avrebbe fatto
  * divergere due veli che devono essere lo stesso velo — stesso colore, stessa
  * durata, stessa origine del movimento. Solo `transform` e `opacity`.
+ *
+ * I fogli che si servono da qui sono tre: `AddSheet` (`.sheet--add`),
+ * `BudgetSheet` (`.sheet--budget`) ed `ExpenseActions`, che usa solo velo e
+ * animazioni perche' e' alto quanto il suo contenuto.
+ *
+ * Il tastierino ha il suo `Keypad.css`, accanto al componente che lo disegna:
+ * era qui dentro quando esisteva un foglio solo, e con il secondo sarebbe
+ * diventato una dipendenza nascosta di `AddSheet` per chiunque altro lo usi.
  */
 
 .scrim {
@@ -29,5 +37,122 @@
   }
   to {
     transform: translate3d(0, 0, 0);
+  }
+}
+
+/* --- il guscio del foglio ------------------------------------------------ */
+
+.sheet {
+  position: fixed;
+  inset-block-end: 0;
+  inset-inline: 0;
+  z-index: var(--z-sheet);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  max-inline-size: var(--app-max);
+  margin-inline: auto;
+  /* Alto quanto serve, con un minimo che su un telefono grande fa crescere i
+   * tasti invece di lasciare mezzo schermo vuoto, e un tetto che su un telefono
+   * piccolo non sfonda mai il viewport. Ogni foglio si sceglie il proprio
+   * minimo: quello dell'inserimento deve contenere anche otto categorie. */
+  min-block-size: min(100dvh, var(--sheet-min, 38rem));
+  max-block-size: 100dvh;
+  overflow: hidden;
+  padding-block: var(--sp-2) max(var(--sp-3), var(--safe-bottom));
+  padding-inline: max(var(--sp-3), var(--safe-left)) max(var(--sp-3), var(--safe-right));
+  border-start-start-radius: var(--radius-3);
+  border-start-end-radius: var(--radius-3);
+  background-color: var(--surface);
+  box-shadow: var(--shadow-2);
+  animation: sheet-in var(--dur-2) var(--ease-out) both;
+}
+
+/* Solo transform e opacity, 200 ms. Mentre esce non accetta piu' tap: il foglio
+ * resta nel DOM per la durata dell'animazione e un secondo chip toccato li'
+ * salverebbe una spesa in piu'. */
+.scrim[data-leaving],
+.sheet[data-leaving] {
+  pointer-events: none;
+  animation-direction: reverse;
+}
+
+/* Telefoni corti (SE con la barra di stato, oppure testo di sistema ingrandito):
+ * i tasti scendono al minimo tattile invece di spingere fuori quello che sta
+ * sopra. Vale per tutti i fogli col tastierino. */
+@media (max-height: 660px) {
+  .sheet {
+    --key-min: var(--tap-min);
+    --chip-min: 3rem;
+    gap: var(--sp-1);
+  }
+}
+
+/* --- il testo che dice cosa fare adesso ---------------------------------- */
+/* Nell'inserimento qui c'era anche una X per chiudere. Tolta: era la terza via
+ * d'uscita (ci sono gia' il velo ed Escape), stava nell'unico angolo che il
+ * pollice non raggiunge e occupava 25px di altezza in un layout dove l'altezza
+ * e' la risorsa scarsa. */
+
+.sheet__hint {
+  min-inline-size: 0;
+  min-block-size: 1.25rem;
+  font-size: var(--fs-200);
+  font-weight: var(--fw-medium);
+  color: var(--text-muted);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* Il salvataggio non e' andato: il foglio resta aperto, l'importo resta
+ * digitato e il messaggio compare qui, dove l'occhio gia' guarda per sapere
+ * cosa fare. I chip restano vivi: "Riprova" dev'essere una cosa che si puo'
+ * fare davvero. */
+.sheet__hint[data-tone="error"] {
+  color: var(--danger);
+  font-weight: var(--fw-semibold);
+}
+
+/* --- l'importo ----------------------------------------------------------- */
+/* Allineato a destra perche' e' da destra che si riempie: l'ultima cifra
+ * digitata resta ferma sotto lo stesso punto dello schermo. */
+
+.amount {
+  font-variant-numeric: tabular-nums;
+  /* Al tetto (99.999,99 EUR) undici caratteri devono stare in 375px meno i
+   * margini: sotto quella larghezza il numero rimpicciolisce invece di essere
+   * tagliato. Sui telefoni normali resta 40px. */
+  font-size: min(var(--fs-600), 10vw);
+  font-weight: var(--fw-semibold);
+  line-height: var(--lh-tight);
+  letter-spacing: var(--tracking-tight);
+  text-align: end;
+  padding-inline-end: var(--sp-1);
+  padding-block: var(--sp-1);
+}
+
+/* Zero non e' un segnaposto: e' il valore vero prima che si digiti. Smorzato,
+ * non finto. */
+.amount[data-empty] {
+  color: var(--text-muted);
+}
+
+/* --- il telefono girato --------------------------------------------------- */
+/* Le due colonne le disegna ciascun foglio: qui c'e' solo cio' che vale per
+ * entrambi, cioe' l'importo, che a mezza larghezza deve rimpicciolire. */
+@media (max-height: 480px) and (orientation: landscape) {
+  /* Mezza larghezza: qui `10vw` varrebbe 80px e "99.999,99 €" sfonderebbe la
+   * colonna. */
+  .amount {
+    grid-area: amount;
+    align-self: end;
+    padding-block: 0;
+    font-size: min(var(--fs-500), 6vw);
+  }
+
+  .sheet__hint {
+    grid-area: hint;
+    align-self: center;
   }
 }

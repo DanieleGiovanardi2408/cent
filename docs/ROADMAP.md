@@ -7,15 +7,30 @@ quando il codice compila.
 |---|---|---|
 | 0 | Scaffold, PWA, tema, safe area | Si installa da Safari e riapre offline |
 | 1 | Data layer + test | Test verdi su date, ricorrenze, budget |
-| 2 | Aggiungi spesa + storico + **export JSON minimo** | Una spesa vera inserita in < 5s sul telefono, e si puo' salvarla fuori |
-| 3 | Categorie personalizzabili | Si creano, riordinano, archiviano |
-| 4 | Budget + Home | La Home dice quanto si puo' spendere oggi |
+| 2 | Aggiungi spesa + storico + export JSON minimo | Una spesa vera inserita in < 5s sul telefono, e si puo' salvarla fuori |
+| **4** | **Budget + Home** | La Home dice quanto si puo' spendere oggi |
+| **3** | **Categorie personalizzabili** | Si creano, riordinano, archiviano |
 | 5 | Spese ricorrenti | Catch-up dopo 40 giorni, zero duplicati |
 | 6 | Statistiche | Grafici SVG, nessuna libreria aggiunta |
 | 7 | Export/import completo + backup | Round-trip senza perdita, import con anteprima |
 | 8 | Packaging e pubblicazione | README con GIF, CI verde, app live su Pages |
 
+**La 4 si fa prima della 3.** I numeri restano quelli: rinumerare renderebbe
+sbagliati i riferimenti "fase 3" e "fase 4" gia' sparsi nelle ADR e nei commenti
+del codice. Cambia l'ordine, non l'identita' delle fasi.
+
+Perche' lo scambio:
+
+- Le categorie **le abbiamo scelte deliberatamente** e non saranno sbagliate prima
+  di una settimana d'uso. Il numero "quanto posso spendere oggi" e' invece il
+  motivo per cui si apre l'app **quando non si sta pagando** — cioe' l'unico
+  motivo che oggi non e' servito da nessuna schermata.
+- E quando arriveremo alle categorie modificabili **sapremo quali sono
+  sbagliate**, invece di indovinarlo. Rimandarle non e' un costo: e' aspettare il
+  dato che rende la fase utile.
+
 Dopo la fase 2: usare l'app per una giornata vera prima di proseguire.
+
 
 ## Compiti espliciti della fase 2
 
@@ -180,6 +195,28 @@ proprie proposte.
 gate**: `crypto.randomUUID` esiste solo in contesto sicuro. Su `http://` da rete
 locale sparisce e l'app non parte — un cambio di runtime che nessun test vede,
 perche' ogni test inietta `newId`.
+
+## Il periodo della Home deriva dai budget
+
+Non esiste una preferenza di visualizzazione: **il periodo mostrato e' quello
+dell'ultimo budget impostato**. La scelta e' deliberata — aggiungere un campo in
+`Settings` sarebbe una migrazione di schema **su dati veri** (CLAUDE.md, "Da qui
+in avanti i dati sono veri") per sostenere un selettore che non esiste.
+
+**La trappola, da conoscere prima che qualcuno ci costruisca sopra.** Con questo
+modello, aggiungere un selettore di periodo alla Home significherebbe che
+**guardare il mese crea un budget mensile permanente nello storico**: un'azione di
+vista produrrebbe un record di dominio, e i budget sono storicizzati, quindi quel
+record resterebbe li' per sempre a dire una cosa che l'utente non ha mai deciso.
+
+Quindi: se quel selettore servira', **serve prima una preferenza separata in
+Settings**. Non si aggiunge il selettore e basta.
+
+Conseguenza gia' attiva oggi: settimanale e mensile possono restare aperti insieme
+(`planResolvedBudgetChange` chiude solo i budget dello stesso periodo), quindi
+"l'ultimo impostato" e' un ordine totale — `effectiveFrom`, poi `createdAt`, poi
+`id` — con un test che verifica che l'ordine dell'array non conti. E' la stessa
+dottrina di `resolveBudget` (ADR 008): mai una scelta arbitraria, mai un throw.
 
 ## Rischi noti: contesto stantio che scrive
 

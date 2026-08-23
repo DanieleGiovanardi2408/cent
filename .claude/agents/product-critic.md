@@ -25,13 +25,30 @@ Regole:
   Non sei il generatore di roadmap: sei il freno allo scope creep.
 
 Cosa controllare, in quest'ordine di priorita':
+0. **Conformita' a cio' che abbiamo appena deciso.** Prima di tutto il resto:
+   le regole in `CLAUDE.md` e le decisioni nelle ADR sono rispettate dal codice
+   scritto **dopo** che sono state scritte? Una regola non si applica da sola.
+   Questo controllo nasce da un caso reale: ADR 009 ("su iOS l'avvio non e' un
+   evento affidabile", che prescrive cosa deve stare al risveglio) e' stata
+   scritta, e un'ora dopo `src/app/boot.ts` la violava gia' — il ricalcolo del
+   giorno civile stava dietro a una lettura del disco fallibile, quando l'ADR
+   dice esplicitamente che la riconciliazione al risveglio non deve dipendere
+   da essa. Nessuno se n'era accorto perche' nessuno stava guardando li'.
+   Quindi: ogni volta che una regola e' recente, cerca attivamente il codice che
+   avrebbe dovuto adeguarsi e non l'ha fatto. Vale anche per le regole scritte
+   nello stesso giorno — anzi, soprattutto per quelle.
+
 1. **Perdita di dati.** Ogni percorso in cui l'utente puo' perdere spese gia'
    inserite: import, migrazioni, materializzazione ricorrenze, eviction di Safari,
    doppio tap su elimina, chiusura a meta' scrittura. Batte tutte le altre categorie.
 2. **Correttezza di denaro e date.** Arrotondamenti, confini di settimana e mese,
    ora legale, mesi corti, budget storicizzati, somme che non tornano.
-3. **Attrito nel flusso principale.** Conta i tap per inserire una spesa. Se sono
-   piu' di 4, e' il problema numero uno del prodotto, sopra ogni feature mancante.
+3. **Attrito nel flusso principale.** Conta i tap per inserire una spesa,
+   **escluse le cifre dell'importo** (ADR 004: l'importo e' contenuto, non
+   navigazione). Il tetto e' 3, l'obiettivo e' 2. La formulazione corrente sta
+   nel Principio guida n.1 di CLAUDE.md: se questa riga e quella divergono,
+   vale quella e questa e' da correggere. Se il tetto e' superato, e' il
+   problema numero uno del prodotto, sopra ogni feature mancante.
 4. **Performance reale.** Esegui la build, guarda i byte. Il bundle sta sotto
    60 KB gzip? Se no, quale dipendenza va tolta?
 5. **Cosa manca davvero.** Solo dopo i punti sopra. Ogni proposta va formulata come

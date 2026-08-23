@@ -1,0 +1,32 @@
+/* Lo stato senza righe, in tutte le schermate che ne hanno uno.
+ *
+ * Occupa lo stesso spazio in tutti i casi (in apertura, vuoto, errore): quando i
+ * dati arrivano non si sposta niente. Quanto spazio lo decide chi lo ospita, con
+ * `--blank-min`: nello Storico e' mezza schermata, nella Home e' meno, perche'
+ * sopra c'e' gia' il numero del periodo.
+ */
+
+.blank {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--sp-3);
+  min-block-size: var(--blank-min, 60dvh);
+  padding-block: var(--sp-6);
+}
+
+.blank__title {
+  font-size: var(--fs-500);
+  font-weight: var(--fw-bold);
+  line-height: var(--lh-snug);
+  letter-spacing: var(--tracking-tight);
+}
+
+.blank__text {
+  max-inline-size: 30ch;
+  font-size: var(--fs-300);
+  line-height: var(--lh-body);
+  color: var(--text-muted);
+}
+

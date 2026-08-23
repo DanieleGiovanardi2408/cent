@@ -1,15 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import { backupFilename, exportBackupFile, serializeBackup } from '../app/backup-file'
-import { refreshDay } from '../app/boot'
+import { getAppState, refreshDay } from '../app/boot'
 import type { Repository } from '../core/repository'
 import { formatCents } from '../core/money'
 import { nowTimestamp } from '../core/types'
-import type { Category, Expense } from '../core/types'
+import type { BudgetPeriod, Category, Expense } from '../core/types'
 import { AddSheet } from './AddSheet'
 import type { SaveInput } from './AddSheet'
 import { BackupPanel } from './BackupPanel'
+import { BudgetSheet } from './BudgetSheet'
 import { ExpenseActions } from './ExpenseActions'
 import { History } from './History'
+import { Home } from './Home'
+import { activePeriod, currentBudgetCents } from './budget-view'
 import { Toast } from './Toast'
 import type { ToastAction, ToastData } from './Toast'
 import { UpdateBanner } from './UpdateBanner'
@@ -30,7 +33,18 @@ function Mark() {
   )
 }
 
-type SheetState = 'closed' | 'open' | 'leaving'
+/**
+ * Quale foglio e' aperto, e se sta gia' uscendo. Sono due — inserimento e
+ * budget — e non possono essere aperti insieme: `null` significa nessuno.
+ */
+type Sheet = { readonly kind: 'add' | 'budget'; readonly leaving: boolean } | null
+
+/**
+ * La schermata attiva. E' stato, non una rotta: in standalone su iOS non esiste
+ * il tasto Indietro del browser, quindi un router sincronizzerebbe la UI con una
+ * history che nessuno puo' guardare. Vedi ADR 002.
+ */
+type View = 'home' | 'history'
 
 let toastSeq = 0
 
@@ -39,7 +53,8 @@ const TOAST_MS = { plain: 4000, action: 6000 } as const
 
 export function App() {
   const app = useApp()
-  const [sheet, setSheet] = useState<SheetState>('closed')
+  const [view, setView] = useState<View>('home')
+  const [sheet, setSheet] = useState<Sheet>(null)
   /** Cambia a ogni apertura: rimonta il foglio, cosi' non eredita mai un importo. */
   const [session, setSession] = useState(0)
   const [toast, setToast] = useState<ToastData | null>(null)
@@ -118,7 +133,7 @@ export function App() {
     }, life)
   }
 
-  function openSheet(): void {
+  function openSheet(kind: 'add' | 'budget'): void {
     // Il toast se ne va **prima** di tutto il resto. Da fisso stava sopra il
     // tastierino e "Annulla" cadeva dentro il tasto "9"; ora e' contenuto in
     // flusso e finisce dietro al foglio, quindi non e' piu' raggiungibile per
@@ -130,15 +145,15 @@ export function App() {
     refreshDay()
     clearTimeout(closeTimer.current)
     setSession((current) => current + 1)
-    setSheet('open')
+    setSheet({ kind, leaving: false })
   }
 
   function closeSheet(): void {
-    setSheet('leaving')
+    setSheet((current) => (current === null ? null : { ...current, leaving: true }))
     clearTimeout(closeTimer.current)
     // Sotto prefers-reduced-motion l'attesa e' zero: sparisce l'animazione,
     // non deve sopravvivere il ritardo.
-    closeTimer.current = window.setTimeout(() => setSheet('closed'), motionMs(200))
+    closeTimer.current = window.setTimeout(() => setSheet(null), motionMs(200))
   }
 
   function categoryOf(id: string): Category | undefined {
@@ -176,7 +191,34 @@ export function App() {
     return true
   }
 
-  /** Apre le azioni su una spesa dello Storico. Il tap sulla riga e' l'affordance. */
+  /**
+   * Scrive il budget. Ottimistico come tutto il resto: `setBudget` muove il
+   * mirror subito e la Home si ridisegna nello stesso frame; se il disco non
+   * accetta, la scrittura finisce in `writeFailures` e l'avviso "esporta
+   * adesso" compare da solo. Nessuno spinner su una scrittura locale.
+   */
+  function saveBudget(period: BudgetPeriod, amountCents: number): boolean {
+    const repo = app.repo
+    if (!repo) return false
+    // Il foglio puo' essere rimasto aperto oltre la mezzanotte: `effectiveFrom`
+    // dev'essere il giorno vero, o il budget nuovo varrebbe da ieri e
+    // riscriverebbe un periodo gia' chiuso.
+    refreshDay()
+    try {
+      repo.setBudget({ period, amountCents, effectiveFrom: getAppState().day })
+    } catch {
+      return false
+    }
+    closeSheet()
+    // Niente "Annulla": impostare un budget non distrugge niente, e il rimedio
+    // e' lo stesso gesto al contrario. Il toast conferma e basta.
+    showToast(
+      `Budget: ${formatCents(amountCents)} ${period === 'weekly' ? 'a settimana' : 'al mese'}`,
+    )
+    return true
+  }
+
+  /** Apre le azioni su una spesa. Il tap sulla riga e' l'affordance. */
   function pick(expense: Expense): void {
     clearToast()
     setPicked(expense)
@@ -270,14 +312,19 @@ export function App() {
   // tecnologie assistive. Il foglio che sta uscendo non conta: sta gia'
   // sparendo, e tenerlo qui zittirebbe il toast che nasce proprio in
   // quell'istante.
-  const modal = sheet === 'open' || picked !== null || panel !== null
+  const modal = (sheet !== null && !sheet.leaving) || picked !== null || panel !== null
 
   return (
     <>
       <div class="app" aria-hidden={modal ? 'true' : undefined}>
         <header class="app__bar">
           <Mark />
-          <span class="app__name">Cent</span>
+
+          {/* Export a sinistra, navigazione a destra: l'angolo in alto a destra
+              e' il meno scomodo dei due per un pollice destro, e va a chi si
+              tocca ogni giorno. Prima era l'opposto — le schede nell'angolo piu'
+              lontano dal FAB e "Esporta", che si tocca una volta ogni due
+              settimane, nel posto buono. */}
           <button
             type="button"
             class="app__action"
@@ -291,6 +338,30 @@ export function App() {
             </svg>
             Esporta
           </button>
+
+          {/* La navigazione sta in barra e non in fondo allo schermo: in fondo
+              c'e' la fascia riservata al FAB, e una barra di schede li' dentro
+              sarebbe un secondo bersaglio a un pollice di distanza da quello che
+              vale piu' di tutti. Due schermate non hanno bisogno di piu' di due
+              parole. */}
+          <nav class="nav" aria-label="Schermate">
+            <button
+              type="button"
+              class="nav__tab"
+              aria-current={view === 'home' ? 'page' : undefined}
+              onClick={() => setView('home')}
+            >
+              Home
+            </button>
+            <button
+              type="button"
+              class="nav__tab"
+              aria-current={view === 'history' ? 'page' : undefined}
+              onClick={() => setView('history')}
+            >
+              Storico
+            </button>
+          </nav>
         </header>
 
         {/* Permanente, non un toast: dice che questa non e' la build vera. */}
@@ -316,14 +387,28 @@ export function App() {
         )}
 
         <main class="app__main">
-          <h1 class="visually-hidden">Le tue spese</h1>
-          <History
-            phase={app.phase}
-            expenses={app.data?.expenses ?? []}
-            categories={app.data?.categories ?? []}
-            day={app.day}
-            onPick={pick}
-          />
+          <h1 class="visually-hidden">
+            {view === 'home' ? 'Quanto ti resta' : 'Le tue spese'}
+          </h1>
+          {view === 'home' ? (
+            <Home
+              phase={app.phase}
+              expenses={app.data?.expenses ?? []}
+              categories={app.data?.categories ?? []}
+              budgets={app.data?.budgets ?? []}
+              day={app.day}
+              onPick={pick}
+              onEditBudget={() => openSheet('budget')}
+            />
+          ) : (
+            <History
+              phase={app.phase}
+              expenses={app.data?.expenses ?? []}
+              categories={app.data?.categories ?? []}
+              day={app.day}
+              onPick={pick}
+            />
+          )}
         </main>
 
         {/* Le due bande in fondo. Sono contenuto, non overlay: comparire accorcia
@@ -336,7 +421,7 @@ export function App() {
           class="fab"
           aria-label="Aggiungi una spesa"
           disabled={app.repo === null}
-          onClick={openSheet}
+          onClick={() => openSheet('add')}
         >
           <svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true">
             <path d="M12 5v14M5 12h14" />
@@ -348,16 +433,28 @@ export function App() {
           lo sfondo nasconderebbe anche loro. Sono `position: fixed`, e un
           eventuale transform su un antenato li ancorerebbe al contenitore
           sbagliato. */}
-      {sheet === 'closed' ? null : (
+      {sheet?.kind === 'add' ? (
         <AddSheet
           key={session}
           categories={categories}
           day={app.day}
-          leaving={sheet === 'leaving'}
+          leaving={sheet.leaving}
           onSave={save}
           onClose={closeSheet}
         />
-      )}
+      ) : null}
+
+      {sheet?.kind === 'budget' ? (
+        <BudgetSheet
+          key={session}
+          weeklyCents={currentBudgetCents(app.data?.budgets ?? [], 'weekly', app.day)}
+          monthlyCents={currentBudgetCents(app.data?.budgets ?? [], 'monthly', app.day)}
+          period={activePeriod(app.data?.budgets ?? [], app.day)}
+          leaving={sheet.leaving}
+          onSave={saveBudget}
+          onClose={closeSheet}
+        />
+      ) : null}
 
       {picked === null ? null : (
         <ExpenseActions

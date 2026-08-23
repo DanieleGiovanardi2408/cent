@@ -1,0 +1,80 @@
+/* Una riga di spesa: un bottone a tutta larghezza. Tocca la riga, si apre il
+ * foglio delle azioni.
+ *
+ * Il rientro negativo fa arrivare lo stato premuto fino al bordo della lista,
+ * cosi' quello che si illumina e' la riga intera — cioe' esattamente il
+ * bersaglio che si e' toccato.
+ *
+ * Lo stile sta accanto al componente, non nel CSS dello Storico: dalla fase 4 la
+ * riga vive anche nella Home, e tenerlo li' avrebbe reso la Home dipendente in
+ * silenzio dal foglio di stile di un'altra schermata.
+ */
+
+.row {
+  inline-size: 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  min-block-size: var(--tap-min);
+  padding-block: var(--sp-1);
+  padding-inline: var(--sp-2);
+  margin-inline: calc(var(--sp-2) * -1);
+  border-radius: var(--radius-1);
+  border-block-end: 1px solid var(--line);
+  text-align: start;
+}
+
+li:last-child .row {
+  border-block-end: none;
+}
+
+/* Nessuna transizione: il colore cambia nel frame del tap. */
+.row:active {
+  background-color: var(--brand-soft);
+}
+
+/* La freccia dice che la riga porta da qualche parte. Senza, un tap che apre un
+ * foglio sarebbe una funzione che esiste solo per chi la scopre per caso. */
+.row__go {
+  flex: none;
+  fill: none;
+  stroke: var(--text-muted);
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.row__emoji {
+  flex: none;
+  inline-size: 1.75rem;
+  text-align: center;
+  font-size: var(--fs-400);
+  line-height: 1;
+}
+
+.row__text {
+  flex: 1;
+  min-inline-size: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.row__name {
+  font-size: var(--fs-300);
+  line-height: var(--lh-snug);
+}
+
+.row__note {
+  font-size: var(--fs-100);
+  line-height: var(--lh-snug);
+  color: var(--text-muted);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.row__amount {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+  font-size: var(--fs-300);
+}

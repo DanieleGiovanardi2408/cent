@@ -123,6 +123,28 @@ async function materialize(repo: Repository): Promise<void> {
 }
 
 /**
+ * Il tetto di tempo sulla rilettura dal disco.
+ *
+ * Il `finally` copre il **rifiuto**, non la promessa che non si risolve mai — ed
+ * e' quello il caso peggiore: `running` resterebbe `true` per sempre, ogni
+ * risveglio successivo sarebbe un no-op silenzioso e con la fase 5 le ricorrenze
+ * smetterebbero di essere generate senza che niente lo dica. Un blocco
+ * permanente invisibile e' peggio di un errore visibile.
+ *
+ * Dieci secondi, e non e' un numero tondo scelto a caso: una rilettura completa
+ * di 5.000 spese misura decine di millisecondi, quindi il tetto sta **due ordini
+ * di grandezza sopra** il caso peggiore reale e non puo' abortire una lettura
+ * lenta ma viva. Dall'altro lato, e' abbastanza corto da essere scaduto prima
+ * che l'utente torni sull'app una seconda volta: chi guarda il telefono, lo
+ * blocca e lo riapre lo fa in minuti, non in secondi.
+ *
+ * Scadere non perde niente: il mirror resta quello che era e la rilettura si
+ * rifa' al risveglio dopo. La materializzazione, invece, resta ferma — parte
+ * solo dopo una rilettura **riuscita**, mai su un mirror di cui non ci si fida.
+ */
+const RELOAD_TIMEOUT_MS = 10_000
+
+/**
  * Rilettura al risveglio (ADR 007).
  *
  * Il mirror e' una cache e dopo ogni sospensione e' scaduto. Qui si agganciano
@@ -135,24 +157,43 @@ async function materialize(repo: Repository): Promise<void> {
  * 2. lo stato pubblicato torna allineato al mirror;
  * 3. la materializzazione parte **solo dopo** una rilettura riuscita, mai prima:
  *    con un mirror vecchio genererebbe occorrenze da regole spente altrove.
+ *
+ * **Il punto 1 non e' dentro il `try`, ed e' la prima riga.** ADR 009 dice che
+ * la riconciliazione al risveglio comprende il ricalcolo del giorno civile, e il
+ * giorno civile non dipende dal disco: quando `reloadFromDisk` rifiuta — iOS
+ * chiude le connessioni IndexedDB in background, e' un fatto noto — la Home
+ * resterebbe sul periodo di ieri con le spese di ieri sotto "Oggi", cioe' il
+ * dato sbagliato piu' visibile dell'app per un guasto che non lo riguarda.
+ * Nemmeno la guardia `running` lo trattiene: il giorno si ricalcola comunque.
  */
 function attachWake(repo: Repository): void {
   let running = false
 
   const wake = async (): Promise<void> => {
+    refreshDay()
     if (running) return
     running = true
+    let expired = 0
     try {
-      const outcome = await repo.reloadFromDisk()
-      patch({ day: today(), data: repo.getState() })
+      const outcome = await Promise.race([
+        repo.reloadFromDisk(),
+        new Promise<never>((_, reject) => {
+          expired = window.setTimeout(
+            () => reject(new Error('rilettura oltre il tetto di tempo')),
+            RELOAD_TIMEOUT_MS,
+          )
+        }),
+      ])
+      patch({ data: repo.getState() })
       if (outcome.reloaded) await materialize(repo)
       // Saltata: il mirror e' avanti al disco (scritture in coda o perse) o un
       // import sta gia' sostituendo tutto. In tutti i casi il dato buono e'
       // quello che l'utente ha davanti, e resta li'.
     } catch {
-      // La lettura dal disco e' fallita: il mirror e' intatto, non e' una
-      // divergenza. Si ritenta al prossimo risveglio.
+      // La lettura dal disco e' fallita, o non e' mai tornata: il mirror e'
+      // intatto, non e' una divergenza. Si ritenta al prossimo risveglio.
     } finally {
+      clearTimeout(expired)
       running = false
     }
   }

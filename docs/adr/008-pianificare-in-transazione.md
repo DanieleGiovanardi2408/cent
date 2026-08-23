@@ -23,6 +23,9 @@ I tre casi:
    i budget dal mirror. Un contesto stantio non vedeva il budget aperto
    dall'altro e non lo chiudeva: due record aperti sovrapposti, per sempre.
    Corretto portando la pianificazione dentro la transazione readwrite.
+   (`planBudgetChange` e' stato poi cancellato: era rimasto solo come wrapper
+   senza chiamanti sopra `planResolvedBudgetChange`, che e' la funzione che gira
+   davvero in transazione.)
 
 ## Decisione
 

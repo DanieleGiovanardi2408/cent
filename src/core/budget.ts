@@ -29,7 +29,6 @@ import type { IsoDate } from './date'
 import { divideCents, sumCents } from './money'
 import type { Cents } from './money'
 import type { Budget, BudgetPeriod, Expense, Timestamp } from './types'
-import { newId as defaultNewId, nowTimestamp } from './types'
 
 export interface PeriodRange {
   readonly start: IsoDate
@@ -113,6 +112,66 @@ export interface BudgetMetrics {
   readonly range: PeriodRange
   /** `null` = nessun budget definito per questo periodo. */
   readonly budgetCents: Cents | null
+  /**
+   * `effectiveFrom` del record risolto, cioe' **da che giorno il budget e' in
+   * vigore**. `null` esattamente quando `budgetCents` e' `null`.
+   *
+   * Serve a distinguere due situazioni che senza questo campo hanno gli stessi
+   * numeri e sono fatti diversi:
+   *
+   * - **budget nato a meta' periodo** (`> range.start`): si imposta il primo
+   *   budget settimanale mercoledi' avendo gia' speso 240,00 lunedi' e martedi'.
+   *   `remainingCents` esce negativo, ma non si e' sforato niente: il budget non
+   *   c'era ancora quando quei soldi sono usciti.
+   * - **budget bruciato** (`=== range.start`, o precedente): il budget copriva
+   *   tutto il periodo e le spese lo hanno consumato davvero.
+   *
+   * Chi mostra i numeri puo' cosi' dire "budget attivo da mercoledi'" invece di
+   * far passare per sforamento un budget appena nato.
+   *
+   * **Non e' un pro-rata**: il budget non viene ridotto in proporzione ai giorni
+   * rimasti, e `budgetCents`/`remainingCents` non cambiano significato. "200 a
+   * settimana" dichiara un ritmo, non un fondo per i giorni che restano. Questo
+   * campo e' un fatto in piu' da raccontare, non un correttivo al calcolo.
+   *
+   * Puo' anche essere **precedente** a `range.start` (il caso normale: un budget
+   * aperto mesi fa). Il confronto utile e' `budgetEffectiveFrom > range.start`.
+   *
+   * Da solo non basta: `> range.start` vuol dire "il record in vigore oggi e'
+   * stato aperto a periodo gia' cominciato", e questo succede sia al primo budget
+   * in assoluto sia a un budget **modificato** a meta' periodo. A separarli c'e'
+   * `budgetCoveredPeriodStart`.
+   */
+  readonly budgetEffectiveFrom: IsoDate | null
+  /**
+   * Vero se un budget dello stesso `period` e `categoryId` era in vigore il
+   * **primo giorno del periodo** (`range.start`).
+   *
+   * Esiste per qualificare `budgetEffectiveFrom > range.start`, che da solo
+   * confonde due storie diverse:
+   *
+   * - `false` -> **non c'era nessuna regola** all'inizio del periodo. E' il primo
+   *   budget, nato a periodo gia' cominciato: le spese fatte prima sono state
+   *   fatte senza budget, e un `remainingCents` negativo non e' uno sforamento.
+   *   Qui la Home ha qualcosa da spiegare.
+   * - `true` -> un budget c'era gia' dal primo giorno, e mercoledi' l'utente lo ha
+   *   semplicemente **cambiato**. Non c'e' niente da spiegare: la regola esisteva
+   *   e il residuo negativo e' un residuo negativo.
+   *
+   * Senza questo campo la frase "prima non avevi un budget" verrebbe mostrata
+   * anche a chi un budget ce l'aveva: l'app rimprovererebbe per una regola che
+   * non esisteva. E' il difetto che ADR 010 esiste per correggere.
+   *
+   * **Vale `false` quando non c'e' budget oggi** (`budgetCents === null`), senza
+   * guardare il passato. Scelta deliberata: il campo qualifica
+   * `budgetEffectiveFrom`, e se non c'e' un budget da qualificare non c'e' niente
+   * da dire. L'unico caso in cui questo diverge dalla domanda letterale e' un
+   * record chiuso a meta' periodo e mai riaperto — che `planResolvedBudgetChange`
+   * non produce mai (chiude solo aprendo) e che quindi puo' arrivare solo da un
+   * JSON modificato a mano. Chi avesse davvero bisogno della domanda letterale la
+   * faccia a `resolveBudget(budgets, period, range.start, categoryId)`.
+   */
+  readonly budgetCoveredPeriodStart: boolean
   readonly spentCents: Cents
   /** Budget meno speso. Negativo se si e' sforato. `null` senza budget. */
   readonly remainingCents: Cents | null
@@ -198,6 +257,12 @@ export function computeBudgetMetrics(input: BudgetMetricsInput): BudgetMetrics {
     period: input.period,
     range,
     budgetCents,
+    budgetEffectiveFrom: budget?.effectiveFrom ?? null,
+    // Seconda risoluzione, sul primo giorno del periodo invece che su oggi: e'
+    // la sola domanda che distingue "non avevi un budget" da "l'hai cambiato".
+    budgetCoveredPeriodStart:
+      budget !== null &&
+      resolveBudget(input.budgets, input.period, range.start, input.categoryId) !== null,
     spentCents,
     remainingCents,
     daysTotal,
@@ -217,8 +282,6 @@ export interface BudgetChange {
   readonly categoryId?: string
   /** Da quando vale il nuovo importo. Di norma oggi. */
   readonly effectiveFrom: IsoDate
-  readonly now?: () => Timestamp
-  readonly newId?: () => string
 }
 
 /**
@@ -288,39 +351,4 @@ export function planResolvedBudgetChange(
     ...(change.categoryId !== undefined ? { categoryId: change.categoryId } : {}),
   }
   return [...closed, created]
-}
-
-/**
- * `planResolvedBudgetChange` con istante e id generati da qui invece che ricevuti.
- *
- * **Non e' una seconda copia della pianificazione**: non decide niente, risolve
- * `now` e `newId` e delega. La logica esiste in un posto solo, ed e' quella che
- * gira dentro la transazione — `idb.ts` e `memory-persistence.ts` chiamano
- * `planResolvedBudgetChange` sui budget riletti dal disco.
- *
- * Oggi in produzione non la chiama nessuno: `Repository.setBudget` risolve
- * istante e id da se' (gli servono comunque, per il piano ottimistico del
- * mirror e per rendere ripetibile il ritentativo) e chiama direttamente la
- * funzione risolta. Resta esportata come forma comoda per ragionare sulla
- * pianificazione a ingressi fissi, ed e' li' che la usano i test di `budget.ts`.
- *
- * **Chi ne trovasse un uso in produzione, si fermi**: pianificare su un elenco
- * di budget letto dal mirror e poi scrivere il risultato e' esattamente il bug
- * di ADR 008 — un contesto stantio non vede il record aperto dall'altro, non lo
- * chiude, e restano due record sovrapposti che nessuna schermata mostra. Il
- * risultato di questa funzione si guarda; quello che si scrive lo decide il
- * disco.
- */
-export function planBudgetChange(
-  budgets: readonly Budget[],
-  change: BudgetChange,
-): readonly Budget[] {
-  return planResolvedBudgetChange(budgets, {
-    period: change.period,
-    amountCents: change.amountCents,
-    ...(change.categoryId !== undefined ? { categoryId: change.categoryId } : {}),
-    effectiveFrom: change.effectiveFrom,
-    timestamp: (change.now ?? nowTimestamp)(),
-    newRecordId: (change.newId ?? defaultNewId)(),
-  })
 }

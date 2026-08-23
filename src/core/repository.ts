@@ -311,7 +311,7 @@ export interface Repository {
    * scrittura conclusa: cio' che questa funzione restituisce serve al feedback
    * immediato, non a essere memorizzato come verita'.
    */
-  setBudget(change: Omit<BudgetChange, 'now' | 'newId'>): readonly Budget[]
+  setBudget(change: BudgetChange): readonly Budget[]
 
   updateSettings(patch: SettingsPatch): Settings
 

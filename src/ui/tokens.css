@@ -24,6 +24,11 @@
   --fs-500: 1.75rem; /*   28px — titoli */
   --fs-600: 2.5rem; /*    40px — numeri importanti */
   --fs-display: clamp(2.75rem, 14vw, 4rem); /* saluto / totale del periodo */
+  /* Il numero grande della Home. Il tetto in `vw` non e' estetica: al massimo
+   * che il tastierino accetta il residuo e' `-99.999,99 €`, dodici caratteri a
+   * cifre tabulari (~0.6em l'una) = 7.2em. A 11.5vw stanno dentro 390, 375 e
+   * 320 punti senza mai produrre scroll orizzontale. */
+  --fs-hero: min(3.5rem, 11.5vw);
 
   --lh-tight: 1.08;
   --lh-snug: 1.25;
@@ -110,6 +115,15 @@
   --brand-soft: #e3f0ea;
   --on-brand: #ffffff; /*  6.5:1 su --brand */
   --danger: #b3261e; /*  6.0:1 su --bg */
+  /* Sforare non e' un errore: e' un'informazione (CLAUDE.md, "Calcolo budget").
+   * Ha un colore suo, **e non e' --danger**: il rosso e' la cosa che si e'
+   * rotta, e qui non si e' rotto niente — si e' speso piu' del previsto, cosa
+   * che chi ha speso sa gia'. E' un ambra scuro, leggibile come testo
+   * (5.5:1 su --bg, 5.1:1 su --surface-sunken) perche' colora sia una riga di
+   * testo sia la barra del progresso.
+   * Non e' invisibile, pero': e' l'unico colore della Home diverso da --text e
+   * --brand, quindi uno sforo si vede al primo sguardo senza gridare. */
+  --over: #8a5a00;
   --focus: #0d6b4f;
   /* Velo sotto il bottom sheet: abbastanza scuro da staccare il foglio, non
    * tanto da nascondere che la lista dietro si e' gia' aggiornata. */
@@ -138,6 +152,7 @@
     --brand-soft: #12332a;
     --on-brand: #06221a; /*  7.8:1 su --brand */
     --danger: #ff8a80; /*  8.1:1 su --bg */
+    --over: #e3b063; /*  9.4:1 su --bg, 9.9:1 su --surface-sunken */
     --focus: #35c795;
     --scrim: rgb(0 0 0 / 0.62);
     --shadow-1: 0 1px 2px rgb(0 0 0 / 0.5), 0 4px 12px rgb(0 0 0 / 0.35);

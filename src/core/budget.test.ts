@@ -2,13 +2,13 @@ import { describe, expect, it } from 'vitest'
 import {
   computeBudgetMetrics,
   periodRange,
-  planBudgetChange,
+  planResolvedBudgetChange,
   resolveBudget,
   totalSpent,
 } from './budget'
 import { daysBetween } from './date'
 import type { IsoDate } from './date'
-import { makeBudget, makeExpense, sequentialIds, tickingClock } from './testing'
+import { makeBudget, makeExpense } from './testing'
 import type { Budget } from './types'
 
 describe('periodi', () => {
@@ -209,6 +209,11 @@ describe('resolveBudget', () => {
 })
 
 describe('budget storicizzati: il passato non si riscrive', () => {
+  // Istante e id del record nuovo arrivano gia' risolti da chi ha premuto il
+  // tasto: `planResolvedBudgetChange` e' pura, e con gli stessi ingressi
+  // ripianifica lo stesso identico piano (e' cio' che gira in transazione).
+  const ISTANTE = '2026-08-22T09:00:00.000Z'
+  const ISTANTE_DOPO = '2026-08-22T18:30:00.000Z'
   const spese = [
     makeExpense({ date: '2026-07-05', amountCents: 30_000 }),
     makeExpense({ date: '2026-07-20', amountCents: 25_000 }),
@@ -232,12 +237,12 @@ describe('budget storicizzati: il passato non si riscrive', () => {
     expect(luglioPrima.remainingCents).toBe(45_000)
 
     // L utente stamattina abbassa il budget.
-    const scritti = planBudgetChange(iniziali, {
+    const scritti = planResolvedBudgetChange(iniziali, {
       period: 'monthly',
       amountCents: 80_000,
       effectiveFrom: oggi,
-      now: tickingClock(),
-      newId: sequentialIds('b'),
+      timestamp: ISTANTE,
+      newRecordId: 'b2',
     })
     const dopo = [
       ...iniziali.filter((b) => !scritti.some((s) => s.id === b.id)),
@@ -264,51 +269,68 @@ describe('budget storicizzati: il passato non si riscrive', () => {
     expect(agosto.budgetCents).toBe(80_000)
   })
 
-  it('planBudgetChange chiude il record aperto il giorno prima', () => {
-    const scritti = planBudgetChange(iniziali, {
+  it('chiude il record aperto il giorno prima e apre quello nuovo con l id ricevuto', () => {
+    const scritti = planResolvedBudgetChange(iniziali, {
       period: 'monthly',
       amountCents: 80_000,
       effectiveFrom: '2026-08-22',
-      now: tickingClock(),
-      newId: sequentialIds('b'),
+      timestamp: ISTANTE,
+      newRecordId: 'b2',
     })
     expect(scritti).toHaveLength(2)
     expect(scritti[0]?.id).toBe('b1')
     expect(scritti[0]?.effectiveTo).toBe('2026-08-21')
     expect(scritti[0]?.amountCents).toBe(100_000)
+    expect(scritti[0]?.updatedAt).toBe(ISTANTE)
+    expect(scritti[1]?.id).toBe('b2')
     expect(scritti[1]?.effectiveFrom).toBe('2026-08-22')
     expect(scritti[1]?.amountCents).toBe(80_000)
     expect(scritti[1]?.effectiveTo).toBeUndefined()
+    expect(scritti[1]?.createdAt).toBe(ISTANTE)
   })
 
-  it('due cambi nello stesso giorno aggiornano lo stesso record, senza lasciare rottami', () => {
-    const primo = planBudgetChange(iniziali, {
+  it('a ingressi identici il piano e identico: ritentare una scrittura non apre un secondo record', () => {
+    const richiesta = {
       period: 'monthly',
       amountCents: 80_000,
       effectiveFrom: '2026-08-22',
-      now: tickingClock(),
-      newId: sequentialIds('b'),
+      timestamp: ISTANTE,
+      newRecordId: 'b2',
+    } as const
+    expect(planResolvedBudgetChange(iniziali, richiesta)).toEqual(
+      planResolvedBudgetChange(iniziali, richiesta),
+    )
+  })
+
+  it('due cambi nello stesso giorno aggiornano lo stesso record, senza lasciare rottami', () => {
+    const primo = planResolvedBudgetChange(iniziali, {
+      period: 'monthly',
+      amountCents: 80_000,
+      effectiveFrom: '2026-08-22',
+      timestamp: ISTANTE,
+      newRecordId: 'b2',
     })
     const stato = [iniziali[0] as Budget, primo[1] as Budget]
-    const secondo = planBudgetChange(stato, {
+    const secondo = planResolvedBudgetChange(stato, {
       period: 'monthly',
       amountCents: 90_000,
       effectiveFrom: '2026-08-22',
-      now: tickingClock(),
-      newId: sequentialIds('c'),
+      timestamp: ISTANTE_DOPO,
+      newRecordId: 'b3',
     })
     expect(secondo).toHaveLength(1)
-    expect(secondo[0]?.id).toBe(primo[1]?.id)
+    expect(secondo[0]?.id).toBe('b2')
     expect(secondo[0]?.amountCents).toBe(90_000)
+    expect(secondo[0]?.updatedAt).toBe(ISTANTE_DOPO)
   })
 
   it('il primo budget in assoluto non chiude niente', () => {
-    const scritti = planBudgetChange([], {
+    const scritti = planResolvedBudgetChange([], {
       period: 'weekly',
       amountCents: 20_000,
       effectiveFrom: '2026-08-17',
-      now: tickingClock(),
-      newId: sequentialIds('b'),
+      timestamp: ISTANTE,
+      newRecordId: 'b2',
     })
     expect(scritti).toHaveLength(1)
     expect(scritti[0]?.period).toBe('weekly')
@@ -499,6 +521,148 @@ describe('metriche del periodo', () => {
     expect(m.daysTotal).toBe(7)
     expect(m.daysRemaining).toBe(7)
     expect(m.daysElapsed).toBe(0)
+  })
+
+  it('budgetEffectiveFrom riporta da che giorno il budget vale', () => {
+    // Il budget e nato con il periodo (anzi, prima): copriva tutto l arco, quindi
+    // quello che si e speso lo ha eroso davvero.
+    const m = computeBudgetMetrics({
+      expenses: spese,
+      budgets,
+      period: 'monthly',
+      onDate: '2026-08-22',
+      today: '2026-08-22',
+    })
+    expect(m.budgetEffectiveFrom).toBe('2026-08-01')
+    expect(m.budgetEffectiveFrom).toBe(m.range.start)
+  })
+
+  it('un budget nato a meta periodo si distingue da un budget bruciato', () => {
+    // Il caso vero: primo budget settimanale impostato mercoledi, con lunedi e
+    // martedi gia spesi. `remainingCents` esce negativo, ma non e uno sforamento:
+    // il budget non c era ancora. Il numero non cambia, cambia cosa si puo dire.
+    const settimana = [
+      makeExpense({ date: '2026-08-17', amountCents: 12_000 }),
+      makeExpense({ date: '2026-08-18', amountCents: 12_000 }),
+    ]
+    const natoMercoledi = [
+      makeBudget({ period: 'weekly', amountCents: 20_000, effectiveFrom: '2026-08-19' }),
+    ]
+    const m = computeBudgetMetrics({
+      expenses: settimana,
+      budgets: natoMercoledi,
+      period: 'weekly',
+      onDate: '2026-08-19',
+      today: '2026-08-19',
+    })
+    expect(m.range.start).toBe('2026-08-17')
+    expect(m.budgetEffectiveFrom).toBe('2026-08-19')
+    // Nessun budget copriva il lunedi: quei 240,00 sono usciti senza una regola.
+    expect(m.budgetCoveredPeriodStart).toBe(false)
+    // Nessun pro-rata: il tetto resta quello dichiarato, e lo speso e quello del
+    // periodo intero. Solo `budgetEffectiveFrom` dice che il budget e piu giovane.
+    expect(m.budgetCents).toBe(20_000)
+    expect(m.spentCents).toBe(24_000)
+    expect(m.remainingCents).toBe(-4_000)
+
+    // Stessi numeri, budget presente da inizio settimana: qui e bruciato davvero.
+    const bruciato = computeBudgetMetrics({
+      expenses: settimana,
+      budgets: [makeBudget({ period: 'weekly', amountCents: 20_000, effectiveFrom: '2026-08-17' })],
+      period: 'weekly',
+      onDate: '2026-08-19',
+      today: '2026-08-19',
+    })
+    expect(bruciato.remainingCents).toBe(m.remainingCents)
+    expect(bruciato.budgetEffectiveFrom).toBe('2026-08-17')
+    expect(bruciato.budgetCoveredPeriodStart).toBe(true)
+  })
+
+  it('senza budget budgetEffectiveFrom e null come budgetCents', () => {
+    const m = computeBudgetMetrics({
+      expenses: spese,
+      budgets: [],
+      period: 'monthly',
+      onDate: '2026-08-22',
+      today: '2026-08-22',
+    })
+    expect(m.budgetCents).toBeNull()
+    expect(m.budgetEffectiveFrom).toBeNull()
+    expect(m.budgetCoveredPeriodStart).toBe(false)
+  })
+
+  it('un budget modificato a meta periodo non e un budget nato a meta periodo', () => {
+    // Le due storie hanno lo stesso `budgetEffectiveFrom`: e solo
+    // `budgetCoveredPeriodStart` a dire che qui una regola c era gia da lunedi,
+    // e quindi che non c e niente da spiegare.
+    const settimana = [
+      makeExpense({ date: '2026-08-17', amountCents: 12_000 }),
+      makeExpense({ date: '2026-08-18', amountCents: 12_000 }),
+    ]
+    const modificatoMercoledi = [
+      makeBudget({
+        id: 'b-lun',
+        period: 'weekly',
+        amountCents: 30_000,
+        effectiveFrom: '2026-08-10',
+        effectiveTo: '2026-08-18',
+      }),
+      makeBudget({
+        id: 'b-mer',
+        period: 'weekly',
+        amountCents: 20_000,
+        effectiveFrom: '2026-08-19',
+      }),
+    ]
+    const m = computeBudgetMetrics({
+      expenses: settimana,
+      budgets: modificatoMercoledi,
+      period: 'weekly',
+      onDate: '2026-08-19',
+      today: '2026-08-19',
+    })
+    const da = m.budgetEffectiveFrom
+    expect(da).toBe('2026-08-19')
+    expect(da !== null && da > m.range.start).toBe(true)
+    expect(m.budgetCoveredPeriodStart).toBe(true)
+    expect(m.remainingCents).toBe(-4_000)
+  })
+
+  it('un budget aperto mesi fa copre il primo giorno del periodo', () => {
+    const m = computeBudgetMetrics({
+      expenses: spese,
+      budgets,
+      period: 'monthly',
+      onDate: '2026-08-22',
+      today: '2026-08-22',
+    })
+    expect(m.budgetEffectiveFrom).toBe(m.range.start)
+    expect(m.budgetCoveredPeriodStart).toBe(true)
+  })
+
+  it('un budget chiuso a meta periodo e mai riaperto lascia il flag a false', () => {
+    // Dato che `planResolvedBudgetChange` non produce (chiude solo aprendo):
+    // puo arrivare da un JSON modificato a mano. Senza budget oggi non c e
+    // niente da qualificare, quindi il flag e false anche se lunedi un budget
+    // c era. Scelta dichiarata nel doc del campo.
+    const orfano = [
+      makeBudget({
+        period: 'weekly',
+        amountCents: 20_000,
+        effectiveFrom: '2026-08-17',
+        effectiveTo: '2026-08-18',
+      }),
+    ]
+    const m = computeBudgetMetrics({
+      expenses: [],
+      budgets: orfano,
+      period: 'weekly',
+      onDate: '2026-08-19',
+      today: '2026-08-19',
+    })
+    expect(m.budgetCents).toBeNull()
+    expect(m.budgetEffectiveFrom).toBeNull()
+    expect(m.budgetCoveredPeriodStart).toBe(false)
   })
 
   it('totalSpent somma solo dentro l intervallo', () => {

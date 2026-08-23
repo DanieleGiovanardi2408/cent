@@ -42,6 +42,15 @@ decisione sbagliata. Tutto il resto dell'app e' secondario a questo flusso.
 - Ogni interazione (tap -> feedback) < 100 ms. Optimistic UI sempre.
 - Liste fluide a 60fps con 5.000 spese in archivio.
 
+## Da qui in avanti i dati sono veri
+Il database sul dispositivo contiene spese reali che nessuno puo' ricreare. Ogni
+migrazione di schema, ogni scrittura in blocco e ogni correzione a `src/core` da
+questo punto opera su **dati irripetibili**.
+
+Le migrazioni non sono piu' un esercizio: prima di una migrazione che tocchi
+record esistenti, il piano va verificato su una **copia del backup reale**, non
+solo su dati sintetici.
+
 ## Modello dati
 Tutte le entita': `id` (crypto.randomUUID), `createdAt`, `updatedAt`.
 - **Expense**: `amountCents` (intero), `categoryId`, `date: 'YYYY-MM-DD'`, `note?`,

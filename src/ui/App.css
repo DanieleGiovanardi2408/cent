@@ -37,7 +37,8 @@
  * a meta' schermo. */
 .app__bar,
 .alert,
-.list {
+.list,
+.home {
   padding-inline: max(var(--sp-4), var(--safe-left)) max(var(--sp-4), var(--safe-right));
 }
 
@@ -50,11 +51,62 @@
   min-block-size: var(--tap-min);
 }
 
-.app__name {
-  flex: 1;
-  font-size: var(--fs-400);
+/* --- navigazione fra le due schermate ------------------------------------ */
+/* Due parole in barra, non una barra di schede in fondo: in fondo c'e' la
+ * fascia riservata al FAB (--fab-lane), e mettere li' altri bersagli
+ * significherebbe o coprire il FAB o rubargli lo spazio che lo rende il tap
+ * piu' facile dell'app. La navigazione non e' il flusso caldo: quello e' il
+ * FAB, e resta dov'e' in tutte e due le schermate.
+ *
+ * Dentro la barra sta **a destra**, e questo si', e' una misura: le schede
+ * nell'angolo in alto a sinistra erano il punto piu' lontano dal pollice di
+ * tutta l'app, e ci stava la cosa che si tocca ogni giorno mentre "Esporta" —
+ * una volta ogni due settimane — occupava il posto migliore. Erano invertite.
+ * `margin-inline-start: auto` spinge le schede al bordo destro; il rientro
+ * negativo lascia al bersaglio i suoi 44px pieni fino al margine. */
+
+.nav {
+  display: flex;
+  gap: var(--sp-1);
+  margin-inline-start: auto;
+  margin-inline-end: calc(var(--sp-3) * -1);
+}
+
+.nav__tab {
+  min-block-size: var(--tap-min);
+  min-inline-size: var(--tap-min);
+  padding-inline: var(--sp-3);
+  border-radius: var(--radius-2);
+  color: var(--text-muted);
+  font-size: var(--fs-200);
   font-weight: var(--fw-semibold);
-  letter-spacing: var(--tracking-tight);
+}
+
+/* La scheda attiva non si distingue per il solo colore: ha una superficie sua.
+ * Il colore da solo sparisce a chi ha una carenza cromatica e sotto il sole. */
+.nav__tab[aria-current="page"] {
+  background-color: var(--surface-sunken);
+  color: var(--text);
+}
+
+/* Nessuna transizione: il colore cambia nel frame del tap. */
+.nav__tab:active {
+  background-color: var(--brand-soft);
+  color: var(--brand);
+}
+
+/* Schermi stretti (320 punti: il vecchio SE, o lo Zoom schermo di iOS su un
+ * telefono normale). Barra, due schede ed "Esporta" insieme sfondano di un
+ * pelo: il marchio e' la cosa meno utile delle tre — in standalone l'icona
+ * dell'app e' gia' sulla schermata Home — e si toglie per primo. */
+@media (max-width: 359px) {
+  .mark {
+    display: none;
+  }
+
+  .nav__tab {
+    padding-inline: var(--sp-2);
+  }
 }
 
 .app__action {
@@ -64,7 +116,6 @@
   min-block-size: var(--tap-min);
   min-inline-size: var(--tap-min);
   padding-inline: var(--sp-3);
-  margin-inline-end: calc(var(--sp-3) * -1); /* il bersaglio arriva al bordo */
   border-radius: var(--radius-2);
   color: var(--brand);
   font-size: var(--fs-200);

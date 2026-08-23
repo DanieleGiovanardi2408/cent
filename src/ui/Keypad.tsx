@@ -1,4 +1,5 @@
 import { useRef } from 'preact/hooks'
+import './Keypad.css'
 
 /**
  * Tastierino cents-first (ADR 004).

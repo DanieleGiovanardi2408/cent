@@ -93,7 +93,12 @@ async function probe(page: Page): Promise<readonly Target[]> {
           : 'inerte'
         : !reached
           ? 'coperto'
-          : Math.min(box.width, box.height) < 44
+          : // Arrotondato, non grezzo: la stampa qui sotto usa Math.round, e un
+            // confronto sul float fa fallire un bersaglio di 43.999 stampando
+            // "44" — cioe' un messaggio che dice il falso. Sotto la meta' di un
+            // pixel CSS non c'e' nessun difetto tattile da difendere: a
+            // deviceScaleFactor 3 sono poco piu' di un pixel del dispositivo.
+            Math.round(Math.min(box.width, box.height)) < 44
             ? 'piccolo'
             : 'ok'
 
@@ -160,6 +165,42 @@ async function seed(page: Page, howMany: number): Promise<void> {
   }, howMany)
 }
 
+/** La schermata attiva e' stato, non una rotta (ADR 002): si cambia col tap. */
+async function go(page: Page, tab: 'Home' | 'Storico'): Promise<void> {
+  await page.locator('.nav__tab', { hasText: tab }).tap()
+  await expect(page.locator(tab === 'Home' ? '.home' : '.list')).toBeVisible()
+}
+
+/**
+ * Aspetta che nessuna animazione sia in corso.
+ *
+ * E' la condizione vera al posto di un `waitForTimeout(300)`, e la differenza
+ * non e' di stile: un'attesa fissa troppo corta **non produce un rosso, produce
+ * un verde su meno bersagli**. Se il foglio si sta ancora alzando, i suoi
+ * bersagli cadono fuori da `inView` e la sonda li salta in silenzio — e
+ * `targets.length > 0` non se ne accorge, perche' la sola barra in alto ne da'
+ * gia' tre. Un test che tace su cio' che non ha guardato e' peggio di uno che
+ * fallisce. E' lo stesso modello di `showUpdateBanner` qui sotto.
+ */
+async function still(page: Page): Promise<void> {
+  await page.evaluate(async () => {
+    await Promise.all(document.getAnimations().map((a) => a.finished.catch(() => undefined)))
+  })
+}
+
+/** Apre un foglio col tastierino e aspetta che sia fermo, non che sia passato del tempo. */
+async function openSheet(page: Page, by: string): Promise<void> {
+  await page.locator(by).tap()
+  await expect(page.locator('.sheet')).toBeVisible()
+  await still(page)
+}
+
+/** Chiude il foglio dal velo e aspetta che sia uscito dal DOM davvero. */
+async function closeSheet(page: Page): Promise<void> {
+  await page.locator('.scrim').tap({ position: { x: 4, y: 4 } })
+  await expect(page.locator('.sheet')).toHaveCount(0)
+}
+
 /**
  * L'avviso di aggiornamento richiede un service worker in attesa, cioe' un
  * secondo deploy: qui si inietta il suo contenuto nella regione live che sta
@@ -168,7 +209,7 @@ async function seed(page: Page, howMany: number): Promise<void> {
  * di un altro test.
  */
 async function showUpdateBanner(page: Page): Promise<void> {
-  await page.evaluate(() => {
+  await page.evaluate(async () => {
     const host = document.querySelector('.updater')
     if (host === null) throw new Error('la regione dell\'avviso di aggiornamento non e\' nel DOM')
     host.innerHTML = `
@@ -184,6 +225,15 @@ async function showUpdateBanner(page: Page): Promise<void> {
           <svg viewBox="0 0 24 24" width="18" height="18"><path d="m7 7 10 10M17 7 7 17"/></svg>
         </button>
       </div>`
+
+    // Aspetta che l'entrata sia finita prima di restituire il controllo.
+    // Misurare un elemento che si sta ancora animando e' leggere uno stato in un
+    // momento arbitrario invece di attendere una condizione: e' la stessa gara
+    // che aveva reso vacuo il confronto di testo nel test offline, e qui faceva
+    // fallire la sonda una volta su qualche centinaio.
+    await Promise.all(
+      host.getAnimations({ subtree: true }).map((a) => a.finished.catch(() => undefined)),
+    )
   })
 }
 
@@ -210,11 +260,12 @@ test('nessun overlay copre un bersaglio, su ogni viewport e in ogni stato', asyn
   await page.reload()
   await expect(page.locator('.row').first()).toBeVisible()
 
+  // Dalla fase 4 la schermata iniziale e' la Home: lo Storico e' il secondo tap.
+  await go(page, 'Storico')
   await check('lista, nessun overlay')
 
   // --- Una spesa vera, contando i tap: FAB, cifre, categoria.
-  await page.locator('.fab').tap()
-  await page.waitForTimeout(300)
+  await openSheet(page, '.fab')
   await check('foglio aperto (tastierino)')
 
   for (const digit of ['1', '2', '5', '0']) {
@@ -225,7 +276,10 @@ test('nessun overlay copre un bersaglio, su ogni viewport e in ogni stato', asyn
 
   await page.locator('.cat').first().tap()
   await expect(page.locator('.toast__box')).toBeVisible()
-  await page.waitForTimeout(300)
+  // Il foglio esce e sparisce dal DOM: finche' c'e', la lista dietro e' inerte
+  // e la sonda misurerebbe uno stato di passaggio invece di quello finale.
+  await expect(page.locator('.sheet')).toHaveCount(0)
+  await still(page)
 
   // --- Lo stato che nascondeva il bug: toast con "Annulla" **e** avviso di
   //     aggiornamento, insieme, sopra una lista piena.
@@ -234,18 +288,16 @@ test('nessun overlay copre un bersaglio, su ogni viewport e in ogni stato', asyn
 
   // --- E lo stato in cui il bug mordeva: il foglio riaperto mentre il toast
   //     sarebbe ancora vivo. Il toast deve essersene andato da solo.
-  await page.locator('.fab').tap()
-  await page.waitForTimeout(300)
+  await openSheet(page, '.fab')
   await expect(page.locator('.toast__box')).toHaveCount(0)
   await check('foglio riaperto + avviso di aggiornamento')
 
-  await page.locator('.scrim').tap({ position: { x: 4, y: 4 } })
-  await page.waitForTimeout(300)
+  await closeSheet(page)
 
   // --- Il foglio delle azioni su una spesa dello Storico.
   await page.locator('.row').first().tap()
-  await page.waitForTimeout(300)
   await expect(page.locator('.acts')).toBeVisible()
+  await still(page)
   await check('azioni sulla spesa + avviso di aggiornamento')
 
   console.log(`\n${rows.join('\n')}\n`)
@@ -272,13 +324,12 @@ test('il toast non sopravvive ne\' all\'apertura del foglio ne\' a una sospensio
   page,
 }) => {
   const add = async (digits: string[]): Promise<void> => {
-    await page.locator('.fab').tap()
-    await page.waitForTimeout(250)
+    await openSheet(page, '.fab')
     for (const digit of digits) {
       await page.locator('.pad__key', { hasText: new RegExp(`^${digit}$`) }).first().tap()
     }
     await page.locator('.cat').first().tap()
-    await page.waitForTimeout(250)
+    await expect(page.locator('.sheet')).toHaveCount(0)
   }
 
   await page.goto('./')
@@ -289,15 +340,13 @@ test('il toast non sopravvive ne\' all\'apertura del foglio ne\' a una sospensio
   await expect(page.locator('.toast__action')).toHaveText('Annulla')
 
   // Il FAB, subito: il toast se ne va prima che il tastierino esista.
-  await page.locator('.fab').tap()
-  await page.waitForTimeout(250)
+  await openSheet(page, '.fab')
   await expect(page.locator('.toast__box')).toHaveCount(0)
 
   // E il 9 e' un 9.
   await page.locator('.pad__key', { hasText: /^9$/ }).first().tap()
   await expect(page.locator('.amount')).toHaveText('0,09 €')
-  await page.locator('.scrim').tap({ position: { x: 3, y: 3 } })
-  await page.waitForTimeout(250)
+  await closeSheet(page)
   await expect(page.locator('.row')).toHaveCount(1)
 
   // --- La sospensione. L'orologio va avanti di dodici ore mentre il timer,
@@ -337,6 +386,7 @@ test('l\'intestazione appiccicata copre righe, ma non e\' toccabile', async ({ p
   await seed(page, 60)
   await page.reload()
   await expect(page.locator('.row').first()).toBeVisible()
+  await go(page, 'Storico')
 
   const covered = await page.evaluate(() => {
     const list = document.querySelector('.list')
@@ -367,8 +417,7 @@ test('l\'intestazione appiccicata copre righe, ma non e\' toccabile', async ({ p
 test('il tastierino e le otto categorie ci stanno, senza scroll', async ({ page }) => {
   await page.goto('./')
   await expect(page.locator('.fab')).toBeEnabled()
-  await page.locator('.fab').tap()
-  await page.waitForTimeout(300)
+  await openSheet(page, '.fab')
 
   // Tutti e undici i tasti e tutte e otto le categorie, dentro il foglio.
   await expect(page.locator('.pad__key')).toHaveCount(11)
@@ -399,4 +448,120 @@ test('il tastierino e le otto categorie ci stanno, senza scroll', async ({ page 
   }))
   expect(scroll.page, 'c\'e\' scroll orizzontale in pagina').toBeLessThanOrEqual(0)
   expect(scroll.sheet, 'il contenuto del foglio non ci sta: servirebbe uno scroll').toBeLessThanOrEqual(0)
+})
+
+/**
+ * La stessa sonda sulla Home, che dalla fase 4 e' la schermata iniziale.
+ *
+ * Serve una prova sua, e non basta quella dello Storico, per due ragioni:
+ *
+ * 1. la Home ha un bersaglio che lo Storico non ha — il bottone del budget — e
+ *    sta **in fondo alla colonna**, cioe' esattamente dove arriva l'avviso di
+ *    aggiornamento. E' il caso che direbbe subito se la scelta della fase 2 (il
+ *    banner in flusso invece che in overlay) regge anche qui;
+ * 2. la Home ha tre stati con contenuti diversi — senza budget, con budget, con
+ *    5.000 spese — e in due di essi il contenuto sotto il numero grande cambia
+ *    del tutto.
+ */
+test('nessun overlay copre un bersaglio nella Home, in tutti i suoi stati', async ({
+  page,
+}, testInfo) => {
+  const viewport = `${testInfo.project.use.viewport?.width}x${testInfo.project.use.viewport?.height}`
+  const rows: string[] = []
+  const failures: Target[] = []
+
+  const check = async (state: string): Promise<void> => {
+    const targets = await probe(page)
+    expect(targets.length, `nessun bersaglio misurato in "${state}": la sonda non prova niente`)
+      .toBeGreaterThan(0)
+    rows.push(...report(viewport, state, targets))
+    failures.push(...targets.filter((t) => t.status === 'coperto' || t.status === 'piccolo'))
+  }
+
+  await page.goto('./')
+  await expect(page.locator('.fab')).toBeEnabled()
+
+  // --- Archivio vuoto e nessun budget: lo stato del primo avvio.
+  await expect(page.locator('.budget')).toHaveText('Imposta un budget')
+  await check('home vuota, nessun budget')
+
+  // --- Lo stato che mette alla prova la posizione dell'avviso: l'unico bottone
+  //     in fondo alla colonna e l'avviso che compare proprio li'.
+  await showUpdateBanner(page)
+  await check('home vuota + avviso di aggiornamento')
+
+  // --- Il foglio del budget: tastierino, due bersagli che selezionano e uno,
+  //     in fondo, che scrive. Il "Salva" spento non e' misurabile dalla sonda
+  //     (salta i `:disabled`), quindi lo stato che conta e' quello con l'importo.
+  await openSheet(page, '.budget')
+  await expect(page.locator('.period')).toHaveCount(2)
+  await check('foglio del budget aperto')
+
+  for (const digit of ['2', '0', '0', '0', '0']) {
+    await page.locator('.pad__key', { hasText: new RegExp(`^${digit}$`) }).first().tap()
+  }
+  await expect(page.locator('.amount')).toHaveText('200,00 €')
+  await expect(page.locator('.save')).toBeEnabled()
+  await check('foglio del budget, importo digitato')
+
+  await page.locator('.period', { hasText: 'A settimana' }).tap()
+  await expect(page.locator('.period', { hasText: 'A settimana' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  )
+  await page.locator('.save').tap()
+  await expect(page.locator('.sheet')).toHaveCount(0)
+  await expect(page.locator('.budget')).toHaveText('Cambia il budget')
+  await expect(page.locator('.toast__box')).toBeVisible()
+  await still(page)
+  await check('home con budget + toast + avviso di aggiornamento')
+
+  // --- E con l'archivio pieno: 5.000 spese, di cui quattordici oggi.
+  await seed(page, 5000)
+  await page.reload()
+  await showUpdateBanner(page)
+  await expect(page.locator('.row').first()).toBeVisible()
+  await check('home con budget, 5.000 spese + avviso di aggiornamento')
+
+  console.log(`\n${rows.join('\n')}\n`)
+
+  expect(
+    failures.map((t) => `${t.status}: ${t.label} (${t.rect}) risponde ${t.hit}`),
+    'un overlay copre un bersaglio, o un bersaglio e\' sotto i 44px',
+  ).toEqual([])
+})
+
+/**
+ * Dove stanno le due cose in barra, misurato invece che deciso a occhio.
+ *
+ * Erano invertite: le schede nell'angolo in alto a **sinistra** — il punto piu'
+ * lontano dal pollice su un telefono tenuto con una mano, e su iPhone 14 sono
+ * 770px dal centro del FAB — e "Esporta", che si tocca una volta ogni due
+ * settimane, nell'angolo migliore dei due. La navigazione e' l'azione ricorrente
+ * e si prende il posto buono.
+ *
+ * Il test non fissa "a destra" come gusto: fissa la **ragione**, cioe' che le
+ * schede siano piu' vicine al FAB di quanto lo sia l'export. Se un giorno il FAB
+ * cambiasse angolo, questo test direbbe da solo dove va la navigazione.
+ */
+test('la navigazione sta nell\'angolo raggiungibile, non "Esporta"', async ({ page }) => {
+  await page.goto('./')
+  await expect(page.locator('.fab')).toBeEnabled()
+
+  const centre = async (selector: string): Promise<{ x: number; y: number }> => {
+    const box = await page.locator(selector).boundingBox()
+    if (box === null) throw new Error(`${selector} non e' in pagina`)
+    return { x: box.x + box.width / 2, y: box.y + box.height / 2 }
+  }
+
+  const fab = await centre('.fab')
+  const nav = await centre('.nav')
+  const esporta = await centre('.app__action')
+  const far = (p: { x: number; y: number }): number => Math.hypot(p.x - fab.x, p.y - fab.y)
+
+  expect(nav.x, 'le schede non sono dopo "Esporta"').toBeGreaterThan(esporta.x)
+  expect(
+    Math.round(far(nav)),
+    `le schede (${Math.round(far(nav))}px dal FAB) non sono piu' vicine di "Esporta" (${Math.round(far(esporta))}px)`,
+  ).toBeLessThan(Math.round(far(esporta)))
 })
