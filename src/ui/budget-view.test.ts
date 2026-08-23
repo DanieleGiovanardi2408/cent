@@ -220,6 +220,13 @@ describe('quanto puoi spendere al giorno', () => {
    */
   const frase = (m: BudgetMetrics): AllowanceCopy => allowanceCopy(m, budgetStart(m, []))
 
+  /**
+   * Fra numero e simbolo dell'euro `Intl` mette uno spazio **non separabile**
+   * (e' un invariante, sorvegliato da `money.test.ts`). Qui non e' quello che si
+   * sta provando: si normalizza, come fa il grosso della suite.
+   */
+  const norm = (text: string): string => text.replace(/\s/g, ' ')
+
   it('e il residuo diviso i giorni che restano, oggi compreso', () => {
     // Mercoledi': restano mercoledi'-domenica, cioe' 5 giorni. 150,00 / 5 = 30,00.
     const copy = frase(
@@ -230,11 +237,32 @@ describe('quanto puoi spendere al giorno', () => {
     expect(copy.over).toBe(false)
   })
 
-  it('l ultimo giorno del periodo parla al singolare', () => {
+  /**
+   * L'ultimo giorno non e' un ritmo: e' un totale. Con `daysRemaining === 1` la
+   * divisione e' per uno, quindi il numero e' esattamente il residuo — e la
+   * tilde, che esiste per dire "e' una media", direbbe il falso. Visto sul
+   * dispositivo: "Puoi spendere ~128,55 € al giorno" con sotto "per oggi, che
+   * e' l'ultimo giorno", cioe' due righe che si contraddicono.
+   */
+  it('l ultimo giorno e un totale, non un ritmo: niente tilde e niente "al giorno"', () => {
     const copy = frase(metrics({ today: DOMENICA, budgetCents: 20_000 }))
-    expect(copy.main).toContain('200,00')
-    expect(copy.sub).toContain('ultimo giorno')
+    expect(norm(copy.main)).toBe('Puoi spendere 200,00 € oggi')
+    expect(copy.main).not.toContain('~')
+    expect(copy.main).not.toContain('al giorno')
+    expect(copy.sub).toContain('Ultimo giorno')
     expect(copy.sub).not.toContain('1 giorni')
+  })
+
+  /**
+   * E il numero e' il residuo **esatto**, non un arrotondamento: con un giorno
+   * solo `divideCents` divide per uno. Se un giorno cambiasse, la tilde tolta
+   * qui sopra tornerebbe a servire — questo test se ne accorgerebbe.
+   */
+  it('e il numero dell ultimo giorno e il residuo esatto', () => {
+    const m = metrics({ today: DOMENICA, budgetCents: 20_000, spese: [spesa(LUNEDI, 7145)] })
+    expect(m.daysRemaining).toBe(1)
+    expect(m.dailyAllowanceCents).toBe(m.remainingCents)
+    expect(norm(frase(m).main)).toBe('Puoi spendere 128,55 € oggi')
   })
 
   it('col residuo negativo non promette un tetto negativo: dice che il budget e finito', () => {
@@ -411,10 +439,31 @@ describe('il budget nato a meta periodo', () => {
     expect(allowanceCopy(m, start).main).toBe('Il budget del periodo è finito.')
   })
 
-  it('senza spese prima non inventa un "prima avevi speso 0,00"', () => {
+  /**
+   * Il difetto opposto a quello per cui ADR 010 ha introdotto la frase, visto
+   * sul dispositivo: "Budget attivo da domenica" compariva anche quando tutte
+   * le spese erano dentro la copertura del budget. Li' non c'e' nessun numero
+   * strano da giustificare, e una spiegazione senza un fatto da spiegare si
+   * legge come l'annuncio di un problema che non esiste.
+   */
+  it('senza spese anteriori al budget non compare affatto', () => {
     const m = metrics({ today: MERCOLEDI, budgetCents: 20_000, dal: MERCOLEDI })
-    const note = startNote(m, budgetStart(m, []))
-    expect(note).toBe('Budget attivo da mercoledì.')
+    const start = budgetStart(m, [])
+    // Il budget e' nato davvero a meta' periodo: il caso c'e'...
+    expect(start.late).toBe(true)
+    // ...ma non c'e' niente da spiegare, quindi non si dice niente.
+    expect(start.beforeCents).toBe(0)
+    expect(startNote(m, start)).toBeNull()
+  })
+
+  it('e nemmeno quando le spese del periodo sono tutte dopo effectiveFrom', () => {
+    const spese = [spesa(MERCOLEDI, 5000)]
+    const m = metrics({ today: MERCOLEDI, budgetCents: 20_000, dal: MERCOLEDI, spese })
+    const start = budgetStart(m, spese)
+    expect(start.beforeCents).toBe(0)
+    expect(startNote(m, start)).toBeNull()
+    // La riga utile resta quella, e non e' toccata da questa correzione.
+    expect(allowanceCopy(m, start).main).toContain('Puoi spendere')
   })
 
   it('col residuo negativo per le sole spese di prima, dice il fatto e non la colpa', () => {

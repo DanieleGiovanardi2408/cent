@@ -23,13 +23,11 @@
  * cancellano, e resteremmo a credere che sia ancora concesso.
  */
 
-/** True se l'app gira come applicazione a se' (Home Screen iOS, PWA installata). */
-export function isStandaloneDisplay(): boolean {
-  if (typeof window === 'undefined') return false
-  // `navigator.standalone` esiste solo su Safari iOS e non e' nel lib DOM.
-  const legacy = (navigator as Navigator & { standalone?: boolean }).standalone
-  return legacy === true || window.matchMedia('(display-mode: standalone)').matches
-}
+/**
+ * `isStandaloneDisplay()` stava qui e ora vive in `install-gate.ts`: da quando
+ * il display-mode decide se l'app puo' scrivere (ADR 011) e' la stessa domanda,
+ * e due copie della stessa sonda sono due copie che divergono.
+ */
 
 /**
  * Chiede che i dati locali non siano sfrattabili.

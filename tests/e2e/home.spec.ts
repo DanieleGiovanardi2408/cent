@@ -14,7 +14,10 @@
  * 3. **Niente scroll orizzontale**, nemmeno col residuo negativo piu' largo che
  *    5.000 spese possano produrre.
  */
-import { expect, test } from '@playwright/test'
+// Questi test provano l'app, quindi dichiarano di girare nell'app installata:
+// fuori da standalone Cent e' una pagina di installazione (ADR 011). Vedi
+// `installed.ts` per il perche' la cucitura sta qui e non nel codice dell'app.
+import { expect, test } from './installed'
 import type { Page } from '@playwright/test'
 
 interface Shift {
@@ -398,6 +401,17 @@ test('a 320 punti la Home non salta lo stesso', async ({ page }, testInfo) => {
 })
 
 test('la Home dice quanto resta e quanto al giorno, e sono numeri veri', async ({ page }) => {
+  // Mercoledi' 19 agosto 2026: la settimana va da lunedi' 17 a domenica 23,
+  // quindi restano cinque giorni, oggi compreso.
+  //
+  // L'orologio e' fissato e non e' un vezzo: senza, il numero al giorno dipende
+  // dal giorno in cui gira la suite, e il test puo' solo asserire il prefisso.
+  // Il 23 agosto 2026 era una domenica e questo test e' cascato per davvero,
+  // sull'ultimo giorno del periodo — dove "al giorno" non e' piu' la frase
+  // giusta. `setFixedTime` invece di `install`: i timer devono continuare a
+  // correre, o il foglio del budget non finirebbe mai di chiudersi.
+  await page.clock.setFixedTime(new Date('2026-08-19T10:00:00'))
+
   await page.goto('./')
   await expect(page.locator('.budget')).toBeEnabled()
 
@@ -407,10 +421,12 @@ test('la Home dice quanto resta e quanto al giorno, e sono numeri veri', async (
 
   await setBudget(page, '70000', 'A settimana')
 
-  // 700,00 € su sette giorni: 100,00 € al giorno se si comincia il lunedi'.
+  // 700,00 € su cinque giorni: 140,00 € al giorno.
   await expect(page.locator('.hero__label')).toHaveText('Restano')
   await expect(page.locator('.hero__value')).toHaveText('700,00 €')
   await expect(page.locator('.allowance')).toContainText('Puoi spendere ~')
+  await expect(page.locator('.allowance')).toContainText('140,00')
+  await expect(page.locator('.allowance')).toContainText('al giorno')
 
   // Una spesa vera dal FAB: il residuo scende nello stesso frame, senza attese.
   await page.locator('.fab').tap()
@@ -423,6 +439,37 @@ test('la Home dice quanto resta e quanto al giorno, e sono numeri veri', async (
   await expect(page.locator('.hero__value')).toHaveText('600,00 €')
   await expect(page.locator('.today__total')).toHaveText('100,00 €')
   await expect(page.locator('.row')).toHaveCount(1)
+})
+
+/**
+ * L'ultimo giorno del periodo non e' un ritmo: e' un totale.
+ *
+ * Visto sul dispositivo nella sua forma peggiore: la riga grande diceva
+ * "Puoi spendere ~128,55 € al giorno" e il sottotitolo la smentiva con "per
+ * oggi, che e' l'ultimo giorno". La tilde dice "e' una media": con un giorno
+ * solo non c'e' nessuna media, e il numero e' il residuo esatto.
+ *
+ * Il test e' qui e non solo in `budget-view.test.ts` perche' e' una frase che
+ * l'utente legge, ed e' proprio su questo giorno che la suite end-to-end ci e'
+ * passata sopra per mesi senza vedere niente: il 23 agosto 2026 era una
+ * domenica, e l'unica asserzione era sul prefisso "Puoi spendere ~".
+ */
+test('l ultimo giorno del periodo la Home dice un totale, non un ritmo', async ({ page }) => {
+  // Domenica 23 agosto 2026: ultimo giorno della settimana.
+  await page.clock.setFixedTime(new Date('2026-08-23T10:00:00'))
+
+  await page.goto('./')
+  await expect(page.locator('.budget')).toBeEnabled()
+  await setBudget(page, '70000', 'A settimana')
+
+  const allowance = page.locator('.allowance')
+  await expect(allowance).toContainText('Puoi spendere')
+  await expect(allowance).toContainText('700,00')
+  await expect(allowance).toContainText('oggi')
+  // Le due cose che mentivano: la tilde e "al giorno".
+  await expect(allowance).not.toContainText('~')
+  await expect(allowance).not.toContainText('al giorno')
+  await expect(page.locator('.allowance__sub')).toContainText('Ultimo giorno del periodo')
 })
 
 /**

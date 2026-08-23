@@ -12,6 +12,7 @@ import { BudgetSheet } from './BudgetSheet'
 import { ExpenseActions } from './ExpenseActions'
 import { History } from './History'
 import { Home } from './Home'
+import { Mark } from './Mark'
 import { activePeriod, currentBudgetCents } from './budget-view'
 import { Toast } from './Toast'
 import type { ToastAction, ToastData } from './Toast'
@@ -21,17 +22,6 @@ import { dayHeading } from './labels'
 import { motionMs } from './motion'
 import { useApp } from './useApp'
 import './App.css'
-
-/** Il marchio: il simbolo del centesimo, lo stesso disegno delle icone. */
-function Mark() {
-  return (
-    <svg class="mark" viewBox="0 0 64 64" width="26" height="26" aria-hidden="true">
-      <rect class="mark__bg" width="64" height="64" rx="14.3" />
-      <path class="mark__fg" d="M43.9 22.0A15.5 15.5 0 1 0 43.9 42.0" />
-      <path class="mark__fg" d="M32 11V53" />
-    </svg>
-  )
-}
 
 /**
  * Quale foglio e' aperto, e se sta gia' uscendo. Sono due — inserimento e

@@ -100,7 +100,9 @@
  * pelo: il marchio e' la cosa meno utile delle tre — in standalone l'icona
  * dell'app e' gia' sulla schermata Home — e si toglie per primo. */
 @media (max-width: 359px) {
-  .mark {
+  /* Solo quello in barra: sulla pagina di installazione (ADR 011) il marchio e'
+   * il nome dell'app e li' lo spazio non manca. */
+  .app__bar .mark {
     display: none;
   }
 
@@ -137,17 +139,6 @@
 
 .app__action:disabled {
   opacity: 0.4;
-}
-
-.mark__bg {
-  fill: var(--brand);
-}
-
-.mark__fg {
-  fill: none;
-  stroke: var(--on-brand);
-  stroke-width: 6.4;
-  stroke-linecap: round;
 }
 
 /* --- avviso: scritture non arrivate al disco ----------------------------- */

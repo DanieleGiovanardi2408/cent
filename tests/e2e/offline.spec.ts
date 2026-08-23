@@ -19,7 +19,10 @@
  * 4. Due asserzioni, non una. Uno stato 200 con il guscio vuoto passerebbe la
  *    prima e non la seconda.
  */
-import { expect, test } from '@playwright/test'
+// Questi test provano l'app, quindi dichiarano di girare nell'app installata:
+// fuori da standalone Cent e' una pagina di installazione (ADR 011). Vedi
+// `installed.ts` per il perche' la cucitura sta qui e non nel codice dell'app.
+import { expect, test } from './installed'
 
 /**
  * Testo della pagina una volta che ha smesso di cambiare.

@@ -1,0 +1,13 @@
+/* Il marchio. Sta con il componente e non in App.css da quando lo usano due
+ * schermate: la barra dell'app e la pagina di installazione (ADR 011). */
+
+.mark__bg {
+  fill: var(--brand);
+}
+
+.mark__fg {
+  fill: none;
+  stroke: var(--on-brand);
+  stroke-width: 6.4;
+  stroke-linecap: round;
+}

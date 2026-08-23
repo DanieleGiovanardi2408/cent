@@ -1,0 +1,149 @@
+/* La pagina di installazione (ADR 011).
+ *
+ * A differenza di `.app` questa **scorre col documento**: e' un testo, non
+ * un'interfaccia con una barra fissa e un FAB da tenere fermi. In orizzontale
+ * (800x327, il viewport che ha gia' trovato un tastierino tagliato) i tre passi
+ * non ci stanno in altezza, e la risposta giusta li' e' lo scroll verticale del
+ * documento — non nascondere un passo.
+ *
+ * Niente animazioni: non c'e' nessuno stato che cambi. La schermata e' quella
+ * che si vede al primo frame, e resta.
+ */
+
+.install {
+  max-inline-size: var(--app-max);
+  margin-inline: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5);
+  /* Safe area su tutti e quattro i lati: qui non c'e' nessun contenitore
+   * intermedio che ci pensi, e in orizzontale il notch mangia un bordo. */
+  padding-block: max(var(--sp-6), var(--safe-top)) max(var(--sp-6), var(--safe-bottom));
+  padding-inline: max(var(--sp-4), var(--safe-left)) max(var(--sp-4), var(--safe-right));
+}
+
+/* --- nome dell'app ------------------------------------------------------- */
+
+.install__brand {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+}
+
+.install__name {
+  font-size: var(--fs-400);
+  font-weight: var(--fw-bold);
+  letter-spacing: var(--tracking-tight);
+}
+
+.install__title {
+  font-size: var(--fs-500);
+  font-weight: var(--fw-bold);
+  line-height: var(--lh-snug);
+  letter-spacing: var(--tracking-tight);
+}
+
+/* Nessun tetto di larghezza suo: la colonna e' gia' `--app-max`, e un `ch` in
+ * meno qui farebbe finire la riga prima del riquadro sotto, come se i due
+ * blocchi appartenessero a due griglie diverse. */
+.install__lead {
+  color: var(--text-muted);
+  line-height: var(--lh-body);
+}
+
+/* --- il motivo, prima delle istruzioni ----------------------------------- */
+/* Ha una superficie sua e un filo di brand sul fianco: e' la parte che risponde
+ * alla domanda che chi arriva qui si sta facendo davvero — "perche' non
+ * funziona?" — e deve essere la seconda cosa che l'occhio prende, dopo il
+ * titolo. Il colore non porta da solo nessuna informazione: se sparisse, il
+ * testo direbbe esattamente le stesse cose. */
+
+.why {
+  border-radius: var(--radius-3);
+  border: 1px solid var(--line);
+  border-inline-start: 3px solid var(--brand);
+  background-color: var(--surface);
+  padding: var(--sp-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.why__title {
+  font-size: var(--fs-300);
+  font-weight: var(--fw-semibold);
+  line-height: var(--lh-snug);
+  text-wrap: pretty;
+}
+
+.why__text {
+  font-size: var(--fs-200);
+  line-height: var(--lh-body);
+  color: var(--text-muted);
+}
+
+/* --- i tre passi --------------------------------------------------------- */
+
+/* Titolo e passi sono un blocco solo, con un `gap` piu' stretto di quello della
+ * colonna: il titolo appartiene alla lista che introduce. */
+.how {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+
+.how__title {
+  font-size: var(--fs-400);
+  font-weight: var(--fw-semibold);
+  letter-spacing: var(--tracking-tight);
+}
+
+.steps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+
+.step {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-3);
+}
+
+/* Il numero e' decorativo (la lista e' gia' un `ol`): serve all'occhio per
+ * contare i passi da lontano. Dimensione fissa, cosi' il testo di tre righe non
+ * lo schiaccia. */
+.step__n {
+  flex: none;
+  inline-size: 1.75rem;
+  block-size: 1.75rem;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-full);
+  background-color: var(--brand-soft);
+  color: var(--brand);
+  font-size: var(--fs-200);
+  font-weight: var(--fw-bold);
+  font-variant-numeric: tabular-nums;
+}
+
+.step__text {
+  line-height: var(--lh-body);
+}
+
+.step__text b {
+  font-weight: var(--fw-semibold);
+}
+
+.install__other {
+  font-size: var(--fs-200);
+  line-height: var(--lh-body);
+  color: var(--text-muted);
+  border-block-start: 1px solid var(--line);
+  padding-block-start: var(--sp-4);
+}
+
+.install__other b {
+  font-weight: var(--fw-semibold);
+  color: var(--text);
+}

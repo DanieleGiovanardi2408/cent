@@ -202,13 +202,24 @@ export function budgetStart(m: BudgetMetrics, expenses: readonly Expense[]): Bud
  *
  * Dura un periodo solo: dal successivo il budget copre il primo giorno, `late`
  * diventa falso e la frase sparisce da sola, senza che nessuno la spenga.
+ *
+ * ## Senza spese anteriori la frase non compare affatto
+ *
+ * Prima diceva "Budget attivo da domenica." anche quando **tutte** le spese del
+ * periodo erano gia' dentro la copertura del budget — cioe' quando non c'era
+ * niente di anomalo da spiegare. Visto sul dispositivo: la riga comparve su una
+ * Home che tornava perfettamente, e una spiegazione senza un fatto da spiegare
+ * si legge come l'annuncio di un problema. **E' il difetto opposto a quello per
+ * cui ADR 010 l'ha introdotta**: li' la Home non sapeva giustificare un numero
+ * strano, qui insinuava che un numero normale non lo fosse.
+ *
+ * La condizione e' quella che `budgetStart` calcola gia': esiste spesa anteriore
+ * a `effectiveFrom`. Se `beforeCents` e' zero, non c'e' nessun numero da
+ * giustificare e non si dice niente.
  */
 export function startNote(m: BudgetMetrics, start: BudgetStart): string | null {
-  if (!start.late || m.budgetEffectiveFrom === null) return null
+  if (!start.late || m.budgetEffectiveFrom === null || start.beforeCents === 0) return null
   const since = `Budget attivo ${fromDayLabel(m.period, m.budgetEffectiveFrom)}`
-  // Senza spese precedenti non c'e' nessun numero da giustificare: la mezza
-  // frase in piu' direbbe "prima avevi gia' speso 0,00 €", cioe' niente.
-  if (start.beforeCents === 0) return `${since}.`
   return `${since} · prima avevi già speso ${formatCents(start.beforeCents)}`
 }
 
@@ -284,12 +295,26 @@ export function allowanceCopy(m: BudgetMetrics, start: BudgetStart): AllowanceCo
       over: true,
     }
   }
+  // L'ultimo giorno **non e' un ritmo: e' un totale**. Con un giorno solo la
+  // divisione e' per uno, quindi il numero non e' una media di niente — e' tutto
+  // il residuo, disponibile adesso. La tilde esiste per dire "e' una media"
+  // (l'arrotondamento al centesimo verso il basso): qui mentirebbe, e "al
+  // giorno" mentirebbe due volte, perche' i giorni sono uno.
+  //
+  // Visto sul dispositivo nella sua forma peggiore: la riga grande diceva
+  // "Puoi spendere ~128,55 € al giorno" e il sottotitolo la smentiva subito con
+  // "per oggi, che e' l'ultimo giorno". Due frasi che si contraddicono nello
+  // spazio di due righe.
+  if (m.daysRemaining === 1) {
+    return {
+      main: `Puoi spendere ${formatCents(daily)} oggi`,
+      sub: 'Ultimo giorno del periodo: domani riparte da capo.',
+      over: false,
+    }
+  }
   return {
     main: `Puoi spendere ~${formatCents(daily)} al giorno`,
-    sub:
-      m.daysRemaining === 1
-        ? 'per oggi, che è l’ultimo giorno del periodo'
-        : `per i ${daysLabel(m.daysRemaining)} che restano, oggi compreso`,
+    sub: `per i ${daysLabel(m.daysRemaining)} che restano, oggi compreso`,
     over: false,
   }
 }

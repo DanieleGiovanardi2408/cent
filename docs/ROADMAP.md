@@ -44,23 +44,46 @@ originale il primo modo per metterli al sicuro arrivava in fase 7. Erano cinque
 fasi di spese vere su una piattaforma che puo' cancellarle da sola (vedi sotto).
 Un errore di sequenza, non una feature mancante.
 
-### Verifica manuale: lo storage di Safari e quello della web app sono separati?
+### Verifica manuale: storage di Safari — FATTA, vedi "Verifiche sul dispositivo"
 
-Non e' verificabile in sviluppo e cambia l'onboarding. Da fare appena c'e'
-qualcosa di deployato, sul dispositivo reale:
+Esito: **separati**. La conseguenza e' in ADR 011.
 
-1. Aprire l'app in **Safari** (non installata) e inserire una spesa.
-2. "Aggiungi a Home".
-3. Aprire l'app **dalla Home Screen** e guardare se la spesa c'e'.
 
-Se lo storage e' separato, la spesa non ci sara' — e allora l'onboarding deve
-dire "installa PRIMA di inserire qualsiasi cosa", e **non e' un consiglio ma un
-blocco**: in modalita' browser l'inserimento va impedito, non sconsigliato.
-Altrimenti un utente perde i dati senza mai capire che sono altrove.
+## Verifiche sul dispositivo — FATTE
 
-Contesto: senza `navigator.storage.persist()` concesso, la policy WebKit cancella
-tutto lo storage scrivibile da script (IndexedDB, localStorage, registrazione del
-service worker) dopo 7 giorni di Safari senza interazione con quel sito.
+Eseguite sull'iPhone, sulla PWA installata da GitHub Pages. Non sono piu' aperte.
+
+### Export JSON — funziona
+Il file e' stato scaricato, aperto e verificato riga per riga: sei spese, otto
+categorie, il budget, le impostazioni, `schemaVersion: 2`. **Il quinto esito
+silenzioso** — `kind: 'downloaded'` che non scarica niente, il caso peggiore
+previsto al gate della fase 2 — **non si e' verificato.**
+
+Verificato di passaggio un dettaglio che finora era solo testato: una spesa creata
+alle `23:13:38Z` ha `date: '2026-08-23'` e `timeMinutes: 73` (01:13 locali). **La
+trappola della mezzanotte regge su dati veri**, non solo nei test: data civile e
+minuti vengono dallo stesso istante e non appartengono a giorni diversi.
+
+### Primo budget a meta' settimana — come previsto
+La Home si comporta come deciso in [ADR 010](adr/010-il-budget-e-del-periodo.md).
+Tre note di copy raccolte sul dispositivo sono state corrette subito dopo.
+
+### Storage di Safari e della PWA — SEPARATI, fatto accertato
+Non e' piu' una cosa da verificare. Sono sandbox distinte, provato sul telefono.
+La conseguenza prevista fin dalla fase 2 — **impedire, non sconsigliare** — e'
+stata applicata: vedi
+[ADR 011](adr/011-fuori-da-standalone-e-una-pagina-di-installazione.md).
+
+## Cosa hanno insegnato le prime 24 ore d'uso
+
+### Anticipare la cancellazione dallo Storico e' servito davvero
+La cancellazione e' stata tirata dentro la fase 2 con l'argomento "dopo due giorni
+qualche riga sbagliata ci sara' di sicuro", contro l'obiezione che fosse scope
+della fase 3. **E' stata usata due volte in meno di 24 ore.**
+
+Da ricordare la prossima volta che si dubitera' se anticipare una rete di
+sicurezza: il costo di anticiparla si paga una volta, il costo di non averla si
+paga ogni volta che serve e non c'e'.
 
 ## Compiti espliciti della fase 6
 
@@ -90,6 +113,23 @@ l'ordine dopo che la memoria muscolare si e' formata costa piu' di quanto
 sembri: dopo pochi giorni si tocca per posizione senza leggere l'etichetta, e
 un riordino trasforma quel gesto in una spesa categorizzata male. Non va
 impedito — sono categorie sue — va detto.
+
+## Compiti espliciti della fase 7
+
+### L'anteprima dell'import non deve contare i record cancellati
+
+L'export contiene i record con `deletedAt` — nel primo backup reale erano **3 su
+6**. Per un backup e' **corretto** e non si cambia: un backup che perde i soft
+delete perde anche l'informazione che quella spesa e' stata cancellata, e un
+reimport la resusciterebbe.
+
+Ma l'**anteprima** dell'import e' un'altra cosa: se conta i record grezzi dira'
+"6 spese" dove l'app ne mostra 3. Sarebbe un'anteprima che mente **proprio nel
+momento in cui serve per decidere** se sovrascrivere i propri dati — cioe'
+l'operazione piu' distruttiva dell'app, quella senza undo persistito.
+
+L'anteprima conta le spese vive (`isLive`), e se vuole nominare le altre lo fa a
+parte: "3 spese, piu' 3 cancellate".
 
 ## Verifica offline automatica — anticipata dalla fase 6
 
