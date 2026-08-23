@@ -114,7 +114,7 @@ async function open(): Promise<void> {
  *   dati, e in fase 2 l'import non esiste nemmeno nella UI.
  * L'occorrenza mancante la rifa' la chiamata successiva: e' idempotente.
  */
-async function materialize(repo: Repository): Promise<void> {
+async function materialize(repo: WakeRepository): Promise<void> {
   try {
     await repo.materializeRecurring(today())
   } catch {
@@ -145,12 +145,24 @@ async function materialize(repo: Repository): Promise<void> {
 const RELOAD_TIMEOUT_MS = 10_000
 
 /**
- * Rilettura al risveglio (ADR 007).
+ * Cio' che il risveglio usa davvero del repository, e niente altro.
  *
- * Il mirror e' una cache e dopo ogni sospensione e' scaduto. Qui si agganciano
- * i due eventi che in una PWA significano "l'app e' tornata": non c'e' nessuna
- * logica di sicurezza da replicare — se il mirror contiene roba che il disco non
- * ha, e' il repository a tirarsi indietro e a dire perche'.
+ * Non e' un'astrazione in piu': e' il contratto minimo che `createWake` chiede,
+ * scritto sul posto. Un doppio nei test implementa tre metodi invece di venti, e
+ * chi legge la firma sa subito che qui non si scrive niente che non passi da
+ * questi tre.
+ */
+export type WakeRepository = Pick<
+  Repository,
+  'reloadFromDisk' | 'getState' | 'materializeRecurring'
+>
+
+/**
+ * Costruisce il risveglio (ADR 007).
+ *
+ * Il mirror e' una cache e dopo ogni sospensione e' scaduto. Qui non c'e'
+ * nessuna logica di sicurezza da replicare — se il mirror contiene roba che il
+ * disco non ha, e' il repository a tirarsi indietro e a dire perche'.
  *
  * Tre cose succedono a ogni risveglio, anche quando la rilettura viene saltata:
  * 1. il giorno civile viene ricalcolato (app lasciata aperta la notte);
@@ -165,22 +177,34 @@ const RELOAD_TIMEOUT_MS = 10_000
  * resterebbe sul periodo di ieri con le spese di ieri sotto "Oggi", cioe' il
  * dato sbagliato piu' visibile dell'app per un guasto che non lo riguarda.
  * Nemmeno la guardia `running` lo trattiene: il giorno si ricalcola comunque.
+ *
+ * ## Perche' repository e tetto arrivano da fuori
+ *
+ * Questo e' lo strato di composizione: comporre e' il suo mestiere, e prendere
+ * le dipendenze come argomenti e' iniezione ordinaria, non una porta aperta per
+ * i test dentro il dominio. La funzione cosi' non tocca il DOM — l'aggancio agli
+ * eventi resta in `attachWake` — quindi si prova in ambiente node con un finto
+ * repository e un tetto di pochi millisecondi. La stessa cucitura in `src/core`
+ * sarebbe stata una superficie pubblica che qualcuno avrebbe usato per sbaglio.
  */
-function attachWake(repo: Repository): void {
+export function createWake(
+  repo: WakeRepository,
+  reloadTimeoutMs: number,
+): () => Promise<void> {
   let running = false
 
-  const wake = async (): Promise<void> => {
+  return async function wake(): Promise<void> {
     refreshDay()
     if (running) return
     running = true
-    let expired = 0
+    let expired: ReturnType<typeof setTimeout> | undefined
     try {
       const outcome = await Promise.race([
         repo.reloadFromDisk(),
         new Promise<never>((_, reject) => {
-          expired = window.setTimeout(
+          expired = setTimeout(
             () => reject(new Error('rilettura oltre il tetto di tempo')),
-            RELOAD_TIMEOUT_MS,
+            reloadTimeoutMs,
           )
         }),
       ])
@@ -197,6 +221,15 @@ function attachWake(repo: Repository): void {
       running = false
     }
   }
+}
+
+/**
+ * Aggancia il risveglio ai due eventi che in una PWA significano "l'app e'
+ * tornata". E' l'unica meta' della faccenda che tocca il DOM, ed e' per questo
+ * che e' rimasta separata da `createWake`: qui non c'e' niente da decidere.
+ */
+function attachWake(repo: Repository): void {
+  const wake = createWake(repo, RELOAD_TIMEOUT_MS)
 
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') void wake()

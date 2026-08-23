@@ -222,6 +222,22 @@ Target touch >= 44px. Contrasto AA in entrambi i temi. `prefers-reduced-motion`.
 Ogni azione distruttiva e' annullabile (soft delete + toast), niente dialoghi
 "Sei sicuro?". Stati vuoti con copy vero in italiano.
 
+## Cuciture per i test
+Una cucitura aperta per i test nello **strato di composizione** (`src/app`) e'
+normale: comporre e' il suo mestiere, e una dipendenza passata come argomento e'
+iniezione ordinaria. La stessa cucitura nello **strato di dominio** (`src/core`)
+e' la cosa che qualcuno usera' per sbaglio.
+
+**Non e' il test a essere sbagliato: e' il piano su cui lo apri.**
+
+Il precedente in questo repo e' stato applicato due volte, e non ha eccezioni:
+`expensesInRange` e `planBudgetChange` sono state cancellate perche' erano API
+pubbliche di dominio senza chiamanti di produzione, tenute vive dai test che le
+chiamavano. Prima di aggiungere un parametro "solo per i test" a qualcosa in
+`src/core`, la domanda e': **la stessa prova si puo' fare da `src/app`, passando
+un finto?** Quasi sempre si', e li' non lascia una superficie che qualcuno
+scambiera' per un'API.
+
 ## Convenzioni di lavoro
 - Conventional Commits (`feat:`, `fix:`, `perf:`, `docs:`, `refactor:`).
 - Ogni decisione architetturale non ovvia -> `docs/adr/NNN-titolo.md`.
