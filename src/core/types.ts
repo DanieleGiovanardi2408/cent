@@ -106,6 +106,13 @@ export interface Budget extends EntityBase {
 
 export type ThemePreference = 'light' | 'dark' | 'auto'
 
+/** Le due lingue dell'app. Non e' una stringa qualsiasi: e' un insieme chiuso. */
+export type Language = 'it' | 'en'
+
+export function isLanguage(value: unknown): value is Language {
+  return value === 'it' || value === 'en'
+}
+
 /** Record singolo: esiste una sola riga, con questo id. */
 export const SETTINGS_ID = 'settings'
 
@@ -117,6 +124,38 @@ export interface Settings extends EntityBase {
   readonly lastBackupAt?: Timestamp
   /** Versione dello schema con cui questi dati sono stati scritti. */
   readonly schemaVersion: number
+  /**
+   * La lingua **scelta dall'utente**. Opzionale, e la sua assenza e' un dato:
+   * significa "nessuno l'ha mai scelta", non "italiano".
+   *
+   * Il core non sa niente di `navigator`, e non deve: il default di prodotto
+   * — inglese se la lingua del telefono non e' italiano — dipende
+   * dall'ambiente, e un ambiente non e' un dato di dominio. Quindi qui il campo
+   * nasce **assente** e chi disegna la UI lo risolve leggendo l'ambiente a ogni
+   * avvio, finche' l'utente non entra in Impostazioni e sceglie davvero.
+   *
+   * Scriverci un valore al posto suo — nella migrazione, o al primo avvio —
+   * vorrebbe dire registrare una decisione che nessuno ha preso, e da quel
+   * momento non ci sarebbe piu' modo di distinguere "ha scelto italiano" da
+   * "gliel'abbiamo indovinato": chi cambia la lingua del telefono si
+   * ritroverebbe l'app ferma su una scelta che non ricorda di aver fatto. E' la
+   * stessa ragione per cui `Expense.timeMinutes` resta assente invece di
+   * ricevere mezzanotte.
+   */
+  readonly language?: Language
+  /**
+   * Quando la guida al primo avvio e' stata completata **o saltata**. Opzionale:
+   * assente = mai vista, ed e' lo stato a cui la guida e' agganciata.
+   *
+   * E' uno **stato**, non un evento: la guida si mostra a ogni apertura finche'
+   * questo campo e' assente, quindi mostrarla e' idempotente e ripetibile —
+   * l'unica forma che ADR 009 accetta per qualcosa che deve succedere "al primo
+   * avvio" su una piattaforma dove l'avvio non e' un evento affidabile.
+   *
+   * Chi rivede la guida da Impostazioni non lo azzera: rivederla e' una lettura,
+   * non un ritorno allo stato iniziale.
+   */
+  readonly onboardingCompletedAt?: Timestamp
 }
 
 /*

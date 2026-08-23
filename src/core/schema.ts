@@ -19,7 +19,7 @@ import type { StoreName } from './types'
 export const DB_NAME = 'cent'
 
 /** Versione corrente. Si incrementa aggiungendo un passo a `MIGRATIONS`. */
-export const SCHEMA_VERSION = 2
+export const SCHEMA_VERSION = 3
 
 export const STORE_NAMES: readonly StoreName[] = [
   'expenses',
@@ -126,6 +126,41 @@ export const MIGRATIONS: readonly MigrationStep[] = [
     transform: (data) => ({
       ...data,
       settings: data.settings.map((raw) => ({ ...raw, schemaVersion: 2 })),
+    }),
+  },
+  {
+    to: 3,
+    summary: 'Settings.language e Settings.onboardingCompletedAt (opzionali, default assente)',
+    /**
+     * **Una migrazione sola per due campi**, ed entrambi entrano assenti.
+     *
+     * Non c'e' niente da scrivere sui record esistenti, e non e' pigrizia: per
+     * tutti e due il default previsto **e' l'assenza**, e l'assenza e' un dato.
+     *
+     * - `language` assente = "nessuno l'ha mai scelta". Il default di prodotto
+     *   (inglese se il telefono non e' italiano) dipende da `navigator`, che
+     *   `src/core` non conosce e non deve conoscere. Se questa migrazione
+     *   scrivesse `'it'` — l'unica ipotesi plausibile per chi ha gia' un
+     *   database — registrerebbe una decisione che l'utente non ha preso, e da
+     *   quel momento nessuno potrebbe piu' distinguerla da una scelta vera.
+     * - `onboardingCompletedAt` assente = "guida mai vista". Scriverci un
+     *   istante vorrebbe dire dichiarare completata una guida che non e' mai
+     *   esistita, e togliere proprio a chi usa gia' l'app la spiegazione del
+     *   cents-first — cioe' l'errore che quell'utente ha commesso due volte in
+     *   sessanta secondi.
+     *
+     * E' la stessa dottrina del passo alla versione 2 con `timeMinutes`: un
+     * campo opzionale nuovo non si riempie a tavolino.
+     *
+     * Resta quindi l'unico campo che mentirebbe, il numero di versione del
+     * singleton delle impostazioni. Le altre sezioni escono **con lo stesso
+     * riferimento** con cui sono entrate: e' cosi' che `idb.ts` sa di non dover
+     * riscrivere nessuna spesa (vedi `applyTransforms`), ed e' la forma
+     * verificabile di "la migrazione non tocca i record esistenti".
+     */
+    transform: (data) => ({
+      ...data,
+      settings: data.settings.map((raw) => ({ ...raw, schemaVersion: 3 })),
     }),
   },
 ]

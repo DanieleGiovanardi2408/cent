@@ -13,6 +13,12 @@
  */
 
 import type { BudgetChangeRequest } from './budget'
+import type {
+  CategoryDeletion,
+  CategoryDeletionRequest,
+  CategoryPlacement,
+  CategoryPlacementRequest,
+} from './categories'
 import type { IsoDate } from './date'
 import type { Budget, Category, DataSet, Expense, RecurringRule, Settings, Timestamp } from './types'
 

@@ -52,9 +52,9 @@ categorie modificabili non siano piu' un miglioramento ma un **prerequisito**.
 
 **b) Il taglio di "Tocca una categoria per salvare" era giustificato da "l'unico
 utente lo sa gia'".** Quella premessa e' caduta. **Il chip-come-conferma non esiste
-in nessun'altra app**: nessuno lo indovina. **DA DECIDERE, non da lasciar cadere**:
-o la riga torna, o la guida lo copre esplicitamente. Non entrambe le cose per
-inerzia, e non nessuna delle due per dimenticanza.
+in nessun'altra app**: nessuno lo indovina. **DECISO** — vedi "La riga ... torna, agganciata a uno stato" qui sotto: la riga
+torna, mostrata finche' non si sono salvate tre spese, e la guida la copre
+comunque. Non una delle due per inerzia: entrambe, con compiti diversi.
 
 **c) Il cents-first l'ha sbagliato due volte in sessanta secondi chi l'ha
 progettato.** Con piu' utenti al primo giorno, l'innesco della Parte 2 del
@@ -226,6 +226,70 @@ della fase 3. **E' stata usata due volte in meno di 24 ore.**
 Da ricordare la prossima volta che si dubitera' se anticipare una rete di
 sicurezza: il costo di anticiparla si paga una volta, il costo di non averla si
 paga ogni volta che serve e non c'e'.
+
+## La riga "Tocca una categoria per salvare" torna, agganciata a uno stato
+
+**Decisione**: la riga torna, e si mostra **finche' l'utente non ha salvato tre
+spese**. Poi mai piu'.
+
+**Due stati, non un messaggio solo.** Con l'importo vuoto i chip sono disabilitati:
+dire "tocca una categoria per salvare" quando toccare non fa niente **invita a un
+gesto che fallisce**, nel momento peggiore.
+
+    importo vuoto    ->  "Digita l'importo"
+    importo scritto  ->  "Tocca una categoria per salvare"
+
+**Il conteggio si deriva, non si memorizza.** Il numero di spese e' gia' nel
+repository: aggiungere un campo a `Settings` significherebbe o infilarlo nella
+migrazione 2 -> 3, o farne una seconda **su dati veri**, per un contatore gia'
+ricavabile. E' la stessa dottrina di `budgetCoveredPeriodStart` e del periodo della
+Home: **si deriva da cio' che c'e', non si duplica**.
+
+### Perche' tre e non uno
+
+Non e' un numero scelto a sentimento: e' **un'asimmetria di costo**.
+
+- Mostrarla **due volte di troppo** costa **zero**: testo statico, spazio gia'
+  riservato, nessun `aria-live`, per chi ha gia' imparato.
+- Mostrarla **troppo poco** costa un utente **senza piu' nessun canale** che gli
+  dica come si salva, in un'app dove il salvataggio non ha un tasto.
+
+Un lato dell'errore e' gratis, l'altro no: si prende quello gratis. E' la stessa
+asimmetria dell'indicatore di backup, che deve sbagliare **verso l'allarme**.
+
+### Come ci siamo arrivati — e' il caso concreto che giustifica il controllo 0
+
+**La decisione di tagliare la riga era corretta con le premesse di allora.** Non e'
+stata un errore: sono cambiate le premesse, e nessuno se ne sarebbe accorto da
+solo.
+
+Al gate della fase 2 la riga fu tagliata per quattro ragioni:
+
+1. **ridondante** — i chip passano da `opacity: 0.45` a piena nello stesso
+   istante, in un canale che l'occhio guarda davvero;
+2. **31 px** in cima a un foglio dove il layout era saturo;
+3. un **secondo `aria-live`** che alla prima cifra metteva VoiceOver in coda con
+   due annunci, di cui contava il secondo;
+4. implicita, e mai scritta: **l'unico utente lo sapeva gia'**.
+
+Poi due cose sono successe, **nessuna delle due riguardava questa decisione**:
+
+- correggendo il salto di layout che la rimozione stessa aveva prodotto, la riga
+  e' stata **pinnata a esattamente una riga di testo**. Da quel momento la riga
+  **esiste comunque, vuota, con l'altezza riservata**: rimetterci un messaggio
+  costa **zero pixel e zero salti**. Le ragioni 2 e 3 sono evaporate come effetto
+  collaterale di una correzione non correlata — la 3 perche' un testo statico non
+  va marcato `aria-live`;
+- il **cambio di scopo del 23 agosto** ha invalidato la 4: il chip-come-conferma
+  non esiste in nessun'altra app, e nessuno lo indovina.
+
+Delle quattro ragioni ne resta **una**, la prima — ed e' vera **solo per chi ha
+gia' imparato**, che e' esattamente cio' che l'aggancio allo stato risolve.
+
+**Nessuno di questi due cambiamenti ha toccato il codice della riga.** Una
+decisione puo' diventare sbagliata senza che il suo codice cambi, e senza che
+nessuno la stia guardando: e' il motivo per cui il controllo 0 del critico esiste,
+e questo e' il caso che lo dimostra meglio della regola astratta.
 
 ## Fase 3 — Prerequisiti per condividere
 
