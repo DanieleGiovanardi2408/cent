@@ -9,7 +9,7 @@ quando il codice compila.
 | 1 | Data layer + test | Test verdi su date, ricorrenze, budget |
 | 2 | Aggiungi spesa + storico + export JSON minimo | Una spesa vera inserita in < 5s sul telefono, e si puo' salvarla fuori |
 | **4** | **Budget + Home** | La Home dice quanto si puo' spendere oggi |
-| **3** | **Categorie personalizzabili** | Si creano, riordinano, archiviano |
+| **3** | **Prerequisiti per condividere**: categorie, Impostazioni, due lingue, guida | Il link si puo' mandare a un amico |
 | 5 | Spese ricorrenti | Catch-up dopo 40 giorni, zero duplicati |
 | 6 | Statistiche | Grafici SVG, nessuna libreria aggiunta |
 | 7 | Export/import completo + backup | Round-trip senza perdita, import con anteprima |
@@ -31,6 +31,43 @@ Perche' lo scambio:
 
 Dopo la fase 2: usare l'app per una giornata vera prima di proseguire.
 
+
+## Cambio di scopo — 23 agosto 2026
+
+Cent passa da app per il suo autore ad app usata **anche da altre persone**: amici
+in Erasmus ad Amsterdam. Resta local-first e senza account — ognuno ha i propri
+dati sul proprio telefono — ma il pubblico cambia, e con lui alcune premesse su cui
+si e' deciso.
+
+**Questo e' il controllo 0 del critico applicato a un cambio di premessa invece che
+a una regola nuova**: quando cade una premessa, il codice scritto sotto di essa non
+si adegua da solo.
+
+### Premesse cadute
+
+**a) Le otto categorie sono personali.** `Coffeeshop` e `Sigarette` sono scelte di
+una persona sola. Chi non fuma si ritrova **due chip morti** in una griglia dove
+abbiamo difeso ogni pixel e imposto un tetto di otto. Da qui il fatto che le
+categorie modificabili non siano piu' un miglioramento ma un **prerequisito**.
+
+**b) Il taglio di "Tocca una categoria per salvare" era giustificato da "l'unico
+utente lo sa gia'".** Quella premessa e' caduta. **Il chip-come-conferma non esiste
+in nessun'altra app**: nessuno lo indovina. **DA DECIDERE, non da lasciar cadere**:
+o la riga torna, o la guida lo copre esplicitamente. Non entrambe le cose per
+inerzia, e non nessuna delle due per dimenticanza.
+
+**c) Il cents-first l'ha sbagliato due volte in sessanta secondi chi l'ha
+progettato.** Con piu' utenti al primo giorno, l'innesco della Parte 2 del
+tastierino (euro grandi, centesimi piccoli) e' da considerare **gia' scattato**:
+non si aspetta che l'audit trovi un altro mis-inserimento, perche' quello
+riguardava una persona che il meccanismo lo aveva progettato.
+
+### Regola: il link non si condivide ancora
+
+**Non si manda a nessuno finche' categorie modificabili, Impostazioni, due lingue e
+guida non sono tutte e quattro finite.** Le prime impressioni si spendono una volta
+sola: un'app che chiede di installarsi, poi mostra due chip che non c'entrano
+niente e non spiega come si salva, non ha una seconda occasione.
 
 ## Compiti espliciti della fase 2
 
@@ -98,17 +135,24 @@ difetto strutturale non si conta, si corregge.
 Costo accettato: il chip piu' vicino si allontana dal pollice di ~57 px, ~70 ms
 sul secondo tap.
 
-### Fermo con un innesco preciso: euro grandi, centesimi piccoli
+### Da fare in fase 3: euro grandi, centesimi piccoli
 
 `0,23 €` e `23,00 €` hanno oggi la stessa quantita' di inchiostro, e il
 discriminante e' una virgola da 3 px. Rendendo la parte frazionaria al ~55% del
 corpo, la magnitudine smette di essere codificata in *quale* glifo e diventa
-**quanto inchiostro grande c'e'** — che si vede in periferia.
+**quanto inchiostro grande c'e'** — che si vede in periferia. Costo stimato ~150
+byte con `formatToParts`.
 
-**Non e' "vediamo": l'innesco e' scritto.** Si spedisce **se l'audit trova un
-altro mis-inserimento dopo che lo spostamento dell'importo e' in produzione.**
-Costo stimato ~150 byte con `formatToParts`. La decisione e' gia' presa: quando
-l'innesco scatta non va rifatta.
+**L'innesco e' scattato per il cambio di scopo, non per l'audit.** Era scritto cosi':
+*"si spedisce se l'audit trova un altro mis-inserimento dopo che lo spostamento
+dell'importo e' in produzione"*. Quella condizione presupponeva **un solo utente,
+che il meccanismo lo aveva progettato** — e che ciononostante lo ha sbagliato due
+volte in sessanta secondi. Con altre persone al primo giorno la condizione non ha
+piu' senso di aspettare: si considera **gia' scattata**.
+
+Resta la divisione del lavoro fra i due rimedi, che e' il motivo per cui servono
+entrambi: **la guida spiega una volta, la tipografia spiega ogni volta.**
+
 
 ### Scartato: qualunque avviso sotto una soglia
 
@@ -183,6 +227,72 @@ Da ricordare la prossima volta che si dubitera' se anticipare una rete di
 sicurezza: il costo di anticiparla si paga una volta, il costo di non averla si
 paga ogni volta che serve e non c'e'.
 
+## Fase 3 — Prerequisiti per condividere
+
+Non e' piu' "categorie modificabili". Contiene **quattro cose interdipendenti**, e
+sono interdipendenti sul serio: Impostazioni e' il posto dove vivono lingua,
+categorie e "rivedi la guida", quindi nessuna delle altre tre sta in piedi senza.
+
+**Di conseguenza la fase 5 si alleggerisce**: la schermata Impostazioni non arriva
+piu' li'.
+
+### 1. Categorie modificabili, con tetto di otto attive
+Regole complete in CLAUDE.md, "Tetto di otto categorie attive". In sintesi:
+modificare, aggiungere, riordinare; **massimo otto attive**, infinite in archivio;
+**archiviare non e' cancellare** (la categoria resta su tutte le spese che l'hanno
+usata, e Storico e statistiche continuano a mostrarla); cancellare davvero solo se
+nessuna spesa la usa; **lo scambio e' un gesto solo** — aggiungendo la nona, l'app
+chiede quale sostituisce.
+
+Sul riordino vale l'avviso gia' scritto: dopo che la memoria muscolare si e'
+formata, cambiare l'ordine costa piu' di quanto sembri. Non impedirlo, dirlo.
+
+### 2. Impostazioni — versione minima
+Lingua, budget, categorie, export, **"rivedi la guida"**. Nient'altro in fase 3.
+
+### 3. Due lingue (it / en)
+Vincoli in CLAUDE.md, "Due lingue: it / en". I due che si dimenticano:
+- **la parita' delle chiavi la garantisce il compilatore**, non un test;
+- **la formattazione esce da `src/core`** — va fatto ora, prima che ci siano due
+  lingue da cablare invece di una.
+
+**La pagina di installazione in browser va tradotta per prima**: e' la primissima
+cosa che un amico vede, e oggi e' l'unica schermata che parla a chi non ha ancora
+l'app.
+
+### 4. Guida al primo avvio
+**Tre schede, non di piu'.** Saltabile sempre. **Riapribile da Impostazioni**: chi
+la salta deve poterla ritrovare.
+
+Contenuto, in quest'ordine — che e' **l'ordine dei danni**, non l'ordine logico:
+
+1. **L'importo si riempie da destra.** Mostrato **in movimento**, non a parole:
+   `5 -> 0,05`, `50 -> 0,50`, `500 -> 5,00`. E' l'errore che ha morso l'autore due
+   volte in sessanta secondi, e la Parte 2 del tastierino e' la stessa spiegazione
+   resa permanente: **la guida spiega una volta, la tipografia spiega ogni volta.**
+2. **Il chip della categoria E' il salvataggio.** Non esiste un tasto Salva.
+3. **I dati restano su questo telefono**, nessuno li vede, l'export e' l'unico
+   backup. Con l'invito a installarla sulla Home se non lo e' gia'.
+
+**Non deve creare una spesa finta per dimostrare.**
+
+**Conformita' ad ADR 009 — e' il punto che sembra vietato e non lo e'.** La guida
+**non e' agganciata all'evento di avvio**: e' agganciata allo **stato** "mai
+completata". Si mostra a ogni apertura finche' quello stato non cambia, quindi e'
+**ripetibile e idempotente** — che e' esattamente cio' che ADR 009 chiede a
+qualunque cosa succeda al ritorno in primo piano. Il divieto riguarda i
+comportamenti che dipendono dall'*evento*, perche' su iOS quell'evento non e'
+affidabile; uno stato persistito non ha quel problema.
+
+### Migrazione 2 -> 3, una sola
+`Settings.language` e `Settings.onboardingCompletedAt` **insieme**, entrambi
+opzionali con default. Una migrazione sola, non due.
+
+Vale "Da qui in avanti i dati sono veri" (CLAUDE.md): **il piano va verificato su
+una copia del backup reale**, non solo su dati sintetici. `cent20260823.json` e' un
+campione valido — 6 spese, 3 vive e 3 cancellate, un budget, otto categorie,
+`schemaVersion: 2`.
+
 ## Compiti espliciti della fase 6
 
 ### Statistiche per fascia oraria e giorno della settimana
@@ -202,15 +312,6 @@ ne ha escluse**. Una statistica che scarta record in silenzio mente — e qui
 scarterebbe proprio le spese inserite in ritardo, che non sono un campione
 casuale.
 
-## Compiti espliciti della fase 3
-
-### Riordino delle categorie: avvisare, non impedire
-
-Quando le categorie diventeranno riordinabili, la UI deve dire che cambiare
-l'ordine dopo che la memoria muscolare si e' formata costa piu' di quanto
-sembri: dopo pochi giorni si tocca per posizione senza leggere l'etichetta, e
-un riordino trasforma quel gesto in una spesa categorizzata male. Non va
-impedito — sono categorie sue — va detto.
 
 ## Compiti espliciti della fase 7
 

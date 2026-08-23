@@ -1,9 +1,19 @@
 # Cent — expense tracker PWA
 
 ## Cos'e'
-App web installabile (PWA) per tracciare le spese quotidiane. Uso personale,
-single-user, mobile-first (iPhone, Safari, "Aggiungi a Home"). Primo contesto
-d'uso: un soggiorno ad Amsterdam. L'app e' pensata per uso continuativo.
+App web installabile (PWA) per tracciare le spese quotidiane. Mobile-first
+(iPhone, Safari, "Aggiungi a Home"). Primo contesto d'uso: un soggiorno ad
+Amsterdam. L'app e' pensata per uso continuativo.
+
+**Dal 23 agosto 2026 non e' piu' solo per il suo autore**: la useranno anche altre
+persone — amici in Erasmus. Resta **local-first e senza account**: ogni persona ha
+i propri dati sul proprio telefono, e non esiste nessuna condivisione fra
+dispositivi. Cambia il pubblico, non l'architettura.
+
+Cosa cambia davvero: **niente puo' piu' essere giustificato con "tanto lo sa gia'
+l'unico utente".** Le convenzioni non ovvie — il chip della categoria che salva,
+l'importo che si riempie da destra — vanno spiegate, non presupposte. Vedi
+`docs/ROADMAP.md`, "Cambio di scopo".
 
 ## Principio guida n.1
 **Inserire una spesa deve richiedere meno di 5 secondi e al massimo 3 tap oltre
@@ -62,7 +72,9 @@ Tutte le entita': `id` (crypto.randomUUID), `createdAt`, `updatedAt`.
 - **Budget**: `period: 'weekly'|'monthly'`, `amountCents`, `categoryId?`,
   `effectiveFrom`, `effectiveTo?`. I budget sono **storicizzati**: cambiare il
   budget di oggi non deve riscrivere i totali dei periodi passati.
-- **Settings**: `weekStartsOn: 1`, `theme`, `lastBackupAt?`, `schemaVersion`.
+- **Settings**: `weekStartsOn: 1`, `theme`, `lastBackupAt?`, `schemaVersion`,
+  `language?` (it | en), `onboardingCompletedAt?`. Gli ultimi due arrivano con la
+  migrazione 2 -> 3, entrambi opzionali con default.
 
 ## Ordinamento delle categorie
 La griglia serve al momento del pagamento. Si ordina **per frequenza di tap, non
@@ -84,6 +96,28 @@ Tutte e otto devono stare in griglia insieme al tastierino, senza scroll, sul
 viewport piu' piccolo supportato. Se non ci stanno si ripensa il layout: non si
 aggiunge uno scroll e non si nasconde niente dietro un "Altre" — sarebbero i due
 tap promessi che diventano tre in silenzio.
+
+### Tetto di otto categorie attive
+L'utente puo' modificare, aggiungere e riordinare le proprie categorie, ma
+**al massimo otto restano attive sulla griglia**. Quante se ne vuole in archivio.
+
+La ragione e' il vincolo che protegge i due tap: la griglia 4x2 **senza scroll**.
+Uno scroll ucciderebbe la promessa in silenzio — i due tap diventerebbero
+scroll + tap senza che nessuna misura se ne accorga. Il tetto rende il vincolo
+vero **per costruzione** invece che per disciplina.
+
+**Archiviare non e' cancellare.** Una categoria archiviata sparisce dalla griglia
+ma **resta su tutte le spese che l'hanno usata**: Storico e statistiche continuano
+a mostrarla. Archiviare e' un'azione di **visualizzazione**, non sui dati. La
+storia non cambia mai retroattivamente.
+
+Cancellare davvero si puo' **solo se nessuna spesa la usa**. Altrimenti
+resterebbero record orfani.
+
+**Lo scambio e' un gesto solo.** Aggiungendo la nona, l'app chiede "quale
+sostituisce?" e lo si fa li'. Se per aggiungerne una bisognasse prima andare ad
+archiviarne un'altra e tornare indietro, il tetto si sentirebbe come un dispetto
+invece che come una scelta — stessa regola, due prodotti diversi.
 
 ## Colori delle categorie
 Gli otto colori sono **un sistema, non otto scelte separate**: diventeranno la
@@ -180,6 +214,31 @@ toast di ieri sera e' ancora li' stamattina, con "Annulla" agganciato a una spes
 di dodici ore fa.
 
 E' lo stesso principio del mirror che e' una cache, applicato alla UI.
+
+## Due lingue: it / en
+- **Nessuna libreria.** Un modulo in `src/ui/i18n`, due dizionari, una `t()`. Il
+  budget e' 60 KB e siamo a 28,4: una libreria di i18n costerebbe piu' di tutto il
+  resto dell'app.
+- **La parita' delle chiavi la garantisce il compilatore, non un test**: il
+  dizionario inglese e' tipizzato come `Record<keyof typeof it, string>`. Una
+  chiave mancante deve essere un **errore di compilazione**, non una stringa
+  inglese che spunta in mezzo all'italiano.
+- Rilevamento da `navigator.language` al primo avvio. **Default inglese** se non e'
+  italiano: la lingua condivisa di un gruppo Erasmus e' l'inglese.
+- Override manuale in Impostazioni, persistito.
+
+### La formattazione esce da `src/core`
+`money.ts` ha `it-IT` cablato. E' **presentazione dentro il dominio**, ed e' stata
+invisibile finche' la lingua era una sola. Il core restituisce **interi**; la UI
+formatta con il locale attivo.
+
+Va fatto **prima** che esistano due lingue da cablare invece di una.
+
+Il cents-first regala una cosa qui: non si digita nessun separatore decimale,
+quindi **non esiste parsing dipendente dal locale**. Solo output.
+
+Il canarino sullo spazio non separabile va esteso a **entrambi** i locali: la
+posizione del simbolo cambia con la lingua, la proprieta' da difendere no.
 
 ## Calcolo budget
 Metriche della dashboard: speso / budget / rimanente del periodo, giorni rimanenti,

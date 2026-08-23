@@ -51,6 +51,30 @@ rileggere il disco (ADR 007), ricalcolare il giorno civile, riconciliare i timer
 (CLAUDE.md, "Stato dell'interfaccia e sospensione"). Sono tutte cose invisibili
 finche' non cambiano un dato, ed e' per questo che possono ripetersi.
 
+## Cosa questa ADR NON vieta: i comportamenti agganciati a uno STATO
+
+La regola sopra riguarda i comportamenti agganciati all'**evento** di avvio,
+perche' su iOS quell'evento non e' affidabile.
+
+**Un comportamento agganciato a uno stato persistito non ha quel problema**, ed e'
+lecito anche se cambia la schermata.
+
+Il caso concreto e' la guida al primo avvio (fase 3). Non si mostra "all'avvio":
+si mostra **finche' `Settings.onboardingCompletedAt` e' assente**. La differenza
+non e' terminologica:
+
+- agganciata all'evento, comparirebbe solo agli avvii a freddo — cioe' a seconda
+  di se iOS ha ucciso l'app in background, che e' il difetto che questa ADR
+  descrive;
+- agganciata allo stato, compare **a ogni apertura** finche' non e' stata
+  completata, ed e' quindi **ripetibile e idempotente** — che e' esattamente cio'
+  che la regola qui sopra chiede a qualunque cosa succeda al ritorno in primo
+  piano.
+
+Il criterio per distinguere: **se il comportamento si ripete identico a ogni
+ritorno in primo piano finche' una condizione non cambia, e' uno stato ed e'
+lecito. Se succede una volta e poi non piu', dipende dall'evento ed e' vietato.**
+
 ## Un secondo argomento, indipendente
 
 Aprire sul tastierino significa che **ogni apertura accidentale atterra nello
