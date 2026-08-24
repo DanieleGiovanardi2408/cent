@@ -400,6 +400,25 @@ Corollario: prima di scrivere il confronto bisogna sapere **quanto vale l'effett
 piu' piccolo che deve fallire**. Se non lo si sa, non si sta scegliendo una
 precisione: se ne sta ereditando una a caso.
 
+## L'output di una verifica si filtra quando lo si legge, mai quando lo si registra
+Una verifica lunga va **registrata intera**. Il filtro (`grep`, `tail`) si applica
+alla **lettura**, non alla scrittura: nel momento in cui il risultato non torna,
+l'unica cosa che serve e' proprio cio' che il filtro avrebbe scartato.
+
+Caso concreto: una prova al confine e' tornata con **103 test passati invece di
+104**, e la ricostruzione era impossibile perche' l'output era stato incanalato in
+un `grep` che teneva due righe. Rifatta conservando tutto, il conteggio era pieno
+(`[114/114]`), ma **la discrepanza non e' stata spiegata**: e' stata solo non
+riprodotta. Il sospetto — contesa di risorse con un processo rimasto vivo — e' un
+sospetto, e va detto come tale.
+
+E' la **terza forma della stessa lezione**, dopo:
+- l'albero che cambiava sotto la misura (una caccia a un test intermittente
+  invalidata da un file creato e cancellato da un altro agente mentre girava);
+- la misura dell'**effetto** invece della **causa** (il CLS che non vedeva 0,82 px).
+
+Qui la misura era giusta e l'oggetto fermo: e' stata **registrata a meta'**.
+
 ## Dopo una correzione, la verifica si riesegue — non si deduce
 Il posto piu' probabile in cui trovare il prossimo difetto e' **dentro la
 correzione appena fatta**. Una correzione tocca il codice in un punto delicato

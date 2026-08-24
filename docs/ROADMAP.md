@@ -245,6 +245,35 @@ migrazione 2 -> 3, o farne una seconda **su dati veri**, per un contatore gia'
 ricavabile. E' la stessa dottrina di `budgetCoveredPeriodStart` e del periodo della
 Home: **si deriva da cio' che c'e', non si duplica**.
 
+### Correzione: la ragione dell'`aria-live` era sbagliata, la conclusione no
+
+Qui sopra era scritto che l'obiezione dell'annuncio doppio di VoiceOver **"e'
+evaporata… perche' un testo statico non va marcato `aria-live`"**.
+
+**Quella premessa e' falsa per la copy che stavamo per scrivere.** La riga non e'
+statica: ha **due stati** e commuta esattamente alla prima cifra — cioe' nello
+stesso frame in cui cambia l'importo, che e' l'altra live region. Due region
+`polite` aggiornate insieme, due annunci in coda, e quello che conta arriva
+secondo.
+
+**La conclusione sopravvive, per un'altra ragione**: la riga **non e' una live
+region per progetto**. Non e' un valore che cambia, e' **un'istruzione** — si legge
+esplorando, non si annuncia. Annunciarla a ogni cifra sarebbe rumore anche se fosse
+sola in coda.
+
+Scartata anche la via di mezzo (`aria-live` condizionale, attivo solo per
+`failed`/`max`): teneva in vita la cosa sbagliata, e avrebbe fatto discutere
+**quando** annunciare invece di accorgersi che non va annunciato mai.
+
+E la cosa che quella live region cercava di fare va dove serve davvero: **nel nome
+accessibile dei chip** — *"Spesa, tocca due volte per salvare"*. Cosi' chi usa
+VoiceOver lo scopre **sul controllo che sta per toccare**, non in un annuncio che
+puo' arrivare secondo. Non ci si era arrivati perche' si stava scegliendo fra due
+formulazioni di una riga, cioe' guardando il canale sbagliato.
+
+Il cambio di ragione resta scritto invece di essere riscritto: e' il terzo caso in
+due giorni di una premessa erosa senza che il codice cambiasse.
+
 ### Perche' tre e non uno
 
 Non e' un numero scelto a sentimento: e' **un'asimmetria di costo**.
@@ -327,6 +356,49 @@ di oggi** — cioe' il guscio nella lingua sbagliata per pochi frame. Non puo'
 introdurre un difetto che non esista gia'. E' la differenza fra una cache che, se
 sbaglia, produce uno stato nuovo e sconosciuto, e una che al peggio torna al punto
 di partenza.
+
+## ADR 011 ha reso morto del codice che nessuno ha toccato
+
+`history.blank.install` — la riga *"Aggiungi Cent alla schermata Home: si apre a
+schermo intero e parte anche senza rete"* — esiste in **entrambi** i dizionari, e'
+resa da `History.tsx` dentro `.hint--install`, ed e' `display: none` salvo
+`:root[data-display="browser"]`.
+
+Da ADR 011 in poi quello stato coesiste con l'app **solo su dev build e su `http://`
+da rete locale**. Due stringhe tradotte, sei righe di CSS e un `<p>` che **nessun
+utente vedra' mai**.
+
+**E' il caso piu' puro della serie**: nessuno ha modificato quel codice, nessuna
+grep lo distingue da quello vivo, e nessun test cade. E' morto perche' e' cambiata
+una premessa **altrove** — ed e' stato trovato solo perche' si stava per scriverne
+una seconda copia dentro la guida.
+
+Cancellato, non spostato: la sua destinazione naturale e' una schermata **il cui
+intero mestiere e' gia' quella frase**, con tre passi illustrati invece di una riga.
+
+## Il promemoria di backup ha due soglie, non una
+
+- **Oltre 14 giorni** dall'ultimo export -> l'avviso vive in Home e in Impostazioni.
+- **Mai esportato** -> il primo avviso a **7 giorni**.
+
+La ragione della seconda soglia: **il backup che non avviene mai e' il primo**, e
+chi non e' entrato in Impostazioni in una settimana non ci entrera' spontaneamente.
+
+Entrambe derivate da `lastBackupAt`, **nessun campo nuovo e nessuna migrazione**: la
+distinzione fra le due soglie e' `lastBackupAt` assente contro presente, che e' gia'
+nel modello.
+
+## Se la suite locale supera i 5 minuti, si divide
+
+Oggi gli e2e sono ~1,9 minuti su una macchina scarica e ~3 in CI. Va bene.
+
+**La soglia e' decisa adesso, cosi' quando succede non si ridiscute**: se la suite
+locale supera i **5 minuti su una macchina scarica**, si divide in due comandi — uno
+veloce che si lancia sempre, uno completo prima del commit.
+
+E' la stessa calibrazione dell'hook `pre-commit`, che esegue solo il typecheck e mai
+la suite: **una verifica abbastanza lenta viene saltata, e una verifica saltata e'
+peggio di una che non esiste** — perche' qualcuno crede che sia girata.
 
 ## Fase 3 — Prerequisiti per condividere
 
