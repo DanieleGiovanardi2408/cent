@@ -651,6 +651,30 @@ Conseguenza gia' attiva oggi: settimanale e mensile possono restare aperti insie
 `id` — con un test che verifica che l'ordine dell'array non conti. E' la stessa
 dottrina di `resolveBudget` (ADR 008): mai una scelta arbitraria, mai un throw.
 
+## Un'enumerazione fatta in fretta e' un punto di partenza, non una chiusura
+
+L'elenco delle premesse cadute nella sezione "Cambio di scopo" e' stato scritto in
+dieci minuti, e poi **trattato come completo per tre passi di lavoro**.
+
+Al gate della fase 3 il conto era: delle tre elencate, **una applicata a meta'**
+(le categorie modificabili si', i loro nomi italiani no), **una non applicata**
+(la Parte 2 del tastierino, con due commenti nel codice che la dichiaravano
+attiva), una applicata. E **due fuori elenco**: `CLAUDE.md` continuava a dichiarare
+`Locale it-IT` fra i vincoli non negoziabili e a chiedere "stati vuoti con copy
+vero in italiano" — due righe rese false dal capitolo sulle due lingue, e lasciate
+li' a essere lette come regola da chiunque aprisse il file per primo.
+
+**Il critico deve ri-derivare quell'elenco, non spuntarlo.** Una lista scritta
+sotto la spinta di una decisione e' un buon inizio e una pessima garanzia: contiene
+cio' che veniva in mente allora, non cio' che era vero. Spuntarla da' la sensazione
+di aver chiuso — che e' peggio di non averla, perche' chiude anche la ricerca.
+
+Corollario, gia' visto altrove: la sesta premessa erosa e' stata **il promemoria di
+backup dentro Impostazioni**, deciso quando Impostazioni non aveva ancora la
+sezione "I tuoi dati". La sua ragione — *l'export sepolto non si vede piu'* — e'
+falsa proprio nella schermata dove l'export e' in vista. Nessuno ha toccato quel
+codice: e' cambiato cio' che gli sta intorno.
+
 ## Verificabili solo sul dispositivo — una categoria, non un debito
 
 Queste cose **non sono coperte in suite e non devono esserlo**: il runner non puo'

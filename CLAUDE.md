@@ -37,7 +37,11 @@ decisione sbagliata. Tutto il resto dell'app e' secondario a questo flusso.
 - Nessuna dipendenza da CDN a runtime. Tutto bundlato.
 - Importi come **interi in centesimi**. Mai float per il denaro.
 - Date come stringhe locali `YYYY-MM-DD`. Mai aritmetica su Date in UTC.
-- Settimana che inizia **lunedi'**. Locale `it-IT`, EUR, `Intl.NumberFormat`.
+- Settimana che inizia **lunedi'**. EUR, `Intl.NumberFormat`.
+- **Due lingue, it ed en**, con **default inglese** quando la lingua del
+  dispositivo non e' italiana (vedi "Due lingue"). Questa riga diceva
+  `Locale it-IT` fino alla fase 3: era vera quando l'utente era uno solo, ed e'
+  rimasta scritta due giorni dopo che aveva smesso di esserlo.
 
 ## Stack
 - Vite + TypeScript (strict) + Preact
@@ -131,6 +135,66 @@ dimenticate: vivono in un elenco esplicito in `src/app/legacy-cleanup`, che le
 cancella al primo avvio. Chi ritira una chiave la aggiunge a quell'elenco.
 Ritirata finora: `cent.storagePersisted.v1` (fase 0, sostituita da
 `navigator.storage.persisted()` come unica fonte di verita').
+
+## `Settings` si divide in due
+Non tutto cio' che sta in `Settings` descrive i dati. **Meta' descrive il
+dispositivo**, e la differenza decide cosa attraversa un backup.
+
+**Viaggia col backup** (descrive i dati e come vanno interpretati):
+- `schemaVersion`
+- `weekStartsOn`
+
+**Appartiene al dispositivo e non si importa MAI**:
+- `language` — e' la lingua di *questo* telefono, non del file
+- `onboardingCompletedAt` — chi ha gia' visto la guida qui l'ha vista qui
+- `lastBackupAt` — dice quando *questo* dispositivo ha fatto una copia
+- `theme`
+
+Il caso concreto che l'ha decisa, trovato prima che la fase 7 lo scoprisse:
+`importBackup` sostituisce il record `settings` **intero**. Importando un backup
+piu' vecchio dei due campi nuovi, **la guida ricomparirebbe sopra i dati appena
+importati e la lingua tornerebbe ad "Automatica"** — cancellando la scelta fatta su
+questo telefono, nell'istante in cui l'utente ha appena dimostrato di non essere
+alle prime armi.
+
+### `weekStartsOn` viaggia col backup, e la ragione e' il criterio
+Sembra una preferenza di visualizzazione, e non lo e': **cambiarlo ricalcola ogni
+confine di periodo dello storico**. I budget sono storicizzati, e ogni budget
+settimanale e' stato deciso contro confini precisi; un backup ripristinato sotto
+una convenzione diversa **reinterpreterebbe in silenzio ogni totale settimanale**,
+senza toccare un solo record.
+
+Il criterio generale, che vale per il prossimo campo dubbio: **se cambiarlo cambia
+il significato dei dati gia' scritti, descrive i dati. Se cambia solo come li si
+guarda adesso, descrive il dispositivo.**
+
+(Oggi `weekStartsOn` e' fissato a 1 dal vincolo sulla settimana che inizia lunedi',
+quindi la decisione conta solo se quel vincolo cadesse. Va scritta lo stesso: il
+posto in cui si scopre di non averla presa e' un import.)
+
+## Le categorie di default si creano dopo che la lingua e' risolta
+Le otto etichette esistono in **entrambi i dizionari**, e il seed le scrive nella
+lingua risolta. Da quel momento **sono dati dell'utente**: cambiare lingua dopo
+**non** le ritraduce, ed e' corretto — sono sue, e rinominarle e' esattamente cio'
+che l'editor serve a fare.
+
+**Il difetto da evitare e' l'ordine, non la traduzione.** Oggi il seed gira dentro
+`openRepository` **prima che una lingua esista**: tradurre senza cambiare l'ordine
+produce otto etichette nella lingua sbagliata con un dizionario tradotto accanto.
+Quindi il vincolo e': **le categorie di default non si creano finche' la lingua non
+e' risolta.**
+
+### Alternativa scartata: salvare una chiave invece di un nome
+Si potrebbe salvare una chiave e tradurla a ogni render finche' nessuno rinomina.
+Darebbe nomi giusti anche a chi cambia lingua dopo.
+
+**Scartata**: introdurrebbe un campo con **due nature** (chiave o nome), una
+transizione fra le due, e un backup che deve rappresentarle entrambe — cioe'
+esattamente lo stato rappresentabile-ma-ambiguo che questo progetto elimina da
+giorni, pagato per una comodita' che capita **una volta sola** nella vita di un
+utente.
+
+**Una categoria ha un nome. Punto.**
 
 ## Motore delle ricorrenze — la parte che si sbaglia sempre
 Le regole ricorrenti NON sono spese: generano spese reali in modo pigro,
@@ -279,7 +343,9 @@ Migrazioni di schema versionate, senza perdita di record.
 ## Accessibilita' e finiture
 Target touch >= 44px. Contrasto AA in entrambi i temi. `prefers-reduced-motion`.
 Ogni azione distruttiva e' annullabile (soft delete + toast), niente dialoghi
-"Sei sicuro?". Stati vuoti con copy vero in italiano.
+"Sei sicuro?". Stati vuoti con copy vero — **in tutte e due le lingue**, e
+l'inglese si scrive per primo come originale: un inglese che sa di traduzione fa
+piu' danno di un italiano che sa di traduzione.
 
 ## Non leggere l'intero albero mentre un agente lo sta scrivendo
 Nessuna operazione che legga **tutto** il working tree — una misura o un commit —
