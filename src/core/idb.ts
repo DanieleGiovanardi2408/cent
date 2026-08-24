@@ -33,6 +33,8 @@ import { DB_NAME, MIGRATIONS, SCHEMA_VERSION, STORE_NAMES, emptyRawDataSet, pend
 import type { MigrationStep, RawDataSet, RawRecord } from './schema'
 import { planResolvedBudgetChange } from './budget'
 import { planCategoryDeletion, planCategoryPlacement } from './categories'
+import { planRecurringRuleDeletion } from './recurring-plan'
+import type { RecurringRuleDeletion } from './recurring-plan'
 import type { CategoryDeletion, CategoryPlacement } from './categories'
 import { isAfter } from './date'
 import { NOTHING_SKIPPED } from './persistence'
@@ -179,7 +181,9 @@ function storesOf(batch: WriteBatch): StoreName[] {
   ) {
     names.add('categories')
   }
-  if (batch.recurringRules || batch.advanceRecurringMarkers) names.add('recurringRules')
+  if (batch.recurringRules || batch.advanceRecurringMarkers || batch.recurringRuleDeletion) {
+    names.add('recurringRules')
+  }
   if (batch.budgets || batch.budgetChange) names.add('budgets')
   if (batch.settings) names.add('settings')
   // Cancellare una categoria dipende da chi la nomina: le **tre** letture
@@ -194,6 +198,10 @@ function storesOf(batch: WriteBatch): StoreName[] {
     names.add('recurringRules')
     names.add('budgets')
   }
+  // Stessa ragione, un riferimento solo: chi nomina una regola sono le spese
+  // che ha generato. Anche qui l'elenco deve restare lo specchio esatto degli
+  // argomenti di `planRecurringRuleDeletion`.
+  if (batch.recurringRuleDeletion) names.add('expenses')
   return [...names]
 }
 
@@ -229,6 +237,7 @@ async function runBatch(tx: WriteTx, batch: WriteBatch): Promise<WriteResult> {
   let budgetsWritten: readonly Budget[] = []
   let placement: CategoryPlacement | undefined
   let deletion: CategoryDeletion | undefined
+  let ruleDeletion: RecurringRuleDeletion | undefined
   const writes: Promise<unknown>[] = []
 
   /**
@@ -321,6 +330,18 @@ async function runBatch(tx: WriteTx, batch: WriteBatch): Promise<WriteResult> {
     const store = tx.objectStore('recurringRules')
     for (const record of batch.recurringRules) enqueue(store.put(record))
   }
+  if (batch.recurringRuleDeletion) {
+    const store = tx.objectStore('recurringRules')
+    // Le spese si rileggono **qui dentro**: il permesso dipende interamente da
+    // record di un altro store, e un conteggio fatto appena prima e' la stessa
+    // gara con una finestra piu' stretta (ADR 008).
+    ruleDeletion = planRecurringRuleDeletion(
+      await store.getAll(),
+      await tx.objectStore('expenses').getAll(),
+      batch.recurringRuleDeletion,
+    )
+    if (ruleDeletion.ok) enqueue(store.delete(ruleDeletion.deleted.id))
+  }
   if (batch.advanceRecurringMarkers) {
     const store = tx.objectStore('recurringRules')
     // Rilettura **dentro** la transazione: quello che finisce sul disco e' la
@@ -367,6 +388,7 @@ async function runBatch(tx: WriteTx, batch: WriteBatch): Promise<WriteResult> {
     budgets: budgetsWritten,
     ...(placement !== undefined ? { categoryPlacement: placement } : {}),
     ...(deletion !== undefined ? { categoryDeletion: deletion } : {}),
+    ...(ruleDeletion !== undefined ? { recurringRuleDeletion: ruleDeletion } : {}),
   }
 }
 

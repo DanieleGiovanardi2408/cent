@@ -400,4 +400,103 @@ export const it = {
   'nudge.unknown': 'Non riesco a dire da quanto non fai una copia',
   'nudge.hint': 'I dati stanno solo qui.',
   'nudge.action': 'Esporta',
+
+  /* --- spese fisse: le regole ricorrenti ---------------------------------- *
+   *
+   * "Spesa fissa" e non "ricorrenza": e' il nome che l'utente usa parlando
+   * (l'affitto, l'abbonamento), ed e' anche il nome della **decisione** che ADR
+   * 016 usa per tenerle fuori dal budget. Chiamarle "ricorrenti" avrebbe
+   * descritto il meccanismo — che le ripete — invece del fatto che conta: che
+   * non sono una scelta di oggi.
+   */
+
+  /* la riga che dichiara l'esclusione, accanto al numero grande (ADR 016 §2) */
+  'hero.fixed': 'oltre a {amount} di spese fisse',
+
+  /* la sezione in Impostazioni: il secondo dei due numeri (ADR 016 §3) */
+  'fixed.title': 'Spese fisse',
+  'fixed.total': 'In tutto {amount} al mese.',
+  'fixed.none': 'Non hai spese fisse.',
+  'fixed.text':
+    'Affitto, abbonamenti, palestra: quello che esce da solo. L’app le segna al posto tuo e le tiene fuori dal budget, perché non sono una decisione.',
+  // Compare solo se almeno una regola non e' mensile: una mensile da 900 vale
+  // esattamente 900 al mese, e avvertire di un'approssimazione che non c'e'
+  // insegnerebbe a non leggere l'avviso quando invece serve.
+  'fixed.rate': 'È una media sull’anno: un mese con più scadenze ne vedrà uscire di più.',
+  'fixed.add': 'Aggiungi una spesa fissa',
+  'fixed.list': 'Le tue spese fisse',
+  // Una regola che comincia piu' avanti c'e' ma non pesa ancora: si vede, e si
+  // vede anche perche' non e' nel totale.
+  'fixed.later': 'parte: {day}',
+  'fixed.ended': 'finita: {day}',
+
+  /* ogni quanto scatta */
+  'cad.daily.one': 'ogni giorno',
+  'cad.daily.other': 'ogni {count} giorni',
+  'cad.weekly.one': 'ogni settimana',
+  'cad.weekly.other': 'ogni {count} settimane',
+  'cad.monthly.one': 'ogni mese',
+  'cad.monthly.other': 'ogni {count} mesi',
+
+  /* --- il foglio che crea una regola -------------------------------------- *
+   *
+   * Qui **non** vale il chip-come-conferma di ADR 004: una regola si crea una
+   * volta e vale per mesi, quindi si sceglie e poi si salva, come il budget.
+   */
+  'rule.label': 'Nuova spesa fissa',
+  'rule.hint.empty': 'Quanto esce ogni volta?',
+  'rule.hint.category': 'Scegli una categoria',
+  'rule.hint.check': 'Controlla ogni quanto e da quando, poi tocca Crea',
+  'rule.hint.failed': 'Non sono riuscito a creare la regola. Tocca di nuovo Crea.',
+  'rule.hint.max': 'Importo massimo raggiunto',
+  'rule.cadence': 'Ogni quanto',
+  'rule.cadence.monthly': 'Al mese',
+  'rule.cadence.weekly': 'A settimana',
+  'rule.cadence.daily': 'Al giorno',
+  'rule.cats': 'Categoria',
+  'rule.start': 'Da quando',
+  'rule.start.today': 'Oggi',
+  'rule.start.pick': 'Scegli il giorno da cui parte',
+  'rule.start.other': 'Un’altra data',
+
+  /* --- l'anteprima, prima di scrivere ------------------------------------- *
+   *
+   * Le date passate sono legittime — e' cosi' che si registra un affitto che
+   * esiste da mesi — quindi non si vietano: si dichiara cosa succede. La
+   * conferma compare **solo** quando c'e' dell'arretrato: una conferma che
+   * compare sempre smette di essere letta.
+   */
+  // ## Perche' l'intervallo non ha preposizioni
+  //
+  // "dal 1 gennaio al 1 agosto" e' giusto, "dal 8 agosto" no: in italiano si
+  // elide davanti a otto e undici ("dall'8", "dall'11"). Sono due giorni su
+  // trentuno, cioe' un errore di grammatica che compare **a volte** — la classe
+  // peggiore, perche' passa ogni rilettura fatta in un giorno qualsiasi.
+  //
+  // La stessa cosa la fa gia' `periodRangeLabel`: l'intervallo lo scrive
+  // `formatRange`, che fonde le parti uguali (`1 – 8 agosto`) e le riapre a
+  // cavallo di due mesi. Come si scrive un intervallo lo sa il locale, e
+  // nessuna delle due lingue ha bisogno di una preposizione per dirlo.
+  'rule.preview.today': 'Prima spesa: oggi.',
+  'rule.preview.later': 'Prima spesa: {day}.',
+  'rule.preview.back.one': 'Questa regola creerà 1 spesa arretrata: {from}, {total}.',
+  'rule.preview.back.other':
+    'Questa regola creerà {count} spese arretrate: {range}, {total} in totale.',
+  'rule.confirm.one': 'Crea anche la spesa arretrata',
+  'rule.confirm.other': 'Crea anche le {count} spese arretrate',
+  'rule.save': 'Crea la spesa fissa',
+  // Due chiavi e non una con un `{count}` dentro: "Crea 1 spese" e' un refuso, e
+  // il caso a una sola arretrata esiste (mensile dal primo del mese corrente).
+  // Il testo e la casella lo distinguevano gia'; il bottone no, ed e' l'unica
+  // delle tre che si legge sempre.
+  'rule.save.back.one': 'Crea 1 spesa · {total}',
+  'rule.save.back.other': 'Crea {count} spese · {total}',
+
+  'toast.ruleSaved': 'Spesa fissa creata: {name}',
+  'toast.ruleSavedBack': '{name}: {count} spese create',
+
+  /* --- una spesa che viene da una regola ---------------------------------- */
+  // Discreto, non un avviso: e' un'informazione su **da dove arriva** quella
+  // riga, e le spese generate restano modificabili e cancellabili come tutte.
+  'row.fixed': 'spesa fissa',
 } as const

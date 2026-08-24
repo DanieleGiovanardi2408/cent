@@ -149,6 +149,45 @@ export function occurrencesBetween(
   return dates
 }
 
+export interface MaterializationWindow {
+  /** Primo giorno da esaminare, incluso. */
+  readonly from: IsoDate
+  /** Ultimo giorno da esaminare, incluso. */
+  readonly to: IsoDate
+}
+
+/**
+ * L'intervallo che `materializeRecurring` esaminerebbe **adesso** per questa
+ * regola. `null` se non c'e' niente da esaminare.
+ *
+ * Due estremi, e nessuno dei due e' ovvio:
+ *
+ * - `from` e' il giorno dopo il segnaposto, o `startDate` se la regola non ha
+ *   mai prodotto niente. E' qui che nasce l'arretrato: una regola nuova con
+ *   `startDate` a gennaio parte da gennaio, non da oggi;
+ * - `to` e' oggi, tagliato a `endDate` se la regola e' gia' finita.
+ *
+ * Sta in una funzione sola perche' ha **due** chiamanti: il motore e
+ * `previewMaterialization`. Se l'anteprima ricalcolasse la finestra per conto
+ * suo, il giorno in cui uno dei due estremi cambiasse l'anteprima resterebbe
+ * indietro — e un'anteprima che non descrive la scrittura che segue non e' una
+ * conferma, e' una bugia con un bottone sotto.
+ *
+ * Non guarda `active` e non guarda la validita': descrive il calendario, non se
+ * sia il caso di applicarlo. Chi la chiama filtra prima.
+ */
+export function materializationWindow(
+  rule: RecurringRule,
+  today: IsoDate,
+): MaterializationWindow | null {
+  const from =
+    rule.lastMaterializedDate === undefined ? rule.startDate : addDays(rule.lastMaterializedDate, 1)
+  const to =
+    rule.endDate !== undefined && isBefore(rule.endDate, today) ? rule.endDate : today
+  if (isAfter(from, to)) return null
+  return { from, to }
+}
+
 /**
  * L'id di una spesa generata: funzione pura di (regola, giorno).
  *
@@ -313,17 +352,13 @@ export async function materializeRecurring(
       continue
     }
 
-    const from =
-      rule.lastMaterializedDate === undefined
-        ? rule.startDate
-        : addDays(rule.lastMaterializedDate, 1)
-    const windowTo =
-      rule.endDate !== undefined && isBefore(rule.endDate, options.today)
-        ? rule.endDate
-        : options.today
-    if (isAfter(from, windowTo)) continue
+    // La finestra la decide `materializationWindow`, che e' anche cio' che
+    // l'anteprima mostra all'utente prima di salvare la regola.
+    const window = materializationWindow(rule, options.today)
+    if (window === null) continue
+    const windowTo = window.to
 
-    const dates = occurrencesBetween(rule, from, windowTo).filter(
+    const dates = occurrencesBetween(rule, window.from, windowTo).filter(
       (date) => !seen.has(recurringExpenseId(rule.id, date)),
     )
 

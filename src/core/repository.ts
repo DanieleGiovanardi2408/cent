@@ -72,6 +72,7 @@ import type {
   CategoryPlacement,
   CategoryPlacementRequest,
 } from './categories'
+import type { RecurringRuleDeletion } from './recurring-plan'
 import { buildDefaultCategories, buildDefaultSettings } from './defaults'
 import type { DefaultCategoryNames } from './defaults'
 import type { Cents } from './money'
@@ -398,8 +399,44 @@ export interface Repository {
   /** Riscrive `order` seguendo l'elenco dato. Gli id sconosciuti sono ignorati. */
   reorderCategories(orderedIds: readonly string[]): readonly Category[]
 
+  /**
+   * Crea una regola. **Non materializza niente da sola**: le occorrenze
+   * arretrate arrivano alla prossima `materializeRecurring()`.
+   *
+   * Chi chiama deve aver gia' mostrato `previewMaterialization` e chiesto
+   * conferma quando `backdated` e' vero: una regola con `startDate` a gennaio
+   * creata ad agosto vale otto spese e otto periodi passati riscritti. Il core
+   * non puo' imporlo — questa e' una scrittura ottimistica e sincrona — ma la
+   * funzione che risponde alla domanda esiste, e' pura, ed e' esatta.
+   */
   addRecurringRule(input: NewRecurringRule): RecurringRule
+  /**
+   * Modifica una regola. **Disattivarla** (`{ active: false }`) e' sempre
+   * possibile e non ha nessuna condizione: e' la via normale per far smettere
+   * una regola, e non perde niente.
+   *
+   * Cambiare il calendario non riscrive il passato: il motore riparte da
+   * `lastMaterializedDate`, quindi spostare `startDate` all'indietro su una
+   * regola che ha gia' prodotto qualcosa **non** genera occorrenze arretrate.
+   */
   updateRecurringRule(id: string, patch: RecurringRulePatch): RecurringRule | null
+
+  /**
+   * Cancella davvero una regola, e **solo se non ha mai generato nessuna
+   * spesa** — viva o cancellata che sia, perche' un soft delete resta nello
+   * Storico e nell'export.
+   *
+   * Le spese gia' generate non vengono toccate in nessun caso: la storia non
+   * cambia retroattivamente. E' proprio questo che rende la cancellazione
+   * possibile solo quando non c'e' storia, altrimenti resterebbero spese con un
+   * `recurringId` che punta al vuoto.
+   *
+   * Stessa forma di `deleteCategory`, e per le stesse ragioni: asincrona, non
+   * ottimistica, il permesso lo da' il disco dentro la transazione (ADR 008), e
+   * il rifiuto porta con se' il numero da mostrare ("ha generato 8 spese:
+   * puoi disattivarla").
+   */
+  deleteRecurringRule(id: string): Promise<RecurringRuleDeletion>
 
   /**
    * Chiude il budget in vigore e ne apre uno nuovo. Vedi `budget.ts`.
@@ -1045,6 +1082,23 @@ export async function openRepository(
         ...(endDate !== undefined ? { endDate } : {}),
         updatedAt: clock(),
       })
+    },
+
+    async deleteRecurringRule(id) {
+      if (importing) throw new ImportInProgressError()
+      const startedAt = generation
+      const result = await schedule({ recurringRuleDeletion: { id } }, false)
+      const outcome = result.recurringRuleDeletion
+      if (outcome === undefined) {
+        throw new TypeError('La persistenza non ha risposto a recurringRuleDeletion')
+      }
+      if (outcome.ok && generation === startedAt && !importing) {
+        mutate((state) => ({
+          ...state,
+          recurringRules: state.recurringRules.filter((r) => r.id !== id),
+        }))
+      }
+      return outcome
     },
 
     setBudget(change) {

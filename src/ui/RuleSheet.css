@@ -1,0 +1,263 @@
+/* Il foglio che crea una spesa fissa.
+ *
+ * Il guscio, la riga di aiuto e l'importo arrivano da sheet.css; i chip della
+ * data, la griglia `.cats` e il chip `.cat` da AddSheet.css; i tasti da
+ * Keypad.css; il bottone `.save` da BudgetSheet.css — che e' lo **stesso**
+ * bottone, per lo stesso ruolo (l'unico tap che scrive) e con la stessa forma.
+ *
+ * Qui c'e' solo cio' che e' di questo foglio: la cadenza, la riga della data,
+ * il piede che dichiara e conferma, e il chip di categoria che **seleziona**
+ * invece di salvare.
+ *
+ * ## Il corpo scorre, il piede no
+ *
+ * E' il secondo foglio dell'app in cui lo scroll e' ammesso, dopo quello delle
+ * categorie, e per la stessa ragione: **non e' il percorso dei due tap**. Qui
+ * ci sono cinque decisioni una sopra l'altra, e a 667 punti d'altezza —
+ * l'iPhone SE, o un telefono normale con il testo di sistema ingrandito — la
+ * colonna non ci sta. Cio' che **dichiara e conferma** resta comunque fuori
+ * dallo scroll: l'anteprima con i numeri, la casella e il bottone non possono
+ * finire sotto la linea di galleggiamento, o la conferma esplicita sarebbe una
+ * conferma che si puo' saltare senza vederla.
+ *
+ * A 390x844 (iPhone 14) non scorre niente: la colonna misura ~743px contro gli
+ * 844 disponibili.
+ */
+
+/* Alto: cinque blocchi piu' un piede a tre righe. Piu' del foglio
+ * d'inserimento (38rem), che ne ha quattro. */
+.sheet--rule {
+  --sheet-min: 46rem;
+}
+
+.rule {
+  flex: 1;
+  min-block-size: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* --- ogni quanto --------------------------------------------------------- */
+/* Tre bersagli larghi un terzo di foglio. Non sono `.period` del budget — li'
+ * ogni voce porta con se' l'importo in vigore, qui non c'e' un secondo dato da
+ * mostrare e una riga vuota sotto ogni etichetta sarebbe 16px di niente per
+ * tre. Stessa altezza e stessa grammatica dei segnali, pero': superficie piu'
+ * contorno, mai il solo colore. */
+
+.cads {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--sp-2);
+}
+
+.cad {
+  display: grid;
+  place-items: center;
+  min-block-size: 3rem;
+  min-inline-size: var(--tap-min);
+  padding-inline: var(--sp-1);
+  border-radius: var(--radius-2);
+  background-color: var(--surface-sunken);
+  color: var(--text);
+  /* Tre parole affiancate a 320 punti: "A settimana" e' la piu' lunga in
+   * italiano, "Monthly" in inglese. Il corpo scende con la larghezza invece di
+   * mandare a capo — un bottone che va a capo cambia altezza da solo, e questi
+   * tre stanno su una riga sola. */
+  font-size: min(var(--fs-200), 4vw);
+  font-weight: var(--fw-medium);
+  white-space: nowrap;
+}
+
+.cad[data-selected] {
+  background-color: var(--brand-soft);
+  box-shadow: inset 0 0 0 2px var(--brand);
+  color: var(--brand);
+  font-weight: var(--fw-semibold);
+}
+
+/* Nessuna transizione: il colore cambia nel frame del tap. */
+.cad:active {
+  background-color: var(--brand-soft);
+}
+
+/* --- da quando ----------------------------------------------------------- */
+/* Due chip, gli stessi dell'inserimento. Il secondo porta l'input `date`
+ * sotto: le date passate sono legittime e le future pure, quindi non c'e'
+ * nessun `max`. */
+
+.starts {
+  display: flex;
+  gap: var(--sp-2);
+}
+
+/* --- la categoria: qui il chip seleziona, non salva ---------------------- */
+/* E' il segnale che tiene separati i due gesti. Nel foglio d'inserimento
+ * toccare un chip **scrive una spesa**; qui sceglie e basta, e cio' che scrive
+ * e' il bottone in fondo. Due gesti che si somigliano troppo hanno bisogno che
+ * sia la faccia a distinguerli, non una frase.
+ *
+ * Il selezionato ha contorno **e** superficie: il colore da solo sparisce a chi
+ * ha una carenza cromatica e sotto il sole. `outline-offset` negativo cosi' il
+ * contorno sta dentro la cella e non cambia le misure del bersaglio — la sonda
+ * misura il rettangolo dipinto. */
+.cats--pick .cat[aria-pressed="true"] {
+  outline: 2px solid var(--brand);
+  outline-offset: -2px;
+  background-color: var(--brand-soft);
+}
+
+/* --- il piede: dichiarare, confermare, scrivere -------------------------- */
+/*
+ * Tre altezze **riservate**, non calcolate dal contenuto, e la ragione e' una
+ * sola: il bottone che scrive non deve muoversi mai.
+ *
+ * - l'anteprima cambia frase a ogni cifra e a ogni cambio di data, e passa da
+ *   una riga ("Prima spesa: oggi.") a due ("Questa regola creera' 8 spese
+ *   arretrate: 1 gennaio – 1 agosto, 7.200,00 € in totale.");
+ * - la casella di conferma **compare e sparisce** con `backdated`, cioe' nel
+ *   frame in cui si tocca il chip della data. Senza riserva, il bottone
+ *   salirebbe di 52px mentre il pollice ci sta gia' andando: e' esattamente il
+ *   salto di 2,5px che questo progetto ha gia' pagato una volta, moltiplicato
+ *   per venti.
+ *
+ * Il prezzo e' ~52px vuoti nel caso normale (regola che parte oggi). E' lo
+ * stesso scambio di `.since` dentro `--slot-min`, e ha la stessa risposta:
+ * qualche pixel vuoto costa meno di un salto.
+ */
+
+.rule__foot {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding-block-start: var(--sp-2);
+  border-block-start: 1px solid var(--line);
+}
+
+/* Due righe riservate, scritte come `font-size * line-height` e non con l'unita'
+ * `lh` per lo stesso ripiego di `.sheet__hint`. La frase piu' lunga misurata,
+ * in entrambe le lingue, sta in due righe a 320 punti. */
+.rule__preview {
+  min-block-size: calc(2 * var(--fs-100) * var(--lh-snug));
+  font-size: var(--fs-100);
+  line-height: var(--lh-snug);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Il posto della conferma: riservato sempre, occupato solo quando c'e'
+ * dell'arretrato da confermare. */
+.rule__confirmSlot {
+  min-block-size: var(--tap-min);
+}
+
+/* La casella. E' un `button` con `role="checkbox"` e non un `<input>`: su iOS
+ * l'input nativo porta con se' il proprio disegno, che non si toglie senza
+ * `appearance: none` piu' una seconda implementazione della spunta. Con
+ * `aria-checked` il ruolo per le tecnologie assistive e' lo stesso, e il
+ * bersaglio e' tutta la riga invece del quadratino.
+ *
+ * Le misure sono **dichiarate** su entrambi gli assi: il testo qui dentro
+ * dipende dalla lingua e da un numero che va da 1 a qualche decina. */
+.rule__confirm {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  inline-size: 100%;
+  min-block-size: var(--tap-min);
+  min-inline-size: var(--tap-min);
+  padding-inline: var(--sp-2);
+  border-radius: var(--radius-2);
+  text-align: start;
+  color: var(--text);
+}
+
+.rule__confirm:active {
+  background-color: var(--surface-sunken);
+}
+
+/* Il quadratino. Il bordo e' `--line-strong`, che sta sopra 3:1 in entrambi i
+ * temi: una casella da spuntare deve **vedersi vuota**, o non si sa che c'e'
+ * qualcosa da fare. */
+.rule__box {
+  flex: none;
+  display: grid;
+  place-items: center;
+  inline-size: 1.5rem;
+  block-size: 1.5rem;
+  border: 2px solid var(--line-strong);
+  border-radius: var(--radius-1);
+}
+
+.rule__box svg {
+  visibility: hidden;
+  fill: none;
+  stroke: var(--on-brand);
+  stroke-width: 2.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Spuntata: due segnali, non uno. La superficie piena e il segno dentro. */
+.rule__confirm[aria-checked="true"] .rule__box {
+  background-color: var(--brand);
+  border-color: var(--brand);
+}
+
+.rule__confirm[aria-checked="true"] .rule__box svg {
+  visibility: visible;
+}
+
+.rule__confirmText {
+  flex: 1;
+  min-inline-size: 0;
+  font-size: var(--fs-200);
+  font-weight: var(--fw-medium);
+  line-height: var(--lh-snug);
+}
+
+/* --- il telefono girato --------------------------------------------------- */
+/* A 800x327 la colonna non ci sta: corpo e piede diventano due colonne, come
+ * nel foglio delle categorie. Il piede — cioe' cio' che dichiara e conferma —
+ * resta intero e visibile, e il corpo scorre nella sua meta'. */
+@media (max-height: 480px) and (orientation: landscape) {
+  .sheet--rule {
+    --sheet-min: 0;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto 1fr;
+    grid-template-areas:
+      "hint hint"
+      "body foot";
+    column-gap: var(--sp-3);
+    max-inline-size: min(48rem, calc(100dvw - 6rem));
+    min-block-size: 100dvh;
+  }
+
+  .sheet--rule .sheet__hint {
+    grid-area: hint;
+  }
+
+  .rule {
+    grid-area: body;
+  }
+
+  .rule__foot {
+    grid-area: foot;
+    justify-content: center;
+    border-block-start: none;
+    padding-block-start: 0;
+  }
+
+  /* In orizzontale l'importo torna una riga qualunque della colonna che scorre:
+   * la griglia a due colonne di sheet.css lo manderebbe in `grid-area: amount`,
+   * che qui non esiste. */
+  .sheet--rule .amount {
+    grid-area: auto;
+    font-size: min(var(--fs-500), 6vw);
+  }
+}

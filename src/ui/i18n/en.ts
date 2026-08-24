@@ -339,4 +339,57 @@ export const en: Record<keyof typeof it, string> = {
   'nudge.unknown': 'I cannot tell how long since your last copy',
   'nudge.hint': 'Your data lives only here.',
   'nudge.action': 'Export',
+
+  /* --- spese fisse: le regole ricorrenti ---------------------------------- */
+  'hero.fixed': 'on top of {amount} in fixed costs',
+
+  'fixed.title': 'Fixed costs',
+  'fixed.total': '{amount} a month in total.',
+  'fixed.none': 'You have no fixed costs yet.',
+  'fixed.text':
+    'Rent, subscriptions, the gym: whatever goes out on its own. Cent writes them down for you and keeps them out of the budget, because they are not a decision.',
+  'fixed.rate': 'This is a yearly average: a month with more due dates will see more go out.',
+  'fixed.add': 'Add a fixed cost',
+  'fixed.list': 'Your fixed costs',
+  'fixed.later': 'starts: {day}',
+  'fixed.ended': 'ended: {day}',
+
+  'cad.daily.one': 'every day',
+  'cad.daily.other': 'every {count} days',
+  'cad.weekly.one': 'every week',
+  'cad.weekly.other': 'every {count} weeks',
+  'cad.monthly.one': 'every month',
+  'cad.monthly.other': 'every {count} months',
+
+  'rule.label': 'New fixed cost',
+  'rule.hint.empty': 'How much goes out each time?',
+  'rule.hint.category': 'Pick a category',
+  'rule.hint.check': 'Check how often and from when, then tap Create',
+  'rule.hint.failed': 'I could not create the rule. Tap Create again.',
+  'rule.hint.max': 'Highest amount reached',
+  'rule.cadence': 'How often',
+  'rule.cadence.monthly': 'Monthly',
+  'rule.cadence.weekly': 'Weekly',
+  'rule.cadence.daily': 'Daily',
+  'rule.cats': 'Category',
+  'rule.start': 'Starting',
+  'rule.start.today': 'Today',
+  'rule.start.pick': 'Pick the day it starts from',
+  'rule.start.other': 'Another date',
+
+  'rule.preview.today': 'First expense: today.',
+  'rule.preview.later': 'First expense: {day}.',
+  'rule.preview.back.one': 'This rule will create 1 past expense: {from}, {total}.',
+  'rule.preview.back.other':
+    'This rule will create {count} past expenses: {range}, {total} in total.',
+  'rule.confirm.one': 'Also create the past expense',
+  'rule.confirm.other': 'Also create the {count} past expenses',
+  'rule.save': 'Create the fixed cost',
+  'rule.save.back.one': 'Create 1 expense · {total}',
+  'rule.save.back.other': 'Create {count} expenses · {total}',
+
+  'toast.ruleSaved': 'Fixed cost added: {name}',
+  'toast.ruleSavedBack': '{name}: {count} expenses created',
+
+  'row.fixed': 'fixed cost',
 }

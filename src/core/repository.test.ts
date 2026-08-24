@@ -769,6 +769,96 @@ describe('categorie: cancellare davvero', () => {
   })
 })
 
+describe('ricorrenti: cancellare davvero una regola', () => {
+  const nuovaRegola = {
+    amountCents: 90_000,
+    categoryId: 'cat-1',
+    cadence: 'monthly' as const,
+    interval: 1,
+    startDate: '2026-08-01',
+  }
+
+  it('una regola che non ha mai generato niente si cancella, dal mirror e dal disco', async () => {
+    const { repo, disk } = await open()
+    const regola = repo.addRecurringRule(nuovaRegola)
+    await repo.flush()
+
+    const esito = await repo.deleteRecurringRule(regola.id)
+    expect(esito.ok).toBe(true)
+    expect(repo.getState().recurringRules).toHaveLength(0)
+    expect(disk.recurringRules).toHaveLength(0)
+  })
+
+  it('dopo la materializzazione non si cancella piu, e le spese restano', async () => {
+    const { repo, disk } = await open()
+    const regola = repo.addRecurringRule(nuovaRegola)
+    await repo.flush()
+    await repo.materializeRecurring('2026-08-22')
+
+    const generate = disk.expenses.filter((e) => e.recurringId === regola.id).length
+    expect(generate).toBe(1)
+
+    const esito = await repo.deleteRecurringRule(regola.id)
+    expect(esito.ok).toBe(false)
+    expect(esito.ok === false && esito.reason).toBe('in-use')
+    expect(esito.ok === false && esito.reason === 'in-use' && esito.expenses).toBe(1)
+    // La regola resta, e soprattutto la storia non cambia: le spese generate
+    // sono ancora tutte li'.
+    expect(disk.recurringRules).toHaveLength(1)
+    expect(disk.expenses.filter((e) => e.recurringId === regola.id)).toHaveLength(1)
+  })
+
+  it('disattivare si puo sempre, anche quando cancellare non si puo', async () => {
+    const { repo } = await open()
+    const regola = repo.addRecurringRule(nuovaRegola)
+    await repo.flush()
+    await repo.materializeRecurring('2026-08-22')
+
+    expect((await repo.deleteRecurringRule(regola.id)).ok).toBe(false)
+    const spenta = repo.updateRecurringRule(regola.id, { active: false })
+    expect(spenta?.active).toBe(false)
+  })
+
+  it('una spesa generata e poi cancellata trattiene comunque', async () => {
+    const { repo, disk } = await open()
+    const regola = repo.addRecurringRule(nuovaRegola)
+    await repo.flush()
+    await repo.materializeRecurring('2026-08-22')
+    const generata = disk.expenses.find((e) => e.recurringId === regola.id)
+    repo.deleteExpense(generata?.id ?? '')
+    await repo.flush()
+
+    const esito = await repo.deleteRecurringRule(regola.id)
+    expect(esito.ok === false && esito.reason).toBe('in-use')
+  })
+
+  it('il permesso lo da il disco: una spesa materializzata da un altro contesto conta', async () => {
+    const { repo, disk } = await open()
+    const regola = repo.addRecurringRule(nuovaRegola)
+    await repo.flush()
+
+    const secondo = await openRepository(createMemoryPersistence(disk), {
+      defaultCategoryNames: TEST_CATEGORY_NAMES,
+      now: tickingClock(),
+      newId: sequentialIds('due'),
+    })
+    await secondo.materializeRecurring('2026-08-22')
+
+    // Il mirror del primo contesto non ha mai visto quella spesa.
+    expect(repo.getState().expenses.filter((e) => e.recurringId === regola.id)).toHaveLength(0)
+    const esito = await repo.deleteRecurringRule(regola.id)
+    expect(esito.ok === false && esito.reason).toBe('in-use')
+    expect(disk.recurringRules).toHaveLength(1)
+  })
+
+  it('un id che non esiste non e un errore, e una risposta', async () => {
+    const { repo } = await open()
+    expect((await repo.deleteRecurringRule('non-esiste')).ok === false).toBe(true)
+    const esito = await repo.deleteRecurringRule('non-esiste')
+    expect(esito.ok === false && esito.reason).toBe('unknown')
+  })
+})
+
 describe('budget dal repository', () => {
   it('setBudget storicizza: chiude il vecchio e apre il nuovo', async () => {
     const { repo, disk } = await open()

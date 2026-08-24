@@ -415,6 +415,27 @@ test('ogni testo dipinto sta sopra la soglia AA della sua taglia', async ({ page
         await expect(page.locator('.prefs')).toBeVisible()
       },
     },
+    // Il foglio della spesa fissa, nel suo stato piu' pieno: cadenza
+    // selezionata, chip di categoria selezionato, anteprima con i numeri e la
+    // casella di conferma. Sono quattro superfici nuove — e una, la spunta
+    // dentro il quadratino, dipinge `--on-brand` su `--brand`, che finora era
+    // solo nel bottone del budget.
+    {
+      nome: 'foglio spesa fissa, con arretrato da confermare',
+      vai: async () => {
+        await page.locator('.app__action').tap()
+        await expect(page.locator('.prefs')).toBeVisible()
+        await page.locator('.prefs__action').filter({ hasText: /spesa fissa/i }).tap()
+        await expect(page.locator('.sheet--rule')).toBeVisible()
+        await page.locator('.pad__key', { hasText: /^9$/ }).first().tap()
+        await page.locator('.pad__key--zero').tap()
+        await page.locator('.cats--pick .cat').first().tap()
+        await page.locator('.starts .chip__input').fill('2026-01-01')
+        await expect(page.locator('.rule__confirm')).toBeVisible()
+        await page.locator('.rule__confirm').tap()
+        await expect(page.locator('.rule__confirm')).toHaveAttribute('aria-checked', 'true')
+      },
+    },
   ]
 
   const cattive: Misura[] = []

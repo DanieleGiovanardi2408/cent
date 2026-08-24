@@ -14,12 +14,15 @@ import { BackupPanel } from './BackupPanel'
 import { BudgetSheet } from './BudgetSheet'
 import { CategorySheet } from './CategorySheet'
 import type { CategoryDraft, CategoryMode } from './CategorySheet'
+import { RuleSheet } from './RuleSheet'
+import type { RuleDraft } from './RuleSheet'
 import { ExpenseActions } from './ExpenseActions'
 import { Fit } from './Fit'
 import { Guide } from './Guide'
 import { History } from './History'
 import { Home } from './Home'
 import { Mark } from './Mark'
+import { previewMaterialization } from '../core/recurring-plan'
 import { Settings } from './Settings'
 import { activePeriod, currentBudgetCents } from './budget-view'
 import { Toast } from './Toast'
@@ -40,10 +43,11 @@ import { useApp } from './useApp'
 import './App.css'
 
 /**
- * Quale foglio e' aperto, e se sta gia' uscendo. Sono due — inserimento e
- * budget — e non possono essere aperti insieme: `null` significa nessuno.
+ * Quale foglio e' aperto, e se sta gia' uscendo. Sono tre — inserimento, budget
+ * e spesa fissa — e non possono essere aperti insieme: `null` significa nessuno.
  */
-type Sheet = { readonly kind: 'add' | 'budget'; readonly leaving: boolean } | null
+type SheetKind = 'add' | 'budget' | 'rule'
+type Sheet = { readonly kind: SheetKind; readonly leaving: boolean } | null
 
 /**
  * La schermata attiva. E' stato, non una rotta: in standalone su iOS non esiste
@@ -292,7 +296,7 @@ export function App() {
     }, life)
   }
 
-  function openSheet(kind: 'add' | 'budget'): void {
+  function openSheet(kind: SheetKind): void {
     // Il toast se ne va **prima** di tutto il resto. Da fisso stava sopra il
     // tastierino e "Annulla" cadeva dentro il tasto "9"; ora e' contenuto in
     // flusso e finisce dietro al foglio, quindi non e' piu' raggiungibile per
@@ -374,6 +378,73 @@ export function App() {
     showToast(
       t('toast.budgetSaved', { amount: money(amountCents), cadence: cadenceLabel(period) }),
     )
+    return true
+  }
+
+  /**
+   * Crea una regola ricorrente, e **subito dopo la materializza**.
+   *
+   * ## Perche' la materializzazione e' qui e non solo all'avvio
+   *
+   * `addRecurringRule` scrive la **regola**, non le spese: le occorrenze
+   * arretrate le genera `materializeRecurring`, che finora girava solo
+   * all'avvio e al risveglio. Senza questa chiamata, chi ha appena confermato
+   * "questa regola creera' 8 spese" chiuderebbe il foglio e non ne vedrebbe
+   * nessuna, fino alla prossima apertura dell'app: cioe' l'anteprima avrebbe
+   * detto il vero e la schermata l'avrebbe smentita.
+   *
+   * ## Perche' non si aspetta
+   *
+   * Perche' e' una scrittura locale, e su una scrittura locale non si mette uno
+   * spinner. La regola e' gia' nel mirror quando questa funzione ritorna, e le
+   * spese arrivano a blocchi (`onCommitted` muove il mirror per ogni
+   * transazione, non alla fine): lo Storico si riempie mentre il foglio sta
+   * ancora scendendo. Se il disco non accetta, la scrittura finisce in
+   * `writeFailures` e l'avviso "esporta adesso" compare da solo — lo stesso
+   * canale di ogni altra scrittura, senza un secondo modo di dire la stessa
+   * cosa.
+   *
+   * `catch` vuoto e non `void` nudo: `materializeRecurring` **rifiuta** (una
+   * scrittura persa, un import passato nel frattempo), e un `void` senza catch
+   * sarebbe una unhandled rejection al primo catch-up interrotto. E' la stessa
+   * nota che `src/app/boot.ts` ha sulla sua chiamata.
+   *
+   * ## L'anteprima si rifa' qui, e non e' un doppione
+   *
+   * Serve al **toast**, non alla decisione: il foglio ha gia' chiesto conferma
+   * e ha gia' passato il suo controllo. Qui si vuole solo sapere se dire "creata"
+   * o "creata, con 8 spese", e chiederlo alla stessa funzione pura che ha
+   * prodotto la frase confermata e' l'unico modo perche' i due numeri non
+   * divergano.
+   */
+  function saveRule(draft: RuleDraft): boolean {
+    const repo = app.repo
+    if (!repo) return false
+    // Il foglio puo' essere rimasto aperto oltre la mezzanotte: "da oggi"
+    // dev'essere il giorno vero, o la regola nascerebbe gia' con un arretrato
+    // che nessuno ha confermato.
+    refreshDay()
+    const day = getAppState().day
+    const preview = previewMaterialization({ ...draft, interval: 1 }, day)
+    try {
+      repo.addRecurringRule({ ...draft, interval: 1 })
+    } catch {
+      // Il foglio resta aperto con tutto quello che si e' scelto, e lo dice
+      // dove si riprova. Un toast qui finirebbe dietro al velo.
+      return false
+    }
+    closeSheet()
+    const category = categoryOf(draft.categoryId)
+    const name = category?.name ?? t('rule.label')
+    showToast(
+      preview.ok && preview.backdated
+        ? t('toast.ruleSavedBack', { name, count: preview.count })
+        : t('toast.ruleSaved', { name }),
+    )
+    void repo.materializeRecurring(day).catch(() => {
+      // Nessun canale nuovo: cio' che conta e' gia' in `writeFailures`, e
+      // l'avviso in cima all'app lo mostra da solo.
+    })
     return true
   }
 
@@ -865,8 +936,11 @@ export function App() {
               backupDays={
                 lastBackupAt === undefined ? null : daysSince(lastBackupAt, nowTimestamp())
               }
+              rules={app.data?.recurringRules ?? []}
+              day={app.day}
               ready={app.repo !== null}
               onEditBudget={() => openSheet('budget')}
+              onNewRule={() => openSheet('rule')}
               onExport={exportNow}
               onReplayGuide={replayGuide}
             />
@@ -918,6 +992,17 @@ export function App() {
           period={homePeriod}
           leaving={sheet.leaving}
           onSave={saveBudget}
+          onClose={closeSheet}
+        />
+      ) : null}
+
+      {sheet?.kind === 'rule' ? (
+        <RuleSheet
+          key={session}
+          categories={categories}
+          day={app.day}
+          leaving={sheet.leaving}
+          onSave={saveRule}
           onClose={closeSheet}
         />
       ) : null}

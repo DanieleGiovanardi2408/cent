@@ -176,6 +176,34 @@
   text-overflow: ellipsis;
 }
 
+/* Le spese fisse che il numero grande non conta (ADR 016 §2).
+ *
+ * Stessa voce del dettaglio sopra — muta, non allarmata: non e' un avviso, e'
+ * la dichiarazione di cosa quel numero misura. Niente `--over` e niente
+ * grassetto: chi ha l'affitto in mezzo al mese non ha fatto niente di strano.
+ *
+ * L'altezza e' riservata **sempre**, anche quando la riga e' vuota. Non e' lo
+ * spazio buttato che sembra: questa riga compare e sparisce con il periodo (la
+ * settimana in cui scatta il canone si', la successiva no), quindi senza
+ * riserva sarebbe un salto **ricorrente**, non uno all'apertura. E' la stessa
+ * scelta di `.since` dentro `--slot-min`, per la stessa ragione: qualche pixel
+ * vuoto costa meno di un salto.
+ *
+ * `nowrap` come `.hero__note`: la frase e' corta in entrambe le lingue
+ * ("oltre a 1.040,00 € di spese fisse", "on top of €1,040.00 in fixed costs")
+ * ma l'importo puo' arrivare a nove caratteri, e a 320 punti va troncato invece
+ * di prendersi una seconda riga che la riserva non ha. */
+.hero__fixed {
+  min-block-size: calc(1em * var(--lh-snug));
+  font-size: var(--fs-100);
+  line-height: var(--lh-snug);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
 /* --- il riquadro che cambia contenuto ma non misura ---------------------- */
 
 .slot {

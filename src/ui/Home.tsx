@@ -95,6 +95,13 @@ export function Home({ phase, expenses, categories, budgets, day, onPick, onEdit
           {ready ? hero.value : ''}
         </p>
         <p class="hero__note">{ready ? hero.note : ''}</p>
+        {/* Cosa **non** c'e' dentro il numero grande (ADR 016 §2). L'altezza e'
+            riservata anche da vuota, come le altre quattro righe di questo
+            blocco: la riga compare e sparisce da sola a seconda che nel periodo
+            sia scattata o no una regola — settimana del canone si', quella dopo
+            no — e senza riserva la barra, la disponibilita' e le spese di oggi
+            scenderebbero di una riga a settimane alterne. */}
+        <p class="hero__fixed">{ready ? (hero.fixed ?? '') : ''}</p>
       </section>
 
       {/* Il riquadro che cambia contenuto ma non misura: con budget tiene barra,

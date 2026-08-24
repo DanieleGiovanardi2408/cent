@@ -45,7 +45,7 @@ import type { Cents } from '../../core/money'
 import { addDays, fromIsoDate, toDateParts } from '../../core/date'
 import type { IsoDate } from '../../core/date'
 import type { PeriodRange } from '../../core/budget'
-import type { BudgetPeriod, Language } from '../../core/types'
+import type { BudgetPeriod, Cadence, Language } from '../../core/types'
 import type { DefaultCategoryNames } from '../../core/defaults'
 import { it } from './it'
 import { en } from './en'
@@ -455,4 +455,78 @@ export function daysLabel(days: number): string {
 /** `a settimana` / `al mese`, la coda delle frasi sul budget. */
 export function cadenceLabel(period: BudgetPeriod): string {
   return t(period === 'weekly' ? 'cadence.weekly' : 'cadence.monthly')
+}
+
+/* ------------------------------------------------------------------------- *
+ * Le spese fisse (ADR 016).
+ * ------------------------------------------------------------------------- */
+
+/**
+ * Ogni quanto scatta una regola: `ogni mese`, `ogni 2 settimane`.
+ *
+ * Sei chiavi e non una con tre segnaposto: `interval === 1` cambia la **forma**
+ * della frase, non un numero dentro di essa. In italiano "ogni 1 mese" e' un
+ * refuso, in inglese "every 1 month" pure, ed e' esattamente il caso piu'
+ * comune — quello che l'interfaccia propone per prima.
+ */
+export function cadencePhrase(cadence: Cadence, interval: number): string {
+  const one = interval === 1
+  switch (cadence) {
+    case 'daily':
+      return one ? t('cad.daily.one') : t('cad.daily.other', { count: interval })
+    case 'weekly':
+      return one ? t('cad.weekly.one') : t('cad.weekly.other', { count: interval })
+    case 'monthly':
+      return one ? t('cad.monthly.one') : t('cad.monthly.other', { count: interval })
+  }
+}
+
+/**
+ * Un giorno per esteso: `1 gennaio`, `1 January`. Con l'anno se non e' quello
+ * di `todayIso` — un affitto registrato da diciotto mesi ha una prima
+ * occorrenza che senza anno e' indistinguibile da quella di quest'anno.
+ */
+export function fullDayLabel(date: IsoDate, todayIso: IsoDate): string {
+  const sameYear = toDateParts(date).year === toDateParts(todayIso).year
+  const formatter = sameYear ? formats.dayAndMonth : formats.dayWithYear
+  return formatter.format(fromIsoDate(date))
+}
+
+/**
+ * Due giorni come **intervallo**: `1 gennaio – 1 agosto`.
+ *
+ * ## Perche' non c'e' una preposizione
+ *
+ * Perche' in italiano non ce n'e' una sola: "dal 1 gennaio" e' giusto, "dal 8
+ * agosto" no — si elide in "dall'8", e lo stesso vale per l'11. Sono due giorni
+ * su trentuno, cioe' un errore di grammatica che compare **a volte**: la classe
+ * peggiore, perche' passa indenne ogni rilettura fatta in un giorno qualsiasi.
+ * Un intervallo scritto come intervallo non ha il problema, in nessuna delle
+ * due lingue.
+ *
+ * ## Perche' **non** usa `formatRange`, che sarebbe la scelta ovvia
+ *
+ * Perche' su `{ day: 'numeric', month: 'long' }` in `it-IT` impagina i giorni a
+ * due cifre: `formatRange` da' `01 gennaio – 01 agosto` dove `format` da'
+ * `1 gennaio`. In `en-GB` no — li' e' `1 January – 1 August`. Cioe' lo zero
+ * comparirebbe **solo in italiano e solo negli intervalli**, che e' esattamente
+ * il difetto che nessuno vede finche' non apre l'app nell'altra lingua.
+ * Verificato, non supposto: `Intl.DateTimeFormat('it-IT', {day:'numeric',
+ * month:'long'}).formatRange(1 gen, 1 ago)` -> `'01 gennaio – 01 agosto'`.
+ *
+ * `periodRangeLabel` continua a usare `formatRange`, ed e' corretto: li' il
+ * formato e' `dayShort`, che non ha questo comportamento, e la fusione
+ * (`18–24 ago`) e' il punto.
+ *
+ * Il prezzo, dichiarato: qui le parti uguali **non** si fondono, quindi due
+ * date dello stesso mese si scrivono per esteso (`1 agosto – 8 agosto`) invece
+ * che `1 – 8 agosto`. E' piu' lungo di quattro caratteri e non e' mai
+ * sbagliato.
+ *
+ * L'anno lo decide ciascuna delle due date per conto suo (`fullDayLabel`): un
+ * intervallo a cavallo di capodanno lo porta dove serve, invece che su
+ * entrambe o su nessuna.
+ */
+export function dayRangeLabel(from: IsoDate, to: IsoDate, todayIso: IsoDate): string {
+  return `${fullDayLabel(from, todayIso)} – ${fullDayLabel(to, todayIso)}`
 }

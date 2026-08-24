@@ -20,6 +20,7 @@ import type {
   CategoryPlacementRequest,
 } from './categories'
 import type { IsoDate } from './date'
+import type { RecurringRuleDeletion, RecurringRuleDeletionRequest } from './recurring-plan'
 import type { Budget, Category, DataSet, Expense, RecurringRule, Settings, Timestamp } from './types'
 
 /** Quello che c'e' su disco all'avvio. `settings: null` = database mai inizializzato. */
@@ -147,6 +148,24 @@ export interface WriteBatch {
   readonly categoryDeletion?: CategoryDeletionRequest
   readonly recurringRules?: readonly RecurringRule[]
   /**
+   * Cancella **davvero** una regola ricorrente, se non ha mai generato niente.
+   *
+   * Stessa dottrina di `categoryDeletion`, ed e' la stessa domanda: chi chiama
+   * porta l'intenzione ("cancella questa"), non il permesso gia' calcolato. Il
+   * conteggio delle spese che la nominano — cancellate comprese — va fatto sui
+   * dati del disco dentro la stessa transazione. Deciderlo sul mirror significa
+   * poter cancellare una regola le cui occorrenze un altro contesto ha
+   * materializzato trenta secondi fa, e le spese che restano puntano a un
+   * `recurringId` che non esiste piu': nessuna schermata sa ripararle.
+   *
+   * Le spese generate **non** vengono toccate: la storia non cambia mai
+   * retroattivamente. E' proprio per questo che la cancellazione e' permessa
+   * solo quando non c'e' storia.
+   *
+   * L'esito torna in `WriteResult.recurringRuleDeletion`.
+   */
+  readonly recurringRuleDeletion?: RecurringRuleDeletionRequest
+  /**
    * Fa avanzare il segnaposto di una regola **senza portarsi dietro nient'altro
    * di quella regola**.
    *
@@ -214,6 +233,8 @@ export interface WriteResult {
   readonly categoryPlacement?: CategoryPlacement
   /** Esito di `categoryDeletion`. Assente quando il batch non ne conteneva una. */
   readonly categoryDeletion?: CategoryDeletion
+  /** Esito di `recurringRuleDeletion`. Assente quando il batch non ne conteneva una. */
+  readonly recurringRuleDeletion?: RecurringRuleDeletion
 }
 
 export interface Persistence {

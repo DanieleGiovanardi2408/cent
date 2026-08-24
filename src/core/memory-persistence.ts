@@ -25,6 +25,8 @@
 
 import { planResolvedBudgetChange } from './budget'
 import { planCategoryDeletion, planCategoryPlacement } from './categories'
+import { planRecurringRuleDeletion } from './recurring-plan'
+import type { RecurringRuleDeletion } from './recurring-plan'
 import type { CategoryDeletion, CategoryPlacement } from './categories'
 import { isAfter } from './date'
 import { NOTHING_SKIPPED } from './persistence'
@@ -169,6 +171,7 @@ export function createMemoryPersistence(disk: MemoryDisk = emptyDisk()): MemoryP
       let budgetsWritten: readonly Budget[] = []
       let placement: CategoryPlacement | undefined
       let deletion: CategoryDeletion | undefined
+      let ruleDeletion: RecurringRuleDeletion | undefined
       if (batch.addExpenses) {
         // Semantica add, identica a quella di `idb.ts`: l'id gia' presente si
         // salta, non si sovrascrive. Qui non serve nessuna transazione perche'
@@ -206,6 +209,19 @@ export function createMemoryPersistence(disk: MemoryDisk = emptyDisk()): MemoryP
         }
       }
       if (batch.recurringRules) upsert(next.recurringRules, batch.recurringRules)
+      if (batch.recurringRuleDeletion) {
+        // Come in `idb.ts`: il permesso lo da' lo stato del "disco", non quello
+        // che aveva in mano chi ha chiesto la scrittura.
+        ruleDeletion = planRecurringRuleDeletion(
+          next.recurringRules,
+          next.expenses,
+          batch.recurringRuleDeletion,
+        )
+        if (ruleDeletion.ok) {
+          const id = ruleDeletion.deleted.id
+          next.recurringRules = next.recurringRules.filter((r) => r.id !== id)
+        }
+      }
       if (batch.advanceRecurringMarkers) {
         advanceMarkers(next.recurringRules, batch.advanceRecurringMarkers)
       }
@@ -228,7 +244,8 @@ export function createMemoryPersistence(disk: MemoryDisk = emptyDisk()): MemoryP
         skippedIds.length === 0 &&
         budgetsWritten.length === 0 &&
         placement === undefined &&
-        deletion === undefined
+        deletion === undefined &&
+        ruleDeletion === undefined
       ) {
         return NOTHING_SKIPPED
       }
@@ -237,6 +254,7 @@ export function createMemoryPersistence(disk: MemoryDisk = emptyDisk()): MemoryP
         budgets: budgetsWritten,
         ...(placement !== undefined ? { categoryPlacement: placement } : {}),
         ...(deletion !== undefined ? { categoryDeletion: deletion } : {}),
+        ...(ruleDeletion !== undefined ? { recurringRuleDeletion: ruleDeletion } : {}),
       }
     },
     async replaceAll(data: DataSet): Promise<void> {

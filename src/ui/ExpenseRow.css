@@ -73,6 +73,23 @@ li:last-child .row {
   text-overflow: ellipsis;
 }
 
+/* Il segno "questa spesa viene da una regola". Muto: `--text-muted`, 14px, il
+ * peso di un trattino. Non e' `--over` e non e' `--brand` — non c'e' niente da
+ * segnalare e niente da promuovere, e' solo la provenienza della riga.
+ *
+ * `flex: none` e misure dichiarate sull'`svg`: un'icona che si stringesse
+ * cambierebbe la larghezza disponibile per il nome della categoria, e con essa
+ * il punto in cui il nome va a capo — cioe' l'altezza della riga dipenderebbe
+ * dai dati. */
+.row__fixed {
+  flex: none;
+  fill: none;
+  stroke: var(--text-muted);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 .row__amount {
   flex: none;
   font-variant-numeric: tabular-nums;

@@ -1,0 +1,76 @@
+/* L'elenco delle spese fisse in Impostazioni.
+ *
+ * La sezione, il titolo, il testo e il bottone arrivano da Settings.css
+ * (`.prefs__*`): questa e' una sezione come le altre, non una schermata sua. La
+ * pastiglia col colore della categoria arriva da Categories.css (`.arch__dot`).
+ *
+ * Qui c'e' solo la riga dell'elenco, ed e' una riga che **non si tocca**:
+ * modifica e cancellazione arrivano nella consegna successiva. Niente
+ * `:active`, niente freccia, nessun bordo che inviti — un bersaglio che si
+ * illumina e non fa niente e' peggio di nessun bersaglio.
+ */
+
+.prefs__text--rate {
+  /* Sta sotto il testo che spiega cosa sono, e non e' un secondo paragrafo di
+   * spiegazione: e' una precisazione sul numero. Riquadrata a sinistra per
+   * dirlo senza usare un colore d'allarme — non c'e' niente che non va, c'e'
+   * una convenzione dichiarata. */
+  margin-block-start: var(--sp-2);
+  padding-inline-start: var(--sp-3);
+  border-inline-start: 2px solid var(--line-strong);
+}
+
+.fixed {
+  margin-block-start: var(--sp-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-2);
+  overflow: hidden;
+  list-style: none;
+}
+
+.fixed__row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  /* Non e' un bersaglio, quindi non c'e' un pavimento tattile da dichiarare:
+   * l'altezza e' quella di due righe di testo piu' l'aria. Resta comunque
+   * abbondante — chi legge con le dita non ci inciampa. */
+  padding: var(--sp-2) var(--sp-3);
+}
+
+.fixed__row + .fixed__row {
+  border-block-start: 1px solid var(--line);
+}
+
+.fixed__text {
+  flex: 1;
+  min-inline-size: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.fixed__name {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: var(--fs-300);
+  line-height: var(--lh-snug);
+}
+
+.fixed__note {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: var(--fs-100);
+  line-height: var(--lh-snug);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Il costo mensile. `flex: none` e tabolare: la colonna dei numeri deve stare
+ * incolonnata, o due importi della stessa lunghezza sembrano diversi. */
+.fixed__amount {
+  flex: none;
+  font-size: var(--fs-300);
+  font-variant-numeric: tabular-nums;
+}

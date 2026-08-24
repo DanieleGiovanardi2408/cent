@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
+  budgetSpent,
   computeBudgetMetrics,
+  countsTowardBudget,
   periodRange,
   planResolvedBudgetChange,
+  recurringSpent,
   resolveBudget,
-  totalSpent,
 } from './budget'
 import { daysBetween } from './date'
 import type { IsoDate } from './date'
@@ -665,9 +667,149 @@ describe('metriche del periodo', () => {
     expect(m.budgetCoveredPeriodStart).toBe(false)
   })
 
-  it('totalSpent somma solo dentro l intervallo', () => {
-    expect(totalSpent(spese, { start: '2026-08-01', end: '2026-08-31' })).toBe(18_000)
-    expect(totalSpent(spese, { start: '2026-08-02', end: '2026-08-21' })).toBe(5_000)
-    expect(totalSpent(spese, { start: '2026-01-01', end: '2026-01-31' })).toBe(0)
+  it('budgetSpent somma solo dentro l intervallo', () => {
+    expect(budgetSpent(spese, { start: '2026-08-01', end: '2026-08-31' })).toBe(18_000)
+    expect(budgetSpent(spese, { start: '2026-08-02', end: '2026-08-21' })).toBe(5_000)
+    expect(budgetSpent(spese, { start: '2026-01-01', end: '2026-01-31' })).toBe(0)
+  })
+})
+
+/**
+ * ADR 016 — le spese generate da una regola non entrano nel budget.
+ *
+ * Il caso che l'ADR esiste per evitare e' preciso: un affitto da 900 dentro una
+ * settimana da 200 renderebbe la settimana del primo sempre catastrofica, e
+ * "puoi spendere ~X al giorno" diventerebbe un numero che nessuno guarda piu'.
+ */
+describe('le ricorrenti fuori dal budget (ADR 016)', () => {
+  const agosto = { start: '2026-08-01', end: '2026-08-31' }
+  const spese = [
+    makeExpense({ date: '2026-08-03', amountCents: 4_000 }),
+    makeExpense({
+      date: '2026-08-01',
+      amountCents: 90_000,
+      source: 'recurring',
+      recurringId: 'r-affitto',
+    }),
+    makeExpense({ date: '2026-08-05', amountCents: 1_000, deletedAt: '2026-08-05T10:00:00.000Z' }),
+    makeExpense({
+      date: '2026-08-02',
+      amountCents: 3_000,
+      source: 'recurring',
+      recurringId: 'r-palestra',
+      deletedAt: '2026-08-02T10:00:00.000Z',
+    }),
+  ]
+
+  it('countsTowardBudget: fuori le cancellate, fuori le ricorrenti', () => {
+    expect(countsTowardBudget(spese[0]!)).toBe(true)
+    expect(countsTowardBudget(spese[1]!)).toBe(false)
+    expect(countsTowardBudget(spese[2]!)).toBe(false)
+    expect(countsTowardBudget(spese[3]!)).toBe(false)
+  })
+
+  it('budgetSpent conta solo le manuali vive; recurringSpent solo le generate vive', () => {
+    expect(budgetSpent(spese, agosto)).toBe(4_000)
+    expect(recurringSpent(spese, agosto)).toBe(90_000)
+  })
+
+  it('un affitto da 900 non svuota la settimana da 200', () => {
+    const budgets = [makeBudget({ period: 'weekly', amountCents: 20_000, effectiveFrom: '2026-08-01' })]
+    const settimana = [
+      // Il primo del mese cade in questa settimana: e' il giorno in cui, senza
+      // ADR 016, la Home sarebbe stata catastrofica ogni singolo mese.
+      makeExpense({
+        date: '2026-08-31',
+        amountCents: 90_000,
+        source: 'recurring',
+        recurringId: 'r-affitto',
+      }),
+      makeExpense({ date: '2026-09-01', amountCents: 2_500 }),
+    ]
+    const m = computeBudgetMetrics({
+      expenses: settimana,
+      budgets,
+      period: 'weekly',
+      onDate: '2026-09-01',
+      today: '2026-09-01',
+    })
+    expect(m.range).toEqual({ start: '2026-08-31', end: '2026-09-06' })
+    expect(m.spentCents).toBe(2_500)
+    expect(m.remainingCents).toBe(17_500)
+    expect(m.overBudget).toBe(false)
+    // 17500 / 6 giorni rimanenti = 2916,66 -> 2916. Un numero che si guarda
+    // ancora, che e' esattamente il punto dell'ADR.
+    expect(m.daysRemaining).toBe(6)
+    expect(m.dailyAllowanceCents).toBe(2_916)
+    // E l'esclusione e' dichiarata, non taciuta.
+    expect(m.recurringSpentCents).toBe(90_000)
+  })
+
+  it('senza ricorrenti nel periodo recurringSpentCents e zero: non c e niente da annunciare', () => {
+    const m = computeBudgetMetrics({
+      expenses: [makeExpense({ date: '2026-08-10', amountCents: 5_000 })],
+      budgets: [makeBudget({ amountCents: 60_000, effectiveFrom: '2026-08-01' })],
+      period: 'monthly',
+      onDate: '2026-08-22',
+      today: '2026-08-22',
+    })
+    expect(m.spentCents).toBe(5_000)
+    expect(m.recurringSpentCents).toBe(0)
+  })
+
+  it('le ricorrenti non toccano nessuno degli altri numeri', () => {
+    const budgets = [makeBudget({ amountCents: 60_000, effectiveFrom: '2026-08-01' })]
+    const input = {
+      budgets,
+      period: 'monthly' as const,
+      onDate: '2026-08-22',
+      today: '2026-08-22',
+    }
+    const sole = [makeExpense({ date: '2026-08-10', amountCents: 5_000 })]
+    const conFisse = [
+      ...sole,
+      makeExpense({
+        date: '2026-08-01',
+        amountCents: 90_000,
+        source: 'recurring' as const,
+        recurringId: 'r-affitto',
+      }),
+    ]
+    const senza = computeBudgetMetrics({ ...input, expenses: sole })
+    const con = computeBudgetMetrics({ ...input, expenses: conFisse })
+    // Ogni campo identico tranne quello che dichiara l'esclusione.
+    expect({ ...con, recurringSpentCents: 0 }).toEqual(senza)
+  })
+
+  it('una spesa generata e poi corretta a mano resta fuori: conta source, non l importo', () => {
+    // L'utente ha corretto il canone a 920 sulla singola istanza. Resta una
+    // spesa generata, quindi resta fuori dal budget: cambiare l'importo non
+    // trasforma una fissa in una decisione.
+    const corretta = makeExpense({
+      date: '2026-08-01',
+      amountCents: 92_000,
+      source: 'recurring',
+      recurringId: 'r-affitto',
+      updatedAt: '2026-08-02T09:00:00.000Z',
+    })
+    expect(budgetSpent([corretta], agosto)).toBe(0)
+    expect(recurringSpent([corretta], agosto)).toBe(92_000)
+  })
+
+  it('il filtro per categoria vale su entrambi i versanti', () => {
+    const miste = [
+      makeExpense({ date: '2026-08-03', amountCents: 4_000, categoryId: 'cat-cibo' }),
+      makeExpense({ date: '2026-08-04', amountCents: 7_000, categoryId: 'cat-casa' }),
+      makeExpense({
+        date: '2026-08-01',
+        amountCents: 90_000,
+        categoryId: 'cat-casa',
+        source: 'recurring',
+        recurringId: 'r-affitto',
+      }),
+    ]
+    expect(budgetSpent(miste, agosto, 'cat-casa')).toBe(7_000)
+    expect(recurringSpent(miste, agosto, 'cat-casa')).toBe(90_000)
+    expect(recurringSpent(miste, agosto, 'cat-cibo')).toBe(0)
   })
 })

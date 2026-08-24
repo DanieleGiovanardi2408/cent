@@ -83,6 +83,10 @@ function metrics(options: {
 
 const spesa = (date: string, amountCents: number): Expense => makeExpense({ date, amountCents })
 
+/** Una spesa generata da una regola: il budget non la conta (ADR 016). */
+const fissa = (date: string, amountCents: number): Expense =>
+  makeExpense({ date, amountCents, source: 'recurring' })
+
 describe('quale periodo guarda la Home', () => {
   it('senza nessun budget parte dalla settimana', () => {
     expect(activePeriod([], MERCOLEDI)).toBe('weekly')
@@ -196,6 +200,52 @@ describe('il numero grande', () => {
       metrics({ today: MERCOLEDI, budgetCents: 20_000, spese: [spesa(LUNEDI, 22_250)] }),
     )
     expect(dopo.value).toContain('22,50')
+  })
+
+  it('dichiara le spese fisse che non conta: un esclusione taciuta e una bugia', () => {
+    // ADR 016 §2. `remainingCents` esclude le ricorrenti, quindi il numero
+    // grande e' giusto **solo se si sa cosa non c'e' dentro**.
+    const hero = heroCopy(
+      metrics({
+        today: MERCOLEDI,
+        budgetCents: 20_000,
+        spese: [spesa(LUNEDI, 5000), fissa(LUNEDI, 90_000)],
+      }),
+    )
+    // Il residuo non cambia: la fissa non entra nel calcolo.
+    expect(hero.value).toContain('150,00')
+    expect(hero.fixed).not.toBeNull()
+    expect(hero.fixed).toContain('900,00')
+  })
+
+  it('senza fisse nel periodo la riga non compare affatto', () => {
+    // E' il ramo che tiene onesto l'altro: annunciare un'esclusione dove non ha
+    // tolto niente e' lo stesso difetto di `startNote` che spiegava un numero
+    // normale.
+    const hero = heroCopy(
+      metrics({ today: MERCOLEDI, budgetCents: 20_000, spese: [spesa(LUNEDI, 5000)] }),
+    )
+    expect(hero.fixed).toBeNull()
+  })
+
+  it('lo dice anche senza budget, dove il numero grande e lo speso', () => {
+    // La decisione non nomina il ramo col budget: `spentCents` esclude le
+    // ricorrenti in tutti e due, quindi la dichiarazione vale in tutti e due.
+    const hero = heroCopy(metrics({ today: MERCOLEDI, spese: [spesa(LUNEDI, 5000), fissa(LUNEDI, 90_000)] }))
+    expect(hero.label).toBe('Spesi')
+    expect(hero.value).toContain('50,00')
+    expect(hero.fixed).toContain('900,00')
+  })
+
+  it('una fissa cancellata non e piu un uscita, ne dentro ne fuori dal budget', () => {
+    const cancellata = makeExpense({
+      date: LUNEDI,
+      amountCents: 90_000,
+      source: 'recurring',
+      deletedAt: '2026-08-19T10:00:00.000Z',
+    })
+    const hero = heroCopy(metrics({ today: MERCOLEDI, budgetCents: 20_000, spese: [cancellata] }))
+    expect(hero.fixed).toBeNull()
   })
 
   it('il tono "sforato" scatta al primo centesimo oltre, non prima', () => {

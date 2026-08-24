@@ -675,6 +675,22 @@ sezione "I tuoi dati". La sua ragione — *l'export sepolto non si vede piu'* �
 falsa proprio nella schermata dove l'export e' in vista. Nessuno ha toccato quel
 codice: e' cambiato cio' che gli sta intorno.
 
+## Fase 5 — decisioni chiuse nella prima consegna
+
+- **`interval` e' sempre 1 nel foglio di creazione.** Il motore accetta qualunque
+  intervallo e l'elenco sa gia' scrivere "ogni 3 mesi" — una regola trimestrale
+  arrivata da un backup si legge giusta. Ma affitto, abbonamenti e palestra hanno
+  intervallo uno, e un selettore in piu' costerebbe una riga a un foglio che a 667
+  punti gia' scorre. **Non e' un TODO: e' una decisione chiusa.** Se un giorno
+  servira' il trimestrale, il motore c'e' gia' e manca solo il selettore.
+- **Modifica e cancellazione** sono la consegna successiva della stessa fase.
+- **L'anteprima non e' imposta dal tipo.** `addRecurringRule` e' sincrona e non
+  puo' obbligare nessuno a chiamare `previewMaterialization` prima: e' disciplina,
+  non tipo. Renderlo irrappresentabile richiederebbe un `addRecurringRule`
+  asincrono che riceve l'anteprima confermata. Non e' stato fatto perche' non era
+  nel brief — ma e' la mossa che questo progetto fa di solito, e va decisa invece
+  che dimenticata.
+
 ## Verificabili solo sul dispositivo — una categoria, non un debito
 
 Queste cose **non sono coperte in suite e non devono esserlo**: il runner non puo'

@@ -530,6 +530,71 @@ describe('cancellare una categoria: il permesso lo danno tre store', () => {
   })
 })
 
+describe('cancellare una regola: il permesso lo danno le spese sul disco', () => {
+  /*
+   * Come per le categorie, questi test girano su IndexedDB vero: lo store
+   * dimenticato nello scope della transazione si vede solo qui. Su
+   * `memory-persistence` non ci sono scope, quindi un `expenses` in meno
+   * nell'elenco di `storesOf` non produrrebbe nessun sintomo; su IndexedDB
+   * produce un `NotFoundError` su ogni cancellazione.
+   */
+
+  async function conRegola(name: string): Promise<Persistence> {
+    const persistence = createIdbPersistence({ name })
+    await persistence.write({
+      settings: makeSettings(),
+      recurringRules: [makeRule({ id: 'r-affitto', startDate: '2026-01-01', cadence: 'monthly' })],
+    })
+    return persistence
+  }
+
+  it('una regola senza spese generate si cancella davvero', async () => {
+    const persistence = await conRegola(dbName())
+    const esito = await persistence.write({ recurringRuleDeletion: { id: 'r-affitto' } })
+    expect(esito.recurringRuleDeletion?.ok).toBe(true)
+
+    const suDisco = await persistence.loadAll()
+    expect(suDisco.recurringRules).toHaveLength(0)
+    persistence.close()
+  })
+
+  it('una spesa generata sul disco la trattiene, e resta dov e', async () => {
+    const persistence = await conRegola(dbName())
+    await persistence.write({
+      expenses: [
+        makeExpense({
+          id: 'rec:r-affitto:2026-01-01',
+          date: '2026-01-01',
+          source: 'recurring',
+          recurringId: 'r-affitto',
+        }),
+      ],
+    })
+
+    const esito = await persistence.write({ recurringRuleDeletion: { id: 'r-affitto' } })
+    expect(esito.recurringRuleDeletion).toEqual({ ok: false, reason: 'in-use', expenses: 1 })
+
+    const suDisco = await persistence.loadAll()
+    expect(suDisco.recurringRules).toHaveLength(1)
+    // La storia non cambia mai retroattivamente: la spesa e' ancora li'.
+    expect(suDisco.expenses).toHaveLength(1)
+    persistence.close()
+  })
+
+  it('una spesa manuale che non nomina nessuna regola non trattiene niente', async () => {
+    const persistence = await conRegola(dbName())
+    await persistence.write({ expenses: [makeExpense({ id: 'e-1', date: '2026-01-01' })] })
+
+    const esito = await persistence.write({ recurringRuleDeletion: { id: 'r-affitto' } })
+    expect(esito.recurringRuleDeletion?.ok).toBe(true)
+
+    const suDisco = await persistence.loadAll()
+    expect(suDisco.recurringRules).toHaveLength(0)
+    expect(suDisco.expenses).toHaveLength(1)
+    persistence.close()
+  })
+})
+
 describe('il segnaposto viaggia da solo', () => {
   it('avanza senza portarsi dietro la copia vecchia della regola', async () => {
     // Il contesto che materializza legge la regola dal proprio mirror. Se

@@ -1,5 +1,7 @@
-import type { BudgetPeriod, Category, Language } from '../core/types'
+import type { IsoDate } from '../core/date'
+import type { BudgetPeriod, Category, Language, RecurringRule } from '../core/types'
 import { Categories } from './Categories'
+import { FixedCosts } from './FixedCosts'
 import { LANGUAGE_NAMES, cadenceLabel, daysLabel, money, t } from './i18n'
 import './Settings.css'
 
@@ -71,9 +73,14 @@ interface Props {
    * volonta' non ha bisogno di essere sollecitato, ha bisogno di sapere.
    */
   readonly backupDays: number | null
+  /** Tutte le regole ricorrenti, anche quelle non ancora in vigore. */
+  readonly rules: readonly RecurringRule[]
+  /** Il giorno civile corrente: decide quali regole pesano sul mese. */
+  readonly day: IsoDate
   /** Il database e' aperto: prima non c'e' niente da scrivere. */
   readonly ready: boolean
   readonly onEditBudget: () => void
+  readonly onNewRule: () => void
   readonly onExport: () => void
   /**
    * Rimette la guida davanti. **Cancella** `onboardingCompletedAt` invece di
@@ -96,8 +103,11 @@ export function Settings({
   onPlaceCategory,
   onNewCategory,
   backupDays,
+  rules,
+  day,
   ready,
   onEditBudget,
+  onNewRule,
   onExport,
   onReplayGuide,
 }: Props) {
@@ -178,6 +188,20 @@ export function Settings({
           {t(budgetCents === null ? 'settings.budget.set' : 'settings.budget.edit')}
         </button>
       </section>
+
+      {/* Subito sotto il budget, e non e' un ordine qualunque: sono la stessa
+          decisione vista da due lati (ADR 016 §3). Il budget escluse le fisse
+          non significa niente da solo — "200 a settimana" con 1.040 di fisse e
+          "200 a settimana" senza sono due vite diverse — quindi la seconda
+          cifra sta a una riga di distanza dalla prima, non in un'altra
+          schermata. */}
+      <FixedCosts
+        rules={rules}
+        categories={[...activeCategories, ...archivedCategories]}
+        day={day}
+        ready={ready}
+        onNew={onNewRule}
+      />
 
       <section class="prefs__group" aria-labelledby="prefs-data">
         <h2 class="prefs__title" id="prefs-data">

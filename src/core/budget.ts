@@ -22,6 +22,20 @@
  *   sulla Home. L'alternativa (il budget del primo giorno del periodo) renderebbe
  *   ogni modifica invisibile fino al periodo successivo, che e' un bug travestito
  *   da coerenza.
+ *
+ * ## Quali spese conta (ADR 016)
+ *
+ * **Non tutte.** Le spese con `source: 'recurring'` restano fuori: il budget
+ * serve a decidere se prendere quel caffe', e l'affitto non e' una decisione.
+ * Un canone da 900 dentro una settimana da 200 renderebbe la settimana del
+ * primo sempre catastrofica, e "puoi spendere ~X al giorno" — il numero che il
+ * brief chiama il piu' utile — diventerebbe un numero che nessuno guarda piu'.
+ *
+ * Il confine e' `countsTowardBudget`, e vale **solo in questo file**: Storico e
+ * statistiche continuano a mostrare tutto, perche' quelle uscite sono uscite
+ * vere. Perche' l'esclusione non diventi un'omissione, `BudgetMetrics` porta
+ * anche `recurringSpentCents`: il numero che il budget non conta, disponibile a
+ * chi deve dirlo.
  */
 
 import { addDays, daysBetween, endOfMonth, endOfWeek, isAfter, isBefore, startOfMonth, startOfWeek } from './date'
@@ -172,7 +186,25 @@ export interface BudgetMetrics {
    * faccia a `resolveBudget(budgets, period, range.start, categoryId)`.
    */
   readonly budgetCoveredPeriodStart: boolean
+  /**
+   * Speso nel periodo **secondo il budget**: spese vive, ricorrenti escluse
+   * (ADR 016). Non e' il totale del periodo — quello lo mostrano Storico e
+   * statistiche, e vale `spentCents + recurringSpentCents`.
+   */
   readonly spentCents: Cents
+  /**
+   * Speso in ricorrenti nello stesso periodo: la parte **esclusa** dal budget.
+   *
+   * E' qui perche' l'esclusione si possa dire invece che subire. Zero quando
+   * nel periodo non e' scattata nessuna regola, ed e' il segnale con cui la
+   * Home decide di **non** dire niente: annunciare "oltre alle spese fisse"
+   * dove le fisse non ci sono e' lo stesso difetto di `startNote` che spiegava
+   * un numero normale.
+   *
+   * Non entra in nessun altro campo di questa struttura: non tocca
+   * `remainingCents`, ne' il passo, ne' la disponibilita' giornaliera.
+   */
+  readonly recurringSpentCents: Cents
   /** Budget meno speso. Negativo se si e' sforato. `null` senza budget. */
   readonly remainingCents: Cents | null
   readonly daysTotal: number
@@ -212,8 +244,84 @@ export interface BudgetMetricsInput {
   readonly categoryId?: string
 }
 
-/** Somma delle spese vive in `[start, end]`, eventualmente di una sola categoria. */
-export function totalSpent(
+/**
+ * Vero se questa spesa entra nel budget (ADR 016).
+ *
+ * Due condizioni, e sono due fatti diversi:
+ *
+ * - **non cancellata**: un soft delete non e' un'uscita. Vale ovunque, ed e' la
+ *   stessa regola di `isLive` in `stats.ts`;
+ * - **non generata da una regola**: il budget serve a decidere se prendere quel
+ *   caffe', e l'affitto non e' una decisione. Vale **solo qui**.
+ *
+ * ## Perche' `source` e non un campo nuovo
+ *
+ * Creare una regola ricorrente **e'** l'atto con cui l'utente dichiara che
+ * quella spesa e' fissa. Il proxy non e' un'euristica che indovina: e' un fatto
+ * gia' scritto, con un gesto che aveva gia' un altro scopo e che quindi non puo'
+ * essere frainteso. Stessa forma dell'identita' deterministica (ADR 006): non si
+ * sorveglia una condizione, si usa qualcosa che esiste gia'. Nessun campo nuovo,
+ * nessuna migrazione.
+ *
+ * ## Dove **non** vale
+ *
+ * Storico e statistiche mostrano tutto: `groupByDay`, `spentByCategory` e
+ * `lastWeeksTotals` filtrano solo `deletedAt` e continueranno a farlo. Quelle
+ * sono uscite vere, uscite davvero. Una spesa che sparisce dallo Storico
+ * sarebbe una bugia sui dati; una che non entra nel budget e' una scelta su
+ * cosa quel numero misura.
+ */
+export function countsTowardBudget(expense: Expense): boolean {
+  return expense.deletedAt === undefined && expense.source !== 'recurring'
+}
+
+function inRange(expense: Expense, range: PeriodRange, categoryId?: string): boolean {
+  if (isBefore(expense.date, range.start) || isAfter(expense.date, range.end)) return false
+  return categoryId === undefined || expense.categoryId === categoryId
+}
+
+/**
+ * Somma delle spese che il budget conta in `[start, end]`: vive **e non
+ * ricorrenti** (ADR 016).
+ *
+ * ## Nota per chi arriva da `totalSpent`
+ *
+ * Questa funzione si chiamava cosi', e sommava tutte le spese vive. Il nome e'
+ * cambiato insieme alla semantica, di proposito: una `totalSpent` che ne
+ * escludesse silenziosamente una parte sarebbe esattamente il numero che mente
+ * per omissione contro cui ADR 016 e' scritta, e ogni chiamante futuro
+ * l'avrebbe usata credendo il contrario. Con il nome nuovo, chi vuole il totale
+ * vero di un periodo non lo trova per sbaglio: lo chiede a `recurringSpent` in
+ * piu', o passa dalle funzioni dello Storico.
+ */
+export function budgetSpent(
+  expenses: readonly Expense[],
+  range: PeriodRange,
+  categoryId?: string,
+): Cents {
+  const values: Cents[] = []
+  for (const expense of expenses) {
+    if (!countsTowardBudget(expense)) continue
+    if (!inRange(expense, range, categoryId)) continue
+    values.push(expense.amountCents)
+  }
+  return sumCents(values)
+}
+
+/**
+ * L'altra meta': le spese vive **generate da una regola** nello stesso
+ * intervallo, cioe' esattamente cio' che il budget non conta.
+ *
+ * Esiste perche' l'esclusione si possa **dire con un numero**. Una Home che
+ * escludesse le fisse senza nominarle mostrerebbe un residuo giusto e
+ * incomprensibile; con questo, la riga "oltre a N di spese fisse" e' scrivibile,
+ * e — come `startNote` — puo' sparire da sola quando il numero e' zero, invece
+ * di annunciare un'esclusione che in quel periodo non ha tolto niente.
+ *
+ * Le spese cancellate restano fuori anche qui: un soft delete non e' un'uscita
+ * ne' dentro ne' fuori dal budget.
+ */
+export function recurringSpent(
   expenses: readonly Expense[],
   range: PeriodRange,
   categoryId?: string,
@@ -221,8 +329,8 @@ export function totalSpent(
   const values: Cents[] = []
   for (const expense of expenses) {
     if (expense.deletedAt !== undefined) continue
-    if (isBefore(expense.date, range.start) || isAfter(expense.date, range.end)) continue
-    if (categoryId !== undefined && expense.categoryId !== categoryId) continue
+    if (expense.source !== 'recurring') continue
+    if (!inRange(expense, range, categoryId)) continue
     values.push(expense.amountCents)
   }
   return sumCents(values)
@@ -238,7 +346,10 @@ export function computeBudgetMetrics(input: BudgetMetricsInput): BudgetMetrics {
 
   const budget = resolveBudget(input.budgets, input.period, referenceDay, input.categoryId)
   const budgetCents = budget?.amountCents ?? null
-  const spentCents = totalSpent(input.expenses, range, input.categoryId)
+  const spentCents = budgetSpent(input.expenses, range, input.categoryId)
+  // Calcolato ma tenuto fuori da ogni altro numero: serve a **dichiarare**
+  // l'esclusione, non a correggerla.
+  const recurringSpentCents = recurringSpent(input.expenses, range, input.categoryId)
 
   const daysTotal = daysBetween(range.start, range.end) + 1
   const daysRemaining = isAfter(input.today, range.end)
@@ -264,6 +375,7 @@ export function computeBudgetMetrics(input: BudgetMetricsInput): BudgetMetrics {
       budget !== null &&
       resolveBudget(input.budgets, input.period, range.start, input.categoryId) !== null,
     spentCents,
+    recurringSpentCents,
     remainingCents,
     daysTotal,
     daysElapsed,

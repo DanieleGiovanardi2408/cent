@@ -9,7 +9,7 @@
  * senza DOM, quindi hanno un test.
  */
 
-import { resolveBudget, totalSpent } from '../core/budget'
+import { budgetSpent, resolveBudget } from '../core/budget'
 import type { BudgetMetrics } from '../core/budget'
 import { addDays, isAfter } from '../core/date'
 import type { IsoDate } from '../core/date'
@@ -110,6 +110,23 @@ export interface HeroCopy {
   readonly label: string
   readonly value: string
   readonly note: string
+  /**
+   * **Cosa non c'e' dentro il numero grande**: le spese fisse del periodo
+   * (ADR 016 §2). `null` quando non ce n'e' nessuna.
+   *
+   * Non e' un dettaglio in piu': `spentCents` e `remainingCents` escludono le
+   * ricorrenti, e **un'esclusione taciuta e' un numero che mente per
+   * omissione**. E' la stessa famiglia dell'indicatore di backup che tace a
+   * torto — con la differenza che qui il numero e' persino giusto: e' giusto
+   * solo se si sa cosa non conta.
+   *
+   * `null` e non stringa vuota, e non e' pignoleria: la riga esiste **solo**
+   * quando `recurringSpentCents` non e' zero, cioe' quando in questo periodo
+   * una regola e' davvero scattata. Annunciare "oltre alle spese fisse" dove le
+   * fisse non hanno tolto niente e' esattamente il difetto per cui `startNote`
+   * ha smesso di spiegare un numero normale.
+   */
+  readonly fixed: string | null
   readonly over: boolean
 }
 
@@ -130,11 +147,18 @@ export interface HeroCopy {
  * si spende, piu' scende, sempre.
  */
 export function heroCopy(m: BudgetMetrics): HeroCopy {
+  // Vale per **tutti e due** i rami, budget o non budget: senza budget il
+  // numero grande e' `spentCents`, che le fisse le esclude allo stesso modo.
+  // Una riga attaccata al solo ramo col budget avrebbe lasciato senza
+  // dichiarazione proprio chi non ha ancora un tetto — cioe' chi ha meno
+  // strumenti per accorgersi che manca qualcosa.
+  const fixed = m.recurringSpentCents === 0 ? null : t('hero.fixed', { amount: money(m.recurringSpentCents) })
   if (m.budgetCents === null || m.remainingCents === null) {
     return {
       label: t('hero.spent'),
       value: money(m.spentCents),
       note: t('hero.noBudget'),
+      fixed,
       over: false,
     }
   }
@@ -142,6 +166,7 @@ export function heroCopy(m: BudgetMetrics): HeroCopy {
     label: t('hero.remaining'),
     value: money(m.remainingCents),
     note: t('hero.note', { budget: money(m.budgetCents), spent: money(m.spentCents) }),
+    fixed,
     over: m.remainingCents < 0,
   }
 }
@@ -196,7 +221,7 @@ export function budgetStart(m: BudgetMetrics, expenses: readonly Expense[]): Bud
   }
   return {
     late: true,
-    beforeCents: totalSpent(expenses, { start: m.range.start, end: addDays(from, -1) }),
+    beforeCents: budgetSpent(expenses, { start: m.range.start, end: addDays(from, -1) }),
   }
 }
 
