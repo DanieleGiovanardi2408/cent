@@ -1,4 +1,5 @@
-/* Il foglio che crea una spesa fissa.
+/* Il foglio delle spese fisse: crearne una, cambiarla, spegnerla, riaccenderla,
+ * cancellarla.
  *
  * Il guscio, la riga di aiuto e l'importo arrivano da sheet.css; i chip della
  * data, la griglia `.cats` e il chip `.cat` da AddSheet.css; i tasti da
@@ -7,7 +8,9 @@
  *
  * Qui c'e' solo cio' che e' di questo foglio: la cadenza, la riga della data,
  * il piede che dichiara e conferma, e il chip di categoria che **seleziona**
- * invece di salvare.
+ * invece di salvare. Il blocco che cancella (`.danger`) e la riga di nota
+ * arrivano da Categories.css: e' la stessa domanda ("posso cancellarla
+ * davvero?"), quindi ha la stessa faccia.
  *
  * ## Il corpo scorre, il piede no
  *
@@ -20,8 +23,10 @@
  * finire sotto la linea di galleggiamento, o la conferma esplicita sarebbe una
  * conferma che si puo' saltare senza vederla.
  *
- * A 390x844 (iPhone 14) non scorre niente: la colonna misura ~743px contro gli
- * 844 disponibili.
+ * A 390x844 (iPhone 14) non scorre niente **quando la regola e' nuova**: la
+ * colonna misura ~743px contro gli 844 disponibili. In modifica scorre, e va
+ * bene: il blocco che cancella sta in fondo apposta, e il piede — cioe' cio'
+ * che dichiara e conferma — resta fuori dallo scroll come sempre.
  */
 
 /* Alto: cinque blocchi piu' un piede a tre righe. Piu' del foglio
@@ -39,6 +44,24 @@
   overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
+}
+
+/* **Niente si stringe qui dentro: il contenitore scorre.**
+ *
+ * Un elemento flex si restringe di suo (`flex-shrink: 1`), e restringersi non
+ * vuol dire rimpicciolire il contenuto: vuol dire che il riquadro diventa piu'
+ * corto di cio' che contiene, e cio' che avanza **esce e si sovrappone al
+ * fratello dopo**, che essendo dipinto piu' tardi finisce sopra.
+ *
+ * Non e' una precauzione: e' il difetto che la sonda ha trovato a 375x667 nel
+ * momento in cui il blocco della cancellazione e' entrato in fondo al corpo.
+ * Il tastierino si accorciava di una ventina di pixel e i tasti 7, 8 e 9
+ * restavano dipinti dov'erano, sotto il paragrafo "Ha gia' creato 8 spese":
+ * `elementFromPoint` sul centro di quei tre bersagli rispondeva il paragrafo, e
+ * un tap sul tasto 9 non arrivava piu' al tasto 9.
+ */
+.rule > * {
+  flex: none;
 }
 
 /* --- ogni quanto --------------------------------------------------------- */
@@ -260,4 +283,62 @@
     grid-area: auto;
     font-size: min(var(--fs-500), 6vw);
   }
+}
+
+/* --- il rifiuto della scrittura ------------------------------------------- */
+/*
+ * La riga in cima ha due mestieri e un solo posto: normalmente e' un'istruzione
+ * di una riga (`.sheet__hint`, che taglia con i tre puntini perche' li' una riga
+ * basta e avanza); quando una scrittura viene rifiutata diventa **una frase**,
+ * che dice cosa e' cambiato e che i numeri sono gia' rifatti.
+ *
+ * Sta qui e non nel piede per una ragione di geometria: il piede e' ancorato in
+ * fondo, e crescere li' dentro avrebbe alzato il bottone che scrive di tre
+ * righe **subito dopo che il pollice l'ha toccato**. In cima, invece, cio' che
+ * cresce spinge il corpo — che scorre gia' — e il piede non si muove di un
+ * pixel: l'anteprima, la casella e il bottone restano dove erano.
+ */
+.sheet__hint--long {
+  white-space: normal;
+  overflow: visible;
+  color: var(--text);
+  font-weight: var(--fw-semibold);
+}
+
+/* --- il piede a due bersagli --------------------------------------------- */
+/*
+ * Solo in modifica: "Disattiva" accanto a "Salva". Il primo non si allarga
+ * (`flex: none`), il secondo prende quello che resta e taglia con i tre puntini
+ * se l'etichetta e' lunga ("Crea 8 spese · 7.200 €") — perche' e' quello che
+ * deve restare toccabile per intero, non quello che deve restare leggibile per
+ * intero: cosa scrive lo dice anche l'anteprima due righe sopra.
+ */
+.rule__row {
+  display: flex;
+  gap: var(--sp-2);
+}
+
+.rule__row .save {
+  flex: 1;
+  min-inline-size: var(--tap-min);
+}
+
+.rule__second {
+  flex: none;
+  /* La stessa altezza di `.save`: due bersagli sulla stessa riga con due
+   * altezze diverse si leggono come due cose di importanza diversa, e qui la
+   * differenza sta gia' nel colore. */
+  min-block-size: 3.5rem;
+  min-inline-size: var(--tap-min);
+  padding-inline: var(--sp-3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-2);
+  color: var(--text);
+  font-size: min(var(--fs-300), 4.4vw);
+  font-weight: var(--fw-semibold);
+  white-space: nowrap;
+}
+
+.rule__second:active {
+  background-color: var(--surface-sunken);
 }

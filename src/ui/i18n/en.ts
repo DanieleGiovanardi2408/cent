@@ -353,6 +353,7 @@ export const en: Record<keyof typeof it, string> = {
   'fixed.list': 'Your fixed costs',
   'fixed.later': 'starts: {day}',
   'fixed.ended': 'ended: {day}',
+  'fixed.off': 'off',
 
   'cad.daily.one': 'every day',
   'cad.daily.other': 'every {count} days',
@@ -362,9 +363,12 @@ export const en: Record<keyof typeof it, string> = {
   'cad.monthly.other': 'every {count} months',
 
   'rule.label': 'New fixed cost',
+  'rule.label.edit': 'Fixed cost',
   'rule.hint.empty': 'How much goes out each time?',
   'rule.hint.category': 'Pick a category',
   'rule.hint.check': 'Check how often and from when, then tap Create',
+  'rule.hint.edit': 'Change what you need, then tap Save',
+  'rule.hint.on': 'Check what happens when you switch it back on',
   'rule.hint.failed': 'I could not create the rule. Tap Create again.',
   'rule.hint.max': 'Highest amount reached',
   'rule.cadence': 'How often',
@@ -387,9 +391,33 @@ export const en: Record<keyof typeof it, string> = {
   'rule.save': 'Create the fixed cost',
   'rule.save.back.one': 'Create 1 expense · {total}',
   'rule.save.back.other': 'Create {count} expenses · {total}',
+  'rule.save.edit': 'Save',
+  'rule.save.on': 'Switch back on',
+  'rule.preview.settled': 'There is nothing to catch up on.',
+
+  'rule.refused.stale':
+    'Those numbers were from {day}: midnight changed them. I have redone them below — check and confirm.',
+  'rule.refused.moved':
+    'This fixed cost has created some expenses in the meantime. The numbers below are redone: check and confirm.',
+  'rule.refused.gone': 'This fixed cost is gone. Close this, and look at the list.',
+
+  'rule.deactivate': 'Switch off',
+  'rule.delete': 'Delete the fixed cost',
+  'rule.delete.note': 'Only while it has not created any expense.',
+  'rule.inUse.one':
+    'It has already created 1 expense, so it cannot be deleted: that expense stays in your history. Switch it off and it will create no more.',
+  'rule.inUse.other':
+    'It has already created {count} expenses, so it cannot be deleted: they stay in your history. Switch it off and it will create no more.',
 
   'toast.ruleSaved': 'Fixed cost added: {name}',
   'toast.ruleSavedBack': '{name}: {count} expenses created',
+  'toast.ruleUpdated': 'Fixed cost updated: {name}',
+  'toast.ruleOff': '{name}: it will create no more expenses',
+  'toast.ruleOn': '{name}: it will create expenses again',
+  'toast.ruleOnBack': '{name}: back on, {count} expenses created',
+  'toast.ruleDeleted': 'Fixed cost deleted: {name}',
+  'toast.ruleInUse': 'It has already created expenses: you can only switch it off',
+  'toast.ruleFailed': 'That did not work. Try again.',
 
   'row.fixed': 'fixed cost',
 }

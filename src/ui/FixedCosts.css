@@ -4,10 +4,11 @@
  * (`.prefs__*`): questa e' una sezione come le altre, non una schermata sua. La
  * pastiglia col colore della categoria arriva da Categories.css (`.arch__dot`).
  *
- * Qui c'e' solo la riga dell'elenco, ed e' una riga che **non si tocca**:
- * modifica e cancellazione arrivano nella consegna successiva. Niente
- * `:active`, niente freccia, nessun bordo che inviti — un bersaglio che si
- * illumina e non fa niente e' peggio di nessun bersaglio.
+ * Qui c'e' solo la riga dell'elenco, che adesso **si tocca**: apre la regola.
+ * E' la stessa riga dell'elenco delle categorie archiviate (`.arch__row`) —
+ * stesso pavimento tattile, stesso `:active`, stessa freccia — e la somiglianza
+ * e' voluta: due elenchi che si toccano allo stesso modo non hanno bisogno che
+ * si impari due volte come si toccano.
  */
 
 .prefs__text--rate {
@@ -32,14 +33,37 @@
   display: flex;
   align-items: center;
   gap: var(--sp-3);
-  /* Non e' un bersaglio, quindi non c'e' un pavimento tattile da dichiarare:
-   * l'altezza e' quella di due righe di testo piu' l'aria. Resta comunque
-   * abbondante — chi legge con le dita non ci inciampa. */
+  inline-size: 100%;
+  /* Il pavimento tattile dichiarato, non dedotto dal contenuto: due righe di
+   * testo lo superano gia', ma una regola senza nota e senza importo mensile
+   * (una spenta, una che parte fra un mese) sarebbe piu' bassa. Cio' che si
+   * tocca dichiara le proprie misure minime. */
+  min-block-size: var(--tap-min);
   padding: var(--sp-2) var(--sp-3);
+  text-align: start;
+  color: var(--text);
 }
 
-.fixed__row + .fixed__row {
+.fixed li + li .fixed__row {
   border-block-start: 1px solid var(--line);
+}
+
+/* Nessuna transizione e nessuna `scale`: il riscontro al tocco e' la superficie
+ * che cambia nel frame del tap. Una `scale` cambierebbe le misure dipinte del
+ * bersaglio, che e' cio' che la sonda misura. */
+.fixed__row:active {
+  background-color: var(--surface-sunken);
+}
+
+/* La freccia: dice che la riga porta da qualche parte. Stessa forma e stesso
+ * colore di quella dell'archivio. */
+.fixed__row svg {
+  flex: none;
+  fill: none;
+  stroke: var(--text-muted);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .fixed__text {

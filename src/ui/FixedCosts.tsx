@@ -38,11 +38,17 @@ import './FixedCosts.css'
  * saltare l'avviso proprio nei casi in cui serve. Stessa forma della conferma
  * dell'arretrato, che non compare sempre.
  *
- * ## Modifica e cancellazione non ci sono ancora
+ * ## Adesso le righe sono bersagli, e prima non lo erano
  *
- * E per questo le righe **non sono bottoni**: un bersaglio che si illumina al
- * tocco e non fa niente e' peggio di nessun bersaglio, e la sonda delle
- * sovrapposizioni lo conterebbe fra quelli da difendere. Sono `li`, si leggono.
+ * Finche' non c'era niente da fare toccandole erano `li`: un bersaglio che si
+ * illumina al tocco e non fa niente e' peggio di nessun bersaglio. Adesso una
+ * riga apre la regola — si cambia, si spegne, si riaccende, e se non ha ancora
+ * creato niente si cancella — quindi diventa un `button` con il pavimento
+ * tattile dichiarato e la freccia che dice che porta da qualche parte.
+ *
+ * **Il nome accessibile della riga e' tutto cio' che c'e' scritto dentro**:
+ * nome, cadenza, importo. Un `aria-label` con il solo nome avrebbe tolto
+ * proprio i due numeri per cui uno ci torna sopra.
  */
 
 interface Props {
@@ -53,9 +59,10 @@ interface Props {
   /** Il database e' aperto: prima non c'e' niente da scrivere. */
   readonly ready: boolean
   readonly onNew: () => void
+  readonly onPick: (rule: RecurringRule) => void
 }
 
-export function FixedCosts({ rules, categories, day, ready, onNew }: Props) {
+export function FixedCosts({ rules, categories, day, ready, onNew, onPick }: Props) {
   const list = fixedList(rules, day)
   const byId = new Map(categories.map((category) => [category.id, category]))
   const empty = list.lines.length === 0
@@ -93,26 +100,38 @@ export function FixedCosts({ rules, categories, day, ready, onNew }: Props) {
           {list.lines.map((line) => {
             const category = byId.get(line.rule.categoryId)
             return (
-              <li class="fixed__row" key={line.rule.id}>
-                <span class="arch__dot" style={`--cat:${category?.color ?? 'transparent'}`} aria-hidden="true">
-                  {category?.emoji ?? '•'}
-                </span>
-                <span class="fixed__text">
-                  <span class="fixed__name">
-                    {line.rule.note ?? category?.name ?? t('row.categoryRemoved')}
+              <li key={line.rule.id}>
+                <button type="button" class="fixed__row" onClick={() => onPick(line.rule)}>
+                  <span class="arch__dot" style={`--cat:${category?.color ?? 'transparent'}`} aria-hidden="true">
+                    {category?.emoji ?? '•'}
                   </span>
-                  <span class="fixed__note">
-                    {line.aside ?? fixedLineNote(line.rule)}
+                  <span class="fixed__text">
+                    <span class="fixed__name">
+                      {line.rule.note ?? category?.name ?? t('row.categoryRemoved')}
+                    </span>
+                    {/* Il perche' non pesa **e** cosa fa: "spenta" da sola
+                        avrebbe tolto la cadenza e l'importo proprio alla riga
+                        che si sta per riaccendere, cioe' i due numeri che
+                        servono a decidere. */}
+                    <span class="fixed__note">
+                      {line.aside === null
+                        ? fixedLineNote(line.rule)
+                        : `${line.aside} · ${fixedLineNote(line.rule)}`}
+                    </span>
                   </span>
-                </span>
-                {/* Il costo mensile normalizzato. Su una regola che non e'
-                    ancora cominciata (o e' finita) non c'e' un numero da
-                    mettere: `null` non e' zero, e "0,00 €" accanto a "Affitto"
-                    sarebbe un numero sbagliato con l'aria di essere giusto. La
-                    cella resta, vuota, perche' la colonna non si sfaldi. */}
-                <span class="fixed__amount">
-                  {line.monthlyCents === null ? '' : money(line.monthlyCents)}
-                </span>
+                  {/* Il costo mensile normalizzato. Su una regola che non e'
+                      ancora cominciata (o e' finita, o e' spenta) non c'e' un
+                      numero da mettere: `null` non e' zero, e "0,00 €" accanto
+                      a "Affitto" sarebbe un numero sbagliato con l'aria di
+                      essere giusto. La cella resta, vuota, perche' la colonna
+                      non si sfaldi. */}
+                  <span class="fixed__amount">
+                    {line.monthlyCents === null ? '' : money(line.monthlyCents)}
+                  </span>
+                  <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                    <path d="m10 6 6 6-6 6" />
+                  </svg>
+                </button>
               </li>
             )
           })}

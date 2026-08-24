@@ -72,7 +72,13 @@ import type {
   CategoryPlacement,
   CategoryPlacementRequest,
 } from './categories'
-import type { RecurringRuleDeletion } from './recurring-plan'
+import { redeemPreview } from './recurring-plan'
+import type {
+  ConfirmedPreview,
+  RecurrenceDraft,
+  RecurringRuleDeletion,
+  RecurringRuleWrite,
+} from './recurring-plan'
 import { buildDefaultCategories, buildDefaultSettings } from './defaults'
 import type { DefaultCategoryNames } from './defaults'
 import type { Cents } from './money'
@@ -91,7 +97,6 @@ import type { BackupFile } from './backup'
 import { createObservable } from './store'
 import type {
   Budget,
-  Cadence,
   Category,
   DataSet,
   Expense,
@@ -168,25 +173,58 @@ export interface CategoryPatch {
   readonly order?: number
 }
 
+/*
+ * Le regole ricorrenti si scrivono da **cinque** porte, non da due, e la
+ * divisione non e' estetica: e' ADR 012 applicato a un'operazione.
+ *
+ * L'invariante da proteggere e': **niente generazione retroattiva senza un
+ * annuncio**. Una regola con `startDate` a gennaio creata ad agosto scrive otto
+ * spese e riscrive otto periodi passati nell'istante in cui si salva.
+ *
+ * L'argomento **non nomina la creazione**: nomina la generazione retroattiva. E
+ * la generazione retroattiva ha tre inneschi, non uno.
+ *
+ *   1. **creare** una regola con `startDate` nel passato;
+ *   2. **spostare il calendario** di una regola che non ha ancora materializzato
+ *      niente (o che ha un segnaposto vecchio);
+ *   3. **riaccendere** una regola dormiente da mesi: il segnaposto e' rimasto
+ *      dov'era, e la finestra si riapre su tutto l'intervallo.
+ *
+ * Se l'anteprima fosse obbligatoria solo sulla prima, la seconda e la terza
+ * sarebbero la porta di servizio dello stesso difetto.
+ *
+ * Quindi i campi si dividono per **chi puo' allargare la finestra di
+ * materializzazione**, e ogni gruppo ha un solo produttore:
+ *
+ * - `RecurringRulePatch` — `categoryId` e `note`. Non entrano in nessuno dei
+ *   numeri che l'anteprima annuncia (ne' `count`, ne' le date, ne' il totale),
+ *   quindi **non pagano nessun pedaggio**: `updateRecurringRule` resta sincrona,
+ *   ottimistica e senza esito da controllare.
+ * - `RecurrenceDraft` (importo + calendario) — viaggia **solo** dentro una
+ *   `ConfirmedPreview`. Non esiste nessun altro modo di farlo entrare in una
+ *   regola. Non c'e' una guardia da ricordarsi: c'e' un'espressione che non
+ *   esiste.
+ * - `active` — spezzato nelle due direzioni. `deactivateRecurringRule` va
+ *   sempre e non chiede niente: e' la via normale per far smettere una regola,
+ *   ed e' quella che `planRecurringRuleDeletion` suggerisce quando cancellare
+ *   non si puo'. `reactivateRecurringRule` chiede l'anteprima, perche' e' il
+ *   terzo innesco.
+ *
+ * Nota su `amountCents`, che sta con il calendario e non con la patch: non
+ * genera niente, ma **e' dentro `totalCents`**. Chi ha confermato "8 spese,
+ * 7.200 €" ha confermato anche il secondo numero, e lasciarlo cambiare da una
+ * porta senza annuncio vorrebbe dire scrivere 8 spese per 21.600 € contro una
+ * conferma che diceva altro. Il criterio e' semplice e non ha eccezioni: **se
+ * un campo entra in un numero annunciato, passa dall'annuncio.**
+ */
 export interface NewRecurringRule {
-  readonly amountCents: Cents
   readonly categoryId: string
-  readonly cadence: Cadence
-  readonly interval: number
-  readonly startDate: IsoDate
   readonly note?: string
-  readonly anchorDay?: number
-  readonly endDate?: IsoDate
 }
 
 export interface RecurringRulePatch {
-  readonly amountCents?: Cents
   readonly categoryId?: string
   readonly note?: string | null
-  readonly interval?: number
-  readonly anchorDay?: number | null
-  readonly endDate?: IsoDate | null
-  readonly active?: boolean
 }
 
 export interface SettingsPatch {
@@ -400,26 +438,93 @@ export interface Repository {
   reorderCategories(orderedIds: readonly string[]): readonly Category[]
 
   /**
-   * Crea una regola. **Non materializza niente da sola**: le occorrenze
-   * arretrate arrivano alla prossima `materializeRecurring()`.
+   * Crea una regola a partire da **un'anteprima calcolata adesso**. L'importo e
+   * il calendario vengono da li' e da nessun'altra parte: `input` porta solo
+   * cio' che l'anteprima non guarda (`categoryId`, `note`).
    *
-   * Chi chiama deve aver gia' mostrato `previewMaterialization` e chiesto
-   * conferma quando `backdated` e' vero: una regola con `startDate` a gennaio
-   * creata ad agosto vale otto spese e otto periodi passati riscritti. Il core
-   * non puo' imporlo — questa e' una scrittura ottimistica e sincrona — ma la
-   * funzione che risponde alla domanda esiste, e' pura, ed e' esatta.
+   * **Non materializza niente da sola**: le occorrenze arretrate arrivano alla
+   * prossima `materializeRecurring()`.
+   *
+   * ## Perche' il secondo parametro esiste
+   *
+   * Fino a ieri questa riga diceva *"chi chiama deve aver gia' mostrato
+   * `previewMaterialization`"*, e ammetteva subito dopo che il core non poteva
+   * imporlo. Era disciplina, non tipo: chi salvava senza anteprima scriveva
+   * otto spese arretrate in silenzio, e compilava. Adesso **non compila**,
+   * perche' non ha niente da passare qui.
+   *
+   * ## Puo' rifiutare, ed e' un risultato
+   *
+   * `'stale-preview'` — l'anteprima e' di un altro giorno civile. Non e' un
+   * caso di laboratorio: un foglio aperto alle 23:59:50 e confermato alle
+   * 00:00:05 ha una finestra di materializzazione piu' larga di quella
+   * annunciata, e scriverebbe **un'occorrenza in piu' di quelle dichiarate**.
+   * Si ricalcola l'anteprima e si riprova; non si scrive.
+   *
+   * `'moved-on'` — l'anteprima e' stata calcolata su una regola che aveva gia'
+   * un segnaposto, e qui si sta creando una regola nuova, che non ne ha:
+   * annuncerebbe **meno** di quanto scriverebbe.
    */
-  addRecurringRule(input: NewRecurringRule): RecurringRule
+  addRecurringRule(input: NewRecurringRule, previewed: ConfirmedPreview): RecurringRuleWrite
+
   /**
-   * Modifica una regola. **Disattivarla** (`{ active: false }`) e' sempre
-   * possibile e non ha nessuna condizione: e' la via normale per far smettere
-   * una regola, e non perde niente.
+   * Nome della categoria e nota. **Nient'altro**, ed e' il punto.
    *
-   * Cambiare il calendario non riscrive il passato: il motore riparte da
-   * `lastMaterializedDate`, quindi spostare `startDate` all'indietro su una
-   * regola che ha gia' prodotto qualcosa **non** genera occorrenze arretrate.
+   * Questi due campi non entrano in nessuno dei numeri che l'anteprima
+   * annuncia, quindi questa porta non paga nessun pedaggio: resta sincrona,
+   * ottimistica, e non ha un esito da controllare. Cio' che puo' generare
+   * spese arretrate non e' scrivibile da qui — non e' vietato, e' **assente dal
+   * tipo**.
    */
   updateRecurringRule(id: string, patch: RecurringRulePatch): RecurringRule | null
+
+  /**
+   * Riscrive **importo e calendario** di una regola che esiste gia', a partire
+   * da un'anteprima calcolata adesso su quella regola.
+   *
+   * ## Perche' ha la stessa forma di `addRecurringRule`
+   *
+   * Perche' e' lo stesso pericolo. Spostare `startDate` indietro su una regola
+   * che non ha ancora materializzato niente genera **esattamente gli stessi**
+   * arretrati che genererebbe crearla: se l'anteprima valesse solo sulla
+   * creazione, la modifica sarebbe la porta di servizio dello stesso difetto.
+   * Due operazioni che rispondono alla stessa domanda hanno la stessa API, come
+   * `planCategoryDeletion` e `planRecurringRuleDeletion`.
+   *
+   * ## Il pedaggio lo paga il codice, non sempre l'utente
+   *
+   * Su una regola **gia' materializzata** spostare `startDate` indietro non
+   * genera niente: il motore riparte da `lastMaterializedDate`, non da
+   * `startDate`. In quel caso l'anteprima risponde `backdated: false` e la UI
+   * **non deve mostrare nessuna conferma** — una conferma che compare sempre
+   * smette di essere letta. Il pedaggio e' una chiamata di funzione, non un
+   * cartello davanti all'utente: qui si obbliga a **chiedere**, non a
+   * **chiedere all'utente**.
+   *
+   * `active` non si tocca da qui: ha le sue due porte.
+   */
+  reviseRecurringRule(id: string, previewed: ConfirmedPreview): RecurringRuleWrite
+
+  /**
+   * Spegne una regola. **Va sempre**, non ha condizioni e non ha esito da
+   * controllare: e' l'unica direzione che non puo' generare niente, ed e' la
+   * risposta che `planRecurringRuleDeletion` suggerisce quando cancellare non
+   * si puo'.
+   *
+   * `null` se l'id non esiste. Spegnere una regola gia' spenta non scrive.
+   */
+  deactivateRecurringRule(id: string): RecurringRule | null
+
+  /**
+   * Riaccende una regola, e **riscrive importo e calendario dall'anteprima**,
+   * come `reviseRecurringRule`.
+   *
+   * Ha il pedaggio perche' e' il terzo innesco della generazione retroattiva, e
+   * il piu' silenzioso: una regola spenta da tre mesi ha il segnaposto fermo a
+   * tre mesi fa, e riaccenderla riapre la finestra su tutto l'intervallo. Chi
+   * la riaccende si aspetta "da adesso in poi" e otterrebbe novanta spese.
+   */
+  reactivateRecurringRule(id: string, previewed: ConfirmedPreview): RecurringRuleWrite
 
   /**
    * Cancella davvero una regola, e **solo se non ha mai generato nessuna
@@ -563,6 +668,31 @@ function sameBudget(a: Budget, b: Budget): boolean {
     a.createdAt === b.createdAt &&
     a.updatedAt === b.updatedAt
   )
+}
+
+/**
+ * I campi che una `RecurrenceDraft` detta a una regola: importo e calendario.
+ *
+ * `lastMaterializedDate` **non e' qui**, ed e' deliberato. Nella bozza e' un
+ * ingresso — serve a `materializationWindow` per sapere da dove aprire — ma
+ * sulla regola e' il segnaposto del motore, e chi scrive dall'anteprima non e'
+ * il motore. Riscriverlo da qui vorrebbe dire far tornare indietro un
+ * segnaposto, cioe' rimaterializzare cio' che era gia' uscito. Che
+ * l'anteprima abbia usato **quello vero** lo garantisce `redeemPreview`
+ * confrontandolo prima di lasciar scrivere.
+ */
+function ruleShape(draft: RecurrenceDraft): Omit<
+  RecurringRule,
+  'id' | 'createdAt' | 'updatedAt' | 'categoryId' | 'active' | 'note' | 'lastMaterializedDate'
+> {
+  return {
+    amountCents: draft.amountCents,
+    cadence: draft.cadence,
+    interval: draft.interval,
+    startDate: draft.startDate,
+    ...(draft.anchorDay !== undefined ? { anchorDay: draft.anchorDay } : {}),
+    ...(draft.endDate !== undefined ? { endDate: draft.endDate } : {}),
+  }
 }
 
 function replace<T extends { readonly id: string }>(list: readonly T[], record: T): T[] {
@@ -900,6 +1030,47 @@ export async function openRepository(
     return rule
   }
 
+  /**
+   * Il corpo comune di `reviseRecurringRule` e `reactivateRecurringRule`: la
+   * stessa scrittura, con l'unica differenza che l'una accende e l'altra lascia
+   * `active` com'e'.
+   *
+   * Il segnaposto della regola **non si tocca** e viene confrontato con quello
+   * su cui l'anteprima ha aperto la finestra: se una materializzazione e'
+   * passata nel frattempo, i numeri annunciati non descrivono piu' la finestra
+   * vera e si rifiuta con `'moved-on'`. E' la stessa guardia della mezzanotte
+   * vista dall'altro estremo dell'intervallo — l'anteprima e' un'istantanea, e
+   * un'istantanea vale nell'istante in cui e' stata presa.
+   */
+  function rewriteFromPreview(
+    id: string,
+    previewed: ConfirmedPreview,
+    activate: boolean,
+  ): RecurringRuleWrite {
+    const current = observable.get().recurringRules.find((r) => r.id === id)
+    if (current === undefined) return { ok: false, reason: 'unknown' }
+    const redeemed = redeemPreview(
+      previewed,
+      localInstant(readInstant()).date,
+      current.lastMaterializedDate ?? null,
+    )
+    if (!redeemed.ok) return redeemed
+    // `endDate` e `anchorDay` si tolgono prima di rimettere: la bozza puo'
+    // averli cancellati, e uno spread non cancella niente. Con
+    // `exactOptionalPropertyTypes` scrivere `endDate: undefined` non e' la
+    // stessa cosa che non scriverlo, e il campo resterebbe nel record.
+    const { anchorDay: _anchor, endDate: _end, ...rest } = current
+    return {
+      ok: true,
+      rule: commitRule({
+        ...rest,
+        ...ruleShape(redeemed.draft),
+        ...(activate ? { active: true } : {}),
+        updatedAt: clock(),
+      }),
+    }
+  }
+
   return {
     getState: observable.get,
     subscribe: observable.subscribe,
@@ -1040,48 +1211,54 @@ export async function openRepository(
       return updated
     },
 
-    addRecurringRule(input) {
-      assertCents(input.amountCents, 'amountCents')
-      assertDate(input.startDate, 'startDate')
-      if (!Number.isInteger(input.interval) || input.interval < 1) {
-        throw new RangeError(`interval: atteso un intero >= 1, ricevuto ${input.interval}`)
-      }
+    addRecurringRule(input, previewed) {
+      // Il giorno civile si legge **adesso**, dallo stesso orologio da cui lo
+      // legge `addExpense`, e una volta sola: e' il termine di paragone della
+      // guardia, e chiederlo due volte vorrebbe dire poter cadere fra le due
+      // letture — cioe' il difetto che questa guardia esiste per prendere.
+      const redeemed = redeemPreview(previewed, localInstant(readInstant()).date, null)
+      if (!redeemed.ok) return redeemed
       const timestamp = clock()
-      return commitRule({
-        id: makeId(),
-        createdAt: timestamp,
-        updatedAt: timestamp,
-        amountCents: input.amountCents,
-        categoryId: input.categoryId,
-        cadence: input.cadence,
-        interval: input.interval,
-        startDate: input.startDate,
-        active: true,
-        ...(input.note !== undefined ? { note: input.note } : {}),
-        ...(input.anchorDay !== undefined ? { anchorDay: input.anchorDay } : {}),
-        ...(input.endDate !== undefined ? { endDate: input.endDate } : {}),
-      })
+      return {
+        ok: true,
+        rule: commitRule({
+          ...ruleShape(redeemed.draft),
+          id: makeId(),
+          createdAt: timestamp,
+          updatedAt: timestamp,
+          categoryId: input.categoryId,
+          active: true,
+          ...(input.note !== undefined ? { note: input.note } : {}),
+        }),
+      }
     },
 
     updateRecurringRule(id, patch) {
       const current = observable.get().recurringRules.find((r) => r.id === id)
       if (!current) return null
-      if (patch.amountCents !== undefined) assertCents(patch.amountCents, 'amountCents')
       const note = patch.note === undefined ? current.note : (patch.note ?? undefined)
-      const anchorDay = patch.anchorDay === undefined ? current.anchorDay : (patch.anchorDay ?? undefined)
-      const endDate = patch.endDate === undefined ? current.endDate : (patch.endDate ?? undefined)
-      const { note: _n, anchorDay: _a, endDate: _e, ...rest } = current
+      const { note: _note, ...rest } = current
       return commitRule({
         ...rest,
-        ...(patch.amountCents !== undefined ? { amountCents: patch.amountCents } : {}),
         ...(patch.categoryId !== undefined ? { categoryId: patch.categoryId } : {}),
-        ...(patch.interval !== undefined ? { interval: patch.interval } : {}),
-        ...(patch.active !== undefined ? { active: patch.active } : {}),
         ...(note !== undefined ? { note } : {}),
-        ...(anchorDay !== undefined ? { anchorDay } : {}),
-        ...(endDate !== undefined ? { endDate } : {}),
         updatedAt: clock(),
       })
+    },
+
+    reviseRecurringRule(id, previewed) {
+      return rewriteFromPreview(id, previewed, false)
+    },
+
+    deactivateRecurringRule(id) {
+      const current = observable.get().recurringRules.find((r) => r.id === id)
+      if (!current) return null
+      if (!current.active) return current
+      return commitRule({ ...current, active: false, updatedAt: clock() })
+    },
+
+    reactivateRecurringRule(id, previewed) {
+      return rewriteFromPreview(id, previewed, true)
     },
 
     async deleteRecurringRule(id) {

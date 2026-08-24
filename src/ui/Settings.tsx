@@ -81,6 +81,8 @@ interface Props {
   readonly ready: boolean
   readonly onEditBudget: () => void
   readonly onNewRule: () => void
+  /** Apre una spesa fissa gia' scritta: modifica, spegnimento, cancellazione. */
+  readonly onEditRule: (rule: RecurringRule) => void
   readonly onExport: () => void
   /**
    * Rimette la guida davanti. **Cancella** `onboardingCompletedAt` invece di
@@ -108,6 +110,7 @@ export function Settings({
   ready,
   onEditBudget,
   onNewRule,
+  onEditRule,
   onExport,
   onReplayGuide,
 }: Props) {
@@ -201,6 +204,7 @@ export function Settings({
         day={day}
         ready={ready}
         onNew={onNewRule}
+        onPick={onEditRule}
       />
 
       <section class="prefs__group" aria-labelledby="prefs-data">

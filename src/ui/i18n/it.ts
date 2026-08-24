@@ -429,6 +429,10 @@ export const it = {
   // vede anche perche' non e' nel totale.
   'fixed.later': 'parte: {day}',
   'fixed.ended': 'finita: {day}',
+  // Una regola spenta resta nell'elenco e si legge per intero: e' l'unico dei
+  // tre motivi che si cambia con un tap, quindi e' anche l'unico che deve
+  // portare a qualcosa.
+  'fixed.off': 'spenta',
 
   /* ogni quanto scatta */
   'cad.daily.one': 'ogni giorno',
@@ -444,9 +448,15 @@ export const it = {
    * volta e vale per mesi, quindi si sceglie e poi si salva, come il budget.
    */
   'rule.label': 'Nuova spesa fissa',
+  'rule.label.edit': 'Spesa fissa',
   'rule.hint.empty': 'Quanto esce ogni volta?',
   'rule.hint.category': 'Scegli una categoria',
   'rule.hint.check': 'Controlla ogni quanto e da quando, poi tocca Crea',
+  'rule.hint.edit': 'Cambia quello che serve, poi tocca Salva',
+  // Riaccendere e' il terzo innesco della generazione retroattiva (ADR 017), e
+  // il piu' silenzioso: chi lo fa si aspetta "da adesso" e puo' trovarsi mesi
+  // di arretrati. La riga in cima lo dice **prima** che il piede lo conti.
+  'rule.hint.on': 'Guarda cosa succede quando la riaccendi',
   'rule.hint.failed': 'Non sono riuscito a creare la regola. Tocca di nuovo Crea.',
   'rule.hint.max': 'Importo massimo raggiunto',
   'rule.cadence': 'Ogni quanto',
@@ -491,9 +501,54 @@ export const it = {
   // delle tre che si legge sempre.
   'rule.save.back.one': 'Crea 1 spesa · {total}',
   'rule.save.back.other': 'Crea {count} spese · {total}',
+  'rule.save.edit': 'Salva',
+  'rule.save.on': 'Riattiva',
+  // Una regola gia' in pari: `count: 0` qui non vuol dire "parte piu' avanti",
+  // vuol dire "non c'e' niente da recuperare". Dire "Prima spesa: 1 gennaio"
+  // sarebbe falso — quella spesa e' nello Storico da mesi.
+  'rule.preview.settled': 'Non c’è niente da recuperare.',
+
+  /* --- quando la scrittura dice di no ------------------------------------- *
+   *
+   * Nessuno dei tre e' un errore dell'utente: sono numeri cambiati sotto la
+   * schermata. Quindi ognuno dice **cosa e' cambiato** e che i numeri **sono
+   * gia' rifatti** — un rifiuto che annuncia solo il no lascerebbe davanti a un
+   * bottone spento senza una mossa da fare.
+   */
+  // La mezzanotte. "Ieri" si scrive solo sapendo anche qual e' oggi: il rifiuto
+  // porta tutti e due i giorni, e {day} e' il primo letto rispetto al secondo.
+  'rule.refused.stale':
+    'I numeri erano di {day}: dopo la mezzanotte non sono più quelli. Li ho rifatti qui sotto — ricontrolla e conferma.',
+  'rule.refused.moved':
+    'Nel frattempo questa spesa fissa ne ha già create alcune. I numeri qui sotto sono rifatti: ricontrolla e conferma.',
+  'rule.refused.gone': 'Questa spesa fissa non c’è più. Chiudi, e guarda l’elenco.',
+
+  /* --- spegnere, cancellare ----------------------------------------------- *
+   *
+   * "Disattiva" non ha una conferma davanti di proposito: e' l'uscita che il
+   * rifiuto della cancellazione suggerisce, e mettere un ostacolo davanti
+   * all'uscita di sicurezza la renderebbe scomoda proprio quando serve.
+   */
+  'rule.deactivate': 'Disattiva',
+  'rule.delete': 'Cancella la spesa fissa',
+  'rule.delete.note': 'Si può solo finché non ha creato nessuna spesa.',
+  // Il rifiuto arriva **prima** del bottone, con il numero vero dentro, e dice
+  // anche cosa fare invece: e' `planRecurringRuleDeletion` chiamato prima di
+  // disegnare, come per le categorie.
+  'rule.inUse.one':
+    'Ha già creato 1 spesa, quindi non si cancella: quella spesa resta nello Storico. Disattivala e non ne creerà altre.',
+  'rule.inUse.other':
+    'Ha già creato {count} spese, quindi non si cancella: restano nello Storico. Disattivala e non ne creerà altre.',
 
   'toast.ruleSaved': 'Spesa fissa creata: {name}',
   'toast.ruleSavedBack': '{name}: {count} spese create',
+  'toast.ruleUpdated': 'Spesa fissa aggiornata: {name}',
+  'toast.ruleOff': '{name}: non creerà altre spese',
+  'toast.ruleOn': '{name}: torna a creare spese',
+  'toast.ruleOnBack': '{name}: riattivata, {count} spese create',
+  'toast.ruleDeleted': 'Spesa fissa cancellata: {name}',
+  'toast.ruleInUse': 'Ha già creato delle spese: si può solo disattivare',
+  'toast.ruleFailed': 'Non ci sono riuscito. Riprova.',
 
   /* --- una spesa che viene da una regola ---------------------------------- */
   // Discreto, non un avviso: e' un'informazione su **da dove arriva** quella

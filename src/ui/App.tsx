@@ -5,7 +5,7 @@ import { activeCategories, archivedCategories, planCategoryDeletion } from '../c
 import { isLive } from '../core/stats'
 import type { Repository } from '../core/repository'
 import { nowTimestamp } from '../core/types'
-import type { BudgetPeriod, Category, Expense, Language } from '../core/types'
+import type { BudgetPeriod, Category, Expense, Language, RecurringRule } from '../core/types'
 import { AddSheet } from './AddSheet'
 import type { SaveInput } from './AddSheet'
 import { BackupNudge } from './BackupNudge'
@@ -22,7 +22,9 @@ import { Guide } from './Guide'
 import { History } from './History'
 import { Home } from './Home'
 import { Mark } from './Mark'
-import { previewMaterialization } from '../core/recurring-plan'
+import { planRecurringRuleDeletion, previewMaterialization } from '../core/recurring-plan'
+import type { RecurringRuleWrite } from '../core/recurring-plan'
+import { calendarChanged, refusalText } from './recurring-view'
 import { Settings } from './Settings'
 import { activePeriod, currentBudgetCents } from './budget-view'
 import { Toast } from './Toast'
@@ -47,7 +49,19 @@ import './App.css'
  * e spesa fissa — e non possono essere aperti insieme: `null` significa nessuno.
  */
 type SheetKind = 'add' | 'budget' | 'rule'
-type Sheet = { readonly kind: SheetKind; readonly leaving: boolean } | null
+/**
+ * `id` e' la regola che il foglio delle spese fisse sta modificando, `null`
+ * quando se ne sta creando una nuova (ed e' sempre `null` per gli altri due
+ * fogli). E' **l'id e non il record**: dopo una modifica il record e' cambiato,
+ * e un oggetto congelato qui dentro mostrerebbe lo stato di prima del tap
+ * mentre l'elenco dietro ha gia' quello nuovo — la stessa ragione per cui il
+ * foglio delle categorie tiene l'id.
+ */
+type Sheet = {
+  readonly kind: SheetKind
+  readonly id: string | null
+  readonly leaving: boolean
+} | null
 
 /**
  * La schermata attiva. E' stato, non una rotta: in standalone su iOS non esiste
@@ -296,7 +310,7 @@ export function App() {
     }, life)
   }
 
-  function openSheet(kind: SheetKind): void {
+  function openSheet(kind: SheetKind, id: string | null = null): void {
     // Il toast se ne va **prima** di tutto il resto. Da fisso stava sopra il
     // tastierino e "Annulla" cadeva dentro il tasto "9"; ora e' contenuto in
     // flusso e finisce dietro al foglio, quindi non e' piu' raggiungibile per
@@ -308,7 +322,7 @@ export function App() {
     refreshDay()
     clearTimeout(closeTimer.current)
     setSession((current) => current + 1)
-    setSheet({ kind, leaving: false })
+    setSheet({ kind, id, leaving: false })
   }
 
   function closeSheet(): void {
@@ -381,71 +395,247 @@ export function App() {
     return true
   }
 
+  /* --- le spese fisse ---------------------------------------------------- *
+   *
+   * Cinque porte, e la divisione non e' arbitraria (ADR 017): la generazione
+   * retroattiva ha **tre inneschi** — creare, spostare il calendario
+   * all'indietro, riaccendere una regola dormiente — e ognuno dei tre passa da
+   * un'anteprima calcolata adesso. Cambiare la categoria non genera niente e
+   * non paga niente; spegnere e' l'unica direzione che non puo' generare, e
+   * infatti non ha nemmeno una conferma davanti.
+   */
+
+  /** Il nome con cui una regola si chiama nei messaggi: la nota, o la categoria. */
+  function ruleName(rule: RecurringRule): string {
+    return rule.note ?? categoryOf(rule.categoryId)?.name ?? t('rule.label.edit')
+  }
+
   /**
-   * Crea una regola ricorrente, e **subito dopo la materializza**.
+   * Scrive una spesa fissa — creata, modificata o riaccesa — e **subito dopo la
+   * materializza**.
+   *
+   * ## Il permesso di scrivere si rifa' qui, con l'importo vero
+   *
+   * Il foglio calcola il proprio calendario con `amountCents: 1` per non rifare
+   * 9.728 occorrenze a ogni cifra, e quel calcolo porta con se' un permesso che
+   * autorizzerebbe a scrivere una regola da **0,01 €**. Quel permesso non arriva
+   * fin qui: la bozza che il foglio consegna e' fatta di soli campi, e
+   * l'anteprima che si spende e' **questa**, con l'importo vero dentro. Un
+   * calcolo per tap invece che per cifra, che e' esattamente cio' che la
+   * scorciatoia comprava.
+   *
+   * ## Perche' l'anteprima si calcola sul giorno della bozza e non su oggi
+   *
+   * Perche' e' l'unica differenza fra un rifiuto e un ricalcolo silenzioso.
+   * `draft.day` e' il giorno su cui il foglio ha annunciato i suoi numeri e su
+   * cui l'utente ha spuntato la casella; il repository legge il **proprio**
+   * giorno al momento di scrivere e confronta. Se fra le due letture e' passata
+   * la mezzanotte, la finestra si e' allargata di un giorno e la scrittura
+   * produrrebbe un'occorrenza in piu' di quelle dichiarate: rifiuta, e questa
+   * funzione restituisce le parole di quel no. Ricalcolando qui su "oggi",
+   * quella scrittura sarebbe passata — annunciando meno di quanto fa, cioe'
+   * l'unico verso che questo progetto ha dichiarato inaccettabile.
+   *
+   * `refreshDay()` sta **prima** e serve all'altra meta' del rimedio: il foglio
+   * si ridipinge sul giorno nuovo, quindi i numeri rifatti sono gia' sotto gli
+   * occhi nell'istante in cui il rifiuto compare, e la casella di conferma —
+   * che ha il giorno nella propria firma — si e' spenta da sola.
    *
    * ## Perche' la materializzazione e' qui e non solo all'avvio
    *
-   * `addRecurringRule` scrive la **regola**, non le spese: le occorrenze
-   * arretrate le genera `materializeRecurring`, che finora girava solo
-   * all'avvio e al risveglio. Senza questa chiamata, chi ha appena confermato
-   * "questa regola creera' 8 spese" chiuderebbe il foglio e non ne vedrebbe
-   * nessuna, fino alla prossima apertura dell'app: cioe' l'anteprima avrebbe
-   * detto il vero e la schermata l'avrebbe smentita.
+   * Le tre porte scrivono la **regola**, non le spese: le occorrenze arretrate
+   * le genera `materializeRecurring`, che finora girava solo all'avvio e al
+   * risveglio. Senza questa chiamata, chi ha appena confermato "questa regola
+   * creera' 8 spese" chiuderebbe il foglio e non ne vedrebbe nessuna fino alla
+   * prossima apertura dell'app: cioe' l'anteprima avrebbe detto il vero e la
+   * schermata l'avrebbe smentita.
    *
-   * ## Perche' non si aspetta
-   *
-   * Perche' e' una scrittura locale, e su una scrittura locale non si mette uno
-   * spinner. La regola e' gia' nel mirror quando questa funzione ritorna, e le
-   * spese arrivano a blocchi (`onCommitted` muove il mirror per ogni
-   * transazione, non alla fine): lo Storico si riempie mentre il foglio sta
-   * ancora scendendo. Se il disco non accetta, la scrittura finisce in
-   * `writeFailures` e l'avviso "esporta adesso" compare da solo — lo stesso
-   * canale di ogni altra scrittura, senza un secondo modo di dire la stessa
-   * cosa.
-   *
-   * `catch` vuoto e non `void` nudo: `materializeRecurring` **rifiuta** (una
-   * scrittura persa, un import passato nel frattempo), e un `void` senza catch
-   * sarebbe una unhandled rejection al primo catch-up interrotto. E' la stessa
-   * nota che `src/app/boot.ts` ha sulla sua chiamata.
-   *
-   * ## L'anteprima si rifa' qui, e non e' un doppione
-   *
-   * Serve al **toast**, non alla decisione: il foglio ha gia' chiesto conferma
-   * e ha gia' passato il suo controllo. Qui si vuole solo sapere se dire "creata"
-   * o "creata, con 8 spese", e chiederlo alla stessa funzione pura che ha
-   * prodotto la frase confermata e' l'unico modo perche' i due numeri non
-   * divergano.
+   * Non si aspetta, perche' e' una scrittura locale e su una scrittura locale
+   * non si mette uno spinner. Le spese arrivano a blocchi (`onCommitted` muove
+   * il mirror per ogni transazione, non alla fine): lo Storico si riempie mentre
+   * il foglio sta ancora scendendo. `catch` vuoto e non `void` nudo:
+   * `materializeRecurring` **rifiuta** (una scrittura persa, un import passato
+   * nel frattempo), e un `void` senza catch sarebbe una unhandled rejection al
+   * primo catch-up interrotto.
    */
-  function saveRule(draft: RuleDraft): boolean {
+  function saveRule(draft: RuleDraft): string | null {
     const repo = app.repo
-    if (!repo) return false
-    // Il foglio puo' essere rimasto aperto oltre la mezzanotte: "da oggi"
-    // dev'essere il giorno vero, o la regola nascerebbe gia' con un arretrato
-    // che nessuno ha confermato.
+    if (!repo) return t('rule.hint.failed')
     refreshDay()
-    const day = getAppState().day
-    const preview = previewMaterialization({ ...draft, interval: 1 }, day)
+    const target = ruleTarget
+    const preview = previewMaterialization(draft.recurrence, draft.day)
+    // Una bozza che il core non sa leggere: il foglio non la lascia arrivare
+    // fin qui (il bottone e' spento senza un'anteprima), e se ci arrivasse il
+    // messaggio direbbe comunque cosa fare invece di tacere.
+    if (!preview.ok) return t('rule.hint.failed')
+
+    const moved = target !== null && calendarChanged(target, draft.recurrence)
+    let write: RecurringRuleWrite
     try {
-      repo.addRecurringRule({ ...draft, interval: 1 })
+      if (target === null) {
+        write = repo.addRecurringRule({ categoryId: draft.categoryId }, preview.confirmed)
+      } else if (!target.active) {
+        write = repo.reactivateRecurringRule(target.id, preview.confirmed)
+      } else if (moved || preview.backdated) {
+        write = repo.reviseRecurringRule(target.id, preview.confirmed)
+      } else {
+        // Niente da riscrivere sul calendario: la porta con il pedaggio resta
+        // chiusa. Il pedaggio l'ha pagato il codice (l'anteprima qui sopra), e
+        // all'utente non e' costato niente — che e' il punto della divisione.
+        //
+        // La scorciatoia vale **solo se non c'e' niente di annunciato da
+        // proteggere**, ed e' per questo che `backdated` la spegne: e' l'unico
+        // ramo che non spende il permesso, quindi e' anche l'unico in cui la
+        // guardia della mezzanotte non scatterebbe. Con dell'arretrato
+        // dichiarato si passa comunque da `reviseRecurringRule` — che riscrive
+        // gli stessi valori, cioe' non cambia niente, ma **redime
+        // l'anteprima** e rifiuta se il giorno e' cambiato. Un no-op che paga
+        // il pedaggio costa una scrittura; saltarlo costerebbe un'occorrenza
+        // in piu' di quelle annunciate.
+        write = { ok: true, rule: target }
+      }
     } catch {
-      // Il foglio resta aperto con tutto quello che si e' scelto, e lo dice
-      // dove si riprova. Un toast qui finirebbe dietro al velo.
-      return false
+      // Un import sta sostituendo i dati. Il foglio resta aperto con tutto
+      // quello che si e' scelto, e lo dice dove si riprova: un toast qui
+      // finirebbe dietro al velo.
+      return t('rule.hint.failed')
     }
+    if (!write.ok) return refusalText(write, getAppState().day)
+
+    // La categoria e la nota passano dalla porta **senza pedaggio**: non
+    // entrano in nessuno dei numeri annunciati, quindi non hanno un permesso da
+    // spendere e non hanno un esito da controllare.
+    if (target !== null && draft.categoryId !== target.categoryId) {
+      try {
+        repo.updateRecurringRule(target.id, { categoryId: draft.categoryId })
+      } catch {
+        // Come sopra: la regola e' scritta, la categoria no. L'avviso delle
+        // scritture non arrivate al disco e' gia' l'unico canale che serve.
+      }
+    }
+
     closeSheet()
-    const category = categoryOf(draft.categoryId)
-    const name = category?.name ?? t('rule.label')
+    const name = ruleName({ ...write.rule, categoryId: draft.categoryId })
+    const back = preview.backdated
     showToast(
-      preview.ok && preview.backdated
-        ? t('toast.ruleSavedBack', { name, count: preview.count })
-        : t('toast.ruleSaved', { name }),
+      target === null
+        ? back
+          ? t('toast.ruleSavedBack', { name, count: preview.count })
+          : t('toast.ruleSaved', { name })
+        : !target.active
+          ? back
+            ? t('toast.ruleOnBack', { name, count: preview.count })
+            : t('toast.ruleOn', { name })
+          : back
+            ? t('toast.ruleSavedBack', { name, count: preview.count })
+            : t('toast.ruleUpdated', { name }),
     )
-    void repo.materializeRecurring(day).catch(() => {
+    void repo.materializeRecurring(getAppState().day).catch(() => {
       // Nessun canale nuovo: cio' che conta e' gia' in `writeFailures`, e
       // l'avviso in cima all'app lo mostra da solo.
     })
-    return true
+    return null
+  }
+
+  /**
+   * Spegne una regola. **Non chiede niente**, ed e' deliberato: e' l'unica
+   * direzione che non puo' generare una spesa, ed e' la via che il rifiuto
+   * della cancellazione suggerisce quando cancellare non si puo'. Una conferma
+   * davanti all'uscita di sicurezza la renderebbe scomoda proprio dove serve.
+   *
+   * Si annulla dal toast, come ogni altra azione di questa app. Riaccendere
+   * **passa dall'anteprima** — e' il terzo innesco — ma qui non c'e' niente da
+   * annunciare che non fosse gia' vero un istante fa: spegnere non muove il
+   * segnaposto, quindi la finestra che si riapre e' esattamente quella che la
+   * regola aveva prima del tap, e quelle occorrenze sarebbero uscite comunque.
+   */
+  function deactivateRule(): void {
+    const repo = app.repo
+    const target = ruleTarget
+    if (repo === null || target === null) return
+    const name = ruleName(target)
+    let off: RecurringRule | null
+    try {
+      off = repo.deactivateRecurringRule(target.id)
+    } catch {
+      showToast(t('toast.ruleFailed'))
+      return
+    }
+    closeSheet()
+    if (off === null) {
+      showToast(t('toast.ruleFailed'))
+      return
+    }
+    showToast(t('toast.ruleOff', { name }), {
+      label: t('toast.undo'),
+      run: () => reactivateRule(repo, target.id, name),
+    })
+  }
+
+  /**
+   * L'annullamento dello spegnimento: si rifa' l'anteprima **adesso** e si
+   * spende quella.
+   *
+   * La regola si rilegge dal mirror invece di riusare quella catturata nel
+   * toast: fra il tap e l'annullamento possono essere passati sei secondi, e in
+   * quei sei secondi un'altra materializzazione puo' aver mosso il segnaposto.
+   * Un'anteprima calcolata su un record vecchio verrebbe rifiutata con
+   * `'moved-on'`, che e' la risposta giusta ma inutile a chi sta solo disfacendo
+   * un tap.
+   */
+  function reactivateRule(repo: Repository, id: string, name: string): void {
+    const rule = repo.getState().recurringRules.find((r) => r.id === id)
+    if (rule === undefined) {
+      showToast(t('toast.ruleFailed'))
+      return
+    }
+    refreshDay()
+    const day = getAppState().day
+    const preview = previewMaterialization(rule, day)
+    if (!preview.ok) {
+      showToast(t('toast.ruleFailed'))
+      return
+    }
+    let write: RecurringRuleWrite
+    try {
+      write = repo.reactivateRecurringRule(id, preview.confirmed)
+    } catch {
+      showToast(t('toast.ruleFailed'))
+      return
+    }
+    if (!write.ok) {
+      showToast(refusalText(write, getAppState().day))
+      return
+    }
+    showToast(t('toast.ruleOn', { name }))
+    void repo.materializeRecurring(day).catch(() => {})
+  }
+
+  /**
+   * Cancella davvero. Il foglio offre questo bottone **solo** quando
+   * `planRecurringRuleDeletion` ha gia' detto di si' sul mirror; qui il permesso
+   * lo rida' il disco dentro la transazione, che e' l'unico a saperlo con
+   * certezza (ADR 008).
+   *
+   * Nessun "Annulla": ricrearla produrrebbe un record con un altro id, cioe'
+   * un'altra regola. Il foglio lo dice prima di far toccare il bottone, che e'
+   * il momento in cui l'informazione serve — e lo puo' dire proprio perche' la
+   * cancellazione e' possibile **solo** quando non c'e' ancora nessuna storia da
+   * perdere.
+   */
+  function deleteRule(): void {
+    const repo = app.repo
+    const target = ruleTarget
+    if (repo === null || target === null) return
+    const name = ruleName(target)
+    closeSheet()
+    void repo
+      .deleteRecurringRule(target.id)
+      .then((result) => {
+        if (result.ok) showToast(t('toast.ruleDeleted', { name }))
+        else showToast(t(result.reason === 'in-use' ? 'toast.ruleInUse' : 'toast.ruleFailed'))
+      })
+      .catch(() => showToast(t('toast.ruleFailed')))
   }
 
   /** Apre le azioni su una spesa. Il tap sulla riga e' l'affordance. */
@@ -786,6 +976,34 @@ export function App() {
     picked !== null ||
     panel !== null
 
+  /**
+   * La regola che il foglio delle spese fisse sta mostrando, **riletta dal
+   * mirror a ogni render**. `null` mentre se ne crea una nuova.
+   *
+   * Riletta e non congelata all'apertura: il segnaposto puo' avanzare mentre il
+   * foglio e' aperto — una materializzazione al risveglio, un altro contesto —
+   * e l'anteprima dentro al foglio deve annunciare la finestra vera, non quella
+   * di quando lo si e' aperto.
+   */
+  const ruleTarget =
+    sheet?.kind !== 'rule' || sheet.id === null
+      ? null
+      : app.data?.recurringRules.find((rule) => rule.id === sheet.id) ?? null
+
+  /**
+   * Il permesso di cancellare **una regola**, chiesto prima di mostrare il
+   * bottone, esattamente come per le categorie: il rifiuto porta con se' il
+   * numero ("ha gia' creato 8 spese"), e con quel numero si scrive una frase
+   * che dice anche cosa fare invece. Le spese contano tutte, cancellate
+   * comprese: un soft delete resta nello Storico e nell'export, quindi il
+   * riferimento e' vivo.
+   */
+  const ruleDeletion = useMemo(() => {
+    const data = app.data
+    if (data === null || ruleTarget === null) return null
+    return planRecurringRuleDeletion(data.recurringRules, data.expenses, { id: ruleTarget.id })
+  }, [app.data, ruleTarget])
+
   /** La categoria che il foglio sta mostrando, **riletta dal mirror** a ogni render. */
   const catTarget = catSheet?.id === undefined || catSheet.id === null ? null : categoryOf(catSheet.id) ?? null
 
@@ -941,6 +1159,7 @@ export function App() {
               ready={app.repo !== null}
               onEditBudget={() => openSheet('budget')}
               onNewRule={() => openSheet('rule')}
+              onEditRule={(rule) => openSheet('rule', rule.id)}
               onExport={exportNow}
               onReplayGuide={replayGuide}
             />
@@ -1000,9 +1219,13 @@ export function App() {
         <RuleSheet
           key={session}
           categories={categories}
+          target={ruleTarget}
+          deletion={ruleDeletion}
           day={app.day}
           leaving={sheet.leaving}
           onSave={saveRule}
+          onDeactivate={deactivateRule}
+          onDelete={deleteRule}
           onClose={closeSheet}
         />
       ) : null}

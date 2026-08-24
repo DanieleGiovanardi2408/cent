@@ -90,3 +90,53 @@ export function giornoDichiarato(): string {
   const pezzo = (tipo: string): string => parti.find((p) => p.type === tipo)?.value ?? ''
   return `${pezzo('year')}-${pezzo('month')}-${pezzo('day')}`
 }
+
+/**
+ * L'istante che, **nel fuso dichiarato**, e' quel giorno a quell'ora.
+ *
+ * Serve alla prova della mezzanotte, che ha bisogno di due istanti a cavallo
+ * delle 00:00 senza aspettare che arrivino: si fissa l'orologio a 23:59:30, si
+ * apre il foglio, si sposta l'orologio a 00:00:10 e si tocca il bottone.
+ *
+ * L'offset non si scrive a mano (`+02:00` e' vero ad agosto e falso a gennaio,
+ * e questo file non deve sapere in che stagione gira): si chiede al fuso
+ * dichiarato quanto vale **in quell'istante**. Due passate perche' la prima
+ * risposta si legge su un istante approssimato, e a cavallo di un cambio d'ora
+ * l'offset del giorno prima non e' quello del giorno dopo.
+ */
+export function istanteLocale(giorno: string, ora: string): Date {
+  const [anno, mese, giornoDelMese] = giorno.split('-').map(Number)
+  const [ore, minuti, secondi] = ora.split(':').map(Number)
+  const ingenuo = Date.UTC(
+    anno ?? 0,
+    (mese ?? 1) - 1,
+    giornoDelMese ?? 1,
+    ore ?? 0,
+    minuti ?? 0,
+    secondi ?? 0,
+  )
+  const scarto = (quando: number): number => {
+    const parti = new Intl.DateTimeFormat('en-CA', {
+      timeZone: fuso(),
+      hour12: false,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    }).formatToParts(new Date(quando))
+    const pezzo = (tipo: string): number => Number(parti.find((p) => p.type === tipo)?.value ?? '0')
+    const comeUtc = Date.UTC(
+      pezzo('year'),
+      pezzo('month') - 1,
+      pezzo('day'),
+      pezzo('hour') % 24,
+      pezzo('minute'),
+      pezzo('second'),
+    )
+    return comeUtc - quando
+  }
+  const primo = ingenuo - scarto(ingenuo)
+  return new Date(ingenuo - scarto(primo))
+}

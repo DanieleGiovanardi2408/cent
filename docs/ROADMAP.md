@@ -684,12 +684,10 @@ codice: e' cambiato cio' che gli sta intorno.
   punti gia' scorre. **Non e' un TODO: e' una decisione chiusa.** Se un giorno
   servira' il trimestrale, il motore c'e' gia' e manca solo il selettore.
 - **Modifica e cancellazione** sono la consegna successiva della stessa fase.
-- **L'anteprima non e' imposta dal tipo.** `addRecurringRule` e' sincrona e non
-  puo' obbligare nessuno a chiamare `previewMaterialization` prima: e' disciplina,
-  non tipo. Renderlo irrappresentabile richiederebbe un `addRecurringRule`
-  asincrono che riceve l'anteprima confermata. Non e' stato fatto perche' non era
-  nel brief — ma e' la mossa che questo progetto fa di solito, e va decisa invece
-  che dimenticata.
+- ~~**L'anteprima non e' imposta dal tipo.**~~ **Chiuso nella seconda consegna.**
+  `addRecurringRule` riceve una `ConfirmedPreview`, che si ottiene solo da
+  `previewMaterialization`, e resta sincrona: l'asincronia non serviva. Vedi
+  [ADR 017](adr/017-un-anteprima-e-un-istantanea.md).
 
 ## Verificabili solo sul dispositivo — una categoria, non un debito
 

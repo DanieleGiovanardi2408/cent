@@ -18,6 +18,7 @@ import { openRepository } from './repository'
 import type { Persistence, WriteBatch } from './persistence'
 import { recurringExpenseId } from './recurrence'
 import {
+  creaRegola,
   makeBudget,
   makeCategory,
   makeExpense,
@@ -223,7 +224,7 @@ describe('due contesti sullo stesso database', () => {
       newId: sequentialIds('pwa'),
       recurrenceChunkSize: 5,
     })
-    const regola = pwa.addRecurringRule({
+    const regola = creaRegola(pwa, {
       amountCents: 500,
       categoryId: 'cat-1',
       cadence: 'daily',
@@ -292,7 +293,7 @@ describe('due contesti sullo stesso database', () => {
       now: tickingClock(),
       newId: sequentialIds('a'),
     })
-    a.addRecurringRule({
+    creaRegola(a, {
       amountCents: 90_000,
       categoryId: 'cat-1',
       cadence: 'monthly',
@@ -352,7 +353,7 @@ describe('due contesti sullo stesso database', () => {
       newId: sequentialIds('prima'),
       recurrenceChunkSize: 5,
     })
-    const regola = prima.addRecurringRule({
+    const regola = creaRegola(prima, {
       amountCents: 500,
       categoryId: 'cat-1',
       cadence: 'daily',
@@ -667,7 +668,7 @@ describe('morte a meta su un database vero', () => {
       now: tickingClock(),
       newId: sequentialIds('setup'),
     })
-    const regola = primo.addRecurringRule({
+    const regola = creaRegola(primo, {
       amountCents: 500,
       categoryId: 'cat-1',
       cadence: 'daily',

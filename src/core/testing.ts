@@ -8,8 +8,12 @@
  * perche' il tipo li richiede.
  */
 
+import { today } from './date'
 import type { IsoDate } from './date'
 import type { DefaultCategoryNames } from './defaults'
+import { previewMaterialization } from './recurring-plan'
+import type { RecurrenceDraft } from './recurring-plan'
+import type { Repository } from './repository'
 import type { Budget, Category, Expense, RecurringRule, Settings } from './types'
 import { SETTINGS_ID } from './types'
 import { SCHEMA_VERSION } from './schema'
@@ -123,4 +127,55 @@ export function makeSettings(fields: Partial<Settings> = {}): Settings {
     schemaVersion: SCHEMA_VERSION,
     ...fields,
   }
+}
+
+/** Una regola come la si scrive: calendario, piu' i due campi che l'anteprima non guarda. */
+export type BozzaRegola = RecurrenceDraft & { readonly categoryId: string; readonly note?: string }
+
+/**
+ * Creare una regola costa a un test esattamente quello che costa alla UI:
+ * si chiede l'anteprima, e si spende il permesso che restituisce.
+ *
+ * ## Il ritentativo non e' pigrizia
+ *
+ * Il giorno con cui il test calcola l'anteprima e quello che il repository
+ * legge al momento di scrivere sono **due letture d'orologio**, e fra le due
+ * puo' passare la mezzanotte. Quando succede la scrittura rifiuta — e' il suo
+ * mestiere, ed e' l'oggetto di questa consegna — e la cosa giusta da fare e'
+ * ricalcolare, che e' anche cio' che la UI dovra' fare. Senza, questa suite
+ * avrebbe un test che fallisce una volta ogni qualche anno alle 00:00: la
+ * mezzanotte in questo progetto ha gia' morso due volte proprio cosi'.
+ */
+export function creaRegola(repo: Repository, bozza: BozzaRegola, giorno?: IsoDate): RecurringRule {
+  for (let tentativo = 0; tentativo < 2; tentativo += 1) {
+    const anteprima = previewMaterialization(bozza, giorno ?? today())
+    if (!anteprima.ok) throw new Error(`anteprima rifiutata: ${anteprima.reason}`)
+    const esito = repo.addRecurringRule(
+      {
+        categoryId: bozza.categoryId,
+        ...(bozza.note !== undefined ? { note: bozza.note } : {}),
+      },
+      anteprima.confirmed,
+    )
+    if (esito.ok) return esito.rule
+    if (esito.reason !== 'stale-preview') throw new Error(`scrittura rifiutata: ${esito.reason}`)
+  }
+  throw new Error('due anteprime di fila rifiutate: non e la mezzanotte')
+}
+
+/** Come sopra, per la modifica: il calendario nuovo passa dalla stessa porta. */
+export function rivediRegola(
+  repo: Repository,
+  id: string,
+  bozza: RecurrenceDraft,
+  giorno?: IsoDate,
+): RecurringRule {
+  for (let tentativo = 0; tentativo < 2; tentativo += 1) {
+    const anteprima = previewMaterialization(bozza, giorno ?? today())
+    if (!anteprima.ok) throw new Error(`anteprima rifiutata: ${anteprima.reason}`)
+    const esito = repo.reviseRecurringRule(id, anteprima.confirmed)
+    if (esito.ok) return esito.rule
+    if (esito.reason !== 'stale-preview') throw new Error(`scrittura rifiutata: ${esito.reason}`)
+  }
+  throw new Error('due anteprime di fila rifiutate: non e la mezzanotte')
 }

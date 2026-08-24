@@ -13,8 +13,9 @@ import {
   openRepository,
 } from './repository'
 import type { Repository } from './repository'
+import { previewMaterialization } from './recurring-plan'
 import type { Persistence } from './persistence'
-import { sequentialIds, TEST_CATEGORY_NAMES, tickingClock } from './testing'
+import { creaRegola, rivediRegola, sequentialIds, TEST_CATEGORY_NAMES, tickingClock } from './testing'
 import type { DataSet } from './types'
 
 interface Fixture {
@@ -338,13 +339,20 @@ describe("l orario dell inserimento", () => {
 
   it('le spese generate da una ricorrenza non hanno orario: nessuno le ha inserite', async () => {
     const { repo } = await apriAlle(alle2040())
-    repo.addRecurringRule({
-      amountCents: 900,
-      categoryId: 'cat-1',
-      cadence: 'daily',
-      interval: 1,
-      startDate: '2026-08-20',
-    })
+    // L'orologio del repository e' fermo al 22 agosto: l'anteprima va calcolata
+    // **su quel giorno**, o la scrittura rifiuta con `stale-preview`. E' la
+    // guardia che fa il suo mestiere, non un fastidio del test.
+    creaRegola(
+      repo,
+      {
+        amountCents: 900,
+        categoryId: 'cat-1',
+        cadence: 'daily',
+        interval: 1,
+        startDate: '2026-08-20',
+      },
+      '2026-08-22',
+    )
     await repo.materializeRecurring()
 
     const generate = repo.getState().expenses.filter((e) => e.source === 'recurring')
@@ -700,7 +708,7 @@ describe('categorie: cancellare davvero', () => {
   it('una regola ricorrente la trattiene: genererebbe orfane per sempre', async () => {
     const { repo } = await open()
     const svago = repo.getState().categories.find((c) => c.name === 'Leisure')
-    repo.addRecurringRule({
+    creaRegola(repo, {
       amountCents: 90_000,
       categoryId: svago?.id ?? '',
       cadence: 'monthly',
@@ -780,7 +788,7 @@ describe('ricorrenti: cancellare davvero una regola', () => {
 
   it('una regola che non ha mai generato niente si cancella, dal mirror e dal disco', async () => {
     const { repo, disk } = await open()
-    const regola = repo.addRecurringRule(nuovaRegola)
+    const regola = creaRegola(repo, nuovaRegola)
     await repo.flush()
 
     const esito = await repo.deleteRecurringRule(regola.id)
@@ -791,7 +799,7 @@ describe('ricorrenti: cancellare davvero una regola', () => {
 
   it('dopo la materializzazione non si cancella piu, e le spese restano', async () => {
     const { repo, disk } = await open()
-    const regola = repo.addRecurringRule(nuovaRegola)
+    const regola = creaRegola(repo, nuovaRegola)
     await repo.flush()
     await repo.materializeRecurring('2026-08-22')
 
@@ -810,18 +818,18 @@ describe('ricorrenti: cancellare davvero una regola', () => {
 
   it('disattivare si puo sempre, anche quando cancellare non si puo', async () => {
     const { repo } = await open()
-    const regola = repo.addRecurringRule(nuovaRegola)
+    const regola = creaRegola(repo, nuovaRegola)
     await repo.flush()
     await repo.materializeRecurring('2026-08-22')
 
     expect((await repo.deleteRecurringRule(regola.id)).ok).toBe(false)
-    const spenta = repo.updateRecurringRule(regola.id, { active: false })
+    const spenta = repo.deactivateRecurringRule(regola.id)
     expect(spenta?.active).toBe(false)
   })
 
   it('una spesa generata e poi cancellata trattiene comunque', async () => {
     const { repo, disk } = await open()
-    const regola = repo.addRecurringRule(nuovaRegola)
+    const regola = creaRegola(repo, nuovaRegola)
     await repo.flush()
     await repo.materializeRecurring('2026-08-22')
     const generata = disk.expenses.find((e) => e.recurringId === regola.id)
@@ -834,7 +842,7 @@ describe('ricorrenti: cancellare davvero una regola', () => {
 
   it('il permesso lo da il disco: una spesa materializzata da un altro contesto conta', async () => {
     const { repo, disk } = await open()
-    const regola = repo.addRecurringRule(nuovaRegola)
+    const regola = creaRegola(repo, nuovaRegola)
     await repo.flush()
 
     const secondo = await openRepository(createMemoryPersistence(disk), {
@@ -992,7 +1000,7 @@ describe('budget: quali record chiudere lo decide il disco', () => {
 describe('ricorrenze dal repository', () => {
   it('materializza, aggiorna il mirror e non duplica alle aperture successive', async () => {
     const { repo, disk } = await open()
-    repo.addRecurringRule({
+    creaRegola(repo, {
       amountCents: 90_000,
       categoryId: 'cat-1',
       cadence: 'monthly',
@@ -1018,7 +1026,7 @@ describe('ricorrenze dal repository', () => {
 
   it('riaprendo l app il giorno dopo aggiunge solo il mancante', async () => {
     const { repo, disk } = await open()
-    repo.addRecurringRule({
+    creaRegola(repo, {
       amountCents: 500,
       categoryId: 'cat-1',
       cadence: 'daily',
@@ -1036,7 +1044,7 @@ describe('ricorrenze dal repository', () => {
 
   it('una spesa generata si modifica e si cancella senza toccare la regola', async () => {
     const { repo } = await open()
-    const regola = repo.addRecurringRule({
+    const regola = creaRegola(repo, {
       amountCents: 500,
       categoryId: 'cat-1',
       cadence: 'daily',
@@ -1057,7 +1065,7 @@ describe('ricorrenze dal repository', () => {
 
   it('disattivare una regola ferma le occorrenze future', async () => {
     const { repo } = await open()
-    const regola = repo.addRecurringRule({
+    const regola = creaRegola(repo, {
       amountCents: 500,
       categoryId: 'cat-1',
       cadence: 'daily',
@@ -1065,7 +1073,7 @@ describe('ricorrenze dal repository', () => {
       startDate: '2026-08-20',
     })
     await repo.materializeRecurring('2026-08-21')
-    repo.updateRecurringRule(regola.id, { active: false })
+    repo.deactivateRecurringRule(regola.id)
     await repo.materializeRecurring('2026-08-30')
     expect(repo.getState().expenses).toHaveLength(2)
   })
@@ -1076,7 +1084,7 @@ describe('ricorrenze dal repository', () => {
     // davvero e' quello su due repository distinti in `idb.test.ts`: li' il
     // lock non c'e' proprio.
     const { repo, disk } = await open()
-    repo.addRecurringRule({
+    creaRegola(repo, {
       amountCents: 500,
       categoryId: 'cat-1',
       cadence: 'daily',
@@ -1101,7 +1109,7 @@ describe('ricorrenze dal repository', () => {
 
   it('la spesa generata e corretta dall utente sopravvive al catch-up successivo', async () => {
     const { repo, disk } = await open()
-    repo.addRecurringRule({
+    creaRegola(repo, {
       amountCents: 90_000,
       categoryId: 'cat-1',
       cadence: 'monthly',
@@ -1130,7 +1138,7 @@ describe('ricorrenze dal repository', () => {
 
   it('la spesa generata e cancellata dall utente non riappare al catch-up successivo', async () => {
     const { repo, disk } = await open()
-    repo.addRecurringRule({
+    creaRegola(repo, {
       amountCents: 500,
       categoryId: 'cat-1',
       cadence: 'daily',
@@ -1155,17 +1163,22 @@ describe('ricorrenze dal repository', () => {
     expect(disk.expenses).toHaveLength(3)
   })
 
-  it('rifiuta una regola con intervallo assurdo prima di salvarla', async () => {
+  it('una regola con intervallo assurdo non arriva nemmeno a un permesso di scrittura', async () => {
+    // Prima questo controllo stava in `addRecurringRule`, che lanciava. Adesso
+    // il calendario entra in una regola **solo** passando dall'anteprima,
+    // quindi il controllo sta li' — e non lancia: risponde. E' la stessa
+    // ragione per cui non lanciava gia' prima, cioe' che questa funzione gira
+    // mentre l'utente sta ancora scrivendo i campi.
     const { repo } = await open()
-    expect(() =>
-      repo.addRecurringRule({
-        amountCents: 500,
-        categoryId: 'cat-1',
-        cadence: 'daily',
-        interval: 0,
-        startDate: '2026-08-20',
-      }),
-    ).toThrow(RangeError)
+    const anteprima = previewMaterialization(
+      { amountCents: 500, cadence: 'daily', interval: 0, startDate: '2026-08-20' },
+      today(),
+    )
+    expect(anteprima.ok).toBe(false)
+    expect(anteprima.ok === false && anteprima.reason).toContain('interval')
+    // E senza `ok: true` non c'e' nessun `confirmed` da passare: la scrittura
+    // di una regola con `interval: 0` non e' vietata, e' inesprimibile.
+    expect(repo.getState().recurringRules).toHaveLength(0)
   })
 })
 
@@ -1178,7 +1191,7 @@ describe('export e import dal repository', () => {
     const daCancellare = repo.addExpense({ amountCents: 400, categoryId: cat, date: '2026-08-21' })
     repo.deleteExpense(daCancellare.id)
     repo.setBudget({ period: 'monthly', amountCents: 100_000, effectiveFrom: '2026-08-01' })
-    repo.addRecurringRule({
+    creaRegola(repo, {
       amountCents: 90_000,
       categoryId: cat,
       cadence: 'monthly',
@@ -1350,7 +1363,7 @@ describe('un catch-up che muore a meta', () => {
       onWriteError: (error) => errori.push(error),
       recurrenceChunkSize: 5,
     })
-    repo.addRecurringRule({
+    creaRegola(repo, {
       amountCents: 500,
       categoryId: 'cat-1',
       cadence: 'daily',
@@ -1383,7 +1396,7 @@ describe('due contesti, mai simultanei', () => {
   it('un contesto con il mirror vecchio non riaccende una regola spenta altrove', async () => {
     const disk = emptyDisk()
     const a = await open(disk, 'a')
-    const regola = a.repo.addRecurringRule({
+    const regola = creaRegola(a.repo, {
       amountCents: 90_000,
       categoryId: 'cat-1',
       cadence: 'monthly',
@@ -1395,7 +1408,13 @@ describe('due contesti, mai simultanei', () => {
     // B apre e resta viva: da qui il suo mirror invecchia.
     const b = await open(disk, 'b')
 
-    a.repo.updateRecurringRule(regola.id, { amountCents: 92_000, active: false })
+    rivediRegola(a.repo, regola.id, {
+      amountCents: 92_000,
+      cadence: 'monthly',
+      interval: 1,
+      startDate: '2026-06-01',
+    })
+    a.repo.deactivateRecurringRule(regola.id)
     await a.repo.flush()
 
     // B materializza con il mirror vecchio. Prima il suo batch scriveva la
@@ -1416,7 +1435,7 @@ describe('due contesti, mai simultanei', () => {
     // prima di scrivere (ADR 007).
     const disk = emptyDisk()
     const a = await open(disk, 'a')
-    const regola = a.repo.addRecurringRule({
+    const regola = creaRegola(a.repo, {
       amountCents: 90_000,
       categoryId: 'cat-1',
       cadence: 'monthly',
@@ -1426,7 +1445,7 @@ describe('due contesti, mai simultanei', () => {
     await a.repo.flush()
 
     const b = await open(disk, 'b')
-    a.repo.updateRecurringRule(regola.id, { active: false })
+    a.repo.deactivateRecurringRule(regola.id)
     await a.repo.flush()
 
     expect(await b.repo.reloadFromDisk()).toEqual({ reloaded: true })
@@ -1567,7 +1586,7 @@ describe('rilettura al risveglio', () => {
       now: tickingClock(),
       newId: sequentialIds('lenta'),
     })
-    repo.addRecurringRule({
+    creaRegola(repo, {
       amountCents: 500,
       categoryId: 'cat-1',
       cadence: 'daily',
@@ -1625,7 +1644,7 @@ describe('import: la coda e sua', () => {
       newId: sequentialIds('imp'),
       recurrenceChunkSize: 5,
     })
-    repo.addRecurringRule({
+    creaRegola(repo, {
       amountCents: 500,
       categoryId: 'cat-1',
       cadence: 'daily',
@@ -1698,5 +1717,394 @@ describe('import: la coda e sua', () => {
     await expect(repo.flush()).resolves.toBeUndefined()
     // E la rilettura al risveglio torna disponibile.
     expect(await repo.reloadFromDisk()).toEqual({ reloaded: true })
+  })
+})
+
+describe('l anteprima e obbligatoria nel tipo, e scade a mezzanotte', () => {
+  /** Un repository il cui giorno civile lo decide il test, e puo' cambiare. */
+  async function apriConOrologio(
+    orologio: () => Date,
+    disk: MemoryDisk = emptyDisk(),
+  ): Promise<Fixture> {
+    const repo = await openRepository(createMemoryPersistence(disk), {
+      defaultCategoryNames: TEST_CATEGORY_NAMES,
+      now: tickingClock(),
+      newId: sequentialIds('mn'),
+      nowInstant: orologio,
+    })
+    return { repo, disk }
+  }
+
+  const bozzaAffitto = {
+    amountCents: 90_000,
+    cadence: 'monthly' as const,
+    interval: 1,
+    startDate: '2026-01-01',
+  }
+
+  /* --------------------------------------------------------------------- *
+   * Il tipo
+   * --------------------------------------------------------------------- */
+
+  it('senza anteprima non compila, e senza anteprima valida non c e niente da passare', async () => {
+    // Queste tre righe sono l'asserzione: `tsc --noEmit` gira su questo file, e
+    // un `@ts-expect-error` che **non** trova un errore fa fallire il
+    // typecheck. E' il modo in cui questa suite verifica una cosa che a runtime
+    // non si puo' verificare — che una chiamata sbagliata non esista.
+    const { repo } = await apriConOrologio(() => new Date(2026, 7, 22, 12, 0))
+
+    /** Mai eseguita: se lo fosse lancerebbe. Serve solo a farla leggere a `tsc`. */
+    const nonCompila = (): void => {
+      // @ts-expect-error manca il permesso: chi salta l'anteprima non compila.
+      repo.addRecurringRule({ categoryId: 'cat-1' })
+      // @ts-expect-error un booleano non e' un permesso, ed e' tutto il punto.
+      repo.addRecurringRule({ categoryId: 'cat-1' }, true)
+      // @ts-expect-error il calendario non entra piu' da questa porta.
+      repo.addRecurringRule({ categoryId: 'cat-1', startDate: '2026-01-01' }, undefined)
+    }
+
+    expect(nonCompila).toBeTypeOf('function')
+    // E niente e' finito nel mirror: le righe qui sopra non sono mai girate, e
+    // soprattutto non esistono.
+    expect(repo.getState().recurringRules).toHaveLength(0)
+  })
+
+  it('cio che puo generare arretrati non e scrivibile dalla porta senza pedaggio', async () => {
+    const { repo } = await apriConOrologio(() => new Date(2026, 7, 22, 12, 0))
+    const regola = creaRegola(repo, { ...bozzaAffitto, categoryId: 'cat-1' }, '2026-08-22')
+
+    /** Mai eseguita, come sopra: l'asserzione la fa il typecheck. */
+    const nonCompila = (): void => {
+      // @ts-expect-error spostare `startDate` indietro e' generazione retroattiva.
+      repo.updateRecurringRule(regola.id, { startDate: '2020-01-01' })
+      // @ts-expect-error riaccendere una regola dormiente lo e' altrettanto.
+      repo.updateRecurringRule(regola.id, { active: true })
+      // @ts-expect-error `amountCents` entra in `totalCents`, cioe' in un numero annunciato.
+      repo.updateRecurringRule(regola.id, { amountCents: 95_000 })
+    }
+
+    expect(nonCompila).toBeTypeOf('function')
+    expect(repo.getState().recurringRules[0]?.startDate).toBe('2026-01-01')
+    expect(repo.getState().recurringRules[0]?.amountCents).toBe(90_000)
+  })
+
+  /* --------------------------------------------------------------------- *
+   * La mezzanotte, davvero
+   * --------------------------------------------------------------------- */
+
+  it('anteprima calcolata il 22, scrittura tentata il 23: rifiuta e non scrive niente', async () => {
+    // Il caso vero: foglio aperto alle 23:59:50, confermato alle 00:00:05. Non
+    // si aspetta nessun orologio — lo si sposta, che e' l'unica cosa che nella
+    // realta' lo sposta.
+    let istante = new Date(2026, 7, 22, 23, 59, 50)
+    const { repo, disk } = await apriConOrologio(() => istante)
+
+    const giornaliera = {
+      amountCents: 1_000,
+      cadence: 'daily' as const,
+      interval: 1,
+      startDate: '2026-08-15',
+    }
+    const anteprima = previewMaterialization(giornaliera, '2026-08-22')
+    if (!anteprima.ok) throw new Error('anteprima rifiutata')
+    // Cio' che l'utente ha letto e confermato: otto spese, 80,00 €.
+    expect(anteprima.count).toBe(8)
+    expect(anteprima.totalCents).toBe(8_000)
+    expect(anteprima.backdated).toBe(true)
+
+    // Passa la mezzanotte mentre il foglio e' aperto.
+    istante = new Date(2026, 7, 23, 0, 0, 5)
+
+    const esito = repo.addRecurringRule({ categoryId: 'cat-1' }, anteprima.confirmed)
+    expect(esito).toEqual({
+      ok: false,
+      reason: 'stale-preview',
+      previewedOn: '2026-08-22',
+      today: '2026-08-23',
+    })
+
+    // E il rifiuto e' un rifiuto: niente nel mirror, niente sul disco.
+    expect(repo.getState().recurringRules).toHaveLength(0)
+    await repo.flush()
+    expect(disk.recurringRules).toHaveLength(0)
+    expect(disk.expenses).toHaveLength(0)
+  })
+
+  it('l occorrenza in piu che il rifiuto ha evitato e reale: nove invece di otto', async () => {
+    // La prova che il rifiuto non e' pedanteria. Stessa bozza, stesso foglio:
+    // ricalcolando dopo la mezzanotte l'anteprima ne annuncia **nove**, e nove
+    // sono quelle che la materializzazione scrive. Senza la guardia, la nona
+    // sarebbe uscita sotto una conferma che diceva otto.
+    let istante = new Date(2026, 7, 23, 0, 0, 5)
+    const { repo } = await apriConOrologio(() => istante)
+    const giornaliera = {
+      amountCents: 1_000,
+      cadence: 'daily' as const,
+      interval: 1,
+      startDate: '2026-08-15',
+    }
+    const ricalcolata = previewMaterialization(giornaliera, '2026-08-23')
+    if (!ricalcolata.ok) throw new Error('anteprima rifiutata')
+    expect(ricalcolata.count).toBe(9)
+
+    const esito = repo.addRecurringRule({ categoryId: 'cat-1' }, ricalcolata.confirmed)
+    expect(esito.ok).toBe(true)
+    await repo.materializeRecurring('2026-08-23')
+    expect(repo.getState().expenses.filter((e) => e.source === 'recurring')).toHaveLength(9)
+  })
+
+  it('la guardia vale anche sulla modifica: e la porta di servizio dello stesso difetto', async () => {
+    let istante = new Date(2026, 7, 22, 23, 59, 50)
+    const { repo } = await apriConOrologio(() => istante)
+    const regola = creaRegola(
+      repo,
+      { amountCents: 1_000, cadence: 'daily', interval: 1, startDate: '2026-08-22', categoryId: 'cat-1' },
+      '2026-08-22',
+    )
+
+    // Si sposta `startDate` indietro: stesso effetto retroattivo di crearla.
+    const anteprima = previewMaterialization(
+      { amountCents: 1_000, cadence: 'daily', interval: 1, startDate: '2026-08-15' },
+      '2026-08-22',
+    )
+    if (!anteprima.ok) throw new Error('anteprima rifiutata')
+    istante = new Date(2026, 7, 23, 0, 0, 5)
+
+    expect(repo.reviseRecurringRule(regola.id, anteprima.confirmed)).toMatchObject({
+      ok: false,
+      reason: 'stale-preview',
+    })
+    expect(repo.getState().recurringRules[0]?.startDate).toBe('2026-08-22')
+  })
+
+  it('un anteprima calcolata su una regola gia materializzata non crea una regola nuova', async () => {
+    // `addRecurringRule` passa `currentMarker: null` perche' una regola nuova non
+    // ha segnaposto. Questo test difende proprio quel `null`: un'anteprima presa
+    // su una regola esistente parte dal giorno dopo il segnaposto e annuncia
+    // **una** occorrenza, mentre la regola nuova ne scriverebbe otto. E'
+    // l'unico verso inaccettabile — annunciare meno di quanto si fa — e per una
+    // creazione non e' nemmeno un caso di corsa: basta duplicare una regola
+    // riusando l'anteprima che l'elenco aveva gia' in mano.
+    const { repo, disk } = await apriConOrologio(() => new Date(2026, 7, 22, 12, 0))
+    const conSegnaposto = previewMaterialization(
+      { ...bozzaAffitto, lastMaterializedDate: '2026-07-01' },
+      '2026-08-22',
+    )
+    if (!conSegnaposto.ok) throw new Error('anteprima rifiutata')
+    expect(conSegnaposto.count).toBe(1)
+
+    expect(repo.addRecurringRule({ categoryId: 'cat-1' }, conSegnaposto.confirmed)).toEqual({
+      ok: false,
+      reason: 'moved-on',
+      previewedMarker: '2026-07-01',
+      currentMarker: null,
+    })
+    expect(repo.getState().recurringRules).toHaveLength(0)
+    await repo.flush()
+    expect(disk.recurringRules).toHaveLength(0)
+
+    // Ricalcolata senza segnaposto — cioe' su cio' che la regola nuova e'
+    // davvero — annuncia otto, e passa.
+    const giusta = previewMaterialization(bozzaAffitto, '2026-08-22')
+    if (!giusta.ok) throw new Error('anteprima rifiutata')
+    expect(giusta.count).toBe(8)
+    expect(repo.addRecurringRule({ categoryId: 'cat-1' }, giusta.confirmed).ok).toBe(true)
+  })
+
+  it('un id che non esiste e unknown, e lo si scopre prima della mezzanotte', async () => {
+    const { repo } = await apriConOrologio(() => new Date(2026, 7, 22, 12, 0))
+    const anteprima = previewMaterialization(bozzaAffitto, '2026-08-22')
+    if (!anteprima.ok) throw new Error('anteprima rifiutata')
+    expect(repo.reviseRecurringRule('r-mai-esistita', anteprima.confirmed)).toEqual({
+      ok: false,
+      reason: 'unknown',
+    })
+  })
+
+  /* --------------------------------------------------------------------- *
+   * Il pedaggio lo paga chi puo' generare qualcosa
+   * --------------------------------------------------------------------- */
+
+  it('spostare startDate indietro su una regola gia materializzata non genera niente', async () => {
+    // La verifica che il proprietario ha chiesto di fare invece di dedurre: il
+    // motore riparte da `lastMaterializedDate`, non da `startDate`. Quindi
+    // questa modifica **non** e' generazione retroattiva, e l'anteprima lo dice
+    // con `backdated: false` — cioe' la UI non deve chiedere nessuna conferma.
+    const { repo, disk } = await apriConOrologio(() => new Date(2026, 7, 22, 12, 0))
+    const regola = creaRegola(
+      repo,
+      { amountCents: 1_000, cadence: 'daily', interval: 1, startDate: '2026-08-20', categoryId: 'cat-1' },
+      '2026-08-22',
+    )
+    await repo.materializeRecurring('2026-08-22')
+    expect(disk.expenses).toHaveLength(3)
+    const segnaposto = repo.getState().recurringRules[0]?.lastMaterializedDate ?? ''
+    expect(segnaposto).toBe('2026-08-22')
+
+    const anteprima = previewMaterialization(
+      {
+        amountCents: 1_000,
+        cadence: 'daily',
+        interval: 1,
+        startDate: '2026-01-01',
+        lastMaterializedDate: segnaposto,
+      },
+      '2026-08-22',
+    )
+    if (!anteprima.ok) throw new Error('anteprima rifiutata')
+    // Zero arretrati annunciati, e nessuna conferma da chiedere: il pedaggio e'
+    // una chiamata di funzione, non un cartello davanti all'utente.
+    expect(anteprima.count).toBe(0)
+    expect(anteprima.backdated).toBe(false)
+
+    const esito = repo.reviseRecurringRule(regola.id, anteprima.confirmed)
+    expect(esito.ok).toBe(true)
+    expect(esito.ok && esito.rule.startDate).toBe('2026-01-01')
+    // Il segnaposto non e' tornato indietro: e' del motore, non della bozza.
+    expect(esito.ok && esito.rule.lastMaterializedDate).toBe('2026-08-22')
+
+    await repo.materializeRecurring('2026-08-22')
+    await repo.flush()
+    expect(disk.expenses).toHaveLength(3)
+  })
+
+  it('la stessa modifica su una regola mai materializzata genera eccome', async () => {
+    // Lo specchio del test qui sopra, e la ragione per cui la porta e' comunque
+    // sotto pedaggio: e' la stessa modifica, e qui vale sette spese.
+    const { repo } = await apriConOrologio(() => new Date(2026, 7, 22, 12, 0))
+    const regola = creaRegola(
+      repo,
+      { amountCents: 1_000, cadence: 'daily', interval: 1, startDate: '2026-08-22', categoryId: 'cat-1' },
+      '2026-08-22',
+    )
+    const anteprima = previewMaterialization(
+      { amountCents: 1_000, cadence: 'daily', interval: 1, startDate: '2026-08-15' },
+      '2026-08-22',
+    )
+    if (!anteprima.ok) throw new Error('anteprima rifiutata')
+    expect(anteprima.count).toBe(8)
+    expect(anteprima.backdated).toBe(true)
+
+    expect(repo.reviseRecurringRule(regola.id, anteprima.confirmed).ok).toBe(true)
+    await repo.materializeRecurring('2026-08-22')
+    expect(repo.getState().expenses).toHaveLength(8)
+  })
+
+  it('una materializzazione passata nel frattempo fa rifiutare con moved-on', async () => {
+    const { repo } = await apriConOrologio(() => new Date(2026, 7, 22, 12, 0))
+    const regola = creaRegola(
+      repo,
+      { amountCents: 1_000, cadence: 'daily', interval: 1, startDate: '2026-08-20', categoryId: 'cat-1' },
+      '2026-08-22',
+    )
+    const anteprima = previewMaterialization(
+      { amountCents: 1_000, cadence: 'daily', interval: 1, startDate: '2026-08-01' },
+      '2026-08-22',
+    )
+    if (!anteprima.ok) throw new Error('anteprima rifiutata')
+
+    // Fra il calcolo e la scrittura il motore ha girato: il segnaposto e'
+    // avanzato e i numeri annunciati non descrivono piu' la finestra vera.
+    await repo.materializeRecurring('2026-08-22')
+
+    expect(repo.reviseRecurringRule(regola.id, anteprima.confirmed)).toEqual({
+      ok: false,
+      reason: 'moved-on',
+      previewedMarker: null,
+      currentMarker: '2026-08-22',
+    })
+    expect(repo.getState().recurringRules[0]?.startDate).toBe('2026-08-20')
+  })
+
+  /* --------------------------------------------------------------------- *
+   * Le due direzioni di `active`
+   * --------------------------------------------------------------------- */
+
+  it('spegnere va sempre e non chiede niente; riaccendere passa dall anteprima', async () => {
+    const { repo } = await apriConOrologio(() => new Date(2026, 7, 22, 12, 0))
+    const regola = creaRegola(
+      repo,
+      { amountCents: 1_000, cadence: 'daily', interval: 1, startDate: '2026-08-22', categoryId: 'cat-1' },
+      '2026-08-22',
+    )
+    await repo.materializeRecurring('2026-08-22')
+
+    // Spegnere: nessun permesso, nessun esito da controllare, va e basta.
+    expect(repo.deactivateRecurringRule(regola.id)?.active).toBe(false)
+    // Idempotente, e non riscrive: spegnere due volte non e' un errore.
+    expect(repo.deactivateRecurringRule(regola.id)?.active).toBe(false)
+    expect(repo.deactivateRecurringRule('r-mai-esistita')).toBeNull()
+
+    // Riaccendere: qui il pedaggio c'e', ed e' il terzo innesco.
+    const anteprima = previewMaterialization(
+      {
+        amountCents: 1_000,
+        cadence: 'daily',
+        interval: 1,
+        startDate: '2026-08-22',
+        lastMaterializedDate: '2026-08-22',
+      },
+      '2026-08-22',
+    )
+    if (!anteprima.ok) throw new Error('anteprima rifiutata')
+    const riaccesa = repo.reactivateRecurringRule(regola.id, anteprima.confirmed)
+    expect(riaccesa.ok && riaccesa.rule.active).toBe(true)
+  })
+
+  it('riaccendere una regola dormiente da mesi e generazione retroattiva, e l anteprima lo dice', async () => {
+    // Il caso che rende il pedaggio necessario su questa porta: il segnaposto e'
+    // rimasto dov'era. Chi riaccende si aspetta "da adesso in poi" e otterrebbe
+    // ottantasei spese.
+    let istante = new Date(2026, 4, 28, 12, 0)
+    const { repo } = await apriConOrologio(() => istante)
+    const regola = creaRegola(
+      repo,
+      { amountCents: 1_000, cadence: 'daily', interval: 1, startDate: '2026-05-28', categoryId: 'cat-1' },
+      '2026-05-28',
+    )
+    await repo.materializeRecurring('2026-05-28')
+    repo.deactivateRecurringRule(regola.id)
+
+    istante = new Date(2026, 7, 22, 12, 0)
+    const anteprima = previewMaterialization(
+      {
+        amountCents: 1_000,
+        cadence: 'daily',
+        interval: 1,
+        startDate: '2026-05-28',
+        lastMaterializedDate: '2026-05-28',
+      },
+      '2026-08-22',
+    )
+    if (!anteprima.ok) throw new Error('anteprima rifiutata')
+    expect(anteprima.count).toBe(86)
+    expect(anteprima.backdated).toBe(true)
+
+    expect(repo.reactivateRecurringRule(regola.id, anteprima.confirmed).ok).toBe(true)
+    await repo.materializeRecurring('2026-08-22')
+    expect(repo.getState().expenses.filter((e) => e.source === 'recurring')).toHaveLength(87)
+  })
+
+  /* --------------------------------------------------------------------- *
+   * La porta senza pedaggio resta senza pedaggio
+   * --------------------------------------------------------------------- */
+
+  it('categoria e nota si cambiano senza anteprima, anche il giorno dopo', async () => {
+    let istante = new Date(2026, 7, 22, 23, 59, 50)
+    const { repo, disk } = await apriConOrologio(() => istante)
+    const regola = creaRegola(repo, { ...bozzaAffitto, categoryId: 'cat-1' }, '2026-08-22')
+
+    istante = new Date(2026, 7, 23, 0, 0, 5)
+    const cambiata = repo.updateRecurringRule(regola.id, { categoryId: 'cat-2', note: 'Affitto' })
+    expect(cambiata?.categoryId).toBe('cat-2')
+    expect(cambiata?.note).toBe('Affitto')
+    // `null` cancella la nota, come su ogni altra patch di questo repository.
+    expect(repo.updateRecurringRule(regola.id, { note: null })?.note).toBeUndefined()
+    expect(repo.updateRecurringRule('r-mai-esistita', { note: 'x' })).toBeNull()
+
+    await repo.flush()
+    expect(disk.recurringRules[0]?.categoryId).toBe('cat-2')
+    // E il calendario non l'ha sfiorato nessuno.
+    expect(disk.recurringRules[0]?.startDate).toBe('2026-01-01')
   })
 })

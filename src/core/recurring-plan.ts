@@ -14,7 +14,7 @@
  * stesse funzioni che la materializzazione esegue davvero.
  */
 
-import { isAfter, isBefore } from './date'
+import { isAfter, isBefore, isIsoDate } from './date'
 import type { IsoDate } from './date'
 import type { Cents } from './money'
 import { materializationWindow, occurrencesBetween, validateRule } from './recurrence'
@@ -213,7 +213,17 @@ export interface MaterializationPreview {
 }
 
 export type MaterializationPreviewResult =
-  | ({ readonly ok: true } & MaterializationPreview)
+  | ({
+      readonly ok: true
+      /**
+       * La prova che questi numeri sono stati calcolati, e in che giorno.
+       *
+       * E' l'unico modo di ottenere una `ConfirmedPreview`, ed e' quello che
+       * rende impossibile scrivere una regola senza aver chiesto prima cosa
+       * succede. Chi vuole solo mostrare l'anteprima lo ignora.
+       */
+      readonly confirmed: ConfirmedPreview
+    } & MaterializationPreview)
   /** La regola non e' salvabile. `reason` e' il messaggio di `validateRule`. */
   | { readonly ok: false; readonly reason: string }
 
@@ -250,6 +260,15 @@ const DEFAULT_MAX_DATES = 12
  * l'anteprima conta di piu' di quel che verra' scritto — mai di meno, perche'
  * `addExpenses` salta e non sovrascrive. E' l'unico verso accettabile: si
  * annuncia piu' di quanto si fa.
+ *
+ * ## Il caso che violava quel verso, e che adesso non passa piu'
+ *
+ * Ce n'era uno, ed era il tempo. Un'anteprima calcolata alle 23:59:50 e spesa
+ * alle 00:00:05 descrive una finestra piu' stretta di quella vera: annuncia
+ * **meno** di quanto si scrive. Per questo l'esito positivo non porta solo dei
+ * numeri, porta un **permesso** (`confirmed`) con dentro il giorno civile su
+ * cui i numeri sono stati calcolati, e chi scrive lo confronta con il proprio
+ * (`redeemPreview`). Un'anteprima di ieri non si spende: si ricalcola.
  */
 export function previewMaterialization(
   draft: RecurrenceDraft,
@@ -279,6 +298,30 @@ export function previewMaterialization(
   // Prima della finestra: `occurrencesBetween` lancia su una regola non valida,
   // e un'anteprima che lancia lascia la schermata senza risposta proprio mentre
   // l'utente sta ancora scrivendo i campi.
+  //
+  // Da quando l'esito positivo porta con se' il permesso di scrivere, questa
+  // e' anche **l'unica porta** attraverso cui un calendario entra in una
+  // regola: quindi qui si controlla tutto cio' che prima controllava
+  // `addRecurringRule` con le sue `assert*`, e in piu' cio' che nessuno
+  // controllava (`today` malformata). Un `ok: true` deve significare "questo si
+  // puo' scrivere", altrimenti il pedaggio sposta il problema invece di
+  // chiuderlo.
+  if (!Number.isSafeInteger(draft.amountCents)) {
+    return { ok: false, reason: `amountCents non intero: ${draft.amountCents}` }
+  }
+  if (!isIsoDate(draft.startDate)) {
+    return { ok: false, reason: `startDate non valida: "${draft.startDate}"` }
+  }
+  if (draft.endDate !== undefined && !isIsoDate(draft.endDate)) {
+    return { ok: false, reason: `endDate non valida: "${draft.endDate}"` }
+  }
+  if (draft.lastMaterializedDate !== undefined && !isIsoDate(draft.lastMaterializedDate)) {
+    return {
+      ok: false,
+      reason: `lastMaterializedDate non valida: "${draft.lastMaterializedDate}"`,
+    }
+  }
+  if (!isIsoDate(today)) return { ok: false, reason: `today non valida: "${today}"` }
   const problem = validateRule(rule)
   if (problem !== null) return { ok: false, reason: problem }
 
@@ -288,8 +331,26 @@ export function previewMaterialization(
   const first = dates[0] ?? null
   const last = dates[dates.length - 1] ?? null
   const cap = Math.max(0, maxDates)
+  // La bozza si ricopia campo per campo invece di tenere il riferimento
+  // ricevuto: `RecurrenceDraft` e' `readonly` per il compilatore, non a
+  // runtime, e chi ha chiamato l'anteprima resta padrone dell'oggetto che ha
+  // passato. Senza la copia, cambiargli `startDate` dopo cambierebbe cio' che
+  // il permesso autorizza a scrivere — cioe' esattamente il buco che questo
+  // valore esiste per chiudere.
+  const frozen: RecurrenceDraft = {
+    amountCents: draft.amountCents,
+    cadence: draft.cadence,
+    interval: draft.interval,
+    startDate: draft.startDate,
+    ...(draft.anchorDay !== undefined ? { anchorDay: draft.anchorDay } : {}),
+    ...(draft.endDate !== undefined ? { endDate: draft.endDate } : {}),
+    ...(draft.lastMaterializedDate !== undefined
+      ? { lastMaterializedDate: draft.lastMaterializedDate }
+      : {}),
+  }
   return {
     ok: true,
+    confirmed: { [CONFIRMED]: { day: today, draft: frozen } },
     count: dates.length,
     firstDate: first,
     lastDate: last,
@@ -299,6 +360,190 @@ export function previewMaterialization(
     truncated: dates.length > cap,
   }
 }
+
+/* ------------------------------------------------------------------------- *
+ * 2 bis. La prova che l'anteprima e' stata calcolata — e quando
+ * ------------------------------------------------------------------------- */
+
+/**
+ * La chiave sotto cui vive il contenuto di una `ConfirmedPreview`, e **non e'
+ * esportata**: fuori da questo file non si puo' nominare, quindi non si puo'
+ * scrivere un oggetto letterale che le assomigli.
+ *
+ * E' il motivo per cui il tipo e' nominale invece che strutturale. Con un campo
+ * fantasma normale (`readonly __brand: 'confirmed'`) il valore sarebbe
+ * **copiabile con uno spread** — `{ ...previewed, day: ieri }` compilerebbe — e
+ * la guardia della mezzanotte sarebbe aggirabile in una riga. Con la chiave
+ * privata lo spread produce una copia identica, che e' innocua, e non esiste
+ * modo di cambiare il giorno di dentro.
+ */
+const CONFIRMED = Symbol('cent.confirmed-preview')
+
+/**
+ * Cio' che una `ConfirmedPreview` porta con se'. Si legge con `redeemPreview`,
+ * e nessun altro modo di leggerlo o di costruirlo e' esposto.
+ */
+export interface PreviewedWrite {
+  /**
+   * Il **giorno civile** su cui i numeri annunciati sono stati calcolati.
+   *
+   * E' l'mtime di questa istantanea. `materializationWindow` chiude la finestra
+   * su `today`: se il giorno cambia fra il calcolo e la scrittura, la finestra
+   * si allarga di un giorno e la scrittura produce **un'occorrenza in piu' di
+   * quelle annunciate** — cioe' il verso sbagliato, quello in cui si annuncia
+   * meno di quanto si fa.
+   */
+  readonly day: IsoDate
+  /**
+   * L'importo e il calendario esatti a cui i numeri si riferiscono. E' anche
+   * **cio' che verra' scritto**: chi scrive non riceve questi campi da nessuna
+   * altra parte, quindi non esiste modo di annunciare una cosa e scriverne
+   * un'altra.
+   *
+   * ## La trappola che questo apre, dichiarata
+   *
+   * `RuleSheet` chiama `previewMaterialization` **con `amountCents: 1`** a ogni
+   * render, di proposito: cosi' digitare una cifra costa una moltiplicazione
+   * invece di ricalcolare 9.728 occorrenze (misurate a 8,85 ms). Il totale vero
+   * lo riattacca sopra.
+   *
+   * Da adesso quell'anteprima porta con se' anche **il permesso di scrivere una
+   * regola da 0,01 €**. Il calendario e' giusto, l'importo no.
+   *
+   * Il rimedio non e' qui: e' **una seconda chiamata al salvataggio**, con
+   * l'importo vero, il cui permesso e' quello che si spende — `App.tsx` gia'
+   * ricalcola l'anteprima in `saveRule`, per il toast. Il costo e' un calcolo
+   * per tap invece che per cifra, che e' esattamente il motivo per cui la
+   * scorciatoia esisteva.
+   *
+   * Non e' stato chiuso con un tipo perche' chiuderlo vorrebbe dire una seconda
+   * funzione d'anteprima senza importo, cioe' un'API di dominio **senza
+   * chiamanti di produzione oggi** — la cosa che questo repo ha gia' cancellato
+   * due volte (`expensesInRange`, `planBudgetChange`).
+   */
+  readonly draft: RecurrenceDraft
+}
+
+/**
+ * Un'anteprima calcolata, in una forma che si puo' passare a chi scrive.
+ *
+ * **E' opaca di proposito**: l'unico modo di ottenerne una e' chiamare
+ * `previewMaterialization`, che la restituisce dentro il proprio esito
+ * positivo. Non c'e' un costruttore, non c'e' una fabbrica, e il contenuto sta
+ * sotto una chiave che fuori da questo file non si puo' nominare.
+ *
+ * ## Perche' un valore e non un booleano
+ *
+ * Un `confirmed: boolean` su `addRecurringRule` sarebbe stato sorvegliare
+ * invece che rendere irrappresentabile: chi non chiama l'anteprima scrive
+ * `true` e il compilatore e' contento. Qui **chi salta l'anteprima non
+ * compila**, perche' non ha niente da passare. E' ADR 012 applicato a
+ * un'operazione invece che a un campo.
+ *
+ * ## Cosa questo valore NON dice
+ *
+ * Non dice che un essere umano ha letto qualcosa e ha toccato una casella. Il
+ * core non puo' saperlo e non finge di saperlo: dice che **i numeri sono stati
+ * calcolati**, su quale bozza e in quale giorno. Chiedere la conferma a una
+ * persona resta un lavoro della UI, e resta legato a `backdated` — perche' una
+ * conferma che compare sempre smette di essere letta.
+ */
+export interface ConfirmedPreview {
+  readonly [CONFIRMED]: PreviewedWrite
+}
+
+/**
+ * Perche' un'anteprima non e' piu' spendibile.
+ *
+ * Sono **risultati, non eccezioni**: stessa forma di `planCategoryDeletion` e
+ * `planRecurringRuleDeletion`. Chi chiama deve poter dire "ricalcola" invece di
+ * finire in un `catch` che non sa distinguere questo da un disco rotto.
+ */
+export type PreviewRefusal =
+  | {
+      readonly reason: 'stale-preview'
+      /** Il giorno civile su cui l'anteprima era stata calcolata. */
+      readonly previewedOn: IsoDate
+      /** Il giorno civile di adesso. E' diverso: e' passata la mezzanotte. */
+      readonly today: IsoDate
+    }
+  | {
+      readonly reason: 'moved-on'
+      /** Il segnaposto che l'anteprima ha usato per aprire la finestra. */
+      readonly previewedMarker: IsoDate | null
+      /** Il segnaposto vero della regola adesso. */
+      readonly currentMarker: IsoDate | null
+    }
+
+export type PreviewRedemption =
+  | { readonly ok: true; readonly draft: RecurrenceDraft }
+  | ({ readonly ok: false } & PreviewRefusal)
+
+/**
+ * Spendere un'anteprima: si puo' ancora scrivere cio' che annunciava?
+ *
+ * ## La mezzanotte, che qui ha gia' morso due volte
+ *
+ * L'anteprima si calcola all'istante T e si conferma a T+n. Una regola creata
+ * alle 23:59:50 e confermata alle 00:00:05 ha una finestra di
+ * materializzazione **allargata di un giorno** rispetto a quella annunciata: la
+ * scrittura produrrebbe un'occorrenza che nessuno ha visto.
+ *
+ * E' **il verso sbagliato**. La regola dichiarata su `previewMaterialization`
+ * e' *"si annuncia piu' di quanto si fa"*, e questo caso la viola.
+ *
+ * Quindi il confronto e' **di uguaglianza, non di ordine**. Un'anteprima di
+ * domani annuncerebbe di piu' di quanto si scrive, cioe' cadrebbe nel verso
+ * accettabile — ma non descriverebbe comunque *adesso*, e un orologio che va
+ * avanti (o un fuso che cambia sotto i piedi) non e' una condizione da
+ * assecondare in silenzio. E' la stessa guardia dell'mtime su un file: non ci
+ * si fida di un'istantanea presa in un momento diverso da quello in cui si
+ * agisce.
+ *
+ * ## Il segnaposto, che e' la stessa istantanea vista da un altro lato
+ *
+ * `materializationWindow` apre la finestra al giorno dopo
+ * `lastMaterializedDate`. Se fra il calcolo e la scrittura una
+ * materializzazione ha fatto avanzare il segnaposto — o se l'anteprima e' stata
+ * calcolata su una regola che nel frattempo non e' piu' quella — i numeri
+ * annunciati non descrivono piu' la finestra vera.
+ *
+ * `currentMarker` e' `null` per una regola che non ha mai prodotto niente, e
+ * **per una regola che ancora non esiste**: e' cosi' che
+ * `addRecurringRule` rifiuta un'anteprima calcolata su una regola gia'
+ * materializzata, che annuncerebbe **meno** di quanto la regola nuova
+ * scriverebbe davvero.
+ */
+export function redeemPreview(
+  confirmed: ConfirmedPreview,
+  today: IsoDate,
+  currentMarker: IsoDate | null,
+): PreviewRedemption {
+  const { day, draft } = confirmed[CONFIRMED]
+  if (day !== today) {
+    return { ok: false, reason: 'stale-preview', previewedOn: day, today }
+  }
+  const previewedMarker = draft.lastMaterializedDate ?? null
+  if (previewedMarker !== currentMarker) {
+    return { ok: false, reason: 'moved-on', previewedMarker, currentMarker }
+  }
+  return { ok: true, draft }
+}
+
+/**
+ * L'esito di una scrittura che passa da un'anteprima: `addRecurringRule`,
+ * `reviseRecurringRule`, `reactivateRecurringRule`.
+ *
+ * Stessa forma di `RecurringRuleDeletion` e di `CategoryDeletion`, e per la
+ * stessa ragione: il rifiuto e' **un risultato**, e porta con se' i numeri con
+ * cui la schermata sa cosa dire. "L'anteprima e' di ieri: ricalcola" e' una
+ * frase che si scrive solo se si sanno i due giorni.
+ */
+export type RecurringRuleWrite =
+  | { readonly ok: true; readonly rule: RecurringRule }
+  /** L'id non esiste. Non puo' capitare su `addRecurringRule`. */
+  | { readonly ok: false; readonly reason: 'unknown' }
+  | ({ readonly ok: false } & PreviewRefusal)
 
 /* ------------------------------------------------------------------------- *
  * 3. Cancellare una regola

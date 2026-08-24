@@ -8,6 +8,7 @@ import {
   monthlyFixedCosts,
   planRecurringRuleDeletion,
   previewMaterialization,
+  redeemPreview,
 } from './recurring-plan'
 import type { RecurrenceDraft } from './recurring-plan'
 import { makeExpense, makeRule, tickingClock } from './testing'
@@ -506,5 +507,175 @@ describe('planRecurringRuleDeletion', () => {
       lastMaterializedDate: '2026-08-22',
     })
     expect(planRecurringRuleDeletion([ferma], [], { id: 'r-ferma' })).toMatchObject({ ok: true })
+  })
+})
+
+/* ------------------------------------------------------------------------- *
+ * 2 bis. Il permesso di scrivere, e la mezzanotte
+ * ------------------------------------------------------------------------- */
+
+describe('ConfirmedPreview: il permesso esiste solo se l anteprima e stata calcolata', () => {
+  const bozza: RecurrenceDraft = {
+    amountCents: 90_000,
+    cadence: 'monthly',
+    interval: 1,
+    startDate: '2026-01-01',
+  }
+
+  it('un esito positivo porta il permesso, un rifiuto no', () => {
+    const buona = previewMaterialization(bozza, '2026-08-22')
+    expect(buona.ok).toBe(true)
+    expect(buona.ok && buona.confirmed).toBeDefined()
+
+    const rotta = previewMaterialization({ ...bozza, interval: 0 }, '2026-08-22')
+    expect(rotta.ok).toBe(false)
+    // Non c'e' nessun ramo da cui esca un permesso: `ok: false` ha due campi e
+    // basta. E' il senso di "chi salta l'anteprima non compila" — chi la chiama
+    // e la ignora non ha comunque niente da spendere.
+    expect(Object.keys(rotta)).toEqual(['ok', 'reason'])
+  })
+
+  it('il permesso e opaco: non ha campi leggibili da fuori', () => {
+    const esito = previewMaterialization(bozza, '2026-08-22')
+    if (!esito.ok) throw new Error('anteprima rifiutata')
+    // Nessuna chiave stringa: il contenuto sta sotto un simbolo che fuori da
+    // `recurring-plan.ts` non si puo' nominare. E' quello che impedisce
+    // `{ ...permesso, day: ieri }`, cioe' la guardia della mezzanotte aggirata
+    // in una riga da chi ha fretta.
+    expect(Object.keys(esito.confirmed)).toEqual([])
+    expect(JSON.stringify(esito.confirmed)).toBe('{}')
+  })
+
+  it('cambiare la bozza dopo l anteprima non cambia cio che il permesso autorizza', () => {
+    // `readonly` e' un fatto del compilatore, non del runtime: un oggetto
+    // costruito altrove puo' essere modificato dopo. Se il permesso tenesse il
+    // riferimento, si annuncerebbe gennaio e si scriverebbe il 1900.
+    const mutabile = { ...bozza }
+    const esito = previewMaterialization(mutabile, '2026-08-22')
+    if (!esito.ok) throw new Error('anteprima rifiutata')
+    ;(mutabile as { startDate: string }).startDate = '1900-01-01'
+
+    const speso = redeemPreview(esito.confirmed, '2026-08-22', null)
+    expect(speso.ok && speso.draft.startDate).toBe('2026-01-01')
+  })
+})
+
+describe('redeemPreview: non ci si fida di un istantanea presa in un altro momento', () => {
+  const bozza: RecurrenceDraft = {
+    amountCents: 90_000,
+    cadence: 'monthly',
+    interval: 1,
+    startDate: '2026-01-01',
+  }
+
+  function permesso(giorno: string, extra: Partial<RecurrenceDraft> = {}) {
+    const esito = previewMaterialization({ ...bozza, ...extra }, giorno)
+    if (!esito.ok) throw new Error(`anteprima rifiutata: ${esito.reason}`)
+    return esito
+  }
+
+  it('stesso giorno: si spende', () => {
+    expect(redeemPreview(permesso('2026-08-22').confirmed, '2026-08-22', null)).toMatchObject({
+      ok: true,
+    })
+  })
+
+  it('e passata la mezzanotte: rifiuta, e dice quali sono i due giorni', () => {
+    // Anteprima calcolata alle 23:59:50 del 22, scrittura tentata alle 00:00:05
+    // del 23. La finestra si e' allargata di un giorno: la scrittura
+    // produrrebbe **un'occorrenza in piu' di quelle annunciate**, cioe' il verso
+    // sbagliato — si annuncerebbe meno di quanto si fa.
+    const giornaliera = { cadence: 'daily' as const, interval: 1, startDate: '2026-08-15' }
+    const ieri = permesso('2026-08-22', giornaliera)
+    expect(ieri.count).toBe(8)
+    expect(ieri.lastDate).toBe('2026-08-22')
+    // La stessa bozza, un giorno dopo, ne annuncia **nove**: e' esattamente cio'
+    // che la scrittura produrrebbe senza questa guardia, contro una conferma
+    // che ne diceva otto.
+    expect(permesso('2026-08-23', giornaliera).count).toBe(9)
+
+    expect(redeemPreview(ieri.confirmed, '2026-08-23', null)).toEqual({
+      ok: false,
+      reason: 'stale-preview',
+      previewedOn: '2026-08-22',
+      today: '2026-08-23',
+    })
+  })
+
+  it('vale in tutti e due i versi: un anteprima di domani non e adesso', () => {
+    // Il verso "in avanti" annuncerebbe piu' di quanto si scrive, cioe' il verso
+    // accettabile. Si rifiuta lo stesso: il confronto e' di uguaglianza perche'
+    // un'istantanea presa in un altro momento non descrive questo momento, e un
+    // orologio che salta in avanti non e' una condizione da assecondare.
+    expect(redeemPreview(permesso('2026-08-23').confirmed, '2026-08-22', null)).toMatchObject({
+      ok: false,
+      reason: 'stale-preview',
+    })
+  })
+
+  it('il segnaposto e la stessa guardia vista dall altro estremo', () => {
+    const conSegnaposto = permesso('2026-08-22', { lastMaterializedDate: '2026-07-01' })
+    // Speso sulla regola giusta: passa.
+    expect(redeemPreview(conSegnaposto.confirmed, '2026-08-22', '2026-07-01')).toMatchObject({
+      ok: true,
+    })
+    // Nel frattempo una materializzazione ha fatto avanzare il segnaposto: i
+    // numeri annunciati non descrivono piu' la finestra vera.
+    expect(redeemPreview(conSegnaposto.confirmed, '2026-08-22', '2026-08-01')).toEqual({
+      ok: false,
+      reason: 'moved-on',
+      previewedMarker: '2026-07-01',
+      currentMarker: '2026-08-01',
+    })
+  })
+
+  it('un anteprima con segnaposto non si spende su una regola che non ne ha', () => {
+    // E' il caso pericoloso: la finestra annunciata parte dal 2 luglio e vale
+    // **una** occorrenza, quella vera partirebbe dal 1 gennaio e ne vale otto.
+    // Sette spese che nessuno ha visto.
+    const conSegnaposto = permesso('2026-08-22', { lastMaterializedDate: '2026-07-01' })
+    expect(conSegnaposto.count).toBe(1)
+    expect(permesso('2026-08-22').count).toBe(8)
+    expect(redeemPreview(conSegnaposto.confirmed, '2026-08-22', null)).toEqual({
+      ok: false,
+      reason: 'moved-on',
+      previewedMarker: '2026-07-01',
+      currentMarker: null,
+    })
+  })
+})
+
+describe('previewMaterialization: e l unica porta, quindi controlla tutto', () => {
+  it('un importo non intero non produce nessun permesso', () => {
+    // Prima lo controllava `addRecurringRule` con una `assertCents` che
+    // lanciava. Adesso l'importo entra in una regola solo da qui, quindi il
+    // controllo e' qui — e risponde invece di lanciare, perche' questa funzione
+    // gira mentre l'utente sta ancora digitando.
+    const esito = previewMaterialization(
+      { amountCents: 12.5, cadence: 'daily', interval: 1, startDate: '2026-08-01' },
+      '2026-08-22',
+    )
+    expect(esito).toEqual({ ok: false, reason: 'amountCents non intero: 12.5' })
+  })
+
+  it('una startDate malformata non produce nessun permesso', () => {
+    const esito = previewMaterialization(
+      { amountCents: 100, cadence: 'daily', interval: 1, startDate: '22/08/2026' },
+      '2026-08-22',
+    )
+    expect(esito.ok).toBe(false)
+    expect(esito.ok === false && esito.reason).toContain('startDate')
+  })
+
+  it('un today malformato non produce nessun permesso', () => {
+    // Nessuno lo controllava: un `today` sbagliato avrebbe prodotto un permesso
+    // che non corrisponde a nessun giorno civile, e quindi non spendibile mai —
+    // un rifiuto misterioso invece di un errore nel punto in cui nasce.
+    const esito = previewMaterialization(
+      { amountCents: 100, cadence: 'daily', interval: 1, startDate: '2026-08-01' },
+      'oggi',
+    )
+    expect(esito.ok).toBe(false)
+    expect(esito.ok === false && esito.reason).toContain('today')
   })
 })
