@@ -29,12 +29,26 @@
  *    quello che arriva dopo sono le cifre, non lo spazio che occupano.
  * 3. **Niente scroll orizzontale**, nemmeno col residuo negativo piu' largo che
  *    5.000 spese possano produrre.
+ *
+ * ## Gli istanti, e perche' portano tutti un `+02:00`
+ *
+ * Le date scritte qui dentro sono **istanti assoluti**, non orari locali: il
+ * fuso della pagina e' dichiarato in `playwright.config.ts` (Europe/Amsterdam),
+ * ma `new Date('2026-08-23T23:30:00')` lo legge nel fuso del **processo Node**,
+ * che in CI e' UTC. Senza l'offset, "domenica 23 alle 23:30" diventerebbe
+ * l'una e mezza di lunedi' 24 sul runner, e i test sul confine di settimana
+ * cadrebbero **nel momento stesso in cui si dichiara il fuso**.
+ *
+ * Le scene che seminano spese "di oggi" fissano l'orologio all'istante
+ * dichiarato (`clock.ts`): senza, fra la semina e il ricaricamento puo' passare
+ * la mezzanotte e la scena misurata non e' quella preparata.
  */
 // Questi test provano l'app, quindi dichiarano di girare nell'app installata:
 // fuori da standalone Cent e' una pagina di installazione (ADR 011). Vedi
 // `installed.ts` per il perche' la cucitura sta qui e non nel codice dell'app.
 import { expect, test } from './installed'
 import { fontPronto, TEST_FONT } from './font'
+import { fissaOrologio, giornoDichiarato } from './clock'
 import type { Page } from '@playwright/test'
 
 interface Shift {
@@ -356,10 +370,17 @@ async function seed(page: Page, howMany: number): Promise<void> {
   }, howMany)
 }
 
-/** Il giorno civile di chi esegue il test, nella stessa forma dell'app. */
+/**
+ * Il giorno civile **dichiarato**, nella stessa forma dell'app.
+ *
+ * Prima lo leggeva dall'orologio di chi esegue il test, e sono due orologi
+ * diversi: questa riga gira in Node (Europe/Rome in locale, UTC in CI), la
+ * pagina gira nel fuso dichiarato e con l'orologio fissato. Un dato preparato
+ * di qua e letto di la' finiva su due giorni diversi — e bastava che il run
+ * attraversasse la mezzanotte perche' finisse su due giorni diversi comunque.
+ */
 function todayIso(): string {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  return giornoDichiarato()
 }
 
 /** Semina spese in giorni precisi: serve dove conta il giorno, non il volume. */
@@ -476,6 +497,9 @@ async function scenaVuota(page: Page): Promise<Measures> {
 }
 
 async function scena5000(page: Page): Promise<Measures> {
+  // 5.000 spese seminate all'indietro **da oggi**, poi un ricaricamento: se in
+  // mezzo passasse la mezzanotte, la scena misurata non sarebbe questa.
+  await fissaOrologio(page)
   await page.goto('./')
   await expect(page.locator('.budget')).toBeEnabled()
 
@@ -607,6 +631,7 @@ test.describe('la Home non salta', () => {
  */
 async function scena320(page: Page): Promise<Measures> {
   await page.setViewportSize({ width: 320, height: 568 })
+  await fissaOrologio(page)
   await page.goto('./')
   await expect(page.locator('.budget')).toBeEnabled()
   await setBudget(page, '70000', 'A settimana')
@@ -658,7 +683,7 @@ test('la Home dice quanto resta e quanto al giorno, e sono numeri veri', async (
   // sull'ultimo giorno del periodo — dove "al giorno" non e' piu' la frase
   // giusta. `setFixedTime` invece di `install`: i timer devono continuare a
   // correre, o il foglio del budget non finirebbe mai di chiudersi.
-  await page.clock.setFixedTime(new Date('2026-08-19T10:00:00'))
+  await page.clock.setFixedTime(new Date('2026-08-19T10:00:00+02:00'))
 
   await page.goto('./')
   await expect(page.locator('.budget')).toBeEnabled()
@@ -704,7 +729,7 @@ test('la Home dice quanto resta e quanto al giorno, e sono numeri veri', async (
  */
 test('l ultimo giorno del periodo la Home dice un totale, non un ritmo', async ({ page }) => {
   // Domenica 23 agosto 2026: ultimo giorno della settimana.
-  await page.clock.setFixedTime(new Date('2026-08-23T10:00:00'))
+  await page.clock.setFixedTime(new Date('2026-08-23T10:00:00+02:00'))
 
   await page.goto('./')
   await expect(page.locator('.budget')).toBeEnabled()
@@ -730,14 +755,14 @@ test('l ultimo giorno del periodo la Home dice un totale, non un ritmo', async (
  */
 test('al risveglio la Home mostra il periodo di oggi, non quello di ieri', async ({ page }) => {
   // Domenica 23 agosto 2026, 23:30 locali: ultimo giorno della settimana.
-  await page.clock.install({ time: new Date('2026-08-23T23:30:00') })
+  await page.clock.install({ time: new Date('2026-08-23T23:30:00+02:00') })
   await page.goto('./')
   await expect(page.locator('.budget')).toBeEnabled()
   await expect(page.locator('.hero__period')).toContainText('17')
   await expect(page.locator('.hero__period')).toContainText('23')
 
   // Lunedi' 24, mezzanotte e cinque: settimana nuova.
-  await page.clock.setFixedTime(new Date('2026-08-24T00:05:00'))
+  await page.clock.setFixedTime(new Date('2026-08-24T00:05:00+02:00'))
   await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')))
 
   await expect(page.locator('.hero__period')).toContainText('24')
@@ -824,7 +849,7 @@ test('nel foglio del budget il periodo seleziona e basta: scrive solo Salva', as
  */
 async function scenaMetaSettimana(page: Page): Promise<Measures> {
   // Mercoledi' 19 agosto 2026: la settimana e' cominciata lunedi' 17.
-  await page.clock.install({ time: new Date('2026-08-19T10:00:00') })
+  await page.clock.install({ time: new Date('2026-08-19T10:00:00+02:00') })
   await page.goto('./')
   await expect(page.locator('.budget')).toBeEnabled()
 
@@ -847,7 +872,7 @@ async function scenaMetaSettimana(page: Page): Promise<Measures> {
 test.describe('la Home con un budget nato a meta settimana', () => {
   test('lo spiega, invece di annunciare che il budget e\' finito', async ({ page }) => {
     // Mercoledi' 19 agosto 2026: la settimana e' cominciata lunedi' 17.
-    await page.clock.install({ time: new Date('2026-08-19T10:00:00') })
+    await page.clock.install({ time: new Date('2026-08-19T10:00:00+02:00') })
     await page.goto('./')
     await expect(page.locator('.budget')).toBeEnabled()
 
@@ -921,6 +946,7 @@ test.describe('la Home con un budget nato a meta settimana', () => {
  * vede, e su iOS le metriche di SF Pro possono farne sei.
  */
 async function scenaLingua(page: Page): Promise<Measures> {
+  await fissaOrologio(page)
   await page.goto('./')
   await expect(page.locator('.budget')).toBeEnabled()
 
@@ -1015,6 +1041,7 @@ test('le etichette della barra sono larghe uguale nelle due lingue', async ({ pa
  * due volte, quindi si misura.
  */
 async function scenaPromemoria(page: Page): Promise<Measures> {
+  await fissaOrologio(page)
   await page.goto('./')
   await expect(page.locator('.budget')).toBeEnabled()
   await setBudget(page, '20000', 'A settimana')
@@ -1221,7 +1248,7 @@ async function statiDelRiquadro(
 
   // Domenica: "Ultimo giorno del periodo: domani riparte da capo." e' il
   // dettaglio piu' lungo delle due lingue.
-  await page.clock.setFixedTime(new Date('2026-08-23T10:00:00'))
+  await page.clock.setFixedTime(new Date('2026-08-23T10:00:00+02:00'))
   await page.reload()
   await expect(page.locator('.allowance')).toBeVisible()
   const ultimoGiorno = await misuraRiserva(page)
@@ -1238,7 +1265,7 @@ for (const lingua of LINGUE) {
   test(`la riserva del riquadro contiene le righe che dichiara (${lingua.nome})`, async ({
     page,
   }, testInfo) => {
-    await page.clock.install({ time: new Date('2026-08-19T10:00:00') })
+    await page.clock.install({ time: new Date('2026-08-19T10:00:00+02:00') })
     await page.goto('./')
     await expect(page.locator('.budget')).toBeEnabled()
     expect(await fontPronto(page), 'il font dichiarato non e\' in pagina').toBe(true)
@@ -1297,7 +1324,7 @@ test('una riga di troppo sfonda la riserva, cioe\' il gate cade ancora', async (
     'la riserva e\' dimensionata sulla larghezza piu\' stretta dei telefoni: e\' li\' che si prova',
   )
 
-  await page.clock.install({ time: new Date('2026-08-19T10:00:00') })
+  await page.clock.install({ time: new Date('2026-08-19T10:00:00+02:00') })
   await page.goto('./')
   await expect(page.locator('.budget')).toBeEnabled()
   await seedOn(page, [

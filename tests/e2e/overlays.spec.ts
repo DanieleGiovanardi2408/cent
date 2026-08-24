@@ -47,6 +47,23 @@ import type { Page } from '@playwright/test'
 // misura serve a contare zero invece di contare tutto (ADR 011).
 import { probe, report } from './probe'
 import type { Target } from './probe'
+import { fissaOrologio } from './clock'
+
+/**
+ * L'orologio fissato per tutto il file, prima di ogni `goto`.
+ *
+ * Qui **ogni** test dipende da "oggi" senza dirlo: `seed` scrive le spese con
+ * date calcolate all'indietro da `new Date()` nella pagina, e poi ricarica. Se
+ * fra la semina e il ricaricamento passa la mezzanotte, le spese di oggi
+ * diventano quelle di ieri, la sezione "Oggi" si svuota, la colonna cambia
+ * altezza — e la sonda misura una schermata che nessuno voleva provare.
+ *
+ * Non e' un'ipotesi: e' il difetto gemello di quello che ha fatto cadere
+ * `offline.spec.ts`, sullo stesso run. Vedi `clock.ts`.
+ */
+test.beforeEach(async ({ page }) => {
+  await fissaOrologio(page)
+})
 
 /** Semina l'archivio scrivendo dentro IndexedDB: 5.000 spese su un anno. */
 async function seed(page: Page, howMany: number): Promise<void> {

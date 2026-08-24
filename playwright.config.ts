@@ -17,6 +17,38 @@ const MOBILE = {
   deviceScaleFactor: 3,
 }
 
+// Il fuso **dichiarato**: la quarta premessa d'ambiente (ADR 013).
+//
+// E' lo stesso `TZ: 'Europe/Amsterdam'` di `vitest.config.ts`, e la ragione per
+// cui e' lo stesso e' che due suite sullo stesso prodotto non possono misurare
+// contro due calendari diversi: un giorno civile che cambia fra l'una e l'altra
+// e' un difetto che si legge come "flaky" invece che come una premessa mancante.
+const FUSO = 'Europe/Amsterdam'
+
+// E l'**istante**, che il fuso da solo non copre.
+//
+// Anche con Europe/Amsterdam fissato, una suite che parte alle 23:59 attraversa
+// la mezzanotte mentre gira: e' successo davvero — `offline.spec.ts` confrontava
+// il testo online con quello offline e leggeva "17–23 ago" nella prima lettura e
+// "24–30 ago" nella seconda. L'app aveva fatto la cosa giusta (ADR 007); il test
+// stava misurando due istanti diversi.
+//
+// Quindi ogni asserzione che dipende da "oggi" fissa l'orologio a questo
+// istante invece di ereditarlo. Mercoledi' 19 agosto 2026, a meta' giornata e a
+// meta' settimana: nessun confine vicino, ne' di giorno ne' di periodo.
+//
+// L'offset `+02:00` e' scritto di proposito: `new Date('2026-08-19T10:00:00')`
+// verrebbe letto nel fuso del **processo Node** — Europe/Rome in locale, UTC sul
+// runner — e la premessa rientrerebbe dalla finestra nell'atto di dichiararla.
+//
+// `CENT_ORA` serve a rifare la prova al confine senza toccare il codice:
+//
+//     CENT_ORA='2026-08-23T23:59:30+02:00' npx playwright test
+//
+// Se la suite passa anche li', l'orologio e' fissato davvero. Se passasse solo
+// col valore qui sotto, sarebbe fortuna.
+const ISTANTE = process.env['CENT_ORA'] ?? '2026-08-19T10:00:00+02:00'
+
 export default defineConfig({
   testDir: 'tests/e2e',
   // Un fallimento di geometria e' quasi sempre vero: ritentare lo nasconde.
@@ -45,7 +77,19 @@ export default defineConfig({
   // frase andava a capo a un numero diverso di righe. Le prime due premesse
   // (`TZ` in vitest.config.ts, `locale` qui sopra) sono nate dallo stesso
   // difetto: una cosa che l'ambiente decideva per noi, in silenzio.
-  use: { baseURL: BASE_URL, locale: 'it-IT', trace: 'retain-on-failure' },
+  //
+  // La **quarta** e' il tempo, ed e' due cose: il fuso (`timezoneId` qui sotto)
+  // e l'istante (`metadata.istante`, che i test leggono da `tests/e2e/clock.ts`).
+  // Il fuso da solo non basta — vedi il commento su ISTANTE qui sopra.
+  use: {
+    baseURL: BASE_URL,
+    locale: 'it-IT',
+    timezoneId: FUSO,
+    trace: 'retain-on-failure',
+  },
+  // L'istante passa di qui e non da una costante importata dai test perche' le
+  // premesse d'ambiente si leggono in un posto solo: questo file.
+  metadata: { istante: ISTANTE, fuso: FUSO },
   projects: [
     { name: 'iphone-se', use: { ...MOBILE, viewport: { width: 375, height: 667 } } },
     { name: 'iphone-14', use: { ...MOBILE, viewport: { width: 390, height: 844 } } },

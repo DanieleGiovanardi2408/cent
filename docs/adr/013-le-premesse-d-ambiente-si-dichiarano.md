@@ -1,4 +1,7 @@
-# ADR 013 — Le premesse d'ambiente si dichiarano, e il font e' la terza
+# ADR 013 — Le premesse d'ambiente si dichiarano
+
+(Il font e' la terza; il tempo — fuso **e** istante — e' la quarta: vedi
+l'aggiornamento in fondo.)
 
 Data: 2026-08-24
 Stato: accettata
@@ -90,3 +93,84 @@ larghezza. Il giorno che ne dipendera' una, si aggiunge li'.
   `tests/node-fs.d.ts` dichiara a mano l'unica funzione di Node che serve per
   leggerlo: `@types/node` avrebbe portato `process` e `Buffer` dentro `src`,
   dove la regola e' che `src/core` non sappia niente della piattaforma.
+
+---
+
+## Aggiornamento — la quarta premessa e' il tempo, ed e' due cose
+
+Data: 2026-08-24
+
+Il run partito alle 23:58:47 ha confrontato alle 00:00:00, e due test sono andati
+rossi con la stessa causa sotto due forme:
+
+```
+offline.spec.ts:53
+  Expected: "... Questa settimana · 17–23 ago ..."
+  Received: "... Questa settimana · 24–30 ago ..."
+```
+
+Il test legge il testo della pagina online, spegne la rete, ricarica e rilegge.
+Fra le due letture e' passata la mezzanotte: l'app ha ricalcolato il giorno
+civile al risveglio — cioe' **ha fatto esattamente quello che ADR 007 le
+chiede** — e il confronto ha accusato il precache di una cosa che non aveva
+fatto.
+
+### Cosa si dichiara, e dove
+
+1. **Il fuso**, `timezoneId: 'Europe/Amsterdam'` in `playwright.config.ts`,
+   accanto a `locale`. E' lo stesso `TZ` di `vitest.config.ts`: due suite sullo
+   stesso prodotto non possono misurare contro due calendari diversi. Senza, il
+   fuso era quello della macchina — Europe/Rome in locale, **UTC sul runner**.
+2. **L'istante**, `metadata.istante` nello stesso file, letto dai test tramite
+   `tests/e2e/clock.ts`. Perche' il fuso da solo **non basta**: anche con
+   Europe/Amsterdam fissato, un run che parte alle 23:59 attraversa comunque la
+   mezzanotte. Ogni asserzione che dipende da "oggi" fissa l'orologio invece di
+   ereditarlo.
+
+`setFixedTime` e non `install`: i timer devono continuare a correre, o i fogli
+non finiscono di chiudersi e i toast non se ne vanno mai. `home.spec.ts` lo
+faceva gia' cosi', ed e' il modello.
+
+### La trappola che si apre proprio dichiarando il fuso
+
+`new Date('2026-08-23T23:30:00')` non e' un orario di Amsterdam: e' un orario nel
+fuso del **processo Node**, che in CI e' UTC. Dichiarare `timezoneId` senza
+toccare quelle stringhe avrebbe spostato "domenica 23 alle 23:30" all'una e mezza
+di lunedi' 24 **sul solo runner**, facendo cadere i test sul confine di settimana
+nell'atto stesso di riparare gli altri. Verificato togliendo un offset e
+rilanciando con `TZ=UTC`: il test cade con `24–30 ago`.
+
+Quindi ogni istante nei test porta l'offset scritto (`+02:00` per agosto), e il
+giorno civile che serve a Node — `todayIso()` in `home.spec.ts` — si ricava
+dall'istante dichiarato e non da `new Date()`.
+
+### La prova al confine, ripetibile
+
+Un test che passa a mezzogiorno e cade a mezzanotte non e' riparato, e' fortunato.
+La prova si rifa' senza toccare il codice:
+
+    CENT_ORA='2026-08-23T23:59:30+02:00' npx playwright test
+    TZ=UTC CENT_ORA='2026-08-23T23:59:30+02:00' npx playwright test
+
+Trenta secondi prima della mezzanotte, e nella forma del runner. 104 passati, 10
+saltati in entrambe.
+
+### Il secondo rosso non era la stessa radice
+
+`overlays.spec.ts` accusava il promemoria di backup di coprire quattro chip delle
+categorie. Non era ne' la mezzanotte ne' una sovrapposizione: era **la sonda**.
+Prendeva il centro del rettangolo intero, lo arrotondava e lo confrontava con
+bordi frazionari, cosi' un bersaglio a cavallo del bordo inferiore di uno
+scroller veniva interrogato **oltre** quel bordo, dove si vede cio' che e'
+dipinto sotto la lista. Riprodotto in locale spostando quella riga di 0,3 px.
+
+Da li' e' venuta fuori la parte che l'aritmetica piu' fine non risolve:
+`getBoundingClientRect` e il test di collisione del browser non cadono sullo
+stesso decimale — misurati ~0,7 px di disaccordo su uno scroller della Home. La
+sonda ora interroga il **centro della parte visibile** (il bersaglio intersecato
+con gli antenati che ritagliano) e dichiara `ritagliato` cio' che resta sotto i
+2 px. Un overlay non ritaglia, quindi la regola delle Sovrapposizioni non si
+addolcisce di un pixel. Dettagli e misure in `tests/e2e/probe.ts`.
+
+Effetto collaterale utile: i bersagli ritagliati ora si **contano in tabella**.
+Lo stesso stato dava 14 bersagli in CI e 10 in locale, e nessuna riga lo diceva.

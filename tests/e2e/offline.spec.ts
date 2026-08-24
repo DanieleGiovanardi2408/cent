@@ -18,11 +18,24 @@
  *    quest'ultimo non esercita lo stesso percorso.
  * 4. Due asserzioni, non una. Uno stato 200 con il guscio vuoto passerebbe la
  *    prima e non la seconda.
+ *
+ * ## La quinta, che non e' del service worker: l'orologio
+ *
+ * Il confronto fra le due letture e' un confronto fra **due momenti**. La prima
+ * lettura e' online, la seconda dopo aver spento la rete e ricaricato: in mezzo
+ * passano dei secondi, e una volta ci e' passata la mezzanotte. Il testo
+ * cambiava da solo — "Questa settimana · 17–23 ago" contro "24–30 ago" — e il
+ * rosso accusava il precache di una cosa fatta dall'app secondo ADR 007.
+ *
+ * Qui l'orologio e' fissato: le due letture cadono nello stesso giorno civile
+ * per costruzione, e l'unica differenza che resta fra loro e' la rete, che e'
+ * quello che questo test vuole misurare. Vedi `clock.ts`.
  */
 // Questi test provano l'app, quindi dichiarano di girare nell'app installata:
 // fuori da standalone Cent e' una pagina di installazione (ADR 011). Vedi
 // `installed.ts` per il perche' la cucitura sta qui e non nel codice dell'app.
 import { expect, test } from './installed'
+import { fissaOrologio } from './clock'
 
 /**
  * Testo della pagina una volta che ha smesso di cambiare.
@@ -51,6 +64,11 @@ async function stableText(page: import('@playwright/test').Page): Promise<string
 }
 
 test('la seconda apertura funziona senza rete', async ({ page, context }) => {
+  // --- L'orologio prima di tutto: le due letture che questo test confronta
+  //     devono cadere nello stesso giorno civile anche se il run parte alle
+  //     23:59:30. Prima di `goto`, perche' l'app legge il giorno all'avvio.
+  await fissaOrologio(page)
+
   // --- Primo caricamento: il SW si installa ma non controlla ancora la pagina.
   await page.goto('./')
   await page.waitForFunction(() => navigator.serviceWorker.ready.then(() => true), null, {
