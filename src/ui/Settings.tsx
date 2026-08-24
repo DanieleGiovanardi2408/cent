@@ -4,7 +4,8 @@ import { LANGUAGE_NAMES, cadenceLabel, daysLabel, money, t } from './i18n'
 import './Settings.css'
 
 /**
- * Impostazioni, versione minima della fase 3: **lingua, budget, dati**.
+ * Impostazioni: **lingua, categorie, budget, dati, guida**. E' la versione
+ * minima della fase 3, e sono le cinque cose che la fase chiedeva.
  *
  * ## Non e' un foglio, e' una schermata
  *
@@ -21,9 +22,10 @@ import './Settings.css'
  *
  * ## Cosa non c'e' ancora, e dove andra'
  *
- * - **"rivedi la guida"** (passo 4): una riga in fondo. Oggi non esiste
- *   nemmeno la guida da rivedere, e un bottone che non fa niente e' un TODO
- *   travestito da funzione (CLAUDE.md, "Niente TODO orfani");
+ * ("rivedi la guida" c'e': e' l'ultima sezione, ed e' arrivata con la guida
+ * stessa nel passo 4. Un bottone che non fa niente sarebbe stato un TODO
+ * travestito da funzione, quindi e' nato insieme a cio' che riapre.)
+ *
  * - **il tema** chiaro/scuro/auto: rimandato, e non da adesso — segue
  *   `prefers-color-scheme` e la preferenza esplicita richiede di aggiornare
  *   anche i due `<meta name="theme-color">`, che le media query da sole non
@@ -73,6 +75,13 @@ interface Props {
   readonly ready: boolean
   readonly onEditBudget: () => void
   readonly onExport: () => void
+  /**
+   * Rimette la guida davanti. **Cancella** `onboardingCompletedAt` invece di
+   * aprire un pannello: la guida e' agganciata a quello stato e a nient'altro,
+   * e un secondo innesco sarebbe un secondo modo di mostrarla che il giorno che
+   * diverge non si sa piu' quale si sta guardando.
+   */
+  readonly onReplayGuide: () => void
 }
 
 export function Settings({
@@ -90,6 +99,7 @@ export function Settings({
   ready,
   onEditBudget,
   onExport,
+  onReplayGuide,
 }: Props) {
   return (
     <div class="prefs">
@@ -187,6 +197,19 @@ export function Settings({
         </p>
         <button type="button" class="prefs__action" disabled={!ready} onClick={onExport}>
           {t('settings.data.export')}
+        </button>
+      </section>
+
+      {/* Ultima, ed e' la posizione giusta: e' la voce che si cerca una volta
+          sola, e chi la cerca la cerca **qui dentro** — dove ADR 009 la manda,
+          visto che la guida non ha un tasto suo da nessun'altra parte. */}
+      <section class="prefs__group" aria-labelledby="prefs-guide">
+        <h2 class="prefs__title" id="prefs-guide">
+          {t('settings.guide.title')}
+        </h2>
+        <p class="prefs__text">{t('settings.guide.text')}</p>
+        <button type="button" class="prefs__action" disabled={!ready} onClick={onReplayGuide}>
+          {t('settings.guide.again')}
         </button>
       </section>
     </div>

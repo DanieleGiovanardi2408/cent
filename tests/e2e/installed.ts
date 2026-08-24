@@ -36,6 +36,8 @@
  * asserzione geometrica e non solo per quelle dell'app installata.
  */
 import { test as base } from './font'
+import { expect } from '@playwright/test'
+import type { Page } from '@playwright/test'
 
 export const test = base.extend({
   page: async ({ page }, use) => {
@@ -47,3 +49,60 @@ export const test = base.extend({
 })
 
 export { expect } from '@playwright/test'
+
+/**
+ * Chiude la guida al primo avvio, e **aspetta che la chiusura sia sul disco**.
+ *
+ * ## Perche' ogni test che prova l'app la chiama
+ *
+ * Dalla fase 3 il primo avvio ha una guida, ed e' un modale: finche' e' li'
+ * davanti, nessun tap arriva al FAB. Non e' un effetto collaterale da aggirare,
+ * e' il prodotto — quindi i test lo **attraversano** come lo attraversa un
+ * utente, con un tap su "Salta", invece di far finta che non ci sia scrivendo
+ * `onboardingCompletedAt` a mano dentro IndexedDB.
+ *
+ * La differenza non e' di stile: un test che scrive lo stato di nascosto non
+ * esercita mai il bottone che quello stato lo scrive, e il giorno che "Salta"
+ * smette di scriverlo la suite resta verde.
+ *
+ * ## Perche' aspetta il disco e non solo la sparizione
+ *
+ * Perche' meta' dei test qui dentro ricarica la pagina subito dopo aver
+ * preparato lo stato. La scrittura e' ottimistica — il mirror si muove nel frame
+ * del tap, IndexedDB arriva dopo — quindi un `reload()` immediato puo' precedere
+ * la scrittura e far ricomparire la guida a meta' scena. Si aspetta **la
+ * condizione**, come dappertutto in questa suite, non un numero di millisecondi.
+ */
+export async function chiudiGuida(page: Page): Promise<void> {
+  const skip = page.locator('.guide__skip')
+  await expect(skip, 'la guida del primo avvio non e\' comparsa').toBeVisible()
+  await skip.tap()
+  await expect(page.locator('.guide')).toHaveCount(0)
+  await expect
+    .poll(() => guidaChiusaSuDisco(page), {
+      message:
+        '"Salta" non ha scritto onboardingCompletedAt: la guida tornerebbe alla ' +
+        'prossima apertura, cioe\' fra un `reload()`',
+    })
+    .toBe(true)
+}
+
+/** Se `Settings.onboardingCompletedAt` e' scritto **sul disco**, non nel mirror. */
+export async function guidaChiusaSuDisco(page: Page): Promise<boolean> {
+  return page.evaluate(async () => {
+    const db: IDBDatabase = await new Promise((resolve, reject) => {
+      const request = indexedDB.open('cent')
+      request.onsuccess = () => resolve(request.result)
+      request.onerror = () => reject(request.error)
+    })
+    const record: { onboardingCompletedAt?: string } | undefined = await new Promise(
+      (resolve, reject) => {
+        const request = db.transaction('settings').objectStore('settings').get('settings')
+        request.onsuccess = () => resolve(request.result)
+        request.onerror = () => reject(request.error)
+      },
+    )
+    db.close()
+    return record?.onboardingCompletedAt !== undefined
+  })
+}

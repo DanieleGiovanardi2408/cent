@@ -79,6 +79,7 @@ export const en: Record<keyof typeof it, string> = {
   'toast.backupFileFailed': 'The file was not saved.',
   'toast.showData': 'Show the data',
   'toast.languageFailed': 'I could not change the language. Try again.',
+  'toast.guideFailed': 'I could not reopen the guide. Try again.',
   'toast.catAdded': '“{name}” is on the grid',
   'toast.catSwapped': '“{name}” in place of “{old}”',
   'toast.catArchived': '“{name}” is archived',
@@ -129,8 +130,6 @@ export const en: Record<keyof typeof it, string> = {
   'history.blank.title': 'No expenses yet',
   'history.blank.text':
     'Tap the + below, type what you spent and pick the category. Two taps: it works at the till, with one hand.',
-  'history.blank.install':
-    'Add Cent to your Home Screen: it opens full screen and starts even without a connection.',
 
   /* --- riga di spesa e azioni -------------------------------------------- */
   'row.categoryRemoved': 'Category removed',
@@ -146,6 +145,13 @@ export const en: Record<keyof typeof it, string> = {
   'add.hint.failed': 'I could not save it. Tap the category again.',
   'add.hint.max': 'Highest amount reached',
   'add.hint.empty': 'How much did you spend?',
+  // Le due varianti dei primi giorni. In inglese "pick a category" al primo
+  // stato e "tap a category" al secondo: la prima descrive **cosa succedera'**,
+  // la seconda e' l'istruzione per adesso, sui chip che si sono appena accesi.
+  'add.hint.type': 'Type the amount, then pick a category',
+  'add.hint.pick': 'Tap a category to save',
+  // La formula di VoiceOver: "double tap" e' cio' che il lettore stesso chiede.
+  'add.cat.hint': 'double tap to save',
   'add.date.other': 'Other',
   'add.date.pick': 'Pick another date',
   'add.note': 'Note',
@@ -229,6 +235,10 @@ export const en: Record<keyof typeof it, string> = {
   'settings.data.export': 'Export everything',
   'settings.data.last': 'Last backup: {days} ago.',
   'settings.data.never': 'You have not exported anything yet.',
+  'settings.guide.title': 'Guide',
+  'settings.guide.text':
+    'The two things about Cent nobody guesses: how you type an amount, and what saves an expense.',
+  'settings.guide.again': 'Show the guide again',
 
   /* --- Impostazioni: categorie -------------------------------------------- */
   'settings.cats.title': 'Categories',
@@ -287,6 +297,28 @@ export const en: Record<keyof typeof it, string> = {
   'color.magenta': 'Magenta',
   'color.lilac': 'Lilac',
   'color.grey': 'Grey',
+
+  /* --- la guida al primo avvio --------------------------------------------- */
+  // **Queste stringhe sono l'originale**, non una traduzione: la guida e' stata
+  // scritta qui e poi portata in italiano. La versione precedente era un calco
+  // dall'italiano ("The last two digits are always the cents") e si sentiva —
+  // l'unico punto dell'app in cui l'italiano suonava meglio dell'inglese, cioe'
+  // il segno che l'originale non era l'originale.
+  'guide.label': 'How Cent works',
+  'guide.step': 'Step {index} of 2',
+  'guide.skip': 'Skip',
+  'guide.next': 'Next',
+  'guide.start': 'Start',
+  // Il titolo dice il fatto, il sottotitolo dice **cosa fare**: due zeri per un
+  // importo tondo. Prima dicevano lo stesso fatto due volte, ed entrambi
+  // descrittivi — cioe' la regola non era in nessuno dei due.
+  'guide.amount.title': 'Amounts fill in from the right',
+  'guide.amount.text': 'For €23, type 2 3 0 0.',
+  // "saves the expense", non "saves it": senza l'oggetto, "it" si legge come la
+  // categoria — e in Settings le categorie si salvano per davvero.
+  'guide.save.title': 'Tapping a category saves the expense',
+  'guide.save.text':
+    'That’s the confirmation — no Save button. Wrong one? Undo, right after.',
 
   /* --- promemoria di backup ------------------------------------------------ */
   'nudge.never': 'You have never exported',

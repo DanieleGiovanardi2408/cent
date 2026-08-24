@@ -34,7 +34,7 @@
 // Questi test provano l'app, quindi dichiarano di girare nell'app installata:
 // fuori da standalone Cent e' una pagina di installazione (ADR 011). Vedi
 // `installed.ts` per il perche' la cucitura sta qui e non nel codice dell'app.
-import { expect, test } from './installed'
+import { chiudiGuida, expect, test } from './installed'
 import { fissaOrologio } from './clock'
 
 /**
@@ -74,6 +74,13 @@ test('la seconda apertura funziona senza rete', async ({ page, context }) => {
   await page.waitForFunction(() => navigator.serviceWorker.ready.then(() => true), null, {
     timeout: 30_000,
   })
+
+  // --- La guida del primo avvio: si chiude **qui**, prima che questo test
+  //     cominci a confrontare testi. E' un modale legato a uno stato, quindi
+  //     comparirebbe identico nella lettura online e in quella offline — ma il
+  //     testo confrontato sarebbe il suo, non quello dell'app, e il precache
+  //     verrebbe promosso da una schermata che non contiene nessun dato.
+  await chiudiGuida(page)
 
   // --- Trappola 2: serve un secondo caricamento ONLINE perche' il worker
   //     prenda il controllo. Senza `clientsClaim` non lo fa da solo.

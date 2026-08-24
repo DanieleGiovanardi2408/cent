@@ -81,10 +81,37 @@ export default defineConfig({
   // La **quarta** e' il tempo, ed e' due cose: il fuso (`timezoneId` qui sotto)
   // e l'istante (`metadata.istante`, che i test leggono da `tests/e2e/clock.ts`).
   // Il fuso da solo non basta — vedi il commento su ISTANTE qui sopra.
+  //
+  // La **quinta** e' il movimento: `reducedMotion` qui sotto.
+  //
+  // Playwright un default ce l'ha — `no-preference` — ma **un default non e' una
+  // dichiarazione**: e' l'ambiente che decide per noi, che e' esattamente il
+  // difetto da cui nascono le altre quattro. E qui non decide una misura, decide
+  // **quale ramo di codice esiste**: la scheda 1 della guida ha due forme
+  // diverse — l'importo che si riempie in movimento, oppure la tabella dei tre
+  // esempi — e quale delle due si dipinge dipende da questa preferenza. Se il
+  // default di Playwright cambiasse, il ramo animato — che *e'* il contenuto
+  // della scheda — smetterebbe di essere coperto **senza che nessun test
+  // diventi rosso**: la suite resterebbe verde provando l'altra meta'.
+  //
+  // Dichiararlo qui non basta e non e' la parte importante: la guida e' provata
+  // su **entrambi** i rami, esplicitamente, in `tests/e2e/guide.spec.ts`, dove
+  // il ramo ridotto si chiede con
+  // `test.use({ contextOptions: { reducedMotion: 'reduce' } })`.
+  // Questa riga dice qual e' il ramo di tutto il resto della suite.
+  //
+  // Sta dentro `contextOptions` e non accanto a `locale`, e non e' una scelta:
+  // in Playwright 1.62 `reducedMotion` **non e' un'opzione di primo livello** —
+  // lo sono `locale`, `timezoneId`, `colorScheme`, `viewport`, non lei. Scritta
+  // accanto a `locale` sarebbe stata accettata dal file e ignorata
+  // dall'esecuzione, cioe' una premessa che sembra dichiarata e non lo e': la
+  // forma peggiore, perche' chiude la domanda senza rispondere. Trovata con
+  // `tsc`, che i test type-checka; questo file no, ed e' un buco noto.
   use: {
     baseURL: BASE_URL,
     locale: 'it-IT',
     timezoneId: FUSO,
+    contextOptions: { reducedMotion: 'no-preference' },
     trace: 'retain-on-failure',
   },
   // L'istante passa di qui e non da una costante importata dai test perche' le

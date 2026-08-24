@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'preact/hooks'
 import { backupFilename, exportBackupFile, serializeBackup } from '../app/backup-file'
 import { getAppState, refreshDay } from '../app/boot'
 import { activeCategories, archivedCategories, planCategoryDeletion } from '../core/categories'
+import { isLive } from '../core/stats'
 import type { Repository } from '../core/repository'
 import { nowTimestamp } from '../core/types'
 import type { BudgetPeriod, Category, Expense, Language } from '../core/types'
@@ -15,6 +16,7 @@ import { CategorySheet } from './CategorySheet'
 import type { CategoryDraft, CategoryMode } from './CategorySheet'
 import { ExpenseActions } from './ExpenseActions'
 import { Fit } from './Fit'
+import { Guide } from './Guide'
 import { History } from './History'
 import { Home } from './Home'
 import { Mark } from './Mark'
@@ -59,6 +61,42 @@ let toastSeq = 0
 
 /** Quanto vive un toast: sei secondi se c'e' qualcosa da annullare, se no quattro. */
 const TOAST_MS = { plain: 4000, action: 6000 } as const
+
+/**
+ * Per quante spese la riga del foglio spiega come si salva. Poi mai piu'.
+ *
+ * Tre, e non e' un numero a sentimento: e' **un'asimmetria di costo**. Mostrarla
+ * due volte di troppo costa zero — testo statico, altezza gia' riservata,
+ * nessuna regione live — mentre mostrarla troppo poco costa un utente **senza
+ * piu' nessun canale** che gli dica come si salva, in un'app dove il salvataggio
+ * non ha un tasto. Un lato dell'errore e' gratis, l'altro no.
+ */
+const COACH_UNTIL = 3
+
+/**
+ * Quante spese l'utente ha salvato **con le proprie mani**, fino al tetto che
+ * interessa.
+ *
+ * `source === 'manual'` e non tutte, ed e' la parte che si sbaglia: dalla fase 5
+ * un catch-up di ricorrenze puo' materializzare decine di spese al primo avvio
+ * dopo un'assenza, e con un conteggio grezzo la riga si spegnerebbe **prima che
+ * l'utente abbia toccato un chip**. Le cancellate non contano per la ragione
+ * simmetrica: una spesa fatta e disfatta e' comunque un chip toccato, ma
+ * `isLive` tiene il conteggio uguale a quello che l'utente vede nello Storico,
+ * ed e' li' che si formerebbe il dubbio.
+ *
+ * Si ferma al tetto: con 5.000 spese in archivio non c'e' nessun motivo di
+ * contarle tutte per rispondere a una domanda che e' "sono almeno tre?".
+ */
+function savedByHand(expenses: readonly Expense[], stopAt: number): number {
+  let count = 0
+  for (const expense of expenses) {
+    if (expense.source !== 'manual' || !isLive(expense)) continue
+    count += 1
+    if (count >= stopAt) return count
+  }
+  return count
+}
 
 export function App() {
   const app = useApp()
@@ -165,6 +203,37 @@ export function App() {
   const homePeriod = useMemo(
     () => activePeriod(app.data?.budgets ?? [], app.day),
     [app.data?.budgets, app.day],
+  )
+
+  /**
+   * La guida: si mostra finche' `Settings.onboardingCompletedAt` e' assente.
+   *
+   * **E' uno stato, non un evento** — ed e' la differenza che ADR 009 chiede di
+   * saper fare. Agganciata all'avvio comparirebbe solo agli avvii a freddo,
+   * cioe' a seconda di se iOS ha ucciso l'app in background; agganciata allo
+   * stato compare a ogni apertura finche' non e' stata chiusa, che e' ripetibile
+   * e idempotente.
+   *
+   * `app.data !== null` non e' una comodita': finche' il database non e' aperto
+   * non si **sa** se la guida sia stata gia' vista, e dipingerla intanto la
+   * farebbe lampeggiare addosso a chi la chiuse tre settimane fa. Il guscio si
+   * dipinge prima dei dati (regola "Ordine di pittura"), la guida no: non e'
+   * guscio, e' una risposta a una domanda che solo il disco puo' dare.
+   */
+  const guide = app.data !== null && app.data.settings.onboardingCompletedAt === undefined
+
+  /**
+   * La riga del foglio che spiega come si salva, accesa finche' non si sono
+   * salvate tre spese a mano.
+   *
+   * Il conteggio **si deriva**, non si memorizza: le spese sono gia' nel mirror,
+   * e un campo in `Settings` significherebbe o infilarlo nella migrazione 2 -> 3
+   * o farne una seconda su dati veri, per un contatore gia' ricavabile. E' la
+   * stessa dottrina del periodo della Home, che deriva dai budget.
+   */
+  const coach = useMemo(
+    () => savedByHand(app.data?.expenses ?? [], COACH_UNTIL) < COACH_UNTIL,
+    [app.data?.expenses],
   )
 
   /**
@@ -414,6 +483,53 @@ export function App() {
     }
   }
 
+  /**
+   * La guida e' finita: si scrive lo stato, e da li' in poi non si vede piu'.
+   *
+   * Lo scrivono **entrambe** le uscite — "Inizia" e "Salta" — perche' un "Salta"
+   * che non scrive sarebbe una parola che mente: la guida tornerebbe alla
+   * prossima apertura, cioe' fra dieci secondi.
+   *
+   * Ottimistica come ogni scrittura locale: `updateSettings` muove il mirror e
+   * questo render finisce con l'app davanti, sotto i 100 ms, senza spinner. Se
+   * il disco non accetta, la scrittura finisce in `writeFailures` e l'avviso
+   * "esporta adesso" compare da solo. Il `catch` copre l'unico rifiuto sincrono
+   * possibile — un import in corso — che in questa fase non ha ancora una porta
+   * nella UI: rimediarci con un messaggio vorrebbe dire scriverlo per uno stato
+   * che nessuno puo' produrre.
+   */
+  function completeGuide(): void {
+    const repo = app.repo
+    if (!repo) return
+    try {
+      repo.updateSettings({ onboardingCompletedAt: nowTimestamp() })
+    } catch {
+      // Un import sta sostituendo i dati: la guida resta, e al prossimo render
+      // lo stato arrivera' comunque dal mirror nuovo.
+    }
+  }
+
+  /**
+   * "Rivedi la guida": **cancella** lo stato, non apre un foglio.
+   *
+   * E' l'unico verso che rende la guida ritrovabile senza duplicarne
+   * l'innesco: se la riaprisse come un pannello, esisterebbero due modi di
+   * mostrarla — uno legato allo stato e uno a un tap — e il giorno che divergono
+   * nessuno saprebbe quale dei due sta guardando. Nessun toast: la guida compare
+   * nello stesso frame, ed e' il riscontro.
+   */
+  function replayGuide(): void {
+    const repo = app.repo
+    if (!repo) return
+    try {
+      repo.updateSettings({ onboardingCompletedAt: null })
+    } catch {
+      // Qui il messaggio serve: il tap non ha prodotto niente a schermo, e senza
+      // una parola resterebbe un bottone che a volte non fa niente.
+      showToast(t('toast.guideFailed'))
+    }
+  }
+
   /* --- le categorie ------------------------------------------------------ *
    *
    * Cinque gesti e una regola sola dietro tutti: **la griglia tiene otto**, e
@@ -593,6 +709,7 @@ export function App() {
   // sparendo, e tenerlo qui zittirebbe il toast che nasce proprio in
   // quell'istante.
   const modal =
+    guide ||
     (sheet !== null && !sheet.leaving) ||
     (catSheet !== null && !catSheet.leaving) ||
     picked !== null ||
@@ -747,6 +864,7 @@ export function App() {
               ready={app.repo !== null}
               onEditBudget={() => openSheet('budget')}
               onExport={exportNow}
+              onReplayGuide={replayGuide}
             />
           )}
         </main>
@@ -781,6 +899,7 @@ export function App() {
           key={session}
           categories={categories}
           day={app.day}
+          coach={coach}
           leaving={sheet.leaving}
           onSave={save}
           onClose={closeSheet}
@@ -832,6 +951,13 @@ export function App() {
           onClose={() => setPicked(null)}
         />
       )}
+
+      {/* La guida sta con gli altri modali e **dopo** di loro nel DOM: al primo
+          avvio e' l'unica cosa aperta, ma se un giorno qualcosa si aprisse
+          sotto, l'ordine dice gia' chi sta davanti senza un livello nuovo di
+          `z-index`. Come i fogli, sta fuori da `.app`: dentro, l'`aria-hidden`
+          che nasconde lo sfondo nasconderebbe anche lei. */}
+      {guide ? <Guide categories={categories} onDone={completeGuide} /> : null}
 
       {panel === null ? null : (
         <BackupPanel

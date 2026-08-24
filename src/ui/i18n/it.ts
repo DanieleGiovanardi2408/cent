@@ -80,6 +80,7 @@ export const it = {
   'toast.backupFileFailed': 'Il file non si è salvato.',
   'toast.showData': 'Mostra i dati',
   'toast.languageFailed': 'Non sono riuscito a cambiare lingua. Riprova.',
+  'toast.guideFailed': 'Non sono riuscito a riaprire la guida. Riprova.',
   // Le categorie: cosa e' successo, con i nomi veri dentro. Archiviare si
   // annulla (la griglia ha appena liberato un posto, quindi rimetterla non fa
   // la nona); cancellare no, e il foglio lo dice prima.
@@ -133,8 +134,6 @@ export const it = {
   'history.blank.title': 'Nessuna spesa, per ora',
   'history.blank.text':
     'Tocca il + qui sotto, digita quanto hai speso e scegli la categoria. Sono due tap: si fa in cassa, con una mano.',
-  'history.blank.install':
-    'Aggiungi Cent alla schermata Home: si apre a schermo intero e parte anche senza rete.',
 
   /* --- riga di spesa e azioni -------------------------------------------- */
   'row.categoryRemoved': 'Categoria rimossa',
@@ -150,6 +149,17 @@ export const it = {
   'add.hint.failed': 'Non sono riuscito a salvare. Tocca di nuovo la categoria.',
   'add.hint.max': 'Importo massimo raggiunto',
   'add.hint.empty': 'Quanto hai speso?',
+  // Le due varianti contestuali dei primi giorni, mostrate finche' non si sono
+  // salvate tre spese (vedi App.tsx). Sono due e non una perche' con l'importo
+  // vuoto i chip sono spenti: dire "tocca una categoria" quando toccare non fa
+  // niente invita a un gesto che fallisce, nel momento peggiore.
+  'add.hint.type': 'Digita l\u2019importo, poi tocca una categoria',
+  'add.hint.pick': 'Tocca una categoria per salvare',
+  // Il nome accessibile del chip, non un'istruzione a schermo: "tocca due
+  // volte" e' la formula con cui VoiceOver chiede l'attivazione. Chi esplora
+  // con lo schermo letto scopre cosi' che quel tap salva **sul controllo che
+  // sta per toccare**, invece che in un annuncio che arriva secondo.
+  'add.cat.hint': 'tocca due volte per salvare',
   'add.date.other': 'Altra',
   'add.date.pick': 'Scegli un’altra data',
   'add.note': 'Nota',
@@ -244,6 +254,13 @@ export const it = {
   // accende il promemoria, detta dove si esporta.
   'settings.data.last': 'Ultimo backup: {days} fa.',
   'settings.data.never': 'Non hai ancora esportato niente.',
+  // "Rivedi la guida" e' l'unica via di ritorno per chi ha toccato "Salta": la
+  // guida e' agganciata a uno stato, quindi rivederla vuol dire **cancellare
+  // quello stato**, non riaprire un foglio.
+  'settings.guide.title': 'Guida',
+  'settings.guide.text':
+    'Le due cose che in Cent non si indovinano: come si digita l’importo e cosa salva la spesa.',
+  'settings.guide.again': 'Rivedi la guida',
 
   /* --- Impostazioni: categorie -------------------------------------------- */
   'settings.cats.title': 'Categorie',
@@ -308,6 +325,28 @@ export const it = {
   'color.magenta': 'Magenta',
   'color.lilac': 'Lilla',
   'color.grey': 'Grigio',
+
+  /* --- la guida al primo avvio --------------------------------------------- */
+  // Due schede, non tre: la terza — "i dati restano su questo telefono" —
+  // e' stata tagliata. Restano le due convenzioni che nessuna altra app ha, e
+  // che quindi nessuno indovina.
+  //
+  // Le stringhe inglesi sono l'originale (vedi en.ts): qui c'e' la traduzione.
+  'guide.label': 'Come si usa Cent',
+  'guide.step': 'Passo {index} di 2',
+  'guide.skip': 'Salta',
+  'guide.next': 'Avanti',
+  'guide.start': 'Inizia',
+  // Titolo: il fatto. Sottotitolo: la **regola operativa**, che e' la cosa che
+  // serve davvero al primo importo tondo — due zeri, o si segna un centesimo.
+  'guide.amount.title': 'L’importo si riempie da destra',
+  'guide.amount.text': 'Per 23 € digita 2 3 0 0.',
+  // "salva la spesa", non "salva la categoria": in Impostazioni le categorie si
+  // salvano davvero, quindi la lettura sbagliata e' disponibile e va chiusa
+  // nominando l'oggetto.
+  'guide.save.title': 'Toccare una categoria salva la spesa',
+  'guide.save.text':
+    'È quella la conferma: non c’è un tasto Salva. Categoria sbagliata? Annulla, subito dopo.',
 
   /* --- promemoria di backup ------------------------------------------------ */
   // Corte perche' la banda deve restare **discreta**: due righe di testo e un

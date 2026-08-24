@@ -29,9 +29,6 @@ const display = readDisplayContext()
  */
 setLanguage(detectLanguage())
 
-// Serve alla UI per dire la cosa giusta: in standalone "Aggiungi a Home" e' rumore.
-document.documentElement.dataset['display'] = display.standalone ? 'standalone' : 'browser'
-
 /**
  * Il cancello di ADR 011: fuori da standalone, sull'origine di produzione, Cent
  * **e'** la pagina di installazione. Non un'app ridotta, non un avviso sopra

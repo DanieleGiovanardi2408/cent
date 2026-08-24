@@ -1,0 +1,453 @@
+/* La guida al primo avvio.
+ *
+ * Non e' un bottom sheet: e' una scheda **centrata**, e la differenza e'
+ * intenzionale. I fogli si aprono sopra qualcosa che si stava guardando e si
+ * chiudono con un gesto verso il basso; qui non c'e' niente sotto che si stia
+ * guardando — l'app e' appena stata aperta per la prima volta — e le due uscite
+ * sono dichiarate dentro la scheda. Una forma diversa per un oggetto diverso.
+ *
+ * Il velo e' quello dei fogli (`.scrim` in sheet.css): stesso colore, stessa
+ * durata, stessa origine. Duplicarlo avrebbe fatto divergere due veli che devono
+ * essere lo stesso velo.
+ *
+ * Animazioni: solo `transform` e `opacity`, e solo all'entrata. All'uscita non
+ * ce n'e' nessuna, ed e' una scelta — chiudere la guida vuol dire "voglio l'app
+ * adesso", e la risposta piu' onesta a quel tap e' l'app, nello stesso frame.
+ */
+
+.guide {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-sheet);
+  display: grid;
+  place-items: center;
+  padding-block: max(var(--sp-4), var(--safe-top)) max(var(--sp-4), var(--safe-bottom));
+  padding-inline: max(var(--sp-4), var(--safe-left)) max(var(--sp-4), var(--safe-right));
+}
+
+/* Solo `translate` e `opacity`, e **niente `scale`**: la scheda contiene i suoi
+ * due bersagli, e un antenato scalato di 0.98 li rimpicciolisce insieme a se'.
+ * La sonda l'ha misurato — `button.guide__next (85x43)` durante l'entrata,
+ * contro i 44 dichiarati — ed e' un difetto vero anche fuori dal test: per i
+ * 200 ms dell'animazione il bersaglio e' piu' piccolo di quanto promette,
+ * proprio mentre il dito parte. Un `:active` che scala e' un'altra cosa: dura
+ * quanto il dito e' gia' sul bersaglio. */
+@keyframes guide-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 12px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.guide__card {
+  inline-size: 100%;
+  max-inline-size: 26rem;
+  max-block-size: 100%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--sp-4);
+  border-radius: var(--radius-3);
+  background-color: var(--surface);
+  box-shadow: var(--shadow-1);
+  animation: guide-in var(--dur-2) var(--ease-out) both;
+}
+
+.guide__step {
+  font-size: var(--fs-100);
+  font-weight: var(--fw-semibold);
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.guide__title {
+  margin-block-start: var(--sp-3);
+  font-size: var(--fs-400);
+  font-weight: var(--fw-semibold);
+  line-height: var(--lh-snug);
+  letter-spacing: var(--tracking-tight);
+  color: var(--text);
+}
+
+/* Tre righe riservate: le due schede hanno testi di lunghezza diversa e a 320
+ * punti la seconda ne prende tre. Senza la riserva, passare da una scheda
+ * all'altra farebbe saltare i due bottoni sotto — cioe' proprio i bersagli
+ * verso cui il pollice e' gia' in volo. */
+.guide__text {
+  min-block-size: calc(3em * var(--lh-body));
+  margin-block-start: var(--sp-2);
+  font-size: var(--fs-200);
+  line-height: var(--lh-body);
+  color: var(--text-muted);
+  text-wrap: pretty;
+}
+
+/* --- i due bottoni -------------------------------------------------------- */
+/* "Inizia" sta a destra, dove sta sempre l'azione che porta avanti; "Salta" a
+ * sinistra e in tono minore. Sull'ultima scheda ne resta uno solo e prende
+ * tutta la riga: `margin-inline-start: auto` sul primario lo tiene comunque a
+ * destra, e `flex: 1` sul solo bottone rimasto sarebbe stato un bersaglio che
+ * cambia larghezza fra una scheda e l'altra. */
+
+.guide__acts {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-block-start: var(--sp-4);
+}
+
+/* Entrambe le misure dichiarate, non derivate dal contenuto: "Skip" e "Salta"
+ * sono due parole di lunghezza diversa, e la larghezza di un bersaglio non puo'
+ * dipendere dalla lingua (CLAUDE.md, "Ogni bersaglio dichiara le proprie misure
+ * minime"). */
+.guide__skip,
+.guide__next {
+  min-block-size: var(--tap-min);
+  min-inline-size: 5.5rem;
+  padding-inline: var(--sp-4);
+  border-radius: var(--radius-2);
+  font-size: var(--fs-300);
+  font-weight: var(--fw-medium);
+}
+
+.guide__skip {
+  color: var(--text-muted);
+}
+
+.guide__skip:active {
+  background-color: var(--surface-sunken);
+  color: var(--text);
+}
+
+.guide__next {
+  margin-inline-start: auto;
+  background-color: var(--brand);
+  color: var(--on-brand);
+  font-weight: var(--fw-semibold);
+}
+
+/* Il riscontro al tocco e' `opacity`, **non una `scale`**.
+ *
+ * Il FAB cede scalando e li' va bene: quando e' scalato il dito e' gia' sopra,
+ * e nessuno lo misura in quello stato. Qui no — la sonda misura i bersagli
+ * della guida subito dopo un tap, e `getBoundingClientRect` include i
+ * `transform`: 88x44 dichiarati diventavano 85x43 misurati, cioe' un bersaglio
+ * che a schermo mantiene la promessa e in tabella la rompe. Chromium tiene
+ * `:active` per qualche centinaio di millisecondi dopo il tocco e lo stile
+ * calcolato resta indietro anche di piu', quindi non e' un istante che si possa
+ * aspettare: e' una misura che non deve dipendere dallo stato del dito.
+ *
+ * `opacity` da' lo stesso riscontro dentro i 100 ms, e' compositor-only come la
+ * `scale`, e non tocca nessuna misura. */
+.guide__next:active {
+  opacity: 0.86;
+}
+
+/* --- l'illustrazione ------------------------------------------------------ */
+/* Altezza **riservata** e uguale per le due schede: cambiare scheda non deve
+ * spostare titolo, testo e bottoni. E' la stessa disciplina della riga vuota
+ * nel foglio dell'inserimento. */
+
+.demo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-3);
+  min-block-size: 7.5rem;
+  margin-block-start: var(--sp-3);
+  padding: var(--sp-3);
+  border-radius: var(--radius-2);
+  background-color: var(--surface-sunken);
+}
+
+/* --- scheda 1: i tasti battuti ------------------------------------------- */
+/* Disegnati come tasti del tastierino, non come testo: e' cio' che dice "questi
+ * sono i tasti che premi" senza una parola in piu' da tradurre. */
+
+.demo__typed {
+  display: flex;
+  gap: var(--sp-1);
+}
+
+.demo__key {
+  display: grid;
+  place-items: center;
+  inline-size: 1.75rem;
+  block-size: 1.75rem;
+  border-radius: var(--radius-1);
+  background-color: var(--surface);
+  color: var(--text);
+  font-size: var(--fs-200);
+  font-weight: var(--fw-semibold);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Il tasto non ancora battuto resta nel flusso: la riga tiene la sua larghezza
+ * per tutti e tre gli stati, quindi la freccia e l'importo non si spostano
+ * mentre l'esempio va avanti. `visibility`, non `display`. */
+.demo__key[data-off] {
+  visibility: hidden;
+}
+
+.demo__arrow {
+  color: var(--text-muted);
+  font-size: var(--fs-300);
+}
+
+/* --- scheda 1: l'importo in celle ---------------------------------------- */
+/* Una cella per parte del formato (`Intl.formatToParts`): la cella `decimal` e'
+ * l'ancora, la `currency` sta ferma dove il locale l'ha messa — a destra in
+ * italiano, a sinistra in inglese — e le cifre entrano solo dentro `integer` e
+ * `fraction`. Nessuna cifra passa mai sotto il simbolo, in nessuna delle due
+ * lingue. Il perche' per esteso sta in Guide.tsx. */
+
+.demo__amount {
+  display: flex;
+  align-items: baseline;
+  font-size: var(--fs-500);
+  font-weight: var(--fw-semibold);
+  line-height: var(--lh-tight);
+  letter-spacing: var(--tracking-tight);
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+/* `overflow: hidden` per cella e non sul gruppo: la cifra entra da destra e
+ * viene ritagliata dalla **sua** cella, quindi non si vede mai passare sopra la
+ * cifra accanto ne' sotto il simbolo. */
+.demo__cell {
+  display: block;
+  overflow: hidden;
+}
+
+/* La cella di una cifra e' larga **esattamente una cifra**, dichiarata.
+ *
+ * Senza, la larghezza la decide il glifo, e `0,05` -> `0,50` -> `5,00` non sono
+ * larghi uguale: la riga e' centrata, quindi il separatore decimale scivolava di
+ * mezzo pixel a ogni passo. Misurato dal test dell'invariante — `decimal@236`,
+ * `236.57`, `236.64` — cioe' un'ancora che si muove, che e' esattamente la cosa
+ * che le celle esistono per impedire.
+ *
+ * Mezzo pixel non si vede, e non e' il punto: il punto e' che l'invariante o e'
+ * vero per costruzione o non e' un invariante. `1ch` e' la larghezza dello zero
+ * nel font corrente, e con `tabular-nums` e' la larghezza di tutte le cifre:
+ * niente numeri cablati, niente tolleranze nel test. E' la stessa mossa del
+ * resto del progetto — rendere esatta la cosa misurata invece di tollerare
+ * l'approssimazione nella misura. */
+.demo__cell[data-kind="digit"] {
+  inline-size: 1ch;
+  text-align: center;
+}
+
+@keyframes guide-digit {
+  from {
+    opacity: 0;
+    transform: translate3d(60%, 0, 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.demo__glyph {
+  display: block;
+  animation: guide-digit var(--dur-2) var(--ease-out) both;
+}
+
+/* --- scheda 1, ramo senza movimento: i tre casi in tabella ---------------- */
+
+.demo--still {
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--sp-2);
+}
+
+.demo__line {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+}
+
+/* La colonna dei tasti tiene la larghezza dei tre: cosi' le frecce delle tre
+ * righe sono incolonnate e la tabella si legge come una tabella. */
+.demo--still .demo__typed {
+  min-inline-size: 6rem;
+  justify-content: flex-end;
+}
+
+.demo--still .demo__amount {
+  font-size: var(--fs-400);
+}
+
+/* --- scheda 2: i chip veri, dipinti ---------------------------------------- */
+/* Sono `span`, non bottoni: illustrazione, non bersagli. La classe non e'
+ * `.cat` di proposito — vedi il commento in Guide.tsx. */
+
+.demo--save {
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.mock__cats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--sp-2);
+  inline-size: 100%;
+}
+
+.mock__cat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-1);
+  min-block-size: 3rem;
+  padding: var(--sp-1);
+  border-radius: var(--radius-2);
+  background-color: var(--surface);
+  overflow: hidden;
+}
+
+/* Quello toccato: la stessa superficie che il chip vero prende sotto il dito,
+ * piu' un bordo, perche' un chip "premuto" in un'immagine ferma non si
+ * distingue dagli altri senza un secondo segnale. */
+.mock__cat[data-on] {
+  background-color: color-mix(in srgb, var(--cat) 22%, var(--surface));
+  box-shadow: inset 0 0 0 2px var(--brand);
+}
+
+.mock__emoji {
+  display: grid;
+  place-items: center;
+  inline-size: 1.5rem;
+  block-size: 1.5rem;
+  border-radius: var(--radius-full);
+  background-color: color-mix(in srgb, var(--cat) 40%, var(--surface));
+  font-size: 0.875rem;
+  line-height: 1;
+}
+
+.mock__name {
+  max-inline-size: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: var(--fs-100);
+  line-height: var(--lh-snug);
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+
+/* Il toast, con **gli stessi token di quello vero** (Toast.css): stessa
+ * superficie, stesso bordo, stesso raggio, e "Annulla" nel colore del marchio.
+ * Non e' vezzo di coerenza: la scheda serve a far riconoscere fra tre secondi
+ * una cosa che comparira' per sei, e un'illustrazione che assomiglia a un'altra
+ * cosa e' peggio di nessuna illustrazione. Se Toast.css cambia, questo blocco va
+ * riletto — e' l'unico punto in cui due disegni devono restare uguali. */
+.mock__toast {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  max-inline-size: 100%;
+  padding-block: var(--sp-1);
+  padding-inline: var(--sp-3) var(--sp-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-3);
+  background-color: var(--surface);
+  color: var(--text);
+  font-size: var(--fs-200);
+}
+
+.mock__amount {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.mock__undo {
+  flex: none;
+  padding-inline: var(--sp-2);
+  color: var(--brand);
+  font-weight: var(--fw-semibold);
+}
+
+/* --- il telefono girato ---------------------------------------------------- */
+/*
+ * A 800x327 la scheda in colonna non ci starebbe: illustrazione, titolo, testo
+ * e bottoni sommano piu' dell'altezza disponibile, e il risultato sarebbe una
+ * scheda che scorre — cioe' due bottoni sotto la piega, all'unico momento in
+ * cui l'utente deve poter uscire.
+ *
+ * Due colonne: l'illustrazione a sinistra, le parole e le uscite a destra. E'
+ * la stessa mossa del foglio d'inserimento, per la stessa ragione: girato, lo
+ * spazio che avanza e' orizzontale.
+ */
+@media (max-height: 480px) and (orientation: landscape) {
+  .guide__card {
+    max-inline-size: 44rem;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-areas:
+      "demo  step"
+      "demo  title"
+      "demo  text"
+      "demo  acts";
+    grid-template-rows: auto auto auto 1fr;
+    column-gap: var(--sp-4);
+  }
+
+  .guide__step {
+    grid-area: step;
+  }
+
+  .demo {
+    grid-area: demo;
+    align-self: center;
+    min-block-size: 0;
+    margin-block-start: 0;
+  }
+
+  .guide__title {
+    grid-area: title;
+    margin-block-start: var(--sp-2);
+  }
+
+  .guide__text {
+    grid-area: text;
+    /* In orizzontale la colonna e' larga la meta': due righe bastano, e tre
+     * riserverebbero spazio che qui non c'e'. */
+    min-block-size: calc(2em * var(--lh-body));
+  }
+
+  .guide__acts {
+    grid-area: acts;
+    align-self: end;
+    margin-block-start: var(--sp-2);
+  }
+}
+
+/* --- schermi stretti ------------------------------------------------------- */
+/* 320 punti: non e' solo il vecchio SE, e' anche lo Zoom schermo di iOS. I
+ * quattro chip dell'illustrazione scendono con il nome, come nella griglia
+ * vera. */
+@media (max-width: 359px) {
+  .guide__card {
+    padding: var(--sp-3);
+  }
+
+  .mock__name {
+    font-size: 0.6875rem; /* 11px */
+    letter-spacing: -0.02em;
+  }
+
+  .guide__skip,
+  .guide__next {
+    min-inline-size: var(--tap-min);
+    padding-inline: var(--sp-3);
+  }
+}

@@ -32,6 +32,24 @@ export interface Target {
 /**
  * Misura tutti i bersagli interattivi visibili e dice, per ciascuno, chi
  * risponde al centro.
+ *
+ * ## Misura il rettangolo **dipinto**, trasformazioni comprese
+ *
+ * `getBoundingClientRect` include i `transform`, quindi un bersaglio che si
+ * rimpicciolisce sotto il dito viene misurato rimpicciolito se la sonda passa in
+ * quell'istante: un 88x44 diventa 85x43 e la sonda lo chiama "piccolo".
+ *
+ * Non c'e' niente da tollerare nella misura, e non basta aspettare: Chromium
+ * tiene lo stato `:active` per qualche centinaio di millisecondi dopo un `tap()`
+ * e lo stile calcolato puo' restare indietro anche **dopo** che `:active` non
+ * corrisponde piu' — misurato qui, con `document.querySelector(':active')` gia'
+ * a `null` e `getComputedStyle` ancora a `scale(0.97)`. Un'attesa su quella
+ * condizione sarebbe una verifica che promette una cosa e ne fa un'altra.
+ *
+ * La regola sta quindi dove sta sempre in questo progetto — **nel CSS**: il
+ * riscontro al tocco su un bersaglio si da' con `opacity` o con il colore, non
+ * con una `scale` che ne cambia le misure dichiarate. Vedi `Guide.css`,
+ * `.guide__next:active`, dove questa sonda l'ha trovata.
  */
 export async function probe(page: Page): Promise<readonly Target[]> {
   return page.evaluate(() => {

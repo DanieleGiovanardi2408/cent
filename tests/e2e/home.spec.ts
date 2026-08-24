@@ -46,7 +46,7 @@
 // Questi test provano l'app, quindi dichiarano di girare nell'app installata:
 // fuori da standalone Cent e' una pagina di installazione (ADR 011). Vedi
 // `installed.ts` per il perche' la cucitura sta qui e non nel codice dell'app.
-import { expect, test } from './installed'
+import { chiudiGuida, expect, test } from './installed'
 import { fontPronto, TEST_FONT } from './font'
 import { fissaOrologio, giornoDichiarato } from './clock'
 import type { Page } from '@playwright/test'
@@ -492,6 +492,7 @@ async function scenaVuota(page: Page): Promise<Measures> {
   await watch(page)
   await page.goto('./')
   await expect(page.locator('.budget')).toBeEnabled()
+  await chiudiGuida(page)
   await settled(page)
   return measure(page)
 }
@@ -502,6 +503,7 @@ async function scena5000(page: Page): Promise<Measures> {
   await fissaOrologio(page)
   await page.goto('./')
   await expect(page.locator('.budget')).toBeEnabled()
+  await chiudiGuida(page)
 
   // 200,00 € a settimana contro ~3.000 € di spese seminate nel periodo: il
   // residuo e' negativo e largo, cioe' il caso peggiore per la larghezza.
@@ -592,6 +594,7 @@ test.describe('la Home non salta', () => {
     // l'altro. Il riquadro sotto il numero cambia contenuto del tutto.
     await page.goto('./')
     await expect(page.locator('.budget')).toBeEnabled()
+    await chiudiGuida(page)
 
     /**
      * Dove comincia la sezione di oggi **dentro il contenuto**, non nel
@@ -634,6 +637,7 @@ async function scena320(page: Page): Promise<Measures> {
   await fissaOrologio(page)
   await page.goto('./')
   await expect(page.locator('.budget')).toBeEnabled()
+  await chiudiGuida(page)
   await setBudget(page, '70000', 'A settimana')
   await seed(page, 200)
 
@@ -687,6 +691,7 @@ test('la Home dice quanto resta e quanto al giorno, e sono numeri veri', async (
 
   await page.goto('./')
   await expect(page.locator('.budget')).toBeEnabled()
+  await chiudiGuida(page)
 
   // Nessun budget: la Home non e' vuota, mostra il totale del periodo.
   await expect(page.locator('.hero__label')).toHaveText('Spesi')
@@ -733,6 +738,7 @@ test('l ultimo giorno del periodo la Home dice un totale, non un ritmo', async (
 
   await page.goto('./')
   await expect(page.locator('.budget')).toBeEnabled()
+  await chiudiGuida(page)
   await setBudget(page, '70000', 'A settimana')
 
   const allowance = page.locator('.allowance')
@@ -758,6 +764,7 @@ test('al risveglio la Home mostra il periodo di oggi, non quello di ieri', async
   await page.clock.install({ time: new Date('2026-08-23T23:30:00+02:00') })
   await page.goto('./')
   await expect(page.locator('.budget')).toBeEnabled()
+  await chiudiGuida(page)
   await expect(page.locator('.hero__period')).toContainText('17')
   await expect(page.locator('.hero__period')).toContainText('23')
 
@@ -783,6 +790,7 @@ test('al risveglio la Home mostra il periodo di oggi, non quello di ieri', async
 test('tornare al periodo di prima nello stesso giorno riporta la Home li', async ({ page }) => {
   await page.goto('./')
   await expect(page.locator('.budget')).toBeEnabled()
+  await chiudiGuida(page)
 
   await setBudget(page, '20000', 'A settimana')
   await expect(page.locator('.hero__period')).toContainText('Questa settimana')
@@ -811,6 +819,7 @@ test('tornare al periodo di prima nello stesso giorno riporta la Home li', async
 test('nel foglio del budget il periodo seleziona e basta: scrive solo Salva', async ({ page }) => {
   await page.goto('./')
   await expect(page.locator('.budget')).toBeEnabled()
+  await chiudiGuida(page)
   await setBudget(page, '20000', 'A settimana')
 
   await page.locator('.budget').tap()
@@ -852,6 +861,7 @@ async function scenaMetaSettimana(page: Page): Promise<Measures> {
   await page.clock.install({ time: new Date('2026-08-19T10:00:00+02:00') })
   await page.goto('./')
   await expect(page.locator('.budget')).toBeEnabled()
+  await chiudiGuida(page)
 
   await seedOn(page, [
     ['2026-08-17', 12_000],
@@ -875,6 +885,7 @@ test.describe('la Home con un budget nato a meta settimana', () => {
     await page.clock.install({ time: new Date('2026-08-19T10:00:00+02:00') })
     await page.goto('./')
     await expect(page.locator('.budget')).toBeEnabled()
+    await chiudiGuida(page)
 
     await seedOn(page, [
       ['2026-08-17', 12_000],
@@ -949,6 +960,7 @@ async function scenaLingua(page: Page): Promise<Measures> {
   await fissaOrologio(page)
   await page.goto('./')
   await expect(page.locator('.budget')).toBeEnabled()
+  await chiudiGuida(page)
 
   // La scelta si fa dalla schermata vera, non scrivendo nel database: quello
   // che si vuole provare e' il percorso che fara' una persona.
@@ -1008,6 +1020,7 @@ test.describe('la Home con la lingua scelta diversa da quella del telefono', () 
 test('le etichette della barra sono larghe uguale nelle due lingue', async ({ page }) => {
   await page.goto('./')
   await expect(page.locator('.budget')).toBeEnabled()
+  await chiudiGuida(page)
 
   const misura = (): Promise<readonly number[]> =>
     page.evaluate(() =>
@@ -1044,6 +1057,7 @@ async function scenaPromemoria(page: Page): Promise<Measures> {
   await fissaOrologio(page)
   await page.goto('./')
   await expect(page.locator('.budget')).toBeEnabled()
+  await chiudiGuida(page)
   await setBudget(page, '20000', 'A settimana')
   await seed(page, 200)
 
@@ -1268,6 +1282,7 @@ for (const lingua of LINGUE) {
     await page.clock.install({ time: new Date('2026-08-19T10:00:00+02:00') })
     await page.goto('./')
     await expect(page.locator('.budget')).toBeEnabled()
+    await chiudiGuida(page)
     expect(await fontPronto(page), 'il font dichiarato non e\' in pagina').toBe(true)
     if (lingua.id === 'en') await inInglese(page)
 
@@ -1327,6 +1342,7 @@ test('una riga di troppo sfonda la riserva, cioe\' il gate cade ancora', async (
   await page.clock.install({ time: new Date('2026-08-19T10:00:00+02:00') })
   await page.goto('./')
   await expect(page.locator('.budget')).toBeEnabled()
+  await chiudiGuida(page)
   await seedOn(page, [
     ['2026-08-17', 499_999],
     ['2026-08-18', 499_999],

@@ -276,6 +276,29 @@ export function money(cents: Cents): string {
   return formats.money.format(cents / 100)
 }
 
+/**
+ * Lo stesso importo, **in parti**: `integer`, `decimal`, `fraction`, `currency`,
+ * `literal`. E' `money()` senza la concatenazione finale.
+ *
+ * Serve a una cosa sola, ed e' la ragione per cui esiste invece di essere una
+ * `split` su `money()`: **la guida anima l'importo che si riempie da destra, e
+ * l'animazione va ancorata alle parti, non ai glifi.**
+ *
+ * Il fatto che lo impone e' stato verificato, non supposto: `it-IT` scrive
+ * `0,05 €` e `en-GB` scrive `€0.05` — **il simbolo cambia lato**, e l'inglese e'
+ * la lingua di default. Un'animazione scritta sulla stringa farebbe scorrere le
+ * cifre sotto il simbolo dell'euro in una delle due lingue, e nessuno se ne
+ * accorgerebbe finche' non apre l'app in inglese.
+ *
+ * Con le parti l'invariante e' dichiarabile: la cella `decimal` e' l'ancora, la
+ * `currency` sta ferma dove il locale l'ha messa, e le cifre si muovono solo
+ * dentro `integer` e `fraction`. Vedi `Guide.tsx`.
+ */
+export function moneyParts(cents: Cents): readonly Intl.NumberFormatPart[] {
+  assertCents(cents)
+  return formats.money.formatToParts(cents / 100)
+}
+
 function capitalize(text: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1)
 }

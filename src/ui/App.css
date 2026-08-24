@@ -266,13 +266,3 @@
   clip-path: inset(50%);
   white-space: nowrap;
 }
-
-/* Il suggerimento giusto per come l'app e' stata aperta: in standalone
- * "Aggiungi a Home" non ha piu' senso. L'attributo lo scrive main.tsx. */
-.hint--install {
-  display: none;
-}
-
-:root[data-display="browser"] .hint--install {
-  display: block;
-}

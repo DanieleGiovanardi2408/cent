@@ -27,6 +27,13 @@ import './AddSheet.css'
  * - la **data**, che e' oggi. "Ieri" costa un tap perche' e' il caso comune (te
  *   ne accorgi la mattina dopo) e non deve costare un calendario;
  * - la **nota**, collassata: costa un tap in piu' ed e' giusto cosi'.
+ *
+ * Che il chip salvi non lo indovina nessuno, quindi lo dicono **tre canali con
+ * tre tempi diversi**: la guida al primo avvio lo spiega una volta, la riga qui
+ * in cima lo ricorda per le prime tre spese (`coach`), e la tipografia del
+ * tastierino lo spiega ogni volta. Nessuno dei tre e' un doppione dell'altro:
+ * chi salta la guida ha ancora la riga, e chi ha imparato non ha piu' nessuno
+ * dei due davanti.
  */
 
 export interface SaveInput {
@@ -40,6 +47,12 @@ interface Props {
   readonly categories: readonly Category[]
   /** Il giorno civile corrente, calcolato al risveglio e non a ogni render. */
   readonly day: IsoDate
+  /**
+   * I primi giorni: l'utente non ha ancora salvato tre spese a mano, quindi la
+   * riga in cima spiega come si salva invece di tacere. Il conteggio lo fa
+   * `App` (`savedByHand`), che e' l'unico posto che vede tutte le spese.
+   */
+  readonly coach: boolean
   /** Sta uscendo: l'animazione e' partita, i tap non contano piu'. */
   readonly leaving: boolean
   /**
@@ -63,7 +76,7 @@ interface Props {
  */
 const MAX_CENTS = 9_999_999
 
-export function AddSheet({ categories, day, leaving, onSave, onClose }: Props) {
+export function AddSheet({ categories, day, coach, leaving, onSave, onClose }: Props) {
   const [cents, setCents] = useState(0)
   const [date, setDate] = useState<IsoDate>(day)
   const [note, setNote] = useState('')
@@ -104,31 +117,62 @@ export function AddSheet({ categories, day, leaving, onSave, onClose }: Props) {
   }
 
   /**
-   * La riga parla **solo quando ha una notizia**: il primo giorno non si sa cosa
-   * fare, il tetto e' una sorpresa, un salvataggio non andato e' una brutta
-   * sorpresa. Con l'importo digitato e nessun guaio, tace.
+   * La riga in cima al foglio.
    *
-   * Diceva anche "Tocca una categoria per salvare". Tolto: nell'istante in cui
-   * compariva, gli otto chip erano appena passati da spenti ad accesi — la
-   * stessa informazione, gia' data, nel canale che l'occhio guarda davvero. Il
-   * testo la ripeteva in cima al foglio, lontano dal pollice, ed era il secondo
-   * `aria-live` ad aggiornarsi insieme all'importo: alla prima cifra VoiceOver
-   * metteva in coda due annunci, e quello che conta e' il secondo.
+   * ## I primi giorni dice come si salva, poi smette
+   *
+   * Il chip-come-conferma **non esiste in nessun'altra app**: nessuno lo
+   * indovina. Finche' l'utente non ha salvato tre spese a mano (`coach`), la
+   * riga porta l'istruzione, e sono **due**, non una:
+   *
+   *     importo vuoto    ->  "Digita l'importo, poi tocca una categoria"
+   *     importo scritto  ->  "Tocca una categoria per salvare"
+   *
+   * Due e non una perche' con l'importo vuoto i chip sono spenti: dire "tocca
+   * una categoria per salvare" quando toccare non fa niente **invita a un gesto
+   * che fallisce**, nel momento peggiore. La prima variante dice l'ordine delle
+   * due cose; la seconda dice quella che serve adesso.
+   *
+   * Dopo la terza spesa la riga torna a parlare **solo quando ha una notizia**:
+   * il tetto e' una sorpresa, un salvataggio non andato e' una brutta sorpresa,
+   * e con l'importo digitato tace. Chi ha imparato non ha bisogno che glielo si
+   * ripeta: a quel punto il canale vero e' l'accendersi degli otto chip.
+   *
+   * ## Niente `aria-live`, e non perche' il testo sia statico
+   *
+   * Non lo e': commuta esattamente alla prima cifra, cioe' **nello stesso frame
+   * in cui cambia l'importo**, che e' l'altra regione live del foglio. Due
+   * region `polite` aggiornate insieme mettono VoiceOver in coda con due
+   * annunci, e quello che conta arriva secondo.
+   *
+   * La ragione per cui non e' una regione live e' un'altra e vale sempre:
+   * **e' un'istruzione, non un valore**. Si legge esplorando, non si annuncia —
+   * e annunciarla a ogni cifra sarebbe rumore anche se fosse sola in coda.
+   * Scartata anche la via di mezzo (`aria-live` solo per `failed`/`max`):
+   * teneva in vita la cosa sbagliata e spostava la discussione su *quando*
+   * annunciare invece che sul fatto che non va annunciata mai.
+   *
+   * Cio' che quella regione cercava di fare vive adesso dove serve davvero: nel
+   * **nome accessibile dei chip**, qui sotto.
+   *
+   * ## L'altezza
    *
    * La riga resta nel DOM anche vuota, e la sua altezza e' riservata in
-   * sheet.css: **una stringa vuota qui non deve muovere niente.** La prima
-   * versione di questo taglio faceva salire di 2,5px data, categorie, importo e
-   * tastierino alla prima cifra, perche' l'altezza riservata era un valore tondo
-   * piu' basso di una riga piena. Chi tocca `.sheet__hint` deve rileggere il
-   * commento li': e' l'unica cosa che tiene il salto a zero.
+   * sheet.css: **una stringa vuota qui non deve muovere niente.** Una versione
+   * precedente faceva salire di 2,5px data, categorie, importo e tastierino alla
+   * prima cifra, perche' l'altezza riservata era un valore tondo piu' basso di
+   * una riga piena. Chi tocca `.sheet__hint` deve rileggere il commento li': e'
+   * l'unica cosa che tiene il salto a zero.
    */
   const hint = failed
     ? t('add.hint.failed')
     : atMax
       ? t('add.hint.max')
       : empty
-        ? t('add.hint.empty')
-        : ''
+        ? t(coach ? 'add.hint.type' : 'add.hint.empty')
+        : coach
+          ? t('add.hint.pick')
+          : ''
 
   return (
     <>
@@ -146,9 +190,7 @@ export function AddSheet({ categories, day, leaving, onSave, onClose }: Props) {
           if (event.key === 'Escape') onClose()
         }}
       >
-        <p class="sheet__hint" data-tone={failed ? 'error' : undefined} aria-live="polite">
-          {hint}
-        </p>
+        <p class="sheet__hint" data-tone={failed ? 'error' : undefined}>{hint}</p>
 
         {/* Data e nota sulla stessa riga: due cose fuori dal percorso dei due
             tap, che insieme costano una riga sola di altezza. Quando la nota si
@@ -242,6 +284,14 @@ export function AddSheet({ categories, day, leaving, onSave, onClose }: Props) {
               class="cat"
               style={`--cat:${category.color}`}
               disabled={empty}
+              /* Il nome accessibile porta **cosa fa il tap**: "Spesa, tocca due
+                 volte per salvare". E' li' che l'informazione serve — sul
+                 controllo che si sta per toccare — invece che in un annuncio
+                 che puo' arrivare secondo. Non e' agganciato a `coach`: non e'
+                 un suggerimento dei primi giorni, e' il nome dell'azione, e
+                 l'equivalente visivo (i chip che si accendono) non scade
+                 nemmeno lui. */
+              aria-label={`${category.name}, ${t('add.cat.hint')}`}
               onClick={() => save(category)}
             >
               <span class="cat__emoji" aria-hidden="true">

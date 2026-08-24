@@ -41,7 +41,7 @@
 // Questi test provano l'app, quindi dichiarano di girare nell'app installata:
 // fuori da standalone Cent e' una pagina di installazione (ADR 011). Vedi
 // `installed.ts` per il perche' la cucitura sta qui e non nel codice dell'app.
-import { expect, test } from './installed'
+import { chiudiGuida, expect, test } from './installed'
 import type { Page } from '@playwright/test'
 // La sonda vive in `probe.ts`: la usa anche `install.spec.ts`, dove la stessa
 // misura serve a contare zero invece di contare tutto (ADR 011).
@@ -232,6 +232,7 @@ test('nessun overlay copre un bersaglio, su ogni viewport e in ogni stato', asyn
 
   await page.goto('./')
   await expect(page.locator('.fab')).toBeEnabled()
+  await chiudiGuida(page)
 
   // --- 5.000 spese, non tre: la lista deve reggere il caso vero.
   await seed(page, 5000)
@@ -312,6 +313,7 @@ test('il toast non sopravvive ne\' all\'apertura del foglio ne\' a una sospensio
 
   await page.goto('./')
   await expect(page.locator('.fab')).toBeEnabled()
+  await chiudiGuida(page)
 
   await add(['1', '2', '5', '0'])
   await expect(page.locator('.row')).toHaveCount(1)
@@ -361,6 +363,7 @@ test('il toast non sopravvive ne\' all\'apertura del foglio ne\' a una sospensio
 test('l\'intestazione appiccicata copre righe, ma non e\' toccabile', async ({ page }) => {
   await page.goto('./')
   await expect(page.locator('.fab')).toBeEnabled()
+  await chiudiGuida(page)
   await seed(page, 60)
   await page.reload()
   await expect(page.locator('.row').first()).toBeVisible()
@@ -395,6 +398,7 @@ test('l\'intestazione appiccicata copre righe, ma non e\' toccabile', async ({ p
 test('il tastierino e le otto categorie ci stanno, senza scroll', async ({ page }) => {
   await page.goto('./')
   await expect(page.locator('.fab')).toBeEnabled()
+  await chiudiGuida(page)
   await openSheet(page, '.fab')
 
   // Tutti e undici i tasti e tutte e otto le categorie, dentro il foglio.
@@ -459,6 +463,7 @@ test('nessun overlay copre un bersaglio nella Home, in tutti i suoi stati', asyn
 
   await page.goto('./')
   await expect(page.locator('.fab')).toBeEnabled()
+  await chiudiGuida(page)
 
   // --- Archivio vuoto e nessun budget: lo stato del primo avvio.
   await expect(page.locator('.budget')).toHaveText('Imposta un budget')
@@ -533,6 +538,7 @@ test('nessun overlay copre un bersaglio nella Home, in tutti i suoi stati', asyn
 test('la navigazione sta nell\'angolo raggiungibile, non il bottone raro', async ({ page }) => {
   await page.goto('./')
   await expect(page.locator('.fab')).toBeEnabled()
+  await chiudiGuida(page)
 
   const centre = async (selector: string): Promise<{ x: number; y: number }> => {
     const box = await page.locator(selector).boundingBox()
@@ -627,6 +633,7 @@ test('Impostazioni: nessun bersaglio coperto, e le tre voci della lingua fanno q
 
   await page.goto('./')
   await expect(page.locator('.fab')).toBeEnabled()
+  await chiudiGuida(page)
 
   // La migrazione 2 -> 3 non scrive niente di proposito: il campo nasce assente.
   await expect.poll(linguaSuDisco).toBeNull()
@@ -731,6 +738,7 @@ test('Categorie: scambio, archivio e cancellazione, senza bersagli coperti', asy
 
   await page.goto('./')
   await expect(page.locator('.fab')).toBeEnabled()
+  await chiudiGuida(page)
 
   // Una spesa vera sulla prima categoria: serve al ramo che conta, cioe' la
   // cancellazione **rifiutata**. Senza dati veri quel ramo non esiste.
@@ -877,6 +885,7 @@ test('il promemoria di backup non copre niente, nemmeno insieme all\'avviso', as
 
   await page.goto('./')
   await expect(page.locator('.fab')).toBeEnabled()
+  await chiudiGuida(page)
   await seed(page, 40)
   await ageInstall(page, 30)
   await page.reload()
@@ -924,6 +933,7 @@ test('a 320 punti le otto categorie e il tastierino ci stanno lo stesso', async 
   await page.setViewportSize({ width: 320, height: 568 })
   await page.goto('./')
   await expect(page.locator('.fab')).toBeEnabled()
+  await chiudiGuida(page)
   await openSheet(page, '.fab')
 
   await expect(page.locator('.pad__key')).toHaveCount(11)
@@ -971,6 +981,7 @@ test('a 320 punti il piede del foglio categorie resta intero', async ({ page }, 
   await page.setViewportSize({ width: 320, height: 568 })
   await page.goto('./')
   await expect(page.locator('.fab')).toBeEnabled()
+  await chiudiGuida(page)
   await page.locator('.app__action').tap()
   await page.locator('.cats__add').tap()
   await expect(page.locator('.sheet--cat')).toBeVisible()

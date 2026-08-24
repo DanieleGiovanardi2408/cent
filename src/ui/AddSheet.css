@@ -252,10 +252,11 @@
 /* Senza importo non c'e' niente da salvare: i chip lo dicono spegnendosi,
  * invece di accettare un tap che produrrebbe una spesa da zero euro.
  *
- * Ed e' **l'unico** canale che lo dice, da quando la riga in cima ha smesso di
- * ripetere "Tocca una categoria per salvare": alla prima cifra gli otto chip si
- * accendono tutti insieme, dentro il campo visivo di chi sta guardando i tasti.
- * Chi togliesse questo spegnimento dovrebbe rimettere quel testo. */
+ * Alla prima cifra si accendono tutti e otto insieme, dentro il campo visivo di
+ * chi sta guardando i tasti: e' il canale che l'occhio guarda davvero, e per
+ * chi ha gia' imparato e' **l'unico**, perche' dalla terza spesa la riga in
+ * cima tace (AddSheet.tsx, `coach`). Chi togliesse questo spegnimento
+ * dovrebbe rimettere quel testo per sempre invece che per tre spese. */
 .cat:disabled {
   opacity: 0.45;
 }

@@ -102,6 +102,13 @@ export function History({ phase, expenses, categories, day, onPick }: Props) {
  * si apre non c'e' niente da dire e non si dice niente — un "Caricamento..."
  * che dura 40 ms e' rumore che l'utente vede lampeggiare.
  *
+ * Qui c'era una terza riga — "Aggiungi Cent alla schermata Home" — visibile solo
+ * fuori da standalone. Da ADR 011 quello stato non esiste piu' insieme all'app:
+ * fuori da standalone Cent **e'** la pagina di installazione, quindi nessun
+ * utente avrebbe mai potuto leggerla. Cancellata con le sue due stringhe e le
+ * sue sei righe di CSS: era codice morto per una premessa cambiata altrove, non
+ * per una modifica sbagliata qui.
+ *
  * Il caso "archivio non aperto" e' in `Blank.tsx`: lo dice anche la Home, con le
  * stesse parole.
  */
@@ -113,7 +120,6 @@ function Blank({ phase }: { readonly phase: AppPhase }) {
     <div class="blank">
       <p class="blank__title">{t('history.blank.title')}</p>
       <p class="blank__text">{t('history.blank.text')}</p>
-      <p class="blank__text hint--install">{t('history.blank.install')}</p>
     </div>
   )
 }
