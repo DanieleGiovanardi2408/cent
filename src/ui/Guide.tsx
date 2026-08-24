@@ -4,6 +4,7 @@ import { amountCells, money, t } from './i18n'
 import { reducedMotion } from './motion'
 import './sheet.css'
 import './Guide.css'
+import { STEPS, STEP_MS } from './guide-steps'
 
 /**
  * La guida al primo avvio. **Due schede**, non tre.
@@ -53,19 +54,9 @@ interface Props {
   readonly onDone: () => void
 }
 
-/**
- * I tre stati dell'importo, in centesimi: `5 -> 0,05`, `50 -> 0,50`,
- * `500 -> 5,00`. Sono i numeri della ROADMAP, e sono tre perche' due non
- * mostrerebbero il passaggio dell'unita' e quattro sarebbero un esercizio.
- *
- * Hanno una proprieta' che il resto di questo file usa: **tutti e tre producono
- * lo stesso numero di cifre** (tre) e la stessa sequenza di parti, in tutte e
- * due le lingue. E' cio' che rende le celle stabili, quindi l'ancora vera.
- */
-const STEPS = [5, 50, 500] as const
 
-/** Quanto resta a schermo ogni stato. Sotto il secondo non si legge. */
-const STEP_MS = 1300
+
+
 
 export function Guide({ categories, onDone }: Props) {
   const [card, setCard] = useState(0)

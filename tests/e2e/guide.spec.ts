@@ -43,6 +43,25 @@ import { chiudiGuida, expect, guidaChiusaSuDisco, test } from './installed'
 import { probe, report } from './probe'
 import type { Target } from './probe'
 import type { Page } from '@playwright/test'
+import { STEPS } from '../../src/ui/guide-steps'
+
+/**
+ * L'atteso della tabella **si deriva**, non si ricopia.
+ *
+ * Queste righe prima scrivevano '0,05 €' a mano: codificavano la costante
+ * mentre ne controllavano un'altra, quindi cambiare l'esempio della guida le
+ * faceva cadere e chi lo faceva credeva di aver rotto qualcosa. E' la seconda
+ * volta in questo progetto, dopo il test del promemoria che congelava la
+ * soglia unica.
+ *
+ * Cio' che va sorvegliato e' che **la tabella passi dal formatter** — quindi in
+ * inglese il simbolo precede le cifre — non quale importo ci sia dentro.
+ */
+function attesi(locale: string): readonly string[] {
+  const nf = new Intl.NumberFormat(locale, { style: 'currency', currency: 'EUR' })
+  return STEPS.map((cents) => nf.format(cents / 100))
+}
+
 
 /**
  * Aspetta che nessuna animazione sia in corso.
@@ -357,10 +376,10 @@ test.describe('con prefers-reduced-motion', () => {
     await expect(page.locator('.demo--live')).toHaveCount(0)
 
     const righe = page.locator('.demo__line')
-    await expect(righe).toHaveCount(3)
-    await expect(righe.nth(0)).toContainText('0,05 €')
-    await expect(righe.nth(1)).toContainText('0,50 €')
-    await expect(righe.nth(2)).toContainText('5,00 €')
+    await expect(righe).toHaveCount(STEPS.length)
+    for (const [i, atteso] of attesi('it-IT').entries()) {
+      await expect(righe.nth(i)).toContainText(atteso)
+    }
     // I tasti battuti, che sono la colonna sinistra: 5, poi 50, poi 500.
     await expect(righe.nth(2).locator('.demo__key')).toHaveCount(3)
 
@@ -421,13 +440,18 @@ test.describe('in inglese', () => {
   test.describe('e senza movimento', () => {
     test.use({ contextOptions: { reducedMotion: 'reduce' } })
 
-    test('la tabella scrive €0.05, non 0,05 €', async ({ page }) => {
+    test('la tabella mette il simbolo davanti, come vuole en-GB', async ({ page }) => {
       await page.goto('./')
       await expect(page.locator('.demo--still')).toBeVisible()
       const righe = page.locator('.demo__line')
-      await expect(righe.nth(0)).toContainText('€0.05')
-      await expect(righe.nth(1)).toContainText('€0.50')
-      await expect(righe.nth(2)).toContainText('€5.00')
+      const inglese = attesi('en-GB')
+      for (const [i, atteso] of inglese.entries()) {
+        await expect(righe.nth(i)).toContainText(atteso)
+      }
+      // La proprieta' vera, e l'unica che questo test deve difendere: in
+      // inglese il simbolo **precede** le cifre. Una tabella cablata in
+      // italiano cadrebbe qui qualunque sia l'importo scelto.
+      expect(inglese[0]?.startsWith('€')).toBe(true)
     })
   })
 })

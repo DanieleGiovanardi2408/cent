@@ -66,7 +66,7 @@ const COLORI = /colori\.spec\.ts/
 // `testIgnore` e non un `test.skip` dentro i file: la lista di cio' che gira e
 // dove sta insieme alle altre premesse d'ambiente, in questo file, invece di
 // essere sparsa in una condizione per spec.
-const SENZA_GEOMETRIA = [COLORI, /backup\.spec\.ts/]
+const SENZA_GEOMETRIA = [COLORI, /backup\.spec\.ts/, /lingua\.spec\.ts/]
 
 export default defineConfig({
   testDir: 'tests/e2e',
@@ -182,9 +182,19 @@ export default defineConfig({
     },
   ],
   webServer: {
-    // `preview` serve il dist gia' costruito: la build la fa lo script npm, cosi'
-    // il tempo di build non finisce nel timeout del server.
-    command: 'npm run preview -- --port 4173 --strictPort',
+    // **Costruisce prima di servire, e non e' un dettaglio di comodita'.**
+    // `vite preview` serve `dist/`: senza la build qui, `npx playwright test`
+    // — cioe' l'invocazione piu' naturale, e quella di chiunque non abbia letto
+    // la regola — misura l'artefatto precedente. E' successo: una modifica alla
+    // costante della guida e' stata dichiarata verde da una suite che stava
+    // provando il bundle di prima, e il rosso vero e' comparso solo al giro
+    // successivo, che conteneva `npm run build`.
+    //
+    // La premessa non dichiarata era **"il dist corrisponde al sorgente"**.
+    // Qui smette di essere una premessa e diventa un fatto: chiunque lanci i
+    // test, comunque li lanci, costruisce prima. Su questo progetto la build
+    // sta sotto il secondo, quindi il costo e' zero e il rischio sparisce.
+    command: 'npm run build && npm run preview -- --port 4173 --strictPort',
     url: BASE_URL,
     reuseExistingServer: !process.env['CI'],
     timeout: 60_000,
