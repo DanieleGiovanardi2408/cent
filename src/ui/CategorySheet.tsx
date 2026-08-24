@@ -226,9 +226,12 @@ export function CategorySheet({
           if (event.key === 'Escape') onClose()
         }}
       >
-        <p class="sheet__hint" data-tone={failed ? 'error' : undefined} aria-live="polite">
-          {hint}
-        </p>
+        {/* Niente `aria-live`: stessa decisione di `AddSheet` e `BudgetSheet`,
+            e vale qui perche' la sua ragione non nominava nessuno dei tre —
+            **e' un'istruzione, non un valore**. Qui non c'e' una seconda region
+            live con cui accodarsi, e non cambia niente: annunciare a ogni
+            lettera del nome sarebbe rumore anche da sola. */}
+        <p class="sheet__hint" data-tone={failed ? 'error' : undefined}>{hint}</p>
 
         <div class="editor">
           {mode === 'place' ? (

@@ -49,6 +49,25 @@ const FUSO = 'Europe/Amsterdam'
 // col valore qui sotto, sarebbe fortuna.
 const ISTANTE = process.env['CENT_ORA'] ?? '2026-08-19T10:00:00+02:00'
 
+// Il file in cui il **tema** e' il soggetto della prova. Sta in una costante
+// perche' compare due volte con due sensi opposti — e' cio' che il progetto
+// `dark` esegue, ed e' parte di cio' che i viewport secondari saltano — e due
+// espressioni regolari scritte a mano divergerebbero al primo rinomino.
+const COLORI = /colori\.spec\.ts/
+
+// Cio' che non dipende dal viewport, e che quindi gira **una volta sola**, sul
+// viewport di riferimento (`iphone-14`).
+//
+// I tre progetti geometrici esistono per rimisurare le stesse schermate a tre
+// larghezze. Un file che non misura nessuna larghezza — quale ramo prende
+// l'export, quanto contrasto ha un testo dipinto — ripetuto tre volte non
+// aggiunge un'asserzione: aggiunge solo secondi al tetto dei 5 minuti.
+//
+// `testIgnore` e non un `test.skip` dentro i file: la lista di cio' che gira e
+// dove sta insieme alle altre premesse d'ambiente, in questo file, invece di
+// essere sparsa in una condizione per spec.
+const SENZA_GEOMETRIA = [COLORI, /backup\.spec\.ts/]
+
 export default defineConfig({
   testDir: 'tests/e2e',
   // Un fallimento di geometria e' quasi sempre vero: ritentare lo nasconde.
@@ -84,6 +103,17 @@ export default defineConfig({
   //
   // La **quinta** e' il movimento: `reducedMotion` qui sotto.
   //
+  // La **sesta** e' il tema: `colorScheme` qui sotto. Stessa forma delle altre —
+  // Chromium parte in chiaro e finora la suite intera misurava il tema chiaro
+  // **per caso**, non per scelta. Dichiararlo non aggiunge copertura di un
+  // pixel: sposta soltanto il tema scuro da "non provato senza saperlo" a
+  // "escluso di proposito", che e' una differenza di onesta', non di verifica.
+  //
+  // La copertura vera del tema scuro e' il progetto `dark` qui sotto, e non e'
+  // la suite intera: raddoppiare i tempi per rimisurare geometrie che non
+  // dipendono dal colore sarebbe pagare un tetto (5 minuti, ROADMAP) per zero
+  // informazione. Gira dove **il colore decide qualcosa**.
+  //
   // Playwright un default ce l'ha — `no-preference` — ma **un default non e' una
   // dichiarazione**: e' l'ambiente che decide per noi, che e' esattamente il
   // difetto da cui nascono le altre quattro. E qui non decide una misura, decide
@@ -111,6 +141,7 @@ export default defineConfig({
     baseURL: BASE_URL,
     locale: 'it-IT',
     timezoneId: FUSO,
+    colorScheme: 'light',
     contextOptions: { reducedMotion: 'no-preference' },
     trace: 'retain-on-failure',
   },
@@ -118,10 +149,37 @@ export default defineConfig({
   // premesse d'ambiente si leggono in un posto solo: questo file.
   metadata: { istante: ISTANTE, fuso: FUSO },
   projects: [
-    { name: 'iphone-se', use: { ...MOBILE, viewport: { width: 375, height: 667 } } },
+    {
+      name: 'iphone-se',
+      use: { ...MOBILE, viewport: { width: 375, height: 667 } },
+      testIgnore: SENZA_GEOMETRIA,
+    },
     { name: 'iphone-14', use: { ...MOBILE, viewport: { width: 390, height: 844 } } },
     // L'orizzontale e' il viewport che ha trovato il tastierino tagliato.
-    { name: 'landscape', use: { ...MOBILE, viewport: { width: 800, height: 327 } } },
+    {
+      name: 'landscape',
+      use: { ...MOBILE, viewport: { width: 800, height: 327 } },
+      testIgnore: SENZA_GEOMETRIA,
+    },
+    // Il tema scuro, **solo dove il colore decide qualcosa**.
+    //
+    // `colori.spec.ts` e' l'unico file in cui il tema e' il soggetto: contrasti
+    // dipinti, il token `--over` dello sforo, e le otto superfici delle
+    // categorie — che dalla fase 6 sono la palette dei grafici, quindi la
+    // copertura serve **prima** di allora.
+    //
+    // Il viewport e' quello di riferimento e non conta: quel file non misura
+    // nessuna geometria. Conta che sia **lo stesso** delle due esecuzioni, cosi'
+    // la differenza fra la riga chiara e la riga scura del rapporto e' il tema e
+    // nient'altro.
+    //
+    // Il progetto si chiama `dark` e non `iphone-14-dark` perche' e' cio' che si
+    // scrive dopo `--project=` quando si vuole rifare la prova del tema.
+    {
+      name: 'dark',
+      testMatch: COLORI,
+      use: { ...MOBILE, viewport: { width: 390, height: 844 }, colorScheme: 'dark' },
+    },
   ],
   webServer: {
     // `preview` serve il dist gia' costruito: la build la fa lo script npm, cosi'

@@ -651,6 +651,37 @@ Conseguenza gia' attiva oggi: settimanale e mensile possono restare aperti insie
 `id` — con un test che verifica che l'ordine dell'array non conti. E' la stessa
 dottrina di `resolveBudget` (ADR 008): mai una scelta arbitraria, mai un throw.
 
+## Verificabili solo sul dispositivo — una categoria, non un debito
+
+Queste cose **non sono coperte in suite e non devono esserlo**: il runner non puo'
+riprodurle. Non sono buchi da chiudere ne' TODO: sono il confine fra cio' che una
+macchina proxy misura e cio' che misura solo un iPhone. Nessuno provi a coprirle
+con un test — verrebbe verde senza provare niente, che e' il difetto peggiore.
+
+- **`env(safe-area-inset-*)` vale sempre 0 in Chromium.** Quindi **l'intera classe
+  "contenuto sotto il notch o sotto la barra gesti" e' invisibile alla suite**,
+  anche quando i test la nominano: quello che verificano e' l'aritmetica dei
+  `max()`, non il valore che iOS inietta.
+- **`100dvh` in Chromium e' statico.** Su iOS cambia quando la barra di Safari si
+  ritrae, ed e' il momento in cui un layout a piena altezza si rompe.
+- **Le quattro difese `-webkit-*`** — `overflow-scrolling`, `touch-callout`,
+  `text-size-adjust`, `tap-highlight-color` — non hanno **nessun** effetto in
+  Chromium: sono scritte e mai esercitate.
+- **`text-wrap: pretty` / `balance`** e **`font-variant-numeric: tabular-nums`**
+  decidono **dove il testo va a capo** e la larghezza delle cifre, quindi entrano
+  in ogni misura geometrica — con supporto e metriche diversi fra Chromium+Inter e
+  WebKit+SF Pro.
+- **Il font delle emoji** (Apple Color Emoji contro Noto): dichiarato fuori scopo
+  in ADR 013 e resta tale.
+
+Sono il **caso 2 della tassonomia** in CLAUDE.md — asserzione esatta, premessa che
+dipende dall'ambiente — nella sua forma piu' pura: qui la premessa non e' solo
+diversa, e' **assente**.
+
+La copertura vera e' il criterio di chiusura di ogni fase: l'app installata su un
+telefono vero. Quando si fara' la prova con una persona che non ha mai visto
+l'app, **il contenuto sotto il notch e' una delle cose da guardare a occhio**.
+
 ## Rischi noti: contesto stantio che scrive
 
 Due contesti sullo stesso database sono normali ma mai simultanei su iOS (quello

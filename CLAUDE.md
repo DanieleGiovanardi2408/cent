@@ -419,6 +419,31 @@ E' la **terza forma della stessa lezione**, dopo:
 
 Qui la misura era giusta e l'oggetto fermo: e' stata **registrata a meta'**.
 
+## Una decisione vale dove vale il suo argomento
+Prima di considerare applicata una decisione, **rileggi la sua ragione e chiediti
+se nomina il caso specifico**. Se non lo nomina, la decisione vale **ovunque valga
+l'argomento** — e va cercato dove altro vale, non aspettato.
+
+E' successo tre volte in due giorni, sempre nella stessa forma:
+
+- **`aria-live` sulla riga di aiuto.** L'argomento era *"e' un'istruzione, non un
+  valore: si legge esplorando, non si annuncia"*. Non nomina mai `AddSheet` — e
+  infatti valeva identico per il foglio del budget, dove la stessa riga **commuta
+  alla prima cifra insieme all'importo**, cioe' ha esattamente il difetto dei due
+  annunci in coda. Era stato tolto da un componente solo perche' la decisione era
+  stata scritta *su quella riga*.
+- **Il pavimento sulle misure minime.** La regola diceva "un bersaglio dichiara le
+  proprie misure", l'argomento parlava di contenuto che dipende da font e lingua —
+  nessuno dei due nominava un asse. E' stato applicato prima alla sola **altezza**;
+  la larghezza e' arrivata un giorno dopo, e nel frattempo un chip valeva **29,4 px
+  in inglese** a 320 punti.
+- **`history.blank.install`.** ADR 011 decideva che fuori da standalone c'e' una
+  pagina di installazione. Non nominava quella stringa, che e' rimasta viva nel
+  codice e morta nei fatti finche' non se ne stava per scrivere una seconda copia.
+
+Il costo di sbagliare il livello di generalita' non e' un difetto: e' **un difetto
+che si crede gia' corretto**, ed e' per questo che non lo cerca nessuno.
+
 ## Dopo una correzione, la verifica si riesegue — non si deduce
 Il posto piu' probabile in cui trovare il prossimo difetto e' **dentro la
 correzione appena fatta**. Una correzione tocca il codice in un punto delicato

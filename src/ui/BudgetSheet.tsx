@@ -129,9 +129,16 @@ export function BudgetSheet({
           if (event.key === 'Escape') onClose()
         }}
       >
-        <p class="sheet__hint" data-tone={failed ? 'error' : undefined} aria-live="polite">
-          {hint}
-        </p>
+        {/* Niente `aria-live`, per la stessa ragione di `AddSheet`, che non
+            nominava `AddSheet`: **e' un'istruzione, non un valore**. Si legge
+            esplorando, non si annuncia. Qui il difetto era anche peggiore che
+            la': questa riga commuta **alla prima cifra**, cioe' nello stesso
+            frame in cui cambia `.amount`, che e' l'altra regione live del
+            foglio. Due region `polite` aggiornate insieme mettono VoiceOver in
+            coda con due annunci, e quello che conta — l'importo — arriva
+            secondo. Vedi CLAUDE.md, "Una decisione vale dove vale il suo
+            argomento". */}
+        <p class="sheet__hint" data-tone={failed ? 'error' : undefined}>{hint}</p>
 
         <p class="amount" data-empty={empty || undefined} aria-live="polite">
           {money(cents)}

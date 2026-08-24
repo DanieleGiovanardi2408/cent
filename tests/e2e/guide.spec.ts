@@ -592,3 +592,67 @@ test('la riga spiega come si salva per tre spese, poi tace', async ({ page }, te
     'un overlay copre un bersaglio, o un bersaglio e\' sotto i 44px',
   ).toEqual([])
 })
+
+/**
+ * La stessa decisione, in tutti e tre i fogli che hanno quella riga.
+ *
+ * L'argomento che ha tolto `aria-live` da `.sheet__hint` — *"e' un'istruzione,
+ * non un valore: si legge esplorando, non si annuncia"* — **non nomina
+ * `AddSheet`**, quindi non valeva per `AddSheet`: valeva per la riga. Era pero'
+ * stato applicato a un componente solo, e per un anno il foglio del budget ha
+ * tenuto il difetto peggiore dei tre — quella riga commuta **alla prima cifra**,
+ * cioe' nello stesso frame in cui cambia `.amount`, che e' l'altra regione live
+ * di quel foglio: due annunci in coda, e l'importo arriva secondo.
+ *
+ * Il test e' scritto sulla **classe** e non sui tre componenti di proposito: un
+ * quarto foglio con la stessa riga nascerebbe con lo stesso difetto, e il test
+ * scritto sui tre non lo vedrebbe. E' il modo di sbagliare che CLAUDE.md
+ * chiama "un difetto che si crede gia' corretto".
+ */
+test('nessuna riga di aiuto e\' una regione live, in nessuno dei tre fogli', async ({ page }) => {
+  const riga = page.locator('.sheet__hint')
+  /** La riga c'e' **e** non annuncia: senza il primo pezzo, il secondo e' vuoto. */
+  const muta = async (dove: string): Promise<void> => {
+    await expect(riga, `la riga di aiuto non e' nel foglio "${dove}"`).toHaveCount(1)
+    await expect(riga, `la riga di aiuto di "${dove}" e' una regione live`).not.toHaveAttribute(
+      'aria-live',
+      /.*/,
+    )
+  }
+
+  await page.goto('./')
+  await expect(page.locator('.fab')).toBeEnabled()
+  await chiudiGuida(page)
+
+  // --- 1. Il foglio dell'inserimento, dove la decisione era gia' applicata.
+  await page.locator('.fab').tap()
+  await expect(page.locator('.sheet--add')).toBeVisible()
+  await muta('aggiungi spesa')
+  // Anche dopo la prima cifra, cioe' nel frame in cui la riga commuta insieme
+  // all'importo: e' quello lo stato in cui i due annunci si accodano.
+  await page.locator('.pad__key', { hasText: /^5$/ }).first().tap()
+  await expect(page.locator('.amount')).toHaveText('0,05 €')
+  await muta('aggiungi spesa, con una cifra')
+  await page.locator('.scrim').tap({ position: { x: 4, y: 4 } })
+  await expect(page.locator('.sheet')).toHaveCount(0)
+
+  // --- 2. Il foglio del budget: lo stesso difetto, e con `.amount` accanto.
+  await page.locator('.budget').tap()
+  await expect(page.locator('.sheet--budget')).toBeVisible()
+  await muta('budget')
+  await page.locator('.pad__key', { hasText: /^5$/ }).first().tap()
+  await expect(page.locator('.amount')).toHaveText('0,05 €')
+  await muta('budget, con una cifra')
+  await page.locator('.scrim').tap({ position: { x: 4, y: 4 } })
+  await expect(page.locator('.sheet')).toHaveCount(0)
+
+  // --- 3. Il foglio delle categorie, che di regioni live non ne ha nessun'altra:
+  //        la decisione vale lo stesso, perche' la ragione non parlava di code.
+  await page.locator('.app__action').tap()
+  await expect(page.locator('.prefs')).toBeVisible()
+  await page.locator('.cats__add').tap()
+  await expect(page.locator('.sheet--cat')).toBeVisible()
+  await muta('nuova categoria')
+  await page.locator('.editor__name').fill('Caffè')
+  await muta('nuova categoria, con un nome')
+})
