@@ -136,11 +136,11 @@ export interface WriteBatch {
    * Cancella **davvero** una categoria, se nessun record la nomina.
    *
    * Stessa dottrina: chi chiama porta l'intenzione ("cancella questa"), non il
-   * permesso gia' calcolato. Il conteggio delle spese che la usano — cancellate
-   * comprese — va fatto sui dati del disco dentro la stessa transazione:
-   * deciderlo sul mirror significa poter cancellare una categoria che una spesa
-   * scritta da un altro contesto sta gia' usando, e l'orfano che resta non e'
-   * correggibile da nessuna schermata.
+   * permesso gia' calcolato. Il conteggio di chi la usa — spese cancellate,
+   * regole ricorrenti e budget di categoria compresi — va fatto sui dati del
+   * disco dentro la stessa transazione: deciderlo sul mirror significa poter
+   * cancellare una categoria che una spesa scritta da un altro contesto sta
+   * gia' usando, e l'orfano che resta non e' correggibile da nessuna schermata.
    *
    * L'esito torna in `WriteResult.categoryDeletion`.
    */

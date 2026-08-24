@@ -20,6 +20,7 @@ import type { IsoDate } from '../core/date'
 import { createIdbPersistence } from '../core/idb'
 import { openRepository } from '../core/repository'
 import type { Repository, RepositoryState } from '../core/repository'
+import type { DefaultCategoryNames } from '../core/defaults'
 
 export type AppPhase = 'opening' | 'ready' | 'failed'
 
@@ -79,15 +80,37 @@ export function refreshDay(): void {
   if (now !== state.day) patch({ day: now })
 }
 
-/** Avvia l'apertura del database. Ritorna subito: il guscio e' gia' dipinto. */
-export function boot(): void {
-  void open()
+/**
+ * Avvia l'apertura del database. Ritorna subito: il guscio e' gia' dipinto.
+ *
+ * ## Perche' gli otto nomi arrivano da fuori
+ *
+ * Al **primo avvio** aprire il repository scrive: otto categorie e le
+ * impostazioni. Le otto etichette sono lingua, e la lingua la sa `src/app`
+ * leggendo `navigator` — il core non guarda l'ambiente e non lo fara' mai.
+ *
+ * Il difetto che questa firma chiude e' **l'ordine, non la traduzione**: il
+ * seme girava dentro `openRepository` prima che una lingua esistesse, e chi
+ * apriva l'app da un telefono non italiano trovava la guida in inglese e otto
+ * chip in italiano — cioe' il secondo dei due tap, il solo che decide *cosa*
+ * stai salvando, etichettato in una lingua che non legge. Con un parametro
+ * obbligatorio quell'ordine smette di dipendere da chi se lo ricorda.
+ *
+ * Non costa niente al primo frame: `main.tsx` risolve la lingua e compone gli
+ * otto nomi **dopo** aver dipinto il guscio, e sono due letture sincrone di un
+ * oggetto gia' bundlato — nessun database, nessuna rete, nessuna attesa.
+ *
+ * Su un avvio che non e' il primo non vengono nemmeno letti: le categorie sul
+ * disco sono dati dell'utente e nessuno le ritocca.
+ */
+export function boot(defaultCategoryNames: DefaultCategoryNames): void {
+  void open(defaultCategoryNames)
 }
 
-async function open(): Promise<void> {
+async function open(defaultCategoryNames: DefaultCategoryNames): Promise<void> {
   let repo: Repository
   try {
-    repo = await openRepository(createIdbPersistence())
+    repo = await openRepository(createIdbPersistence(), { defaultCategoryNames })
   } catch (error) {
     // Succede davvero: navigazione privata, storage pieno, profilo bloccato.
     // La UI lo dice con parole sue; qui non c'e' niente da ritentare.

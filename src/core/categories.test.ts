@@ -7,7 +7,7 @@ import {
   planCategoryDeletion,
   planCategoryPlacement,
 } from './categories'
-import { makeCategory, makeExpense, makeRule } from './testing'
+import { makeBudget, makeCategory, makeExpense, makeRule } from './testing'
 import type { Category } from './types'
 
 const T = '2026-08-23T12:00:00.000Z'
@@ -238,7 +238,7 @@ describe('cancellare davvero: solo se nessuno la nomina', () => {
   const cats = grigliaPiena()
 
   it('nessun riferimento: si puo', () => {
-    expect(planCategoryDeletion(cats, [], [], { id: 'c-4' })).toEqual({
+    expect(planCategoryDeletion(cats, [], [], [], { id: 'c-4' })).toEqual({
       ok: true,
       deleted: cats.find((c) => c.id === 'c-4'),
     })
@@ -250,31 +250,106 @@ describe('cancellare davvero: solo se nessuno la nomina', () => {
       makeExpense({ date: '2026-08-02', categoryId: 'c-4', deletedAt: '2026-08-02T10:00:00.000Z' }),
       makeExpense({ date: '2026-08-03', categoryId: 'c-1' }),
     ]
-    expect(planCategoryDeletion(cats, spese, [], { id: 'c-4' })).toEqual({
+    expect(planCategoryDeletion(cats, spese, [], [], { id: 'c-4' })).toEqual({
       ok: false,
       reason: 'in-use',
       expenses: 2,
       recurringRules: 0,
+      budgets: 0,
     })
   })
 
   it('una regola ricorrente basta da sola', () => {
     const regole = [makeRule({ startDate: '2026-01-01', categoryId: 'c-4' })]
-    expect(planCategoryDeletion(cats, [], regole, { id: 'c-4' })).toEqual({
+    expect(planCategoryDeletion(cats, [], regole, [], { id: 'c-4' })).toEqual({
       ok: false,
       reason: 'in-use',
       expenses: 0,
       recurringRules: 1,
+      budgets: 0,
+    })
+  })
+
+  /*
+   * I tre test qui sotto sono il quarto tipo di record che puo' nominare una
+   * categoria, e mancava. Non e' raggiungibile dalla UI di oggi — il foglio del
+   * budget non scrive `categoryId` — ma lo diventa con l'import della fase 7:
+   * un file con un budget di categoria, quella categoria cancellata, e resta un
+   * record che punta a un id inesistente. Nessuna schermata puo' mostrarlo ne'
+   * toglierlo, e `resolveBudget` continuerebbe a sceglierlo per sempre.
+   */
+
+  it('un budget di categoria basta da solo, come una regola', () => {
+    const budgets = [
+      makeBudget({ effectiveFrom: '2026-08-01', amountCents: 30_000, categoryId: 'c-4' }),
+    ]
+    expect(planCategoryDeletion(cats, [], [], budgets, { id: 'c-4' })).toEqual({
+      ok: false,
+      reason: 'in-use',
+      expenses: 0,
+      recurringRules: 0,
+      budgets: 1,
+    })
+  })
+
+  it('un budget chiuso conta quanto uno in vigore', () => {
+    // Stessa ragione delle spese cancellate: un budget storicizzato resta
+    // nell'export ed e' la spiegazione di un periodo gia' passato.
+    const budgets = [
+      makeBudget({
+        effectiveFrom: '2026-01-01',
+        effectiveTo: '2026-02-28',
+        amountCents: 20_000,
+        categoryId: 'c-4',
+      }),
+    ]
+    expect(planCategoryDeletion(cats, [], [], budgets, { id: 'c-4' })).toEqual({
+      ok: false,
+      reason: 'in-use',
+      expenses: 0,
+      recurringRules: 0,
+      budgets: 1,
+    })
+  })
+
+  it('il budget generale non nomina nessuna categoria, quindi non trattiene niente', () => {
+    // Il budget senza `categoryId` e' quello che la UI di oggi scrive davvero:
+    // se trattenesse una cancellazione, nessuna categoria sarebbe piu'
+    // cancellabile dal momento in cui si imposta un budget.
+    const budgets = [makeBudget({ effectiveFrom: '2026-08-01', amountCents: 80_000 })]
+    expect(planCategoryDeletion(cats, [], [], budgets, { id: 'c-4' }).ok).toBe(true)
+  })
+
+  it('i quattro conteggi arrivano insieme, non uno alla volta', () => {
+    // Il rifiuto porta i numeri da mostrare: la UI dice "3 spese, 1 regola e 2
+    // budget la usano", e per dirlo deve averli tutti in una risposta sola.
+    const spese = [
+      makeExpense({ date: '2026-08-01', categoryId: 'c-4' }),
+      makeExpense({ date: '2026-08-02', categoryId: 'c-4' }),
+      makeExpense({ date: '2026-08-03', categoryId: 'c-4', deletedAt: '2026-08-03T09:00:00.000Z' }),
+    ]
+    const regole = [makeRule({ startDate: '2026-01-01', categoryId: 'c-4' })]
+    const budgets = [
+      makeBudget({ effectiveFrom: '2026-01-01', amountCents: 10_000, categoryId: 'c-4' }),
+      makeBudget({ effectiveFrom: '2026-02-01', amountCents: 12_000, categoryId: 'c-4' }),
+      makeBudget({ effectiveFrom: '2026-03-01', amountCents: 12_000, categoryId: 'c-1' }),
+    ]
+    expect(planCategoryDeletion(cats, spese, regole, budgets, { id: 'c-4' })).toEqual({
+      ok: false,
+      reason: 'in-use',
+      expenses: 3,
+      recurringRules: 1,
+      budgets: 2,
     })
   })
 
   it('archiviata ma inutilizzata si cancella comunque: sono due cose diverse', () => {
     const conArchiviata = [...cats, makeCategory({ id: 'arc', name: 'Arc', archived: true })]
-    expect(planCategoryDeletion(conArchiviata, [], [], { id: 'arc' }).ok).toBe(true)
+    expect(planCategoryDeletion(conArchiviata, [], [], [], { id: 'arc' }).ok).toBe(true)
   })
 
   it('un id che non esiste e una risposta, non un errore', () => {
-    expect(planCategoryDeletion(cats, [], [], { id: 'mai-vista' })).toEqual({
+    expect(planCategoryDeletion(cats, [], [], [], { id: 'mai-vista' })).toEqual({
       ok: false,
       reason: 'unknown',
     })

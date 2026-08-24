@@ -14,7 +14,7 @@ import {
 } from './repository'
 import type { Repository } from './repository'
 import type { Persistence } from './persistence'
-import { sequentialIds, tickingClock } from './testing'
+import { sequentialIds, TEST_CATEGORY_NAMES, tickingClock } from './testing'
 import type { DataSet } from './types'
 
 interface Fixture {
@@ -24,6 +24,7 @@ interface Fixture {
 
 async function open(disk: MemoryDisk = emptyDisk(), prefix = 'id'): Promise<Fixture> {
   const repo = await openRepository(createMemoryPersistence(disk), {
+    defaultCategoryNames: TEST_CATEGORY_NAMES,
     now: tickingClock(),
     newId: sequentialIds(prefix),
   })
@@ -36,7 +37,9 @@ describe('primo avvio', () => {
     expect(disk.settings?.weekStartsOn).toBe(1)
     expect(disk.settings?.theme).toBe('auto')
     expect(disk.categories).toHaveLength(DEFAULT_CATEGORY_SEEDS.length)
-    expect(repo.getState().categories[0]?.name).toBe('Spesa')
+    // Il nome della prima casella e' quello che il chiamante ha passato, non
+    // uno che il core conosce: e' l'intera differenza fra prima e adesso.
+    expect(repo.getState().categories[0]?.name).toBe(TEST_CATEGORY_NAMES.groceries)
     expect(repo.getState().categories.map((c) => c.order)).toEqual([10, 20, 30, 40, 50, 60, 70, 80])
   })
 
@@ -46,6 +49,67 @@ describe('primo avvio', () => {
     const { repo } = await open(disk, 'secondo')
     expect(disk.categories).toHaveLength(DEFAULT_CATEGORY_SEEDS.length)
     expect(repo.getState().categories.map((c) => c.id)).toEqual(idsPrima)
+  })
+
+  it('semina i nomi che riceve, non nomi suoi', async () => {
+    // La prova che nel core non e' rimasta nessuna parola: con un altro
+    // dizionario esce un'altra griglia, e nient'altro cambia.
+    const disk = emptyDisk()
+    const repo = await openRepository(createMemoryPersistence(disk), {
+      defaultCategoryNames: {
+        groceries: 'Spesa',
+        eatingOut: 'Fuori',
+        coffeeshop: 'Coffeeshop',
+        cigarettes: 'Sigarette',
+        transport: 'Trasporti',
+        leisure: 'Svago',
+        home: 'Casa',
+        extra: 'Extra',
+      },
+      now: tickingClock(),
+      newId: sequentialIds('it'),
+    })
+
+    expect(repo.getState().categories.map((c) => c.name)).toEqual([
+      'Spesa',
+      'Fuori',
+      'Coffeeshop',
+      'Sigarette',
+      'Trasporti',
+      'Svago',
+      'Casa',
+      'Extra',
+    ])
+    expect(disk.categories.map((c) => c.order)).toEqual([10, 20, 30, 40, 50, 60, 70, 80])
+  })
+
+  it('riaprendo in un altra lingua non ritraduce niente: quelle categorie sono dell utente', async () => {
+    // Il seme scrive una volta sola. Da quel momento i nomi sono dati
+    // dell'utente — rinominarli e' cio' che l'editor serve a fare — e nessuna
+    // riapertura, in nessuna lingua, li tocca. Non esiste nessuna migrazione
+    // che li riscriva.
+    const { disk } = await open()
+    const primaScritti = disk.categories.map((c) => ({ id: c.id, name: c.name }))
+
+    const riaperto = await openRepository(createMemoryPersistence(disk), {
+      defaultCategoryNames: {
+        groceries: 'Spesa',
+        eatingOut: 'Fuori',
+        coffeeshop: 'Coffeeshop',
+        cigarettes: 'Sigarette',
+        transport: 'Trasporti',
+        leisure: 'Svago',
+        home: 'Casa',
+        extra: 'Extra',
+      },
+      now: tickingClock(),
+      newId: sequentialIds('secondo'),
+    })
+
+    expect(riaperto.getState().categories.map((c) => ({ id: c.id, name: c.name }))).toEqual(
+      primaScritti,
+    )
+    expect(disk.categories.map((c) => c.name)).toEqual(primaScritti.map((c) => c.name))
   })
 
   it('rilegge dal disco quello che c era', async () => {
@@ -134,6 +198,7 @@ describe('spese: scrittura ottimistica', () => {
     const persistence = createMemoryPersistence(disk)
     const errori: unknown[] = []
     const repo = await openRepository(persistence, {
+      defaultCategoryNames: TEST_CATEGORY_NAMES,
       now: tickingClock(),
       newId: sequentialIds('e'),
       onWriteError: (error) => errori.push(error),
@@ -153,6 +218,7 @@ describe("l orario dell inserimento", () => {
   /** Un repository con l'orologio fermo su un istante deciso dal test. */
   async function apriAlle(istante: Date, disk: MemoryDisk = emptyDisk()): Promise<Fixture> {
     const repo = await openRepository(createMemoryPersistence(disk), {
+      defaultCategoryNames: TEST_CATEGORY_NAMES,
       now: tickingClock(),
       newId: sequentialIds('id'),
       nowInstant: () => istante,
@@ -210,6 +276,7 @@ describe("l orario dell inserimento", () => {
     ]
     let letture = 0
     const repo = await openRepository(createMemoryPersistence(emptyDisk()), {
+      defaultCategoryNames: TEST_CATEGORY_NAMES,
       now: tickingClock(),
       newId: sequentialIds('id'),
       nowInstant: () => {
@@ -301,6 +368,7 @@ describe('scritture fallite: lo stato non guarisce da solo', () => {
     const disk = emptyDisk()
     const persistence = createMemoryPersistence(disk)
     const repo = await openRepository(persistence, {
+      defaultCategoryNames: TEST_CATEGORY_NAMES,
       now: tickingClock(),
       newId: sequentialIds('rotto'),
     })
@@ -422,7 +490,7 @@ describe('categorie: il tetto di otto attive', () => {
 
   it('lo scambio e una scrittura sola: una esce, una entra, e prende il suo posto', async () => {
     const { repo, disk } = await open()
-    const sigarette = repo.getState().categories.find((c) => c.name === 'Sigarette')
+    const sigarette = repo.getState().categories.find((c) => c.name === 'Cigarettes')
 
     const esito = await repo.addCategory(
       { name: 'Musei', emoji: '🏛️', color: '#123456' },
@@ -432,7 +500,7 @@ describe('categorie: il tetto di otto attive', () => {
     expect(esito.ok).toBe(true)
     if (!esito.ok) return
     expect(esito.placed.name).toBe('Musei')
-    expect(esito.archived?.name).toBe('Sigarette')
+    expect(esito.archived?.name).toBe('Cigarettes')
     // Prende la cella di chi esce: le altre sette non si spostano.
     expect(esito.placed.order).toBe(sigarette?.order)
     expect(activeCategories(disk.categories)).toHaveLength(MAX_ACTIVE_CATEGORIES)
@@ -443,10 +511,11 @@ describe('categorie: il tetto di otto attive', () => {
     const { repo, disk } = await open()
     const persistence = createMemoryPersistence(disk)
     const secondo = await openRepository(persistence, {
+      defaultCategoryNames: TEST_CATEGORY_NAMES,
       now: tickingClock(),
       newId: sequentialIds('due'),
     })
-    const sigarette = secondo.getState().categories.find((c) => c.name === 'Sigarette')
+    const sigarette = secondo.getState().categories.find((c) => c.name === 'Cigarettes')
     persistence.crashAfter(1)
 
     await expect(
@@ -467,10 +536,11 @@ describe('categorie: il tetto di otto attive', () => {
     // Due contesti sullo stesso database. Il primo archivia; il secondo ha il
     // mirror di prima, quindi crede che ci sia posto.
     const secondo = await openRepository(createMemoryPersistence(disk), {
+      defaultCategoryNames: TEST_CATEGORY_NAMES,
       now: tickingClock(),
       newId: sequentialIds('due'),
     })
-    const casa = repo.getState().categories.find((c) => c.name === 'Casa')
+    const casa = repo.getState().categories.find((c) => c.name === 'Home')
     repo.archiveCategory(casa?.id ?? '')
     await repo.flush()
 
@@ -485,10 +555,11 @@ describe('categorie: il tetto di otto attive', () => {
   it('rinominare da un mirror vecchio non riporta in griglia cio che e stato archiviato altrove', async () => {
     const { repo, disk } = await open()
     const secondo = await openRepository(createMemoryPersistence(disk), {
+      defaultCategoryNames: TEST_CATEGORY_NAMES,
       now: tickingClock(),
       newId: sequentialIds('due'),
     })
-    const casa = repo.getState().categories.find((c) => c.name === 'Casa')
+    const casa = repo.getState().categories.find((c) => c.name === 'Home')
     repo.archiveCategory(casa?.id ?? '')
     await repo.flush()
 
@@ -505,7 +576,7 @@ describe('categorie: il tetto di otto attive', () => {
 
   it('archiviare libera un posto, e allora aggiungere basta', async () => {
     const { repo } = await open()
-    const svago = repo.getState().categories.find((c) => c.name === 'Svago')
+    const svago = repo.getState().categories.find((c) => c.name === 'Leisure')
     expect(repo.archiveCategory(svago?.id ?? '')?.archived).toBe(true)
     // Archiviata due volte: la seconda non e' un cambiamento.
     expect(repo.archiveCategory(svago?.id ?? '')).toBeNull()
@@ -519,7 +590,7 @@ describe('categorie: il tetto di otto attive', () => {
 
   it('archiviare non cancella: la categoria resta su tutte le spese', async () => {
     const { repo, disk } = await open()
-    const svago = repo.getState().categories.find((c) => c.name === 'Svago')
+    const svago = repo.getState().categories.find((c) => c.name === 'Leisure')
     repo.addExpense({ amountCents: 1_200, categoryId: svago?.id ?? '', date: '2026-08-22' })
     repo.archiveCategory(svago?.id ?? '')
     await repo.flush()
@@ -530,8 +601,8 @@ describe('categorie: il tetto di otto attive', () => {
 
   it('una archiviata torna in griglia solo scambiandola', async () => {
     const { repo } = await open()
-    const svago = repo.getState().categories.find((c) => c.name === 'Svago')
-    const casa = repo.getState().categories.find((c) => c.name === 'Casa')
+    const svago = repo.getState().categories.find((c) => c.name === 'Leisure')
+    const casa = repo.getState().categories.find((c) => c.name === 'Home')
     repo.archiveCategory(svago?.id ?? '')
     await repo.addCategory({ name: 'Musei', emoji: '🏛️', color: '#123456' })
 
@@ -541,8 +612,8 @@ describe('categorie: il tetto di otto attive', () => {
 
     const esito = await repo.unarchiveCategory(svago?.id ?? '', casa?.id)
     expect(esito.ok).toBe(true)
-    expect(esito.ok === true && esito.placed.name).toBe('Svago')
-    expect(esito.ok === true && esito.archived?.name).toBe('Casa')
+    expect(esito.ok === true && esito.placed.name).toBe('Leisure')
+    expect(esito.ok === true && esito.archived?.name).toBe('Home')
     expect(activeCategories(repo.getState().categories)).toHaveLength(MAX_ACTIVE_CATEGORIES)
   })
 
@@ -588,7 +659,7 @@ describe('categorie: il tetto di otto attive', () => {
 describe('categorie: cancellare davvero', () => {
   it('si puo solo se nessuno la nomina', async () => {
     const { repo, disk } = await open()
-    const svago = repo.getState().categories.find((c) => c.name === 'Svago')
+    const svago = repo.getState().categories.find((c) => c.name === 'Leisure')
     const esito = await repo.deleteCategory(svago?.id ?? '')
 
     expect(esito.ok).toBe(true)
@@ -598,7 +669,7 @@ describe('categorie: cancellare davvero', () => {
 
   it('una spesa viva la trattiene, e il rifiuto dice quante', async () => {
     const { repo, disk } = await open()
-    const svago = repo.getState().categories.find((c) => c.name === 'Svago')
+    const svago = repo.getState().categories.find((c) => c.name === 'Leisure')
     repo.addExpense({ amountCents: 1_200, categoryId: svago?.id ?? '', date: '2026-08-22' })
     repo.addExpense({ amountCents: 300, categoryId: svago?.id ?? '', date: '2026-08-22' })
     await repo.flush()
@@ -612,7 +683,7 @@ describe('categorie: cancellare davvero', () => {
 
   it('una spesa cancellata la trattiene lo stesso: resta nello Storico e nell export', async () => {
     const { repo } = await open()
-    const svago = repo.getState().categories.find((c) => c.name === 'Svago')
+    const svago = repo.getState().categories.find((c) => c.name === 'Leisure')
     const spesa = repo.addExpense({
       amountCents: 1_200,
       categoryId: svago?.id ?? '',
@@ -628,7 +699,7 @@ describe('categorie: cancellare davvero', () => {
 
   it('una regola ricorrente la trattiene: genererebbe orfane per sempre', async () => {
     const { repo } = await open()
-    const svago = repo.getState().categories.find((c) => c.name === 'Svago')
+    const svago = repo.getState().categories.find((c) => c.name === 'Leisure')
     repo.addRecurringRule({
       amountCents: 90_000,
       categoryId: svago?.id ?? '',
@@ -643,13 +714,45 @@ describe('categorie: cancellare davvero', () => {
     expect(esito.ok === false && esito.reason === 'in-use' && esito.recurringRules).toBe(1)
   })
 
+  it('un budget di categoria la trattiene: e un orfano che nessuna schermata vedrebbe', async () => {
+    // Non e' raggiungibile dalla UI di oggi (il foglio del budget non scrive
+    // `categoryId`), lo diventa con l'import della fase 7. Un budget che punta a
+    // una categoria cancellata resta li' per sempre: `resolveBudget` continua a
+    // sceglierlo e nessuna schermata puo' ne' mostrarlo ne' toglierlo.
+    const { repo, disk } = await open()
+    const leisure = repo.getState().categories.find((c) => c.name === 'Leisure')
+    repo.setBudget({
+      period: 'monthly',
+      amountCents: 20_000,
+      categoryId: leisure?.id ?? '',
+      effectiveFrom: '2026-08-01',
+    })
+    await repo.flush()
+
+    const esito = await repo.deleteCategory(leisure?.id ?? '')
+    expect(esito.ok === false && esito.reason).toBe('in-use')
+    expect(esito.ok === false && esito.reason === 'in-use' && esito.budgets).toBe(1)
+    expect(disk.categories).toHaveLength(DEFAULT_CATEGORY_SEEDS.length)
+  })
+
+  it('il budget generale non trattiene niente: altrimenti niente sarebbe piu cancellabile', async () => {
+    const { repo } = await open()
+    const leisure = repo.getState().categories.find((c) => c.name === 'Leisure')
+    repo.setBudget({ period: 'monthly', amountCents: 80_000, effectiveFrom: '2026-08-01' })
+    await repo.flush()
+
+    const esito = await repo.deleteCategory(leisure?.id ?? '')
+    expect(esito.ok).toBe(true)
+  })
+
   it('il permesso lo da il disco: una spesa scritta da un altro contesto conta', async () => {
     const { repo, disk } = await open()
     const secondo = await openRepository(createMemoryPersistence(disk), {
+      defaultCategoryNames: TEST_CATEGORY_NAMES,
       now: tickingClock(),
       newId: sequentialIds('due'),
     })
-    const svago = repo.getState().categories.find((c) => c.name === 'Svago')
+    const svago = repo.getState().categories.find((c) => c.name === 'Leisure')
     // Il secondo contesto scrive una spesa che il mirror del primo non vedra' mai.
     secondo.addExpense({ amountCents: 500, categoryId: svago?.id ?? '', date: '2026-08-22' })
     await secondo.flush()
@@ -780,6 +883,7 @@ describe('budget: quali record chiudere lo decide il disco', () => {
     const disk = emptyDisk()
     const persistence = createMemoryPersistence(disk)
     const repo = await openRepository(persistence, {
+      defaultCategoryNames: TEST_CATEGORY_NAMES,
       now: tickingClock(),
       newId: sequentialIds('x'),
     })
@@ -1150,6 +1254,7 @@ describe('un catch-up che muore a meta', () => {
     const persistence = createMemoryPersistence(disk)
     const errori: unknown[] = []
     const repo = await openRepository(persistence, {
+      defaultCategoryNames: TEST_CATEGORY_NAMES,
       now: tickingClock(),
       newId: sequentialIds('cu'),
       onWriteError: (error) => errori.push(error),
@@ -1303,6 +1408,7 @@ describe('rilettura al risveglio', () => {
     const disk = emptyDisk()
     const persistence = createMemoryPersistence(disk)
     const repo = await openRepository(persistence, {
+      defaultCategoryNames: TEST_CATEGORY_NAMES,
       now: tickingClock(),
       newId: sequentialIds('perse'),
     })
@@ -1367,6 +1473,7 @@ describe('rilettura al risveglio', () => {
       close: () => inner.close(),
     }
     const repo = await openRepository(persistence, {
+      defaultCategoryNames: TEST_CATEGORY_NAMES,
       now: tickingClock(),
       newId: sequentialIds('lenta'),
     })
@@ -1423,6 +1530,7 @@ describe('import: la coda e sua', () => {
     const disk = emptyDisk()
     const persistence = createMemoryPersistence(disk)
     const repo = await openRepository(persistence, {
+      defaultCategoryNames: TEST_CATEGORY_NAMES,
       now: tickingClock(),
       newId: sequentialIds('imp'),
       recurrenceChunkSize: 5,
@@ -1481,6 +1589,7 @@ describe('import: la coda e sua', () => {
     const disk = emptyDisk()
     const rotta = fragile(disk)
     const repo = await openRepository(rotta.persistence, {
+      defaultCategoryNames: TEST_CATEGORY_NAMES,
       now: tickingClock(),
       newId: sequentialIds('az'),
     })

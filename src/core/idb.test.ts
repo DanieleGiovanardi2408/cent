@@ -24,6 +24,7 @@ import {
   makeRule,
   makeSettings,
   sequentialIds,
+  TEST_CATEGORY_NAMES,
   tickingClock,
 } from './testing'
 import type { Expense } from './types'
@@ -217,6 +218,7 @@ describe('due contesti sullo stesso database', () => {
     // questo scenario produceva ogni giorno in doppia copia.
     const name = dbName()
     const pwa = await openRepository(createIdbPersistence({ name }), {
+      defaultCategoryNames: TEST_CATEGORY_NAMES,
       now: tickingClock(),
       newId: sequentialIds('pwa'),
       recurrenceChunkSize: 5,
@@ -231,6 +233,7 @@ describe('due contesti sullo stesso database', () => {
     await pwa.flush()
 
     const safari = await openRepository(createIdbPersistence({ name }), {
+      defaultCategoryNames: TEST_CATEGORY_NAMES,
       now: tickingClock('2021-01-01T00:00:00.000Z'),
       newId: sequentialIds('safari'),
       recurrenceChunkSize: 5,
@@ -285,6 +288,7 @@ describe('due contesti sullo stesso database', () => {
     // perche' la cancellazione sparisse per sempre.
     const name = dbName()
     const a = await openRepository(createIdbPersistence({ name }), {
+      defaultCategoryNames: TEST_CATEGORY_NAMES,
       now: tickingClock(),
       newId: sequentialIds('a'),
     })
@@ -299,6 +303,7 @@ describe('due contesti sullo stesso database', () => {
 
     // B apre adesso: da qui in poi il suo mirror invecchia.
     const b = await openRepository(createIdbPersistence({ name }), {
+      defaultCategoryNames: TEST_CATEGORY_NAMES,
       now: tickingClock('2021-01-01T00:00:00.000Z'),
       newId: sequentialIds('b'),
     })
@@ -342,6 +347,7 @@ describe('due contesti sullo stesso database', () => {
   it('interruzione a meta e ripresa da un altro contesto: stesso insieme di record', async () => {
     const name = dbName()
     const prima = await openRepository(createIdbPersistence({ name }), {
+      defaultCategoryNames: TEST_CATEGORY_NAMES,
       now: tickingClock(),
       newId: sequentialIds('prima'),
       recurrenceChunkSize: 5,
@@ -362,6 +368,7 @@ describe('due contesti sullo stesso database', () => {
     prima.close()
 
     const dopo = await openRepository(createIdbPersistence({ name }), {
+      defaultCategoryNames: TEST_CATEGORY_NAMES,
       now: tickingClock('2021-01-01T00:00:00.000Z'),
       newId: sequentialIds('dopo'),
       recurrenceChunkSize: 5,
@@ -457,6 +464,72 @@ describe('il budget si pianifica dentro la transazione', () => {
   })
 })
 
+describe('cancellare una categoria: il permesso lo danno tre store', () => {
+  /*
+   * Il conteggio si fa dentro la transazione, sui record del disco, e i record
+   * che possono nominare una categoria stanno in **tre** store: spese, regole e
+   * budget. Il terzo mancava.
+   *
+   * Questi test girano su IndexedDB vero perche' sono l'unico posto in cui lo
+   * store dimenticato si vede: `memory-persistence` non ha transazioni con uno
+   * scope, quindi li' un `budgets` in meno nell'elenco non produce nessun
+   * sintomo. Su IndexedDB produce un `NotFoundError` su ogni cancellazione.
+   */
+
+  async function conCategoria(name: string): Promise<Persistence> {
+    const persistence = createIdbPersistence({ name })
+    await persistence.write({
+      settings: makeSettings(),
+      categories: [makeCategory({ id: 'cat-svago', name: 'Leisure' })],
+    })
+    return persistence
+  }
+
+  it('un budget di categoria sul disco la trattiene, e il rifiuto lo conta', async () => {
+    const persistence = await conCategoria(dbName())
+    await persistence.write({
+      budgets: [
+        makeBudget({
+          id: 'b-1',
+          effectiveFrom: '2026-08-01',
+          amountCents: 20_000,
+          categoryId: 'cat-svago',
+        }),
+      ],
+    })
+
+    const esito = await persistence.write({ categoryDeletion: { id: 'cat-svago' } })
+    expect(esito.categoryDeletion).toEqual({
+      ok: false,
+      reason: 'in-use',
+      expenses: 0,
+      recurringRules: 0,
+      budgets: 1,
+    })
+
+    const suDisco = await persistence.loadAll()
+    expect(suDisco.categories).toHaveLength(1)
+    persistence.close()
+  })
+
+  it('senza nessun riferimento la cancellazione passa, budget compresi', async () => {
+    const persistence = await conCategoria(dbName())
+    // Un budget generale — quello che la UI scrive davvero — non nomina nessuna
+    // categoria e non deve trattenere niente.
+    await persistence.write({
+      budgets: [makeBudget({ id: 'b-1', effectiveFrom: '2026-08-01', amountCents: 80_000 })],
+    })
+
+    const esito = await persistence.write({ categoryDeletion: { id: 'cat-svago' } })
+    expect(esito.categoryDeletion?.ok).toBe(true)
+
+    const suDisco = await persistence.loadAll()
+    expect(suDisco.categories).toHaveLength(0)
+    expect(suDisco.budgets).toHaveLength(1)
+    persistence.close()
+  })
+})
+
 describe('il segnaposto viaggia da solo', () => {
   it('avanza senza portarsi dietro la copia vecchia della regola', async () => {
     // Il contesto che materializza legge la regola dal proprio mirror. Se
@@ -525,6 +598,7 @@ describe('morte a meta su un database vero', () => {
   it('interruzione a meta e ripresa: nessun duplicato, nessuna occorrenza persa', async () => {
     const name = dbName()
     const primo = await openRepository(createIdbPersistence({ name }), {
+      defaultCategoryNames: TEST_CATEGORY_NAMES,
       now: tickingClock(),
       newId: sequentialIds('setup'),
     })
@@ -540,6 +614,7 @@ describe('morte a meta su un database vero', () => {
 
     // Vita numero due: muore dopo due blocchi da 5.
     const morente = await openRepository(dyingAfter(createIdbPersistence({ name }), 2), {
+      defaultCategoryNames: TEST_CATEGORY_NAMES,
       now: tickingClock('2021-01-01T00:00:00.000Z'),
       newId: sequentialIds('morente'),
       recurrenceChunkSize: 5,
@@ -554,6 +629,7 @@ describe('morte a meta su un database vero', () => {
 
     // Vita numero tre: riprende da dove si e' fermata.
     const ripresa = await openRepository(createIdbPersistence({ name }), {
+      defaultCategoryNames: TEST_CATEGORY_NAMES,
       now: tickingClock('2022-01-01T00:00:00.000Z'),
       newId: sequentialIds('ripresa'),
       recurrenceChunkSize: 5,
@@ -758,6 +834,7 @@ describe('migrazioni pubblicate: i campi nuovi non toccano cio che c era', () =>
 
     const persistence = createIdbPersistence({ name })
     const repo = await openRepository(persistence, {
+      defaultCategoryNames: TEST_CATEGORY_NAMES,
       now: tickingClock(),
       newId: sequentialIds('nuovo'),
       nowInstant: () => new Date(2026, 7, 22, 20, 40),

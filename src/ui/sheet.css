@@ -134,6 +134,9 @@
 
 .amount {
   font-variant-numeric: tabular-nums;
+  /* Nessun `white-space` da difendere: l'unico spazio dell'importo e' lo spazio
+   * non separabile che in italiano precede il simbolo, e arriva dal locale
+   * dentro una cella `gap`. */
   /* Al tetto (99.999,99 EUR) undici caratteri devono stare in 375px meno i
    * margini: sotto quella larghezza il numero rimpicciolisce invece di essere
    * tagliato. Sui telefoni normali resta 40px. */
@@ -150,6 +153,63 @@
  * non finto. */
 .amount[data-empty] {
   color: var(--text-muted);
+}
+
+/* --- euro grandi, centesimi piccoli --------------------------------------- *
+ *
+ * ## Il difetto che questa regola chiude
+ *
+ * `0,23 €` e `23,00 €` avevano la stessa quantita' di inchiostro, e l'unico
+ * carattere che li distingueva era una virgola larga 3 px. L'importo sta fra le
+ * categorie e il tastierino proprio perche' cada sul percorso dell'occhio
+ * (AddSheet.css), ma cadere sul percorso non basta se cio' che c'e' da leggere
+ * e' un dettaglio da 3 px letto di sfuggita: sono due spese sbagliate in 24 ore
+ * d'uso vero, la seconda sopravvissuta 13 ore.
+ *
+ * Portando separatore e frazione al **55% del corpo**, la magnitudine smette di
+ * essere codificata in *quale* glifo e diventa **quanto inchiostro grande c'e'**:
+ * una cifra grande contro due. E' una differenza di massa, non di forma, e la
+ * massa si vede in periferia.
+ *
+ * ## Perche' 0.55em e non un token della scala
+ *
+ * Perche' e' un rapporto **dentro** un numero, non un livello della tipografia:
+ * deve seguire il corpo dell'importo, che qui e' `min(--fs-600, 10vw)` e in
+ * orizzontale `min(--fs-500, 6vw)`. Un token fisso avrebbe scollato le due
+ * meta' del numero esattamente sui viewport in cui il corpo si riduce.
+ *
+ * ## Cosa NON rimpicciolisce, e perche'
+ *
+ * Il simbolo (`currency`) e lo spazio non separabile che in italiano lo precede
+ * (`gap`) restano a corpo pieno: sono costanti fra `0,23` e `23,00`, quindi non
+ * portano nessuna informazione di magnitudine, e in italiano il simbolo e'
+ * l'ultima cella — cioe' quella su cui poggia il bordo destro. Rimpicciolirlo
+ * avrebbe spostato quel bordo.
+ *
+ * Il separatore delle migliaia (`gap`) resta grande insieme alle cifre che
+ * separa: e' parte della parte intera, ed e' l'unica cella `gap` che compare
+ * sopra i mille.
+ *
+ * ## L'allineamento
+ *
+ * Le celle sono `span` in linea, quindi condividono la **linea di base**: i
+ * centesimi si appoggiano sotto agli euro come su un cartellino del prezzo,
+ * senza `vertical-align` e senza `position`. L'altezza della riga non cambia:
+ * `line-height` sta su `.amount` ed e' il ceppo del blocco che comanda, non la
+ * cella piu' alta. Zero salti quando il numero passa da una cifra a due.
+ *
+ * `font-variant-numeric` e' dichiarato **anche qui** e non lasciato solo
+ * all'ereditarieta': le due meta' del numero devono avere le stesse chiglie
+ * tabulari, e se un giorno qualcuno spostasse questa cella fuori da `.amount`
+ * le cifre dei centesimi comincerebbero a ballare a ogni tap senza che nessuna
+ * misura se ne accorga. */
+.amount__cell {
+  font-variant-numeric: tabular-nums;
+}
+
+.amount__cell[data-kind="decimal"],
+.amount__cell[data-kind="fraction"] {
+  font-size: 0.55em;
 }
 
 /* --- il telefono girato --------------------------------------------------- */

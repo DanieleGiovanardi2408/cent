@@ -46,6 +46,7 @@ import { addDays, fromIsoDate, toDateParts } from '../../core/date'
 import type { IsoDate } from '../../core/date'
 import type { PeriodRange } from '../../core/budget'
 import type { BudgetPeriod, Language } from '../../core/types'
+import type { DefaultCategoryNames } from '../../core/defaults'
 import { it } from './it'
 import { en } from './en'
 
@@ -226,6 +227,44 @@ export function t(key: Key, vars?: Vars): string {
 }
 
 /**
+ * Gli otto nomi con cui scrivere le categorie di default, in una lingua.
+ *
+ * ## E' un seme, non un'etichetta
+ *
+ * Si chiama **una volta sola nella vita di un'installazione**, prima di
+ * `openRepository` (`src/app/main.tsx`), e cio' che restituisce finisce sul
+ * disco. Non e' testo che si ridipinge: da quel momento sono **dati
+ * dell'utente**, e cambiare lingua non li ritraduce.
+ *
+ * ## Perche' prende la lingua invece di leggere quella attiva
+ *
+ * Perche' e' l'unica chiamata dell'app che non puo' permettersi di dipendere da
+ * un `setLanguage()` fatto da qualcun altro prima. Il difetto che questa fase
+ * chiude era esattamente questo: il seme girava dentro `openRepository`, cioe'
+ * **prima che una lingua esistesse**. Un parametro obbligatorio sposta l'ordine
+ * dalla disciplina alla firma — chi la chiama ha gia' in mano una `Language`,
+ * o non compila.
+ *
+ * Il `Record` completo lo pretende `src/core/defaults.ts`, ed e' la seconda
+ * meta' della stessa idea: dimenticare una chiave e' un errore di
+ * compilazione, e scambiare "Sigarette" con "Trasporti" — che con otto
+ * stringhe in fila compilerebbe — e' inesprimibile.
+ */
+export function defaultCategoryNames(language: Language): DefaultCategoryNames {
+  const dict = DICTIONARIES[language]
+  return {
+    groceries: dict['cat.default.groceries'],
+    eatingOut: dict['cat.default.eatingOut'],
+    coffeeshop: dict['cat.default.coffeeshop'],
+    cigarettes: dict['cat.default.cigarettes'],
+    transport: dict['cat.default.transport'],
+    leisure: dict['cat.default.leisure'],
+    home: dict['cat.default.home'],
+    extra: dict['cat.default.extra'],
+  }
+}
+
+/**
  * La stessa chiave in **tutte** le lingue, nell'ordine dei dizionari.
  *
  * Serve a una cosa sola, e non e' la traduzione: **riservare alle etichette del
@@ -297,6 +336,49 @@ export function money(cents: Cents): string {
 export function moneyParts(cents: Cents): readonly Intl.NumberFormatPart[] {
   assertCents(cents)
   return formats.money.formatToParts(cents / 100)
+}
+
+/**
+ * Le parti di un importo, ridotte ai **cinque ruoli** che l'interfaccia
+ * distingue davvero.
+ *
+ * `Intl` ne produce di piu' (`group`, `literal`, `minusSign`, e domani altri):
+ * chi disegna un importo non deve conoscerle tutte, deve sapere una cosa sola
+ * per ogni pezzo — **e' inchiostro che varia con la magnitudine, oppure sta
+ * fermo?** Le cifre di `integer` e `fraction` variano; il separatore decimale,
+ * il simbolo e tutto il resto stanno fermi dove il locale li ha messi.
+ *
+ * ## Perche' una funzione sola per due schermate
+ *
+ * La usano la guida (`Guide.tsx`, che spezza `integer` e `fraction` cifra per
+ * cifra per animarle) e il foglio d'inserimento (`AddSheet.tsx`, che
+ * rimpicciolisce `decimal` e `fraction`). Sono due usi diversi della **stessa**
+ * classificazione, e la classificazione e' la parte che si sbaglia: in `it-IT`
+ * il simbolo sta in coda (`0,05 €`), in `en-GB` in testa (`€0.05`). Due copie
+ * avrebbero potuto divergere proprio li', cioe' nella lingua di default, che e'
+ * anche quella in cui nessuno di noi rilegge.
+ *
+ * `group` finisce fra i fermi insieme al resto: il separatore delle migliaia
+ * compare solo sopra i mille e non e' un'ancora, ma non e' nemmeno una cifra —
+ * rimpicciolirlo o animarlo lo staccherebbe dal numero di cui fa parte.
+ */
+export type AmountCellKind = 'integer' | 'decimal' | 'fraction' | 'currency' | 'gap'
+
+export interface AmountCell {
+  readonly kind: AmountCellKind
+  readonly text: string
+}
+
+export function amountCells(cents: Cents): readonly AmountCell[] {
+  return moneyParts(cents).map((part) => ({
+    kind:
+      part.type === 'integer' || part.type === 'fraction' || part.type === 'decimal'
+        ? part.type
+        : part.type === 'currency'
+          ? 'currency'
+          : 'gap',
+    text: part.value,
+  }))
 }
 
 function capitalize(text: string): string {

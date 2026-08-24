@@ -386,7 +386,13 @@ export function CategorySheet({
                    dentro: `planCategoryDeletion` e' pura, e chiederglielo
                    prima e' cio' che trasforma un errore in una frase utile. */
                 <p class="editor__note">
-                  {t('cat.inUse.text', { what: usageLabel(deletion.expenses, deletion.recurringRules) })}
+                  {t('cat.inUse.text', {
+                    what: usageLabel(
+                      deletion.expenses,
+                      deletion.recurringRules,
+                      deletion.budgets,
+                    ),
+                  })}
                 </p>
               ) : null}
             </div>
@@ -454,21 +460,41 @@ export function CategorySheet({
   )
 }
 
-/** "3 spese e 1 spesa ricorrente": i numeri veri, non "qualcosa la usa". */
-function usageLabel(expenses: number, rules: number): string {
-  const a =
-    expenses === 0
-      ? ''
-      : expenses === 1
-        ? t('cat.inUse.expenses.one')
-        : t('cat.inUse.expenses.other', { count: expenses })
-  const b =
-    rules === 0
-      ? ''
-      : rules === 1
-        ? t('cat.inUse.rules.one')
-        : t('cat.inUse.rules.other', { count: rules })
-  if (a === '') return b
-  if (b === '') return a
-  return t('cat.inUse.both', { a, b })
+/**
+ * "3 spese, 1 spesa ricorrente e 2 budget": i numeri veri, non "qualcosa la usa".
+ *
+ * Tre tipi di record possono nominare una categoria, e il terzo — i budget di
+ * categoria, storici compresi — e' entrato quando `planCategoryDeletion` ha
+ * smesso di dimenticarlo. Non e' raggiungibile dalla UI di oggi (il foglio del
+ * budget non scrive `categoryId`) e lo diventa con l'import: un file con un
+ * budget di categoria, la categoria cancellata, e resta un record che punta a
+ * un id inesistente che nessuna schermata puo' ne' mostrare ne' togliere.
+ *
+ * La frase si compone da una **lista**, non da rami annidati: con tre voci
+ * facoltative i casi sono sette, e sette rami scritti a mano sono sette
+ * occasioni di dimenticare una congiunzione in una lingua sola. La lista tiene
+ * solo cio' che c'e' davvero — un "0 budget" sarebbe un numero in piu' da
+ * leggere per dire che non conta.
+ */
+function usageLabel(expenses: number, rules: number, budgets: number): string {
+  const parts = [
+    counted(expenses, 'cat.inUse.expenses.one', 'cat.inUse.expenses.other'),
+    counted(rules, 'cat.inUse.rules.one', 'cat.inUse.rules.other'),
+    counted(budgets, 'cat.inUse.budgets.one', 'cat.inUse.budgets.other'),
+  ].filter((part) => part !== '')
+
+  // Destrutturato e non indicizzato: con `noUncheckedIndexedAccess` ogni
+  // `parts[0]` sarebbe un `string | undefined` da smentire con un `!`, e i
+  // quattro casi qui sotto sono gia' l'elenco completo.
+  const [a, b, c] = parts
+  if (a === undefined) return ''
+  if (b === undefined) return a
+  if (c === undefined) return t('cat.inUse.both', { a, b })
+  return t('cat.inUse.three', { a, b, c })
+}
+
+/** Il nome di una quantita', o stringa vuota se quella quantita' e' zero. */
+function counted(count: number, one: Key, other: Key): string {
+  if (count === 0) return ''
+  return count === 1 ? t(one) : t(other, { count })
 }

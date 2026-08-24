@@ -730,9 +730,13 @@ export function App() {
   const catDeletion = useMemo(() => {
     const data = app.data
     if (data === null || catTarget === null) return null
-    return planCategoryDeletion(data.categories, data.expenses, data.recurringRules, {
-      id: catTarget.id,
-    })
+    return planCategoryDeletion(
+      data.categories,
+      data.expenses,
+      data.recurringRules,
+      data.budgets,
+      { id: catTarget.id },
+    )
   }, [app.data, catTarget])
 
   return (

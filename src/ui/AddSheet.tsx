@@ -3,7 +3,7 @@ import { addDays } from '../core/date'
 import type { IsoDate } from '../core/date'
 import type { Category } from '../core/types'
 import { Keypad } from './Keypad'
-import { dayChipLabel, money, t } from './i18n'
+import { amountCells, dayChipLabel, t } from './i18n'
 import './sheet.css'
 import './AddSheet.css'
 
@@ -28,12 +28,32 @@ import './AddSheet.css'
  *   ne accorgi la mattina dopo) e non deve costare un calendario;
  * - la **nota**, collassata: costa un tap in piu' ed e' giusto cosi'.
  *
- * Che il chip salvi non lo indovina nessuno, quindi lo dicono **tre canali con
- * tre tempi diversi**: la guida al primo avvio lo spiega una volta, la riga qui
- * in cima lo ricorda per le prime tre spese (`coach`), e la tipografia del
- * tastierino lo spiega ogni volta. Nessuno dei tre e' un doppione dell'altro:
- * chi salta la guida ha ancora la riga, e chi ha imparato non ha piu' nessuno
- * dei due davanti.
+ * ## Le due convenzioni che nessuno indovina, e chi le dice
+ *
+ * Sono **due**, non una, e hanno canali diversi perche' sbagliano in modi
+ * diversi.
+ *
+ * **1. Il chip salva.** Non esiste in nessun'altra app. Lo dicono tre canali
+ * con tre tempi: la guida al primo avvio lo spiega una volta, la riga qui in
+ * cima lo ricorda per le prime tre spese (`coach`), e gli otto chip che si
+ * accendono alla prima cifra lo mostrano ogni volta (`.cat:disabled` in
+ * AddSheet.css). Nessuno dei tre e' un doppione: chi salta la guida ha ancora
+ * la riga, e chi ha imparato ha ancora i chip che si accendono.
+ *
+ * **2. L'importo si riempie da destra**, stile bancomat: `2` `3` fa 0,23, non
+ * 23,00. Qui il canale "lo spiega una volta" e' la stessa guida, ma non basta
+ * da sola — l'errore non e' di comprensione, e' di **percezione al momento del
+ * tap**: `0,23 €` e `23,00 €` avevano la stessa quantita' di inchiostro e il
+ * discriminante era una virgola da 3 px, invisibile a ~7 gradi di eccentricita'
+ * mentre l'occhio e' gia' sul chip da toccare. E' l'errore che ha morso **due
+ * volte in sessanta secondi** chi il meccanismo l'aveva progettato, con il
+ * secondo sopravvissuto 13 ore.
+ *
+ * Il canale permanente e' quindi la **tipografia dell'importo**: i centesimi
+ * (separatore e frazione) si dipingono al 55% del corpo, quindi la magnitudine
+ * smette di essere codificata in *quale* glifo e diventa **quanto inchiostro
+ * grande c'e'** — una cifra grande contro due. Si legge in periferia, dove una
+ * virgola no. Le misure e la regola stanno in sheet.css, sotto `.amount`.
  */
 
 export interface SaveInput {
@@ -305,9 +325,21 @@ export function AddSheet({ categories, day, coach, leaving, onSave, onClose }: P
         {/* L'importo sta fra le categorie e il tastierino, e non sopra: e' la
             sola posizione che cade sul percorso dell'occhio fra il tasto appena
             premuto e il chip da toccare. Il perche' per esteso, con la misura
-            che l'ha deciso, sta in AddSheet.css. */}
+            che l'ha deciso, sta in AddSheet.css.
+
+            Non e' una stringa: sono **le parti del formato**, ciascuna nella
+            propria cella, perche' i centesimi si dipingono al 55% del corpo
+            (sheet.css). Sulle parti e non sui glifi perche' il simbolo cambia
+            lato con la lingua — `0,23 €` in italiano, `€0.23` in inglese — e
+            una `split` sulla stringa avrebbe rimpicciolito il pezzo sbagliato
+            nella lingua di default. E' lo stesso modello della guida
+            (`amountCells` in i18n), non una seconda copia. */}
         <p class="amount" data-empty={empty || undefined} aria-live="polite">
-          {money(cents)}
+          {amountCells(cents).map((cell, index) => (
+            <span class="amount__cell" data-kind={cell.kind} key={index}>
+              {cell.text}
+            </span>
+          ))}
         </p>
 
         <Keypad

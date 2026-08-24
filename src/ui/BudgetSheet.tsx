@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import type { BudgetPeriod } from '../core/types'
 import { Keypad } from './Keypad'
-import { cadenceLabel, money, t } from './i18n'
+import { amountCells, cadenceLabel, money, t } from './i18n'
 import './sheet.css'
 import './BudgetSheet.css'
 
@@ -140,8 +140,20 @@ export function BudgetSheet({
             argomento". */}
         <p class="sheet__hint" data-tone={failed ? 'error' : undefined}>{hint}</p>
 
+        {/* Le parti, non la stringa: i centesimi al 55% del corpo (sheet.css).
+            Anche questa e' una decisione che non nominava `AddSheet` — il suo
+            argomento e' *l'importo si digita cents-first e la magnitudine e'
+            appesa a una virgola da 3 px*, e qui c'e' lo stesso tastierino, lo
+            stesso cents-first e la stessa virgola. Un budget sbagliato di un
+            fattore cento e' meno frequente di una spesa sbagliata e altrettanto
+            silenzioso: riscrive ogni "puoi spendere ~X al giorno" del periodo.
+            Vedi CLAUDE.md, "Una decisione vale dove vale il suo argomento". */}
         <p class="amount" data-empty={empty || undefined} aria-live="polite">
-          {money(cents)}
+          {amountCells(cents).map((cell, index) => (
+            <span class="amount__cell" data-kind={cell.kind} key={index}>
+              {cell.text}
+            </span>
+          ))}
         </p>
 
         {/* Due bersagli larghi mezzo foglio. Sotto il nome, l'importo che c'e'

@@ -135,7 +135,7 @@ difetto strutturale non si conta, si corregge.
 Costo accettato: il chip piu' vicino si allontana dal pollice di ~57 px, ~70 ms
 sul secondo tap.
 
-### Da fare in fase 3: euro grandi, centesimi piccoli
+### FATTO: euro grandi, centesimi piccoli
 
 `0,23 €` e `23,00 €` hanno oggi la stessa quantita' di inchiostro, e il
 discriminante e' una virgola da 3 px. Rendendo la parte frazionaria al ~55% del
@@ -749,6 +749,18 @@ non un lock.
   segnare una spesa, oppure vedere quanto resta — e non prima.
 
 ## Rimandato consapevolmente
+
+- **Due contesti che seminano insieme un database vuoto** — dichiarato da
+  `data-core` e non chiuso. Aprendo l'app due volte in parallelo su un archivio
+  nuovo, la condizione `settings === null` e' vera per entrambi e le categorie di
+  default vengono scritte due volte: **sedici invece di otto**. La condizione e'
+  identica a prima di ADR 015 — non e' un difetto introdotto, e' uno mai chiuso.
+  La cura sono **id deterministici per i default**, sulla falsariga di ADR 006:
+  l'id di una categoria di default e' funzione pura della sua chiave, quindi la
+  seconda scrittura non e' rappresentabile invece che sorvegliata.
+  Su iOS non e' raggiungibile (i contesti non sono mai simultanei, ADR 007);
+  su desktop affiancato si', ed e' lo stesso confine di sempre.
+
 
 - **Agganciare la rilettura al risveglio agli eventi del documento** — fase 2.
   `src/core` espone l'API; `src/app` deve chiamarla su `visibilitychange`

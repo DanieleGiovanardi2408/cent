@@ -6,7 +6,7 @@ import { readDisplayContext, writesAreBlocked } from './install-gate'
 import { clearRetiredStorageKeys } from './legacy-cleanup'
 import { requestPersistentStorage } from './persist'
 import { registerServiceWorker } from './sw-update'
-import { detectLanguage, setLanguage } from '../ui/i18n'
+import { defaultCategoryNames, detectLanguage, setLanguage } from '../ui/i18n'
 import '../ui/tokens.css'
 import '../ui/reset.css'
 
@@ -26,8 +26,20 @@ const display = readDisplayContext()
  * Questa riga **non persiste niente**: la lingua rilevata resta una derivazione
  * dell'ambiente, e scriverla in `Settings` la renderebbe indistinguibile da una
  * scelta vera — vedi il contratto di `Settings.language` in `types.ts`.
+ *
+ * C'e' pero' una cosa che dipende da questo valore e **finisce sul disco**: al
+ * primo avvio il repository semina otto categorie, e le otto etichette sono
+ * lingua. Non e' una contraddizione con il capoverso qui sopra: quello che si
+ * scrive non e' la lingua, sono **otto nomi**, e da quel momento sono dati
+ * dell'utente — cambiare lingua dopo non li ritraduce, come non ritradurrebbe
+ * una categoria che ha rinominato lui.
+ *
+ * Al primo avvio l'ambiente e' l'unica fonte possibile e non e' un ripiego:
+ * `Settings.language` per definizione non esiste ancora, perche' `Settings`
+ * nasce nella stessa transazione delle categorie.
  */
-setLanguage(detectLanguage())
+const language = detectLanguage()
+setLanguage(language)
 
 /**
  * Il cancello di ADR 011: fuori da standalone, sull'origine di produzione, Cent
@@ -66,7 +78,14 @@ if (root) render(blocked ? <Install /> : <App />, root)
 // asincrona, quindi questo task finisce e il browser dipinge. Aspettare qui
 // `openRepository()` metterebbe la lettura di 5.000 record davanti al primo
 // frame — e' il motivo per cui la regola sta in CLAUDE.md.
-if (!blocked) boot()
+//
+// Gli otto nomi si compongono **qui**, dopo il render e prima dell'apertura:
+// e' l'ordine che CLAUDE.md pretende ("le categorie di default non si creano
+// finche' la lingua non e' risolta"), ed e' anche l'unico punto in cui non
+// costa niente. Sono otto letture di un oggetto gia' bundlato: il guscio e'
+// gia' dipinto quando girano, quindi il primo frame non aspetta un byte in
+// piu' di prima.
+if (!blocked) boot(defaultCategoryNames(language))
 
 // Niente di tutto questo serve al primo frame: si fa dopo il load, per non
 // rubare banda alla prima pittura. Non usiamo requestAnimationFrame: in una

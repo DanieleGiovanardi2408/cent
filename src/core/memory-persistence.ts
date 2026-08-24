@@ -197,6 +197,7 @@ export function createMemoryPersistence(disk: MemoryDisk = emptyDisk()): MemoryP
           next.categories,
           next.expenses,
           next.recurringRules,
+          next.budgets,
           batch.categoryDeletion,
         )
         if (deletion.ok) {

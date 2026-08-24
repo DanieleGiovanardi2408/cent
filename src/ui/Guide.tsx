@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
 import type { Category } from '../core/types'
-import { money, moneyParts, t } from './i18n'
+import { amountCells, money, t } from './i18n'
 import { reducedMotion } from './motion'
 import './sheet.css'
 import './Guide.css'
@@ -254,8 +254,9 @@ function Keys({ step }: { readonly step: number }) {
  * simbolo dell'euro in una delle due lingue — e sarebbe stato invisibile finche'
  * qualcuno non avesse aperto la guida in inglese.
  *
- * Con `formatToParts` (`moneyParts` in i18n) l'invariante e' dichiarato invece
- * che sperato:
+ * Con `formatToParts` (`amountCells` in i18n, che e' anche cio' che il foglio
+ * d'inserimento usa per rimpicciolire i centesimi) l'invariante e' dichiarato
+ * invece che sperato:
  *
  * - la cella `decimal` e' **l'ancora**: sta ferma, ed e' rispetto a lei che le
  *   cifre entrano da destra;
@@ -295,20 +296,25 @@ interface Cell {
   readonly text: string
 }
 
-/** Le parti del locale, con `integer` e `fraction` spezzate cifra per cifra. */
+/**
+ * Le celle di `amountCells` (i18n), con `integer` e `fraction` spezzate cifra
+ * per cifra: qui ogni cifra ha una sua animazione d'entrata, quindi ha bisogno
+ * di un suo elemento.
+ *
+ * La classificazione **non e' qui**, ed e' la meta' che conta: quali parti sono
+ * cifre e quali stanno ferme lo decide un posto solo, lo stesso che serve al
+ * foglio d'inserimento. Erano due catene di `if` identiche, e la differenza fra
+ * le due si sarebbe vista solo in inglese, dove il simbolo cambia lato.
+ */
 function cellsOf(cents: number): readonly Cell[] {
   const out: Cell[] = []
-  for (const part of moneyParts(cents)) {
-    if (part.type === 'integer' || part.type === 'fraction') {
-      for (const digit of part.value) out.push({ kind: 'digit', text: digit })
-    } else if (part.type === 'decimal') {
-      out.push({ kind: 'decimal', text: part.value })
-    } else if (part.type === 'currency') {
-      out.push({ kind: 'currency', text: part.value })
+  for (const cell of amountCells(cents)) {
+    if (cell.kind === 'integer' || cell.kind === 'fraction') {
+      for (const digit of cell.text) out.push({ kind: 'digit', text: digit })
     } else {
-      // `literal` (lo spazio non separabile fra numero e simbolo in italiano) e
-      // qualunque parte che il locale aggiunga: sta ferma come il simbolo.
-      out.push({ kind: 'gap', text: part.value })
+      // `decimal`, `currency` e `gap` (lo spazio non separabile fra numero e
+      // simbolo in italiano, il separatore delle migliaia): stanno ferme.
+      out.push({ kind: cell.kind, text: cell.text })
     }
   }
   return out

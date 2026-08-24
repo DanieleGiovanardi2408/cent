@@ -73,6 +73,7 @@ import type {
   CategoryPlacementRequest,
 } from './categories'
 import { buildDefaultCategories, buildDefaultSettings } from './defaults'
+import type { DefaultCategoryNames } from './defaults'
 import type { Cents } from './money'
 import type {
   Persistence,
@@ -201,6 +202,24 @@ export interface SettingsPatch {
 }
 
 export interface RepositoryOptions {
+  /**
+   * I nomi con cui scrivere le otto categorie di default **se questo e' il
+   * primo avvio**, gia' nella lingua risolta da chi compone (`src/app`).
+   *
+   * **Obbligatorio, e non ha default.** E' il vincolo di CLAUDE.md — "le
+   * categorie di default non si creano finche' la lingua non e' risolta" — reso
+   * vero per costruzione invece che per disciplina: non esiste modo di aprire
+   * il repository senza aver prima deciso in che lingua scrivere la griglia. Un
+   * campo opzionale con un fallback italiano qui dentro sarebbe esattamente il
+   * difetto che questa riga esiste per chiudere, e tornerebbe in silenzio.
+   *
+   * Il core non guarda `navigator` e non lo fara' mai: un ambiente non e' un
+   * dato di dominio (vedi la nota su `Settings.language` in `types.ts`).
+   *
+   * Su un avvio che non e' il primo non viene letto: le categorie gia' scritte
+   * sono dati dell'utente e non si toccano.
+   */
+  readonly defaultCategoryNames: DefaultCategoryNames
   readonly now?: () => Timestamp
   readonly newId?: () => string
   /**
@@ -362,9 +381,10 @@ export interface Repository {
 
   /**
    * Cancella davvero, e **solo se nessun record la nomina** — nessuna spesa
-   * (viva o cancellata: i soft delete restano nello Storico e nell'export) e
-   * nessuna regola ricorrente. Altrimenti resterebbero riferimenti orfani che
-   * nessuna schermata sa riparare.
+   * (viva o cancellata: i soft delete restano nello Storico e nell'export),
+   * nessuna regola ricorrente e nessun budget di categoria (anche chiuso).
+   * Altrimenti resterebbero riferimenti orfani che nessuna schermata sa
+   * riparare — e quello lasciato da un budget non lo vedrebbe nessuno.
    *
    * Asincrona e non ottimistica per la stessa ragione di `addCategory`, piu'
    * una: e' l'unica operazione irreversibile sulle categorie, e il permesso lo
@@ -518,7 +538,7 @@ function replace<T extends { readonly id: string }>(list: readonly T[], record: 
 
 export async function openRepository(
   persistence: Persistence,
-  options: RepositoryOptions = {},
+  options: RepositoryOptions,
 ): Promise<Repository> {
   const clock = options.now ?? nowTimestamp
   const makeId = options.newId ?? defaultNewId
@@ -531,8 +551,13 @@ export async function openRepository(
   if (settings === null) {
     // Primo avvio: le impostazioni e le categorie di default nascono qui, in una
     // sola transazione, cosi' un'app che muore subito dopo riparte gia' pronta.
+    //
+    // I nomi arrivano da fuori gia' risolti (`options.defaultCategoryNames`).
+    // Qui dentro non si sceglie nessuna lingua: chi apre ha gia' scelto, ed e'
+    // il solo modo perche' "le categorie si creano dopo che la lingua e'
+    // risolta" non dipenda da chi si ricorda di farlo.
     settings = buildDefaultSettings(clock)
-    categories = buildDefaultCategories(clock, makeId)
+    categories = buildDefaultCategories(options.defaultCategoryNames, clock, makeId)
     await persistence.write({ settings, categories })
   }
 

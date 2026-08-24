@@ -51,7 +51,7 @@
  * nessun record la nomina piu'. Vedi `planCategoryDeletion`.
  */
 
-import type { Category, Expense, RecurringRule, Timestamp } from './types'
+import type { Budget, Category, Expense, RecurringRule, Timestamp } from './types'
 
 /**
  * Quante categorie stanno in griglia. Otto, cioe' 4x2 senza scroll.
@@ -264,6 +264,8 @@ export type CategoryDeletion =
       readonly expenses: number
       /** Regole ricorrenti che la nominano. */
       readonly recurringRules: number
+      /** Budget di categoria che la nominano, **storici compresi**. */
+      readonly budgets: number
     }
 
 /**
@@ -279,6 +281,20 @@ export type CategoryDeletion =
  * inesistente genererebbe spese orfane per sempre, cioe' lo stesso danno che
  * arriva da solo invece che una volta.
  *
+ * E contano i **budget di categoria**, storici compresi. Sono i quattro tipi di
+ * record che possono nominare una categoria, ed erano tre: `Budget.categoryId`
+ * mancava da questo elenco mentre la frase qui sopra diceva "nessun record".
+ * Non e' raggiungibile dalla UI di oggi — il foglio del budget non scrive
+ * `categoryId` — ma lo diventa con l'import: basta un file con un budget di
+ * categoria, e la cancellazione lascerebbe un record che punta a un id
+ * inesistente. `resolveBudget` continuerebbe a sceglierlo per sempre, e nessuna
+ * schermata potrebbe ne' mostrarlo ne' toglierlo: e' un orfano peggiore degli
+ * altri due, perche' non si vede.
+ *
+ * Contano anche i budget **chiusi** (`effectiveTo` valorizzato), per la stessa
+ * ragione delle spese cancellate: un budget storicizzato resta nell'export e
+ * resta la spiegazione di come e' stato calcolato un periodo passato.
+ *
  * Se qualcuno la usa, la risposta non e' "no": e' **archiviala**. Che e' gratis,
  * non perde niente, e produce esattamente cio' che l'utente voleva — la
  * categoria fuori dalla griglia.
@@ -290,18 +306,21 @@ export function planCategoryDeletion(
   categories: readonly Category[],
   expenses: readonly Expense[],
   recurringRules: readonly RecurringRule[],
+  budgets: readonly Budget[],
   request: CategoryDeletionRequest,
 ): CategoryDeletion {
   const target = categories.find((c) => c.id === request.id)
   if (target === undefined) return { ok: false, reason: 'unknown' }
   const usedByExpenses = expenses.filter((e) => e.categoryId === request.id).length
   const usedByRules = recurringRules.filter((r) => r.categoryId === request.id).length
-  if (usedByExpenses > 0 || usedByRules > 0) {
+  const usedByBudgets = budgets.filter((b) => b.categoryId === request.id).length
+  if (usedByExpenses > 0 || usedByRules > 0 || usedByBudgets > 0) {
     return {
       ok: false,
       reason: 'in-use',
       expenses: usedByExpenses,
       recurringRules: usedByRules,
+      budgets: usedByBudgets,
     }
   }
   return { ok: true, deleted: target }

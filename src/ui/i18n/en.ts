@@ -252,6 +252,16 @@ export const en: Record<keyof typeof it, string> = {
     'Off the grid, not out of your data: History and stats still show them. Tap one to put it back on the grid in place of another.',
   'settings.cats.placeOne': 'Put {name} back on the grid',
 
+  /* --- i nomi delle otto categorie di default ------------------------------ */
+  'cat.default.groceries': 'Groceries',
+  'cat.default.eatingOut': 'Eating out',
+  'cat.default.coffeeshop': 'Coffeeshop',
+  'cat.default.cigarettes': 'Cigarettes',
+  'cat.default.transport': 'Transport',
+  'cat.default.leisure': 'Fun',
+  'cat.default.home': 'Home',
+  'cat.default.extra': 'Extra',
+
   /* --- foglio della categoria --------------------------------------------- */
   'cat.new.label': 'New category',
   'cat.edit.label': 'Edit category',
@@ -280,7 +290,10 @@ export const en: Record<keyof typeof it, string> = {
   'cat.inUse.expenses.other': '{count} expenses',
   'cat.inUse.rules.one': '1 recurring expense',
   'cat.inUse.rules.other': '{count} recurring expenses',
+  'cat.inUse.budgets.one': '1 budget',
+  'cat.inUse.budgets.other': '{count} budgets',
   'cat.inUse.both': '{a} and {b}',
+  'cat.inUse.three': '{a}, {b} and {c}',
   'cat.inUse.text':
     'Used by {what}: deleting it would leave those rows with no name, so it cannot go. Archiving does what you need — off the grid, History untouched.',
   'cat.preview': 'How the grid will look',
@@ -323,6 +336,7 @@ export const en: Record<keyof typeof it, string> = {
   /* --- promemoria di backup ------------------------------------------------ */
   'nudge.never': 'You have never exported',
   'nudge.since': 'Last backup: {days} ago',
+  'nudge.unknown': 'I cannot tell how long since your last copy',
   'nudge.hint': 'Your data lives only here.',
   'nudge.action': 'Export',
 }

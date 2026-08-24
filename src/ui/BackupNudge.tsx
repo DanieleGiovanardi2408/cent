@@ -45,9 +45,7 @@ export function BackupNudge({
           <path d="M12 3.5 5 6v6c0 4 3 7 7 8.5 4-1.5 7-4.5 7-8.5V6z" />
         </svg>
         <p class="nudge__text">
-          <span class="nudge__title">
-            {nudge.ever ? t('nudge.since', { days: daysLabel(nudge.days) }) : t('nudge.never')}
-          </span>
+          <span class="nudge__title">{title(nudge)}</span>
           <span class="nudge__hint">{t('nudge.hint')}</span>
         </p>
         <button type="button" class="nudge__action" onClick={onExport}>
@@ -56,4 +54,22 @@ export function BackupNudge({
       </div>
     </div>
   )
+}
+
+/**
+ * Tre frasi, non due, e la terza non e' un caso limite: e' cio' che rende
+ * onesto l'accendersi della banda quando il conto non torna.
+ *
+ * - **mai esportato** -> non c'e' nessun numero da dire, e infatti non se ne
+ *   dice uno: `nudge.never` non ha segnaposto;
+ * - **esportato, e si sa quando** -> i giorni veri;
+ * - **esportato, e non si sa quando** (`days === null`: `createdAt` illeggibile,
+ *   orologio tornato indietro) -> lo si dice. L'alternativa era stampare un
+ *   numero inventato, che e' il modo in cui un indicatore comincia a mentire, o
+ *   tacere, che e' il caso peggiore di tutti secondo CLAUDE.md.
+ */
+function title(nudge: Nudge): string {
+  if (!nudge.ever) return t('nudge.never')
+  if (nudge.days === null) return t('nudge.unknown')
+  return t('nudge.since', { days: daysLabel(nudge.days) })
 }

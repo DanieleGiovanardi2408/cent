@@ -182,13 +182,17 @@ function storesOf(batch: WriteBatch): StoreName[] {
   if (batch.recurringRules || batch.advanceRecurringMarkers) names.add('recurringRules')
   if (batch.budgets || batch.budgetChange) names.add('budgets')
   if (batch.settings) names.add('settings')
-  // Cancellare una categoria dipende da chi la nomina: le due letture stanno
-  // nella stessa transazione della cancellazione, altrimenti sarebbero un
-  // controllo fatto "appena prima", cioe' la stessa gara con una finestra piu'
-  // stretta (ADR 008).
+  // Cancellare una categoria dipende da chi la nomina: le **tre** letture
+  // stanno nella stessa transazione della cancellazione, altrimenti sarebbero
+  // un controllo fatto "appena prima", cioe' la stessa gara con una finestra
+  // piu' stretta (ADR 008). I budget sono il terzo store, e l'elenco qui deve
+  // restare l'esatto specchio degli argomenti di `planCategoryDeletion`: uno
+  // store dimenticato qui non e' un permesso sbagliato, e' un
+  // `NotFoundError` sulla transazione.
   if (batch.categoryDeletion) {
     names.add('expenses')
     names.add('recurringRules')
+    names.add('budgets')
   }
   return [...names]
 }
@@ -308,6 +312,7 @@ async function runBatch(tx: WriteTx, batch: WriteBatch): Promise<WriteResult> {
       await store.getAll(),
       await tx.objectStore('expenses').getAll(),
       await tx.objectStore('recurringRules').getAll(),
+      await tx.objectStore('budgets').getAll(),
       batch.categoryDeletion,
     )
     if (deletion.ok) enqueue(store.delete(deletion.deleted.id))

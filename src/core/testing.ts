@@ -9,11 +9,34 @@
  */
 
 import type { IsoDate } from './date'
+import type { DefaultCategoryNames } from './defaults'
 import type { Budget, Category, Expense, RecurringRule, Settings } from './types'
 import { SETTINGS_ID } from './types'
 import { SCHEMA_VERSION } from './schema'
 
 const EPOCH = '2020-01-01T00:00:00.000Z'
+
+/**
+ * I nomi con cui i test aprono il repository.
+ *
+ * Sono in **inglese**, che e' la lingua di default dell'app: un test che
+ * seminasse in italiano racconterebbe la storia di prima, cioe' quella in cui i
+ * nomi erano cablati nel core.
+ *
+ * Nessun test deve dipendere da *queste* parole per qualcosa che non siano le
+ * categorie di default: il punto della cucitura e' che i nomi vengano da fuori,
+ * e chi vuole provarlo passa i propri (vedi `defaults.test.ts`).
+ */
+export const TEST_CATEGORY_NAMES: DefaultCategoryNames = {
+  groceries: 'Groceries',
+  eatingOut: 'Eating out',
+  coffeeshop: 'Coffeeshop',
+  cigarettes: 'Cigarettes',
+  transport: 'Transport',
+  leisure: 'Leisure',
+  home: 'Home',
+  extra: 'Extra',
+}
 
 /** Id prevedibili: `pre-1`, `pre-2`, ... Gli assert restano leggibili. */
 export function sequentialIds(prefix = 'id'): () => string {

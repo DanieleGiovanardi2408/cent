@@ -5,7 +5,15 @@
  * decisione che li ha prodotti e' una sola: **il chip-come-conferma non esiste
  * in nessun'altra app, quindi nessuno lo indovina.** La guida lo spiega una
  * volta; la riga nel foglio lo ricorda nel momento in cui serve, per le prime
- * tre spese; la tipografia del tastierino lo spiega ogni volta.
+ * tre spese; gli otto chip che si accendono alla prima cifra lo mostrano ogni
+ * volta.
+ *
+ * L'altra convenzione che nessuno indovina — **l'importo si riempie da destra**
+ * — ha la stessa guida come canale "una volta" e la **tipografia dell'importo**
+ * come canale permanente: i centesimi al 55% del corpo, cosi' che `0,23` e
+ * `23,00` differiscano per quantita' di inchiostro grande e non per una virgola
+ * da 3 px. Quella parte si misura in `overlays.spec.ts`, dove c'e' il foglio
+ * vero; qui si prova solo la scheda che la spiega.
  *
  * ## I due rami di `prefers-reduced-motion`, provati **tutti e due**
  *

@@ -18,13 +18,28 @@
  * lingue con la stessa regola non giustificano un motore che pesa piu' di tutto
  * il modulo.
  *
- * ## Cosa NON sta qui
+ * ## I nomi delle otto categorie di default stanno qui, e non sono interfaccia
  *
- * I **nomi delle categorie**. Sono dati dell'utente, non interfaccia: vivono in
- * `defaults.ts`, finiscono nel database al primo avvio e dal passo 3 di questa
- * fase si modificano. Tradurli significherebbe che cambiare lingua rinomina le
- * categorie di chi le ha gia' rinominate — cioe' riscrivere dati per una scelta
- * di visualizzazione.
+ * `cat.default.*` sono le uniche chiavi di questo file che **non si rileggono a
+ * ogni render**: si leggono **una volta sola**, al primo avvio, per scrivere le
+ * otto categorie nel database gia' nella lingua risolta (`src/app/main.tsx`).
+ * Da quell'istante sono **dati dell'utente**, come se le avesse scritte lui —
+ * e cambiare lingua dopo **non** le ritraduce. E' corretto: sono sue, e
+ * rinominarle e' esattamente cio' che l'editor delle categorie serve a fare.
+ *
+ * Qui c'era scritto il contrario, e l'argomento era buono finche' i nomi erano
+ * otto stringhe italiane cablate in `defaults.ts`: tradurre *quelle* avrebbe
+ * significato rinominare a ogni cambio di lingua le categorie di chi le aveva
+ * gia' rinominate. Quel difetto non e' stato accettato, e' stato **spostato di
+ * momento**: il dizionario tocca i nomi solo prima che esistano, e il core non
+ * ha piu' nessun nome dentro (`buildDefaultCategories` li prende come
+ * argomento). Chi ripristinasse la vecchia frase riporterebbe otto etichette
+ * italiane sul telefono di chi legge in inglese — cioe' il secondo dei due tap,
+ * il solo che decide *cosa* stai salvando, in una lingua che non legge.
+ *
+ * Il criterio, per la prossima chiave dubbia: **una chiave e' interfaccia se si
+ * rilegge; e' un seme se si scrive.** I semi vivono qui perche' qui c'e' la
+ * lingua, non perche' siano testo dell'app.
  */
 export const it = {
   /* --- giorni e periodi ------------------------------------------------- */
@@ -274,6 +289,25 @@ export const it = {
     'Fuori dalla griglia, non fuori dai dati: Storico e statistiche continuano a mostrarle. Tocca una categoria per rimetterla in griglia al posto di un’altra.',
   'settings.cats.placeOne': 'Rimetti {name} in griglia',
 
+  /* --- i nomi delle otto categorie di default ------------------------------ *
+   *
+   * Si leggono una volta sola, al primo avvio, e finiscono nel database (vedi
+   * la testata di questo file). L'ordine e' quello della griglia 4x2 e lo
+   * decide `DEFAULT_CATEGORY_SEEDS` in `src/core/defaults.ts`: qui ci sono solo
+   * le parole.
+   *
+   * Vincolo che non si vede leggendo: devono stare in `.cat__name` **senza
+   * puntini** su un chip largo ~60px a 320 punti, dove il corpo scende a 11px.
+   * "Coffeeshop" e' la piu' lunga delle due lingue ed e' il metro. */
+  'cat.default.groceries': 'Spesa',
+  'cat.default.eatingOut': 'Fuori',
+  'cat.default.coffeeshop': 'Coffeeshop',
+  'cat.default.cigarettes': 'Sigarette',
+  'cat.default.transport': 'Trasporti',
+  'cat.default.leisure': 'Svago',
+  'cat.default.home': 'Casa',
+  'cat.default.extra': 'Extra',
+
   /* --- foglio della categoria --------------------------------------------- */
   'cat.new.label': 'Nuova categoria',
   'cat.edit.label': 'Modifica categoria',
@@ -305,7 +339,14 @@ export const it = {
   'cat.inUse.expenses.other': '{count} spese',
   'cat.inUse.rules.one': '1 spesa ricorrente',
   'cat.inUse.rules.other': '{count} spese ricorrenti',
+  // "budget" resta invariato al plurale in italiano: e' una parola presa
+  // dall'inglese, e "budgets" suonerebbe come un refuso.
+  'cat.inUse.budgets.one': '1 budget',
+  'cat.inUse.budgets.other': '{count} budget',
   'cat.inUse.both': '{a} e {b}',
+  // Tre numeri sono il caso completo, non un'ipotesi: un budget di categoria
+  // arriva da un import, e chi importa ha gia' spese e ricorrenze.
+  'cat.inUse.three': '{a}, {b} e {c}',
   'cat.inUse.text':
     'La usa {what}: cancellarla lascerebbe quelle righe senza nome, quindi non si può. Archiviarla fa quello che ti serve — sparisce dalla griglia e lo Storico resta intero.',
   'cat.preview': 'Come sarà la griglia',
@@ -354,6 +395,9 @@ export const it = {
   // spazio e dove si arriva di propria volonta'.
   'nudge.never': 'Non hai mai esportato',
   'nudge.since': 'Ultimo backup: {days} fa',
+  // L'orologio e' andato indietro, o la data dell'ultimo backup non si legge.
+  // Non si tace e non si inventa un numero: si dice che il conto non torna.
+  'nudge.unknown': 'Non riesco a dire da quanto non fai una copia',
   'nudge.hint': 'I dati stanno solo qui.',
   'nudge.action': 'Esporta',
 } as const
