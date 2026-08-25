@@ -487,6 +487,29 @@ test('ogni testo dipinto sta sopra la soglia AA della sua taglia', async ({ page
         await expect(page.locator('.rule__current')).toBeVisible()
       },
     },
+    // Il pannello che sposta indietro la data d'inizio (ADR 018), nel suo stato
+    // pieno: il valore attuale, il chip della data acceso, l'anteprima con i
+    // numeri, la casella spuntata e il bottone che scrive.
+    //
+    // Nessuna coppia di colori e' nuova — sono `--text`, `--text-muted`,
+    // `--line-strong` e `--brand` sulla superficie del foglio, tutte gia'
+    // dipinte altrove. Ed e' proprio per questo che la scena c'e': "non ci sono
+    // coppie nuove" e' un ragionamento, e questa riga e' la misura.
+    {
+      nome: 'pannello sposta indietro la data d inizio',
+      vai: async () => {
+        await page.locator('.app__action').tap()
+        await expect(page.locator('.prefs')).toBeVisible()
+        await page.locator('.fixed__row').first().tap()
+        await expect(page.locator('.sheet--rule')).toBeVisible()
+        await page.locator('.starts__back').tap()
+        await expect(page.locator('.rewind__now')).toBeVisible()
+        await page.locator('.starts .chip__input').fill('2026-01-01')
+        await expect(page.locator('.rule__confirm')).toBeVisible()
+        await page.locator('.rule__confirm').tap()
+        await expect(page.locator('.save')).toBeEnabled()
+      },
+    },
   ]
 
   const cattive: Misura[] = []

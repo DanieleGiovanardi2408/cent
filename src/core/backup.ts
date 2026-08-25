@@ -16,7 +16,7 @@
  */
 
 import { MAX_ACTIVE_CATEGORIES, activeCategories } from './categories'
-import { isIsoDate, isTimeMinutes } from './date'
+import { isIsoDate, isTimeMinutes, toDateParts } from './date'
 import type { IsoDate } from './date'
 import { buildDefaultSettings } from './defaults'
 import { SCHEMA_VERSION, SchemaTooNewError, emptyRawDataSet, migrateRawData } from './schema'
@@ -221,26 +221,59 @@ function parseRule(raw: RawRecord, path: string, c: Collector): RecurringRule | 
   if (endDate === false || lastMaterializedDate === false) {
     return c.error(path, 'endDate o lastMaterializedDate non sono date valide')
   }
-  const anchorRaw = raw['anchorDay']
-  let anchorDay: number | undefined
-  if (anchorRaw !== undefined && anchorRaw !== null) {
-    if (typeof anchorRaw !== 'number' || !Number.isInteger(anchorRaw) || anchorRaw < 1 || anchorRaw > 31) {
-      return c.error(`${path}.anchorDay`, `giorno di ancoraggio non valido: ${String(anchorRaw)}`)
-    }
-    anchorDay = anchorRaw
-  }
-  return {
+  const common = {
     ...b,
     amountCents,
     categoryId,
-    cadence,
     interval,
     startDate,
     active: raw['active'] !== false,
-    ...(anchorDay !== undefined ? { anchorDay } : {}),
     ...(endDate !== undefined ? { endDate } : {}),
     ...(lastMaterializedDate !== undefined ? { lastMaterializedDate } : {}),
   }
+  const anchorRaw = raw['anchorDay']
+  const anchorDay =
+    typeof anchorRaw === 'number' && Number.isInteger(anchorRaw) && anchorRaw >= 1 && anchorRaw <= 31
+      ? anchorRaw
+      : null
+
+  // Fuori dalle mensili l'ancora non esiste: dallo schema 4 il tipo non la
+  // lascia nemmeno esprimere. Nessun writer di questa app ne ha mai scritta una
+  // su una giornaliera o una settimanale, ma un JSON a mano puo': si scarta, e
+  // lo si dice, perche' scartarla in silenzio significherebbe far sparire un
+  // numero che qualcuno aveva scritto apposta.
+  if (cadence !== 'monthly') {
+    if (anchorRaw !== undefined && anchorRaw !== null) {
+      c.warn(
+        `${path}.anchorDay`,
+        `il giorno di ancoraggio vale solo per le regole mensili: ignorato su una ${cadence}`,
+      )
+    }
+    return { ...common, cadence }
+  }
+
+  // Una mensile senza ancora leggibile la riceve da `startDate`, ed e' **la
+  // stessa derivazione della migrazione 3 -> 4**.
+  //
+  // Questa e' la strada che la migrazione non copre: un file puo' dichiarare
+  // gia' lo schema 4 — scritto a mano, o esportato da una versione futura di
+  // se stesso — e allora `migrateRawData` non ha nessun passo da applicargli.
+  // Senza questa riga quel file perderebbe la regola (`c.error` scarta il
+  // record), cioe' l'unico esito che un import non puo' produrre.
+  //
+  // Vale anche per un'ancora fuori scala (0, 45, 1.5): prima faceva scartare
+  // **tutta** la regola, e un importo, una categoria e un calendario perduti
+  // per un campo derivabile sono una perdita che non serve a niente.
+  if (anchorDay === null) {
+    if (anchorRaw !== undefined && anchorRaw !== null) {
+      c.warn(
+        `${path}.anchorDay`,
+        `giorno di ancoraggio non valido (${String(anchorRaw)}): si usa il giorno di startDate`,
+      )
+    }
+    return { ...common, cadence, anchorDay: toDateParts(startDate).day }
+  }
+  return { ...common, cadence, anchorDay }
 }
 
 function parseBudget(raw: RawRecord, path: string, c: Collector): Budget | null {

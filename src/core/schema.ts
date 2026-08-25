@@ -19,7 +19,7 @@ import type { StoreName } from './types'
 export const DB_NAME = 'cent'
 
 /** Versione corrente. Si incrementa aggiungendo un passo a `MIGRATIONS`. */
-export const SCHEMA_VERSION = 3
+export const SCHEMA_VERSION = 4
 
 export const STORE_NAMES: readonly StoreName[] = [
   'expenses',
@@ -163,7 +163,93 @@ export const MIGRATIONS: readonly MigrationStep[] = [
       settings: data.settings.map((raw) => ({ ...raw, schemaVersion: 3 })),
     }),
   },
+  {
+    to: 4,
+    summary: 'RecurringRule.anchorDay esplicito e obbligatorio sulle regole mensili',
+    /**
+     * **L'unica migrazione che scrive un campo sui record esistenti**, e la sola
+     * ragione per cui puo' farlo e' che il valore da scrivere e' ancora
+     * ricavabile con certezza.
+     *
+     * Fino allo schema 3 una regola mensile poteva non avere `anchorDay`, e il
+     * motore derivava il giorno del mese da `startDate`. Il significato della
+     * regola dipendeva quindi da un campo che un'altra operazione puo'
+     * cambiare: retrodatare una regola "il 1 del mese" al 23 giugno la
+     * trasformava in "il 23 del mese", in silenzio.
+     *
+     * ## Perche' adesso, e non dopo
+     *
+     * E' aritmetica, non fretta: **in questo momento `startDate` non e' ancora
+     * stato spostato da nessuno**, quindi il giorno che se ne ricava e' esattamente
+     * quello che il motore stava gia' usando. La stessa derivazione fatta dopo il
+     * primo rewind ricaverebbe l'ancora **sbagliata** e la scriverebbe come se
+     * fosse quella giusta — un dato falso, plausibile, e senza piu' nessun posto
+     * da cui rileggere quello vero.
+     *
+     * Non e' quindi il caso di `timeMinutes` ne' di `language`, dove riempire a
+     * tavolino un campo opzionale avrebbe registrato un'osservazione che nessuno
+     * ha fatto. Qui il valore **e' gia' in uso**: si sta scrivendo cio' che il
+     * motore calcolava a ogni apertura. La migrazione non cambia il calendario
+     * di nessuna regola, lo rende soltanto esplicito.
+     *
+     * ## Cosa non tocca
+     *
+     * - Le cadenze `daily` e `weekly`: li' l'ancora non significa niente, e dallo
+     *   schema 4 il tipo non la lascia nemmeno esprimere. Se un record ne porta
+     *   una — nessun writer l'ha mai scritta, ma un JSON a mano puo' — resta sul
+     *   record grezzo e la scarta `parseRule` in import.
+     * - Le mensili che ce l'hanno gia': si lasciano come sono. Il valore scritto
+     *   vince sempre su quello derivabile.
+     * - Le mensili con `startDate` illeggibile: **il record resta**, senza
+     *   ancora. Non si inventa un giorno. Da li' in poi `validateRule` la
+     *   dichiara non utilizzabile e il motore la salta dicendolo, che e' il
+     *   comportamento che gia' aveva — era rotta prima e resta rotta, ma non
+     *   sparisce.
+     *
+     * Le sezioni non toccate escono **con lo stesso riferimento** con cui sono
+     * entrate, e `recurringRules` pure quando non c'e' niente da derivare: e'
+     * cosi' che `idb.ts` sa di non dover riscrivere niente (vedi
+     * `applyTransforms`), ed e' la forma verificabile di "la migrazione non tocca
+     * i record che non la riguardano".
+     */
+    transform: (data) => ({
+      ...data,
+      recurringRules: withExplicitAnchorDay(data.recurringRules),
+      settings: data.settings.map((raw) => ({ ...raw, schemaVersion: 4 })),
+    }),
+  },
 ]
+
+/**
+ * Il giorno del mese scritto in una `YYYY-MM-DD`, o `null` se non lo e'.
+ *
+ * Non passa da `toDateParts`: quella lancia, e una migrazione che lancia su un
+ * record storto abortisce la transazione di upgrade e lascia l'utente con
+ * un'app che non si apre piu'. Qui un record illeggibile e' un record che passa
+ * oltre intatto.
+ */
+function dayOfMonthOf(value: unknown): number | null {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null
+  const day = Number(value.slice(8, 10))
+  return Number.isInteger(day) && day >= 1 && day <= 31 ? day : null
+}
+
+/**
+ * Scrive `anchorDay` sulle mensili che non ce l'hanno, derivandolo da
+ * `startDate`. Restituisce **lo stesso array** se non c'era niente da fare.
+ */
+function withExplicitAnchorDay(rules: RawRecord[]): RawRecord[] {
+  let changed = false
+  const next = rules.map((raw) => {
+    if (raw['cadence'] !== 'monthly') return raw
+    if (typeof raw['anchorDay'] === 'number') return raw
+    const day = dayOfMonthOf(raw['startDate'])
+    if (day === null) return raw
+    changed = true
+    return { ...raw, anchorDay: day }
+  })
+  return changed ? next : rules
+}
 
 export function emptyRawDataSet(): RawDataSet {
   return { expenses: [], categories: [], recurringRules: [], budgets: [], settings: [] }

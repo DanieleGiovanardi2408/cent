@@ -421,6 +421,27 @@ export const en: Record<keyof typeof it, string> = {
   'rule.cats.current':
     '{name} is archived, so it is no longer on the grid. It stays the category of this fixed cost until you tap another one.',
 
+  /* --- moving the start date back (ADR 018) -------------------------------- */
+  'rewind.now': 'Start date: {day}',
+  'rewind.action': 'Move the start date back',
+  'rewind.hint': 'Pick the day it really started. Backwards only.',
+  'rewind.pick': 'Pick an earlier start day',
+  'rewind.pick.none': 'Pick a day',
+  'rewind.note':
+    'Only the start date moves: the amount and how often stay as they are. What you already have stays too — an expense you corrected keeps your amount, and one you deleted stays deleted.',
+  'rewind.preview.none': 'Nothing to create in the past. The start date becomes {day}.',
+  'rewind.preview.today': 'This creates today’s expense: {total}.',
+  'rewind.confirm.today': 'Also create today’s expense',
+  'rewind.notEarlier': '{day} does not come before {current}: the start date only moves back.',
+  'rewind.save.none': 'Move the start date',
+  'rewind.back': 'Back',
+  'rewind.refused.notEarlier':
+    'The start date is already {current}, and {day} does not come before it. Pick another day.',
+  'rewind.refused.invalid':
+    'Something in this fixed cost does not add up, so I am not moving it. Close this, and check it in the list.',
+  'rewind.refused.changed':
+    'This fixed cost changed in the meantime. The numbers below are redone: check and confirm.',
+
   'rule.deactivate': 'Switch off',
   'rule.delete': 'Delete the fixed cost',
   'rule.delete.note': 'Only while it has no expense in your history.',
@@ -435,6 +456,9 @@ export const en: Record<keyof typeof it, string> = {
   'toast.ruleOff': '{name}: it will create no more expenses',
   'toast.ruleOn': '{name}: it will create expenses again',
   'toast.ruleOnBack': '{name}: back on, {count} expenses created',
+  'toast.ruleBack.none': '{name}: the start date is now {day}',
+  'toast.ruleBack.one': '{name}: 1 expense created',
+  'toast.ruleBack.other': '{name}: {count} past expenses created',
   'toast.ruleDeleted': 'Fixed cost deleted: {name}',
   'toast.ruleInUse': 'It has already created expenses: you can only switch it off',
   'toast.ruleFailed': 'That did not work. Try again.',

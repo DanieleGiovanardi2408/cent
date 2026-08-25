@@ -21,7 +21,7 @@ import { isAfter, isBefore, isIsoDate } from './date'
 import type { IsoDate } from './date'
 import type { Cents } from './money'
 import { materializationWindow, occurrencesBetween, validateRule } from './recurrence'
-import type { Cadence, Expense, RecurringRule, Timestamp } from './types'
+import type { Cadence, Expense, RecurringRule, Timestamp, WithCadence } from './types'
 
 /* ------------------------------------------------------------------------- *
  * 1. Il totale mensile delle fisse
@@ -176,11 +176,9 @@ export function monthlyFixedCosts(
  * risponde alla stessa domanda ("cosa scrive la prossima materializzazione"),
  * ed e' cio' che serve per riattivare una regola rimasta ferma dei mesi.
  */
-export interface RecurrenceDraft {
+export interface RecurrenceDraftCommon {
   readonly amountCents: Cents
-  readonly cadence: Cadence
   readonly interval: number
-  readonly anchorDay?: number
   readonly startDate: IsoDate
   readonly endDate?: IsoDate
   /**
@@ -189,6 +187,18 @@ export interface RecurrenceDraft {
    */
   readonly lastMaterializedDate?: IsoDate
 }
+
+/**
+ * La bozza si divide sulla cadenza **con lo stesso tipo della regola**
+ * (`WithCadence`), e non con una copia che gli somiglia.
+ *
+ * E' la riga che impedisce di riaprire il buco da un'altra parte: la bozza e'
+ * l'unico ingresso da cui un calendario entra in un record, quindi se qui
+ * l'ancora tornasse opzionale, il compilatore ammetterebbe di nuovo una mensile
+ * senza ancora e a raccoglierla sarebbe `ruleShape`. Con un tipo solo, una
+ * mensile senza ancora non e' scrivibile ne' come regola ne' come bozza.
+ */
+export type RecurrenceDraft = WithCadence<RecurrenceDraftCommon>
 
 /**
  * **L'impronta economica di un'anteprima**: quante spese ha annunciato e per
@@ -336,22 +346,27 @@ export function previewMaterialization(
   // Una regola sintetica: `occurrencesBetween` chiede una `RecurringRule` e
   // legge solo i campi del calendario. L'id non finisce da nessuna parte —
   // l'anteprima non scrive — ma serve a `validateRule` per il messaggio.
-  const rule: RecurringRule = {
+  const common = {
     id: 'anteprima',
     createdAt: '',
     updatedAt: '',
     amountCents: draft.amountCents,
     categoryId: '',
-    cadence: draft.cadence,
     interval: draft.interval,
     startDate: draft.startDate,
     active: true,
-    ...(draft.anchorDay !== undefined ? { anchorDay: draft.anchorDay } : {}),
     ...(draft.endDate !== undefined ? { endDate: draft.endDate } : {}),
     ...(draft.lastMaterializedDate !== undefined
       ? { lastMaterializedDate: draft.lastMaterializedDate }
       : {}),
   }
+  // Il calendario si ricopia **insieme**, cadenza e ancora nella stessa
+  // espressione: e' l'unica forma che il tipo accetta, ed e' anche l'unica in
+  // cui non si puo' dimenticare la seconda meta'.
+  const rule: RecurringRule =
+    draft.cadence === 'monthly'
+      ? { ...common, cadence: 'monthly', anchorDay: draft.anchorDay }
+      : { ...common, cadence: draft.cadence }
 
   // Prima della finestra: `occurrencesBetween` lancia su una regola non valida,
   // e un'anteprima che lancia lascia la schermata senza risposta proprio mentre
@@ -394,17 +409,19 @@ export function previewMaterialization(
   // passato. Senza la copia, cambiargli `startDate` dopo cambierebbe cio' che
   // il permesso autorizza a scrivere — cioe' esattamente il buco che questo
   // valore esiste per chiudere.
-  const frozen: RecurrenceDraft = {
+  const frozenCommon: RecurrenceDraftCommon = {
     amountCents: draft.amountCents,
-    cadence: draft.cadence,
     interval: draft.interval,
     startDate: draft.startDate,
-    ...(draft.anchorDay !== undefined ? { anchorDay: draft.anchorDay } : {}),
     ...(draft.endDate !== undefined ? { endDate: draft.endDate } : {}),
     ...(draft.lastMaterializedDate !== undefined
       ? { lastMaterializedDate: draft.lastMaterializedDate }
       : {}),
   }
+  const frozen: RecurrenceDraft =
+    draft.cadence === 'monthly'
+      ? { ...frozenCommon, cadence: 'monthly', anchorDay: draft.anchorDay }
+      : { ...frozenCommon, cadence: draft.cadence }
   const footprint: PreviewFootprint = {
     count: dates.length,
     totalCents: draft.amountCents * dates.length,

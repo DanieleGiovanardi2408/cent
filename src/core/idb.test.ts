@@ -297,6 +297,7 @@ describe('due contesti sullo stesso database', () => {
       amountCents: 90_000,
       categoryId: 'cat-1',
       cadence: 'monthly',
+      anchorDay: 1,
       interval: 1,
       startDate: '2026-08-01',
     })

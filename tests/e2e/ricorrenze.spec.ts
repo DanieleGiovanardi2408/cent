@@ -729,16 +729,43 @@ test('la sonda sui tre stati nuovi: elenco toccabile, modifica, riaccensione', a
   await expect(page.locator('.rule__second')).toBeVisible()
   await check('foglio di una spesa fissa esistente')
 
-  // 3. La stessa schermata con la data d'inizio spostata **all'indietro di un
-  //    anno e mezzo**, e nessuna conferma: il motore riparte dal segnaposto,
-  //    non da `startDate`, quindi li' non si genera niente e non c'e' niente da
-  //    confermare. E' ADR 017 §4 verificato dove si vede — una conferma che
-  //    comparisse anche qui insegnerebbe a saltarla dove conta.
-  await page.locator('.starts .chip__input').fill('2025-01-01')
+  // 3. Il pannello che sposta indietro la data d'inizio, nei suoi due stati.
+  //    E' uno stato **nuovo** e sostituisce corpo e piede del foglio piu' alto
+  //    dell'app: se la casella scivolasse fuori, la conferma esplicita di una
+  //    scrittura in blocco diventerebbe una conferma saltabile senza vederla.
+  //
+  //    Qui c'era la data d'inizio spostata a mano in modifica, che dichiarava
+  //    "Non c'e' niente da recuperare" e aveva ragione: la bozza conservava il
+  //    segnaposto, quindi la finestra restava chiusa e non nasceva niente. Era
+  //    il no-op silenzioso da cui e' partita questa consegna (ADR 018), e adesso
+  //    quella strada non esiste piu'.
+  await page.locator('.starts__back').tap()
+  await expect(page.locator('.rewind__now')).toBeVisible()
   await still(page)
-  await expect(page.locator('.rule__preview')).toHaveText('Non c’è niente da recuperare.')
-  await expect(page.locator('.rule__confirm')).toHaveCount(0)
-  await check('foglio di modifica, data spostata indietro')
+  await check('pannello sposta indietro, prima di scegliere il giorno')
+
+  await page.locator('.starts .chip__input').fill('2025-01-01')
+  await expect(page.locator('.rule__confirm')).toBeVisible()
+  await still(page)
+  await check('pannello sposta indietro, con l arretrato da confermare')
+
+  // Il piede del pannello resta intero, su tutti e tre i viewport: e' cio' che
+  // dichiara una scrittura in blocco e cio' che la conferma, e non puo' finire
+  // sotto la linea di galleggiamento. E' la stessa misura che il foglio della
+  // regola ha gia', applicata allo stato che questa consegna aggiunge.
+  for (const selector of ['.rule__preview', '.rule__confirm', '.save']) {
+    const dentro = await page.locator(selector).evaluate((el) => {
+      const box = el.getBoundingClientRect()
+      return box.bottom <= innerHeight + 0.5 && box.top >= 0
+    })
+    expect(dentro, `${selector} del pannello non e' interamente dentro il viewport`).toBe(true)
+  }
+
+  // Si torna al foglio senza aver scritto niente: il pannello e' un modo, e
+  // uscire da un modo non e' una scrittura.
+  await page.locator('.rule__second').tap()
+  await expect(page.locator('.rewind__now')).toHaveCount(0)
+  await still(page)
 
   // 4. Lo stato piu' alto che l'app sappia produrre: la regola spenta e
   //    riaperta **due mesi dopo**, cioe' con la casella che dichiara
@@ -746,8 +773,8 @@ test('la sonda sui tre stati nuovi: elenco toccabile, modifica, riaccensione', a
   //    in fondo al corpo. La casella e' cio' che dichiara: se scivolasse fuori,
   //    la conferma esplicita diventerebbe una conferma saltabile senza vederla.
   //
-  //    Il tap su "Disattiva" chiude il foglio e butta via la data non salvata:
-  //    la regola resta quella di prima.
+  //    Il tap su "Disattiva" chiude il foglio: la regola resta quella di prima,
+  //    perche' entrare e uscire dal pannello non ha scritto niente.
   await page.locator('.rule__second').tap()
   await expect(page.locator('.sheet--rule')).toHaveCount(0)
   await page.clock.setFixedTime(istanteLocale('2026-10-19', '10:00:00'))
@@ -1110,4 +1137,212 @@ test('la sonda sui due stati nuovi: correzione dell importo e nona categoria', a
   expect(scroll.page, 'c\'e\' scroll orizzontale in pagina').toBeLessThanOrEqual(0)
   expect(scroll.sheet, 'c\'e\' scroll orizzontale nel foglio').toBeLessThanOrEqual(0)
   expect(scroll.body, 'c\'e\' scroll orizzontale nel corpo del foglio').toBeLessThanOrEqual(0)
+})
+
+/* ------------------------------------------------------------------------- *
+ * ADR 018 — spostare indietro la data d'inizio
+ * ------------------------------------------------------------------------- */
+
+test('la data d inizio si legge, si sposta solo indietro, e gli arretrati arrivano nello Storico', async ({
+  page,
+}) => {
+  // **Il gesto vero, dall'inizio alla fine.** Una regola gia' materializzata,
+  // con dentro le due cose che ADR 018 promette di non rompere — una correzione
+  // manuale e una cancellazione — e poi "Sposta indietro la data d'inizio".
+  //
+  // Fino a ieri l'unica strada era l'input della data in modifica, ed era rotta
+  // in tutte e due le direzioni: indietro la bozza conservava il segnaposto,
+  // quindi non nasceva niente (il no-op silenzioso); in avanti le istanze gia'
+  // generate restavano prima dell'inizio dichiarato, che e' cio' che ADR 018
+  // vieta. Qui si prova che la strada nuova esiste e che l'altra non c'e' piu'.
+  expect(giornoDichiarato()).toBe('2026-08-19')
+
+  await page.goto('./')
+  await expect(page.locator('.fab')).toBeEnabled()
+  await chiudiGuida(page)
+
+  // --- 900 al mese dal 1 giugno: tre occorrenze, il 1 di giugno, luglio e
+  //     agosto. Tre e non otto perche' servono **due** istanze da maltrattare e
+  //     una da lasciare intatta.
+  await apriFoglioRegola(page)
+  await digita(page, '90000')
+  await page.locator('.cats--pick .cat').filter({ hasText: 'Casa' }).tap()
+  await page.locator('.starts .chip__input').fill('2026-06-01')
+  await page.locator('.rule__confirm').tap()
+  await page.locator('.save').tap()
+  await expect(page.locator('.sheet--rule')).toHaveCount(0)
+  await expect.poll(async () => (await speseSuDisco(page)).length, { timeout: 10_000 }).toBe(3)
+
+  // --- La correzione a mano: il canone di luglio e' stato 920.
+  await page.locator('.nav__tab').nth(1).tap()
+  await expect(page.locator('.list')).toBeVisible()
+  await page.locator('.day').filter({ hasText: '1 luglio' }).locator('.row').tap()
+  await expect(page.locator('.acts')).toBeVisible()
+  await page.locator('.acts__fix').tap()
+  await expect(page.locator('.sheet--amount')).toBeVisible()
+  await still(page)
+  await digita(page, '92000')
+  await page.locator('.sheet--amount .save').tap()
+  await expect(page.locator('.sheet--amount')).toHaveCount(0)
+  await expect.poll(async () => (await speseSuDisco(page)).find((e) => e.date === '2026-07-01')?.amountCents)
+    .toBe(92_000)
+
+  // --- E la cancellazione: quello di giugno non c'era. Il toast si aspetta che
+  //     se ne vada, o "Annulla" resterebbe agganciato mentre si tocca altrove.
+  await page.locator('.day').filter({ hasText: '1 giugno' }).locator('.row').tap()
+  await expect(page.locator('.acts')).toBeVisible()
+  await page.locator('.acts__delete').tap()
+  await expect(page.locator('.day').filter({ hasText: '1 giugno' })).toHaveCount(0)
+  // Il toast con "Annulla" vive sei secondi: si aspetta che se ne vada invece
+  // di toccarci intorno, o il prossimo tap rischia di finire sul suo bottone.
+  await expect(page.locator('.toast__box')).toHaveCount(0, { timeout: 9000 })
+
+  // --- Il foglio della regola: la data d'inizio **si legge**, e non c'e'
+  //     nessun input da spostare in avanti.
+  await apriPrimaRegola(page)
+  await expect(page.locator('.starts__now')).toHaveText('Data d’inizio: 1 giugno')
+  await expect(page.locator('.starts .chip__input')).toHaveCount(0)
+  await expect(page.locator('.starts__back')).toHaveText(/Sposta indietro la data d’inizio/)
+
+  // --- Il pannello. Prima di scegliere non c'e' niente da confermare e il
+  //     bottone che scrive e' spento: l'anteprima e' obbligatoria.
+  await page.locator('.starts__back').tap()
+  await expect(page.locator('.rewind__now')).toHaveText('Data d’inizio: 1 giugno')
+  await expect(page.locator('.rule__preview')).toHaveText('')
+  await expect(page.locator('.save')).toBeDisabled()
+  await expect(page.locator('.rule__confirm')).toHaveCount(0)
+  // La promessa di ADR 018, detta **prima** del tap e non dopo.
+  await expect(page.locator('.rule')).toContainText('resta cancellata')
+
+  // --- Un solo verso: l'input non offre nemmeno le date che non vanno.
+  const picker = page.locator('.starts .chip__input')
+  await expect(picker).toHaveAttribute('max', '2026-05-31')
+  await expect(picker).toHaveAttribute('min', '2000-01-01')
+
+  // --- E se una data non precedente ci arriva lo stesso, il pannello lo dice
+  //     invece di ingoiare il tap: il bottone resta spento.
+  await picker.fill('2026-09-01')
+  await expect(page.locator('.rewind__wrong')).toContainText('non viene prima')
+  await expect(page.locator('.save')).toBeDisabled()
+
+  // --- 1 gennaio. L'anteprima dice i tre numeri che decidono: quante, da
+  //     quando a quando, quanto in tutto. Otto e non cinque: si annuncia la
+  //     finestra intera, e cio' che c'e' gia' non verra' riscritto — l'unico
+  //     verso accettabile e' annunciare piu' di quanto si fa.
+  await picker.fill('2026-01-01')
+  const anteprima = page.locator('.rule__preview')
+  await expect(anteprima).toContainText('8 spese arretrate')
+  await expect(anteprima).toContainText('1 gennaio')
+  await expect(anteprima).toContainText('1 agosto')
+  await expect(anteprima).toContainText('7200,00')
+
+  // --- La conferma e' un bersaglio diverso da quello che scrive, e finche' non
+  //     e' spuntata il bottone e' spento.
+  const conferma = page.locator('.rule__confirm')
+  await expect(conferma).toHaveAttribute('aria-checked', 'false')
+  await expect(page.locator('.save')).toBeDisabled()
+  await expect(page.locator('.save')).toContainText('8')
+  await conferma.tap()
+  await expect(page.locator('.save')).toBeEnabled()
+
+  await page.locator('.save').tap()
+  await expect(page.locator('.sheet--rule')).toHaveCount(0)
+  await expect(page.locator('.toast__box')).toContainText('8 spese arretrate create')
+
+  // --- Sul disco: otto record, e il segnaposto **rimosso**. La regola e'
+  //     tornata nello stato di una appena creata con quella data d'inizio.
+  await expect
+    .poll(async () => (await speseSuDisco(page)).length, {
+      message: 'la materializzazione non ha scritto gli arretrati',
+      timeout: 10_000,
+    })
+    .toBe(8)
+  const regole = await regoleSuDisco(page)
+  expect(regole[0]?.startDate).toBe('2026-01-01')
+
+  const spese = await speseSuDisco(page)
+  expect(spese.map((e) => e.date).sort()).toEqual([
+    '2026-01-01',
+    '2026-02-01',
+    '2026-03-01',
+    '2026-04-01',
+    '2026-05-01',
+    '2026-06-01',
+    '2026-07-01',
+    '2026-08-01',
+  ])
+
+  // --- **La correzione manuale sopravvive.** Il canone di luglio occupa gia'
+  //     il suo id, e `addExpenses` salta invece di sovrascrivere (ADR 006): un
+  //     rewind che riscrivesse 900 su 920 cancellerebbe in silenzio una
+  //     correzione fatta a mano.
+  expect(spese.find((e) => e.date === '2026-07-01')?.amountCents).toBe(92_000)
+  expect(spese.filter((e) => e.date === '2026-07-01')).toHaveLength(1)
+
+  // --- E le spese arretrate compaiono nello Storico **ai giorni giusti**: il 1
+  //     di ogni mese, non il 3 marzo.
+  await page.locator('.nav__tab').nth(1).tap()
+  await expect(page.locator('.list')).toBeVisible()
+  for (const giorno of ['1 gennaio', '1 febbraio', '1 marzo', '1 aprile', '1 maggio']) {
+    await expect(page.locator('.day').filter({ hasText: giorno }).locator('.row')).toHaveCount(1)
+  }
+  await expect(page.locator('.day').filter({ hasText: '1 luglio' }).locator('.row')).toContainText(
+    '920,00',
+  )
+
+  // --- **L'istanza cancellata resta cancellata.** Il soft delete lascia una
+  //     lapide sotto lo stesso id, quindi la chiave resta occupata e `add`
+  //     fallisce: nessuna resurrezione. Era l'unica obiezione seria contro il
+  //     rewind, ed e' falsa — qui si vede che e' falsa.
+  await expect(page.locator('.day').filter({ hasText: '1 giugno' })).toHaveCount(0)
+  await expect(page.locator('.row')).toHaveCount(7)
+
+  // --- Riaprire l'app non duplica niente: l'identita' di un'occorrenza e'
+  //     funzione di (regola, giorno), e il segnaposto e' gia' tornato a oggi.
+  await page.reload()
+  await expect(page.locator('.fab')).toBeEnabled()
+  await expect.poll(async () => (await speseSuDisco(page)).length).toBe(8)
+})
+
+test('una regola che non ha ancora cominciato si sposta senza creare niente, e lo dice', async ({
+  page,
+}) => {
+  // `count: 0` e' legittimo e non e' "0 spese create": la data si muove e basta.
+  // E' anche il ramo che tiene onesta la casella di conferma — se comparisse
+  // anche qui, dove non c'e' niente da confermare, si imparerebbe a spuntarla
+  // senza leggere proprio dove conta.
+  await page.goto('./')
+  await expect(page.locator('.fab')).toBeEnabled()
+  await chiudiGuida(page)
+
+  await apriFoglioRegola(page)
+  await digita(page, '1200')
+  await page.locator('.cats--pick .cat').first().tap()
+  await page.locator('.starts .chip__input').fill('2026-10-15')
+  await expect(page.locator('.rule__confirm')).toHaveCount(0)
+  await page.locator('.save').tap()
+  await expect(page.locator('.sheet--rule')).toHaveCount(0)
+  await expect.poll(async () => (await regoleSuDisco(page)).length).toBe(1)
+
+  await apriPrimaRegola(page)
+  await page.locator('.starts__back').tap()
+  await page.locator('.starts .chip__input').fill('2026-09-15')
+  await expect(page.locator('.rule__preview')).toHaveText(
+    'Niente da creare nel passato. La data d’inizio diventa 15 settembre.',
+  )
+  await expect(page.locator('.rule__confirm')).toHaveCount(0)
+  // Senza conferma il bottone e' comunque acceso: non c'e' niente da
+  // confermare, quindi non c'e' niente che lo tenga spento.
+  await expect(page.locator('.save')).toBeEnabled()
+  await expect(page.locator('.save')).toHaveText('Sposta la data d’inizio')
+
+  await page.locator('.save').tap()
+  await expect(page.locator('.sheet--rule')).toHaveCount(0)
+  await expect(page.locator('.toast__box')).toContainText('15 settembre')
+  await expect.poll(async () => (await regoleSuDisco(page))[0]?.startDate).toBe('2026-09-15')
+  // Niente e' nato: la finestra e' ancora tutta nel futuro.
+  expect(await speseSuDisco(page)).toHaveLength(0)
+  // E l'elenco lo dice, con la data nuova.
+  await page.locator('.app__action').tap()
+  await expect(page.locator('.fixed__note').first()).toContainText('parte: 15 settembre')
 })

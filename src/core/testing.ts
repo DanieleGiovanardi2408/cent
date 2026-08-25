@@ -8,13 +8,21 @@
  * perche' il tipo li richiede.
  */
 
-import { today } from './date'
+import { today, toDateParts } from './date'
 import type { IsoDate } from './date'
 import type { DefaultCategoryNames } from './defaults'
 import { previewMaterialization } from './recurring-plan'
 import type { RecurrenceDraft } from './recurring-plan'
 import type { Repository } from './repository'
-import type { Budget, Category, Expense, RecurringRule, Settings } from './types'
+import type {
+  Budget,
+  Cadence,
+  Category,
+  Expense,
+  RecurringRule,
+  RecurringRuleCommon,
+  Settings,
+} from './types'
 import { SETTINGS_ID } from './types'
 import { SCHEMA_VERSION } from './schema'
 
@@ -78,18 +86,40 @@ export function makeExpense(fields: Partial<Expense> & { date: IsoDate }): Expen
   }
 }
 
-export function makeRule(fields: Partial<RecurringRule> & { startDate: IsoDate }): RecurringRule {
-  return {
+/**
+ * Una regola, con il calendario tenuto insieme dalla fabbrica.
+ *
+ * `anchorDay` e' **facoltativo qui e obbligatorio nel record**: se non lo si
+ * passa, una mensile lo riceve dal giorno di `startDate`. E' la stessa
+ * derivazione della migrazione 3 -> 4, ed e' qui per la stessa ragione per cui
+ * e' li' — quello era gia' il giorno che il motore usava, quindi un test che
+ * non nomina l'ancora continua a descrivere lo stesso calendario di prima.
+ *
+ * Chi vuole provare l'ancora la passa, ed e' l'unico modo di ottenere una
+ * mensile il cui giorno del mese **non** coincide con quello d'inizio: il caso
+ * che prima non era nemmeno esprimibile.
+ */
+export function makeRule(
+  fields: Partial<RecurringRuleCommon> & {
+    startDate: IsoDate
+    cadence?: Cadence
+    anchorDay?: number
+  },
+): RecurringRule {
+  const { cadence = 'monthly', anchorDay, ...rest } = fields
+  const common: RecurringRuleCommon = {
     id: autoId('rule'),
     createdAt: EPOCH,
     updatedAt: EPOCH,
     amountCents: 5000,
     categoryId: 'cat-1',
-    cadence: 'monthly',
     interval: 1,
     active: true,
-    ...fields,
+    ...rest,
   }
+  return cadence === 'monthly'
+    ? { ...common, cadence, anchorDay: anchorDay ?? toDateParts(fields.startDate).day }
+    : { ...common, cadence }
 }
 
 export function makeBudget(

@@ -82,19 +82,18 @@ export type Cadence = 'daily' | 'weekly' | 'monthly'
  * un `addRecurringRule` che nessuno ha mai chiamato con `note`). Se ne
  * arrivasse uno da un JSON scritto a mano, IndexedDB lo conserva — `loadAll`
  * non valida — e `parseRule` lo scarta in import.
+ *
+ * ---
+ *
+ * Qui ci sono i campi che **non dipendono dalla cadenza**. Gli altri due —
+ * `cadence` e `anchorDay` — stanno in `WithCadence` qui sotto, insieme, perche'
+ * il secondo esiste solo per uno dei valori del primo.
  */
-export interface RecurringRule extends EntityBase {
+export interface RecurringRuleCommon extends EntityBase {
   readonly amountCents: Cents
   readonly categoryId: string
-  readonly cadence: Cadence
   /** Ogni quanti giorni / settimane / mesi. Intero >= 1. */
   readonly interval: number
-  /**
-   * Solo per `monthly`: giorno del mese 1-31. Se assente si usa il giorno di
-   * `startDate`. Un anchorDay > giorni del mese cade sull'ultimo giorno
-   * (`clampDayOfMonth`) senza mai sconfinare nel mese successivo.
-   */
-  readonly anchorDay?: number
   readonly startDate: IsoDate
   readonly endDate?: IsoDate
   /**
@@ -105,6 +104,40 @@ export interface RecurringRule extends EntityBase {
   readonly lastMaterializedDate?: IsoDate
   readonly active: boolean
 }
+
+/**
+ * Il calendario, attaccato a una forma qualunque: e' cio' che divide in due
+ * ogni cosa che abbia una cadenza — la regola sul disco e la bozza che la UI
+ * sta ancora scrivendo.
+ *
+ * ## Perche' l'ancora e' obbligatoria sulle mensili
+ *
+ * Fino allo schema 3 `anchorDay` era opzionale e il motore, quando mancava, lo
+ * derivava da `startDate`. Il significato della regola dipendeva quindi da un
+ * campo che **un'altra operazione puo' cambiare**: `rewindRecurringRule`
+ * retrodata `startDate`, e una regola "il 1 del mese" retrodatata al 23 giugno
+ * diventava "il 23 del mese" — in silenzio, e con le istanze gia' generate il 1
+ * rimaste fuori calendario.
+ *
+ * Riparare il rewind facendogli scrivere anche l'ancora avrebbe lasciato in
+ * piedi la causa: **ogni** operazione futura che tocca `startDate` avrebbe
+ * dovuto ricordarsi di congelarla. I writer sono gia' due (`addRecurringRule`
+ * e `RuleSheet`), e il secondo l'invariante non la stabiliva.
+ *
+ * Quindi l'ancora e' esplicita, e a renderla obbligatoria e' **il compilatore**:
+ * `{ cadence: 'monthly' }` senza `anchorDay` non e' un record che un controllo
+ * a runtime rifiuta, e' un record che non si puo' scrivere. Le altre cadenze
+ * non la vogliono affatto (`?: never`), perche' li' non significa niente e un
+ * campo che non significa niente e' un campo che qualcuno leggera'.
+ *
+ * Un `anchorDay` > giorni del mese cade sull'ultimo giorno (`clampDayOfMonth`)
+ * senza mai sconfinare nel mese successivo: 31 a febbraio e' il 28 (o il 29).
+ */
+export type WithCadence<T> =
+  | (T & { readonly cadence: 'monthly'; readonly anchorDay: number })
+  | (T & { readonly cadence: 'daily' | 'weekly'; readonly anchorDay?: never })
+
+export type RecurringRule = WithCadence<RecurringRuleCommon>
 
 export type BudgetPeriod = 'weekly' | 'monthly'
 

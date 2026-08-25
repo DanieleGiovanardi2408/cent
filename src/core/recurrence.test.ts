@@ -59,13 +59,50 @@ describe('calendario mensile: anchorDay e mesi corti', () => {
     ])
   })
 
-  it('senza anchorDay usa il giorno di startDate', () => {
+  it('chi non nomina l ancora la riceve dal giorno di startDate', () => {
+    // La derivazione non e' piu' nel motore: la fa chi **crea** il record —
+    // qui la fabbrica dei test, sul disco la migrazione allo schema 4. Il
+    // calendario che ne esce e' lo stesso di sempre; a cambiare e' chi lo decide.
     const rule = makeRule({ startDate: '2026-01-15', cadence: 'monthly' })
+    expect(rule.anchorDay).toBe(15)
     expect(occurrencesBetween(rule, '2026-01-01', '2026-03-31')).toEqual([
       '2026-01-15',
       '2026-02-15',
       '2026-03-15',
     ])
+  })
+
+  it('retrodatare non sposta il giorno del mese: l ancora e un campo, non una conseguenza', () => {
+    // **Il difetto che ha prodotto lo schema 4.** Finche' l'ancora si derivava
+    // da `startDate`, una regola "il 1 del mese" retrodatata al 23 giugno
+    // diventava "il 23 del mese" — in silenzio, e con le istanze gia' generate
+    // il 1 rimaste fuori calendario.
+    //
+    // La riparazione non e' un terzo campo scritto dal rewind: e' che l'ancora
+    // sia scritta nel record. Cosi' `startDate` decide **da quando**, e nessuna
+    // operazione futura che la sposti puo' ridefinire la regola.
+    const prima = makeRule({ startDate: '2026-08-01', cadence: 'monthly' })
+    expect(prima.anchorDay).toBe(1)
+
+    const retrodatata: RecurringRule = { ...prima, startDate: '2026-06-23' }
+    expect(occurrencesBetween(retrodatata, '2026-06-01', '2026-09-30')).toEqual([
+      '2026-07-01',
+      '2026-08-01',
+      '2026-09-01',
+    ])
+  })
+
+  it('una mensile senza ancora non e utilizzabile: non se ne inventa una', () => {
+    // Non e' scrivibile dal compilatore, ma e' leggibile dal disco: `loadAll`
+    // non valida. Li' la cosa giusta e' dichiarare la regola inutilizzabile —
+    // il motore la salta dicendo perche' — invece di derivare un'ancora da una
+    // `startDate` che a quel punto puo' gia' essere stata spostata.
+    const rotta = { ...makeRule({ startDate: '2026-06-23', cadence: 'monthly' }) } as Record<
+      string,
+      unknown
+    >
+    delete rotta['anchorDay']
+    expect(validateRule(rotta as unknown as RecurringRule)).toContain('anchorDay')
   })
 
   it('un anchorDay precedente al giorno di startDate parte dal mese dopo', () => {
@@ -443,7 +480,10 @@ describe('materializzazione: la regola cambia durante il catch-up', () => {
   })
 
   it('cambiare il calendario ferma il giro invece di scrivere date calcolate col vecchio', async () => {
-    const disk = await catchUpWith((r) => ({ ...r, cadence: 'weekly' }), 1)
+    // Passa da `makeRule`, non da uno spread: cambiare cadenza cambia **la
+    // forma** del record — una settimanale l'ancora non ce l'ha proprio — e la
+    // fabbrica e' l'unico posto che sa ricomporla.
+    const disk = await catchUpWith((r) => makeRule({ ...r, cadence: 'weekly' }), 1)
     expect(disk.recurringRules[0]?.cadence).toBe('weekly')
     expect(disk.expenses).toHaveLength(7)
     // Il segnaposto non promette piu' di quello che c'e': si riparte da qui.

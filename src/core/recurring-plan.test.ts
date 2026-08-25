@@ -205,6 +205,7 @@ describe('previewMaterialization: cosa succede se salvo', () => {
     const draft: RecurrenceDraft = {
       amountCents: 90_000,
       cadence: 'monthly',
+      anchorDay: 1,
       interval: 1,
       startDate: '2026-01-01',
     }
@@ -219,7 +220,7 @@ describe('previewMaterialization: cosa succede se salvo', () => {
   it('una regola che parte oggi non e arretrata: una occorrenza sola, nessuna conferma da chiedere', () => {
     const p = ok(
       previewMaterialization(
-        { amountCents: 90_000, cadence: 'monthly', interval: 1, startDate: '2026-08-22' },
+        { amountCents: 90_000, cadence: 'monthly', anchorDay: 22, interval: 1, startDate: '2026-08-22' },
         '2026-08-22',
       ),
     )
@@ -231,7 +232,7 @@ describe('previewMaterialization: cosa succede se salvo', () => {
   it('una regola che parte domani non scrive niente', () => {
     const p = ok(
       previewMaterialization(
-        { amountCents: 90_000, cadence: 'monthly', interval: 1, startDate: '2026-08-23' },
+        { amountCents: 90_000, cadence: 'monthly', anchorDay: 23, interval: 1, startDate: '2026-08-23' },
         '2026-08-22',
       ),
     )
@@ -304,7 +305,7 @@ describe('previewMaterialization: cosa succede se salvo', () => {
 
   it('una regola non valida non lancia: rifiuta con il motivo di validateRule', () => {
     const r = previewMaterialization(
-      { amountCents: 1_000, cadence: 'monthly', interval: 0, startDate: '2026-01-01' },
+      { amountCents: 1_000, cadence: 'monthly', anchorDay: 1, interval: 0, startDate: '2026-01-01' },
       '2026-08-22',
     )
     expect(r.ok).toBe(false)
@@ -314,6 +315,7 @@ describe('previewMaterialization: cosa succede se salvo', () => {
       {
         amountCents: 1_000,
         cadence: 'monthly',
+        anchorDay: 1,
         interval: 1,
         startDate: '2026-08-01',
         endDate: '2026-07-01',
@@ -345,6 +347,7 @@ describe('previewMaterialization: cosa succede se salvo', () => {
         {
           amountCents: 90_000,
           cadence: 'monthly',
+          anchorDay: 1,
           interval: 1,
           startDate: '2026-01-01',
           lastMaterializedDate: '2026-06-15',
@@ -570,6 +573,7 @@ describe('ConfirmedPreview: il permesso esiste solo se l anteprima e stata calco
   const bozza: RecurrenceDraft = {
     amountCents: 90_000,
     cadence: 'monthly',
+    anchorDay: 1,
     interval: 1,
     startDate: '2026-01-01',
   }
@@ -616,12 +620,16 @@ describe('redeemPreview: non ci si fida di un istantanea presa in un altro momen
   const bozza: RecurrenceDraft = {
     amountCents: 90_000,
     cadence: 'monthly',
+    anchorDay: 1,
     interval: 1,
     startDate: '2026-01-01',
   }
 
-  function permesso(giorno: string, extra: Partial<RecurrenceDraft> = {}) {
-    const esito = previewMaterialization({ ...bozza, ...extra }, giorno)
+  // Una bozza intera, non `bozza` piu' un `Partial`: da quando il calendario e'
+  // un'unione discriminata, una modifica parziale puo' descrivere una mensile a
+  // cui hanno tolto l'ancora — cioe' proprio la cosa che non deve esistere.
+  function permesso(giorno: string, quale: RecurrenceDraft = bozza) {
+    const esito = previewMaterialization(quale, giorno)
     if (!esito.ok) throw new Error(`anteprima rifiutata: ${esito.reason}`)
     return esito
   }
@@ -637,7 +645,12 @@ describe('redeemPreview: non ci si fida di un istantanea presa in un altro momen
     // del 23. La finestra si e' allargata di un giorno: la scrittura
     // produrrebbe **un'occorrenza in piu' di quelle annunciate**, cioe' il verso
     // sbagliato — si annuncerebbe meno di quanto si fa.
-    const giornaliera = { cadence: 'daily' as const, interval: 1, startDate: '2026-08-15' }
+    const giornaliera = {
+      amountCents: 90_000,
+      cadence: 'daily' as const,
+      interval: 1,
+      startDate: '2026-08-15',
+    }
     const ieri = permesso('2026-08-22', giornaliera)
     expect(ieri.count).toBe(8)
     expect(ieri.lastDate).toBe('2026-08-22')
@@ -666,7 +679,7 @@ describe('redeemPreview: non ci si fida di un istantanea presa in un altro momen
   })
 
   it('il segnaposto e la stessa guardia vista dall altro estremo', () => {
-    const conSegnaposto = permesso('2026-08-22', { lastMaterializedDate: '2026-07-01' })
+    const conSegnaposto = permesso('2026-08-22', { ...bozza, lastMaterializedDate: '2026-07-01' })
     // Speso sulla regola giusta: passa.
     expect(redeemPreview(conSegnaposto.confirmed, '2026-08-22', '2026-07-01')).toMatchObject({
       ok: true,
@@ -685,7 +698,7 @@ describe('redeemPreview: non ci si fida di un istantanea presa in un altro momen
     // E' il caso pericoloso: la finestra annunciata parte dal 2 luglio e vale
     // **una** occorrenza, quella vera partirebbe dal 1 gennaio e ne vale otto.
     // Sette spese che nessuno ha visto.
-    const conSegnaposto = permesso('2026-08-22', { lastMaterializedDate: '2026-07-01' })
+    const conSegnaposto = permesso('2026-08-22', { ...bozza, lastMaterializedDate: '2026-07-01' })
     expect(conSegnaposto.count).toBe(1)
     expect(permesso('2026-08-22').count).toBe(8)
     expect(redeemPreview(conSegnaposto.confirmed, '2026-08-22', null)).toEqual({
@@ -742,15 +755,19 @@ describe('planRecurringRuleRewind: la regola torna appena creata', () => {
 
   /** L'impronta di una regola **come sara' dopo il rewind**: senza segnaposto. */
   function impronta(base: RecurringRule, nuovaData: IsoDate, giorno: IsoDate): PreviewFootprint {
+    const comune = {
+      amountCents: base.amountCents,
+      interval: base.interval,
+      startDate: nuovaData,
+      ...(base.endDate !== undefined ? { endDate: base.endDate } : {}),
+    }
+    // Cadenza e ancora si ricopiano insieme: e' l'unica forma che il tipo
+    // accetta, ed e' anche l'unica in cui retrodatare non puo' spostare il
+    // giorno del mese.
     const p = previewMaterialization(
-      {
-        amountCents: base.amountCents,
-        cadence: base.cadence,
-        interval: base.interval,
-        ...(base.anchorDay !== undefined ? { anchorDay: base.anchorDay } : {}),
-        startDate: nuovaData,
-        ...(base.endDate !== undefined ? { endDate: base.endDate } : {}),
-      },
+      base.cadence === 'monthly'
+        ? { ...comune, cadence: 'monthly', anchorDay: base.anchorDay }
+        : { ...comune, cadence: base.cadence },
       giorno,
     )
     if (!p.ok) throw new Error(`anteprima rifiutata: ${p.reason}`)
@@ -955,5 +972,45 @@ describe('planRecurringRuleRewind: la regola torna appena creata', () => {
         updatedAt: UPDATED,
       }),
     ).toEqual({ ok: false, reason: 'unknown' })
+  })
+
+  it('retrodatare non sposta il giorno del mese, e i due campi toccati restano due', () => {
+    // **Il difetto che ha prodotto lo schema 4.** Una regola "il 1 del mese"
+    // retrodatata al 23 giugno diventava "il 23 del mese": l'ancora si derivava
+    // da `startDate`, e il rewind `startDate` la sposta.
+    //
+    // La riparazione **non** e' un terzo campo scritto qui. Se lo fosse, ogni
+    // operazione futura che tocca `startDate` dovrebbe ricordarsene, e i writer
+    // sono gia' due. L'ancora e' un campo del record dallo schema 4, quindi
+    // questa funzione continua a toccare esattamente due campi — `startDate` e
+    // il segnaposto, tolto — e il calendario non si muove da solo.
+    const regola = makeRule({
+      startDate: '2026-08-01',
+      cadence: 'monthly',
+      amountCents: 90_000,
+      lastMaterializedDate: OGGI,
+    })
+    expect(regola.anchorDay).toBe(1)
+
+    const esito = planRecurringRuleRewind([regola], {
+      id: regola.id,
+      startDate: '2026-06-23',
+      today: OGGI,
+      footprint: impronta(regola, '2026-06-23', OGGI),
+      updatedAt: UPDATED,
+    })
+    if (!esito.ok) throw new Error(`atteso ok, ricevuto ${esito.reason}`)
+
+    expect(esito.rule.startDate).toBe('2026-06-23')
+    expect(esito.rule.anchorDay).toBe(1)
+    // Le occorrenze cadono il **primo**, non il ventitre': `startDate` dice da
+    // quando, l'ancora dice quando.
+    expect(occurrencesBetween(esito.rule, '2026-06-01', OGGI)).toEqual([
+      '2026-07-01',
+      '2026-08-01',
+    ])
+    // E i campi toccati sono ancora esattamente due.
+    const { lastMaterializedDate: _era, ...resto } = regola
+    expect(esito.rule).toEqual({ ...resto, startDate: '2026-06-23', updatedAt: UPDATED })
   })
 })

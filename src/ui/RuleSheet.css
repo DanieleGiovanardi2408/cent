@@ -117,6 +117,84 @@
   gap: var(--sp-2);
 }
 
+/* --- la data d'inizio in modifica: si legge (ADR 018) --------------------- */
+/*
+ * Qui i due chip non ci sono. Spostare la data in avanti orfanerebbe le istanze
+ * gia' generate; spostarla indietro a mano non generava niente, perche' la
+ * bozza conservava il segnaposto. Quindi il valore si **legge**, e accanto c'e'
+ * l'unica azione — che apre il pannello del riavvolgimento.
+ *
+ * In colonna e non in riga: "Sposta indietro la data d'inizio" e' la frase piu'
+ * lunga di questo foglio, e affiancata a una data non entrerebbe a 320 punti
+ * senza `nowrap`, cioe' senza rischiare uno scroll orizzontale. Il bottone e'
+ * dentro il corpo che scorre, quindi mandare a capo non muove niente di cio'
+ * che si tocca dopo — al contrario di cio' che sta nel piede.
+ */
+.starts--read {
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--sp-1);
+}
+
+/* Il fatto, non un bersaglio: il valore che la regola ha adesso. */
+.starts__now,
+.rewind__now {
+  font-size: var(--fs-200);
+  line-height: var(--lh-snug);
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Il valore attuale nel pannello ha un grado in piu': li' e' il termine di
+ * paragone di tutto quello che si sta per scegliere, non una riga fra altre. */
+.rewind__now {
+  font-size: var(--fs-300);
+  font-weight: var(--fw-semibold);
+}
+
+/* L'unica azione. Le misure sono **dichiarate** su tutti e due gli assi: il
+ * testo dipende dalla lingua, e in inglese quella frase si accorcia di sei
+ * caratteri. */
+.starts__back {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  min-block-size: var(--tap-min);
+  min-inline-size: var(--tap-min);
+  padding-block: var(--sp-2);
+  padding-inline: var(--sp-3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-2);
+  color: var(--text);
+  font-size: min(var(--fs-200), 4vw);
+  font-weight: var(--fw-medium);
+  line-height: var(--lh-snug);
+  text-align: center;
+}
+
+.starts__back svg {
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.starts__back:active {
+  background-color: var(--surface-sunken);
+}
+
+/* La data sbagliata di verso. E' una risposta a un tap, quindi si annuncia —
+ * ed e' l'unica frase del pannello che compare e sparisce: il posto non si
+ * riserva perche' sta **sopra** il resto del corpo che scorre, non nel piede,
+ * quindi non muove nessuno dei due bersagli del piede. */
+.rewind__wrong {
+  color: var(--text);
+  font-weight: var(--fw-semibold);
+}
+
 /* --- la categoria: qui il chip seleziona, non salva ---------------------- */
 /* E' il segnale che tiene separati i due gesti. Nel foglio d'inserimento
  * toccare un chip **scrive una spesa**; qui sceglie e basta, e cio' che scrive

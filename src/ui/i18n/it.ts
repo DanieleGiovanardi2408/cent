@@ -583,6 +583,50 @@ export const it = {
   'rule.cats.current':
     '{name} \u00e8 in archivio, quindi non \u00e8 pi\u00f9 in griglia. Resta la categoria di questa spesa fissa finch\u00e9 non ne tocchi un\u2019altra.',
 
+  /* --- spostare indietro la data d'inizio (ADR 018) ------------------------ *
+   *
+   * In modifica la data d'inizio **si legge**: spostarla in avanti orfanerebbe
+   * le occorrenze gia' generate, e spostarla indietro a mano non generava
+   * niente \u2014 la bozza conservava il segnaposto, quindi la finestra restava
+   * chiusa e il gesto era un no-op silenzioso. L'unica azione e' questa, e
+   * passa da `rewindRecurringRule`.
+   */
+  // Nessuna preposizione davanti a una data, in nessuna di queste stringhe: in
+  // italiano si elide davanti a otto e undici ("dall\u20198", "dall\u201911"), cioe' due
+  // giorni su trentuno \u2014 un errore di grammatica che compare **a volte**, la
+  // classe peggiore, perche' passa ogni rilettura fatta in un giorno qualsiasi.
+  // E' la stessa ragione per cui `dayRangeLabel` scrive un intervallo senza
+  // preposizioni.
+  'rewind.now': 'Data d\u2019inizio: {day}',
+  'rewind.action': 'Sposta indietro la data d\u2019inizio',
+  'rewind.hint': 'Scegli il giorno da cui \u00e8 partita davvero. Solo indietro.',
+  'rewind.pick': 'Scegli un giorno d\u2019inizio precedente',
+  'rewind.pick.none': 'Scegli il giorno',
+  // Le due promesse di ADR 018 dette all'utente, prima del tap e non dopo: sono
+  // proprio cio' che rende sicuro riaprire la finestra, e chi sta per creare
+  // decine di spese in un colpo ha il diritto di sapere che non gli si
+  // riscrivono le correzioni fatte a mano.
+  'rewind.note':
+    'Si sposta solo la data d\u2019inizio: l\u2019importo e ogni quanto restano quelli. E quello che c\u2019\u00e8 gi\u00e0 resta com\u2019\u00e8 \u2014 una spesa che hai corretto tiene il tuo importo, e una che hai cancellato resta cancellata.',
+  'rewind.preview.none': 'Niente da creare nel passato. La data d\u2019inizio diventa {day}.',
+  // `count > 0` senza arretrato esiste, ed e' un caso solo: una regola che parte
+  // domani riportata a oggi. Chiamarla "arretrata" sarebbe falso di un giorno.
+  'rewind.preview.today': 'Crea la spesa di oggi: {total}.',
+  'rewind.confirm.today': 'Crea anche la spesa di oggi',
+  'rewind.notEarlier': '{day} non viene prima di {current}: la data d\u2019inizio si sposta solo indietro.',
+  'rewind.save.none': 'Sposta la data d\u2019inizio',
+  'rewind.back': 'Indietro',
+  // I due rifiuti che non hanno gia' delle parole. `unknown` riusa
+  // `rule.refused.gone` e la mezzanotte riusa `rule.refused.stale`: sono lo
+  // stesso fatto raccontato dalla stessa frase, e due copie diverse dello stesso
+  // no si allontanerebbero al primo ritocco.
+  'rewind.refused.notEarlier':
+    'La data d\u2019inizio \u00e8 gi\u00e0 {current}, e {day} non viene prima. Scegline un\u2019altra.',
+  'rewind.refused.invalid':
+    'C\u2019\u00e8 qualcosa che non torna in questa spesa fissa, quindi non la sposto. Chiudi, e controllala nell\u2019elenco.',
+  'rewind.refused.changed':
+    'Nel frattempo questa spesa fissa \u00e8 cambiata. I numeri qui sotto sono rifatti: ricontrolla e conferma.',
+
   'rule.deactivate': 'Disattiva',
   'rule.delete': 'Cancella la spesa fissa',
   'rule.delete.note': 'Si può solo finché non ha nessuna spesa nello Storico.',
@@ -605,6 +649,12 @@ export const it = {
   'toast.ruleOff': '{name}: non creerà altre spese',
   'toast.ruleOn': '{name}: torna a creare spese',
   'toast.ruleOnBack': '{name}: riattivata, {count} spese create',
+  // Tre esiti e non uno: la data spostata senza generare niente non e' "0 spese
+  // create", e' un'altra cosa; e il singolare non dice "arretrata" perche' il
+  // caso a uno comprende anche la spesa di **oggi**.
+  'toast.ruleBack.none': '{name}: la data d’inizio adesso è {day}',
+  'toast.ruleBack.one': '{name}: 1 spesa creata',
+  'toast.ruleBack.other': '{name}: {count} spese arretrate create',
   'toast.ruleDeleted': 'Spesa fissa cancellata: {name}',
   'toast.ruleInUse': 'Ha già creato delle spese: si può solo disattivare',
   'toast.ruleFailed': 'Non ci sono riuscito. Riprova.',

@@ -310,3 +310,202 @@ describe('il passo vero alla versione 3', () => {
     expect(migrateRawData(unaVolta, 2, 3)).toEqual(unaVolta)
   })
 })
+
+/**
+ * Il passo alla versione 4, cioe' **l'unico che scrive un campo sui record
+ * esistenti**.
+ *
+ * Non e' un caso a parte per capriccio: e' l'unico in cui il valore da scrivere
+ * non va inventato, perche' e' gia' quello che il motore calcolava a ogni
+ * apertura. Da qui in poi lo calcola una volta sola e lo conserva.
+ *
+ * Il file di backup vero del 23 agosto **non contiene nessuna regola**
+ * (`recurringRules: []`), quindi su quei dati questo passo e' un no-op: la
+ * prova che la catena non li danneggia non esercita la derivazione. Le due cose
+ * sono verificate qui separate — la catena sotto, la derivazione qui sopra —
+ * e nessuna delle due va letta come se coprisse l'altra.
+ */
+describe('il passo vero alla versione 4', () => {
+  /** Un archivio di schema 3 con dentro tutte e tre le cadenze. */
+  function datiVersione3(): RawDataSet {
+    const data = emptyRawDataSet()
+    data.expenses = [
+      {
+        id: 'e1',
+        createdAt: '2026-08-01T10:00:00.000Z',
+        updatedAt: '2026-08-01T10:00:00.000Z',
+        amountCents: 90_000,
+        categoryId: 'c1',
+        date: '2026-08-01',
+        source: 'recurring',
+        recurringId: 'r-affitto',
+      },
+    ]
+    data.categories = [
+      {
+        id: 'c1',
+        createdAt: '2026-07-01T10:00:00.000Z',
+        updatedAt: '2026-07-01T10:00:00.000Z',
+        name: 'Casa',
+        emoji: '🏠',
+        color: '#81a369',
+        order: 70,
+        archived: false,
+      },
+    ]
+    data.recurringRules = [
+      // L'affitto: mensile, senza ancora, cominciata il primo del mese. E' il
+      // record intorno a cui esiste questo passo.
+      {
+        id: 'r-affitto',
+        createdAt: '2026-07-01T10:00:00.000Z',
+        updatedAt: '2026-07-01T10:00:00.000Z',
+        amountCents: 90_000,
+        categoryId: 'c1',
+        cadence: 'monthly',
+        interval: 1,
+        startDate: '2026-06-01',
+        lastMaterializedDate: '2026-08-22',
+        active: true,
+      },
+      // Una mensile che l'ancora ce l'ha gia': non si tocca.
+      {
+        id: 'r-rata',
+        createdAt: '2026-07-01T10:00:00.000Z',
+        updatedAt: '2026-07-01T10:00:00.000Z',
+        amountCents: 12_000,
+        categoryId: 'c1',
+        cadence: 'monthly',
+        interval: 1,
+        anchorDay: 15,
+        startDate: '2026-06-02',
+        active: true,
+      },
+      // Una settimanale: l'ancora non la vuole e non la riceve.
+      {
+        id: 'r-lavanderia',
+        createdAt: '2026-07-01T10:00:00.000Z',
+        updatedAt: '2026-07-01T10:00:00.000Z',
+        amountCents: 800,
+        categoryId: 'c1',
+        cadence: 'weekly',
+        interval: 1,
+        startDate: '2026-06-03',
+        active: true,
+      },
+    ]
+    data.budgets = [
+      {
+        id: 'b1',
+        createdAt: '2026-08-01T10:00:00.000Z',
+        updatedAt: '2026-08-01T10:00:00.000Z',
+        period: 'weekly',
+        amountCents: 20_000,
+        effectiveFrom: '2026-08-01',
+      },
+    ]
+    data.settings = [
+      {
+        id: 'settings',
+        createdAt: '2026-06-01T10:00:00.000Z',
+        updatedAt: '2026-06-01T10:00:00.000Z',
+        weekStartsOn: 1,
+        theme: 'auto',
+        schemaVersion: 3,
+      },
+    ]
+    return data
+  }
+
+  it('una mensile senza ancora la riceve dal giorno di startDate', () => {
+    const dopo = migrateRawData(datiVersione3(), 3, 4)
+    const affitto = dopo.recurringRules.find((r) => r['id'] === 'r-affitto')
+    expect(affitto?.['anchorDay']).toBe(1)
+    // E nient'altro del record cambia: il calendario resta quello che era, e
+    // adesso c'e' scritto.
+    expect(affitto).toEqual({ ...datiVersione3().recurringRules[0], anchorDay: 1 })
+  })
+
+  it('una mensile che ce l ha gia non viene toccata: il valore scritto vince sempre', () => {
+    // `r-rata` comincia il 2 giugno ma scatta il 15. Derivare da `startDate`
+    // qui vorrebbe dire riscriverle il calendario, che e' esattamente il
+    // difetto che questo passo esiste per chiudere.
+    const dopo = migrateRawData(datiVersione3(), 3, 4)
+    const rata = dopo.recurringRules.find((r) => r['id'] === 'r-rata')
+    expect(rata?.['anchorDay']).toBe(15)
+    expect(rata).toEqual(datiVersione3().recurringRules[1])
+  })
+
+  it('le altre cadenze non ricevono niente: sulla settimanale l ancora non esiste', () => {
+    const dopo = migrateRawData(datiVersione3(), 3, 4)
+    const lavanderia = dopo.recurringRules.find((r) => r['id'] === 'r-lavanderia')
+    expect(lavanderia && 'anchorDay' in lavanderia).toBe(false)
+    expect(lavanderia).toEqual(datiVersione3().recurringRules[2])
+  })
+
+  it('non tocca nessuno degli altri store', () => {
+    const prima = datiVersione3()
+    const dopo = migrateRawData(prima, 3, 4)
+    // Stesso riferimento, non solo stesso contenuto: e' cosi' che `idb.ts` sa
+    // di non dover riscrivere niente (vedi `applyTransforms`).
+    expect(dopo.expenses).toBe(prima.expenses)
+    expect(dopo.categories).toBe(prima.categories)
+    expect(dopo.budgets).toBe(prima.budgets)
+  })
+
+  it('se non c e niente da derivare l array delle regole esce com e entrato', () => {
+    // Il caso del backup vero del 23 agosto: `recurringRules` vuoto. E anche
+    // quello di un archivio in cui tutte le mensili hanno gia' l'ancora.
+    const vuoto = datiVersione3()
+    vuoto.recurringRules = []
+    expect(migrateRawData(vuoto, 3, 4).recurringRules).toBe(vuoto.recurringRules)
+
+    const gia = datiVersione3()
+    gia.recurringRules = [gia.recurringRules[1] as RawDataSet['recurringRules'][number]]
+    expect(migrateRawData(gia, 3, 4).recurringRules).toBe(gia.recurringRules)
+  })
+
+  it('aggiorna il numero di versione delle impostazioni e nient altro di loro', () => {
+    const prima = datiVersione3()
+    const dopo = migrateRawData(prima, 3, 4)
+    expect(dopo.settings[0]).toEqual({ ...prima.settings[0], schemaVersion: 4 })
+    expect(dopo.settings[0]?.['updatedAt']).toBe('2026-06-01T10:00:00.000Z')
+  })
+
+  it('una startDate illeggibile non fa sparire il record: resta, senza ancora', () => {
+    // Non si inventa un giorno. La regola era gia' rotta prima e resta rotta,
+    // ma esiste ancora: `transform` non cancella record, mai.
+    const dati = datiVersione3()
+    dati.recurringRules = [{ ...(dati.recurringRules[0] as object), startDate: 'chissa' }]
+    const dopo = migrateRawData(dati, 3, 4)
+    expect(dopo.recurringRules).toHaveLength(1)
+    expect(dopo.recurringRules[0] && 'anchorDay' in dopo.recurringRules[0]).toBe(false)
+    expect(dopo.recurringRules[0]?.['amountCents']).toBe(90_000)
+  })
+
+  it('applicarlo due volte da lo stesso risultato', () => {
+    const unaVolta = migrateRawData(datiVersione3(), 3, 4)
+    expect(migrateRawData(unaVolta, 3, 4)).toEqual(unaVolta)
+  })
+
+  it('la catena 2 -> 3 -> 4 in un colpo solo: nessun record perso, l ancora c e', () => {
+    // Un telefono fermo allo schema 2 che apre un'app allo schema 4 esegue i
+    // due passi **nella stessa transazione di upgrade**, non uno per apertura.
+    // La prova va fatta sulla catena, non sui due passi separati.
+    const prima = datiVersione3()
+    prima.settings = [{ ...prima.settings[0], schemaVersion: 2 }]
+    const dopo = migrateRawData(prima, 2, 4)
+
+    expect(pendingMigrations(2, 4).map((s) => s.to)).toEqual([3, 4])
+    expect(dopo.expenses).toHaveLength(1)
+    expect(dopo.categories).toHaveLength(1)
+    expect(dopo.recurringRules).toHaveLength(3)
+    expect(dopo.budgets).toHaveLength(1)
+    expect(dopo.settings[0]?.['schemaVersion']).toBe(4)
+    expect(dopo.recurringRules[0]?.['anchorDay']).toBe(1)
+    expect(dopo.recurringRules[1]?.['anchorDay']).toBe(15)
+    expect(dopo.recurringRules[2] && 'anchorDay' in dopo.recurringRules[2]).toBe(false)
+    // I due campi della 2 -> 3 restano assenti: la catena non li inventa.
+    expect(dopo.settings[0] && 'language' in dopo.settings[0]).toBe(false)
+  })
+})

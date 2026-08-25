@@ -104,6 +104,7 @@ import type {
   Expense,
   Language,
   RecurringRule,
+  RecurringRuleCommon,
   Settings,
   ThemePreference,
   Timestamp,
@@ -737,28 +738,64 @@ function sameBudget(a: Budget, b: Budget): boolean {
 }
 
 /**
- * I campi che una `RecurrenceDraft` detta a una regola: importo e calendario.
+ * I campi d'identita' di una regola: quelli che la bozza **non** detta.
  *
- * `lastMaterializedDate` **non e' qui**, ed e' deliberato. Nella bozza e' un
- * ingresso — serve a `materializationWindow` per sapere da dove aprire — ma
- * sulla regola e' il segnaposto del motore, e chi scrive dall'anteprima non e'
- * il motore. Riscriverlo da qui vorrebbe dire far tornare indietro un
- * segnaposto, cioe' rimaterializzare cio' che era gia' uscito. Che
- * l'anteprima abbia usato **quello vero** lo garantisce `redeemPreview`
- * confrontandolo prima di lasciar scrivere.
+ * `lastMaterializedDate` sta qui e non nella bozza, ed e' deliberato. Nella
+ * bozza e' un ingresso — serve a `materializationWindow` per sapere da dove
+ * aprire — ma sulla regola e' il segnaposto del motore, e chi scrive
+ * dall'anteprima non e' il motore. Prenderlo dalla bozza vorrebbe dire far
+ * tornare indietro un segnaposto, cioe' rimaterializzare cio' che era gia'
+ * uscito. Che l'anteprima abbia usato **quello vero** lo garantisce
+ * `redeemPreview` confrontandolo prima di lasciar scrivere.
  */
-function ruleShape(draft: RecurrenceDraft): Omit<
-  RecurringRule,
-  'id' | 'createdAt' | 'updatedAt' | 'categoryId' | 'active' | 'lastMaterializedDate'
-> {
-  return {
+interface RuleIdentity {
+  readonly id: string
+  readonly createdAt: Timestamp
+  readonly updatedAt: Timestamp
+  readonly categoryId: string
+  readonly active: boolean
+  readonly lastMaterializedDate?: IsoDate
+}
+
+/**
+ * La regola che una bozza detta, cucita sull'identita' che non le appartiene.
+ *
+ * ## Perche' e' una costruzione intera e non uno spread sul record esistente
+ *
+ * Prima qui c'erano due pezzi: una `ruleShape(draft)` che restituiva i campi
+ * del calendario, e nel chiamante uno spread sul record corrente preceduto da
+ * una destrutturazione che toglieva `anchorDay` ed `endDate` — perche' uno
+ * spread non cancella niente, e una bozza che li ha persi deve poterli
+ * cancellare davvero dal record.
+ *
+ * Con il calendario diventato un'unione discriminata quella forma non regge
+ * piu', e non e' un incidente: `Omit<RecurringRule, ...>` su un'unione **collassa
+ * i due rami in un oggetto solo**, e con loro sparisce esattamente la garanzia
+ * per cui l'unione esiste. Il tipo qui e' l'unica cosa che impedisce a un
+ * refactoring futuro di rimettere in circolo una mensile senza ancora.
+ *
+ * Costruire il record intero dice la stessa cosa senza sottrazioni: cio' che
+ * non e' nella bozza non c'e', e il compilatore controlla che il calendario sia
+ * arrivato tutto.
+ */
+function ruleFromDraft(draft: RecurrenceDraft, identity: RuleIdentity): RecurringRule {
+  const common: RecurringRuleCommon = {
+    id: identity.id,
+    createdAt: identity.createdAt,
+    updatedAt: identity.updatedAt,
+    categoryId: identity.categoryId,
+    active: identity.active,
     amountCents: draft.amountCents,
-    cadence: draft.cadence,
     interval: draft.interval,
     startDate: draft.startDate,
-    ...(draft.anchorDay !== undefined ? { anchorDay: draft.anchorDay } : {}),
     ...(draft.endDate !== undefined ? { endDate: draft.endDate } : {}),
+    ...(identity.lastMaterializedDate !== undefined
+      ? { lastMaterializedDate: identity.lastMaterializedDate }
+      : {}),
   }
+  return draft.cadence === 'monthly'
+    ? { ...common, cadence: 'monthly', anchorDay: draft.anchorDay }
+    : { ...common, cadence: draft.cadence }
 }
 
 function replace<T extends { readonly id: string }>(list: readonly T[], record: T): T[] {
@@ -1121,19 +1158,24 @@ export async function openRepository(
       current.lastMaterializedDate ?? null,
     )
     if (!redeemed.ok) return redeemed
-    // `endDate` e `anchorDay` si tolgono prima di rimettere: la bozza puo'
-    // averli cancellati, e uno spread non cancella niente. Con
-    // `exactOptionalPropertyTypes` scrivere `endDate: undefined` non e' la
-    // stessa cosa che non scriverlo, e il campo resterebbe nel record.
-    const { anchorDay: _anchor, endDate: _end, ...rest } = current
+    // Il record si ricostruisce **intero** dalla bozza, non si sovrascrive a
+    // spread: cosi' `endDate` e `anchorDay` assenti nella bozza sono assenti
+    // nel record, senza doverli togliere prima con una destrutturazione che
+    // qualcuno puo' dimenticare. Vedi `ruleFromDraft`.
     return {
       ok: true,
-      rule: commitRule({
-        ...rest,
-        ...ruleShape(redeemed.draft),
-        ...(activate ? { active: true } : {}),
-        updatedAt: clock(),
-      }),
+      rule: commitRule(
+        ruleFromDraft(redeemed.draft, {
+          id: current.id,
+          createdAt: current.createdAt,
+          updatedAt: clock(),
+          categoryId: current.categoryId,
+          active: activate ? true : current.active,
+          ...(current.lastMaterializedDate !== undefined
+            ? { lastMaterializedDate: current.lastMaterializedDate }
+            : {}),
+        }),
+      ),
     }
   }
 
@@ -1287,14 +1329,15 @@ export async function openRepository(
       const timestamp = clock()
       return {
         ok: true,
-        rule: commitRule({
-          ...ruleShape(redeemed.draft),
-          id: makeId(),
-          createdAt: timestamp,
-          updatedAt: timestamp,
-          categoryId: input.categoryId,
-          active: true,
-        }),
+        rule: commitRule(
+          ruleFromDraft(redeemed.draft, {
+            id: makeId(),
+            createdAt: timestamp,
+            updatedAt: timestamp,
+            categoryId: input.categoryId,
+            active: true,
+          }),
+        ),
       }
     },
 

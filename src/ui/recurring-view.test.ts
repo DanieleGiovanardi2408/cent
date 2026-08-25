@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest'
+import { toDateParts } from '../core/date'
+import type { IsoDate } from '../core/date'
 import { previewMaterialization } from '../core/recurring-plan'
-import type { MaterializationPreview, RecurrenceDraft } from '../core/recurring-plan'
+import type {
+  MaterializationPreview,
+  RecurrenceDraft,
+  RecurrenceDraftCommon,
+} from '../core/recurring-plan'
+import type { RecurringRule } from '../core/types'
 import { makeRule } from '../core/testing'
 import { setLanguage } from './i18n'
 import {
@@ -10,6 +17,9 @@ import {
   fixedList,
   previewCopy,
   refusalText,
+  rewindCopy,
+  rewindDraft,
+  rewindRefusalText,
 } from './recurring-view'
 
 /**
@@ -26,6 +36,15 @@ setLanguage('it')
 
 // Mercoledi' 19 agosto 2026: nessun confine vicino, ne' di giorno ne' di mese.
 const OGGI = '2026-08-19'
+
+/**
+ * Gli spazi di `Intl` sono **non separabili**, e restano tali: e' il canarino
+ * che questo progetto tiene apposta (vedi `money.test.ts`). Qui si normalizzano
+ * solo per poter confrontare una frase intera con una scritta a mano.
+ */
+function norm(text: string): string {
+  return text.replace(/[\u00a0\u202f]/g, ' ')
+}
 
 /**
  * L'anteprima **e la bozza che descrive**, che adesso viaggiano insieme:
@@ -46,9 +65,36 @@ function preview(
   return { shown: result, draft }
 }
 
-/** Una bozza mensile da 900, che e' il caso del brief. */
-function mensile(startDate: string, extra: Partial<RecurrenceDraft> = {}): RecurrenceDraft {
-  return { amountCents: 90_000, cadence: 'monthly', interval: 1, startDate, ...extra }
+/**
+ * Una bozza mensile da 900, che e' il caso del brief.
+ *
+ * L'ancora **si deriva da `startDate`**, come fa il foglio quando crea una
+ * regola e come ha fatto la migrazione 3 -> 4 sui record gia' scritti: e' la
+ * stessa derivazione di `makeRule`, quindi una regola e una bozza costruite qui
+ * dalla stessa data hanno lo stesso calendario e `calendarChanged` risponde
+ * "no" invece di confrontare un numero con niente.
+ *
+ * Resta scavalcabile da `extra`, ed e' il solo modo di scrivere lo stato che
+ * dalla UI arriva solo in modifica: ancora ferma, data d'inizio spostata.
+ *
+ * `extra` non e' un `Partial<RecurrenceDraft>`: su un'unione discriminata
+ * `Partial` distribuisce e produce anche il ramo `anchorDay?: never`, cioe'
+ * esattamente la mensile senza ancora che ADR 020 ha reso non rappresentabile.
+ * Si scavalcano i campi comuni, piu' l'ancora, che comune non e'.
+ */
+function mensile(
+  startDate: IsoDate,
+  extra: Partial<RecurrenceDraftCommon> & { readonly anchorDay?: number } = {},
+): RecurrenceDraft {
+  const { anchorDay, ...common } = extra
+  return {
+    amountCents: 90_000,
+    interval: 1,
+    startDate,
+    ...common,
+    cadence: 'monthly',
+    anchorDay: anchorDay ?? toDateParts(startDate).day,
+  }
 }
 
 function copyOf(draft: RecurrenceDraft, mode: 'new' | 'edit' | 'reactivate' = 'new') {
@@ -91,6 +137,22 @@ describe('l anteprima prima di scrivere', () => {
     const copy = previewCopy(futura.shown, futura.draft, OGGI, 'new')
     expect(copy.text).toContain('1 settembre')
     expect(copy.confirm).toBe(false)
+  })
+
+  it('creando, la prima spesa cade SEMPRE sulla data d inizio: e cio che il piede annuncia', () => {
+    // La proprieta' che tiene onesto il ramo `count: 0`, dove il piede non ha
+    // una data calcolata e ripiega su `draft.startDate`. Quel ripiego dice il
+    // vero **solo** se la prima occorrenza e la data d'inizio coincidono, ed e'
+    // quello che l'ancora derivata da `startDate` garantisce: il foglio, in
+    // creazione, non sa costruire una regola che parte dopo il proprio inizio.
+    //
+    // Il 31 e il 29 febbraio sono qui perche' sono gli unici giorni su cui
+    // `clampDayOfMonth` interviene: se derivasse un'ancora fuori scala, la
+    // prima occorrenza scivolerebbe e questo ripiego mentirebbe.
+    for (const giorno of ['2026-01-01', '2026-07-31', '2026-08-18', OGGI, '2024-02-29']) {
+      const { shown } = preview(mensile(giorno))
+      expect([giorno, shown.firstDate ?? giorno]).toEqual([giorno, giorno])
+    }
   })
 
   it('con una sola arretrata il testo e al singolare, in tutte e tre le frasi', () => {
@@ -354,5 +416,252 @@ describe('la riga sotto il nome', () => {
       makeRule({ startDate: '2026-01-01', cadence: 'monthly', interval: 3 }),
     )
     expect(nota).toContain('ogni 3 mesi')
+  })
+})
+
+/* ------------------------------------------------------------------------- *
+ * Spostare indietro la data d'inizio (ADR 018)
+ * ------------------------------------------------------------------------- */
+
+/**
+ * L'anteprima di un riavvolgimento, dalla stessa strada che percorre il foglio:
+ * `rewindDraft` -> `previewMaterialization` -> `rewindCopy`.
+ *
+ * I numeri si ricopiano **campo per campo** invece di passare l'esito intero, e
+ * non e' pignoleria: e' la stessa separazione di `preview()` qui sopra. Cio' che
+ * si mostra non porta con se' il permesso di scrivere, e la firma di
+ * `rewindCopy` non lo accetta nemmeno.
+ */
+function rewindOf(rule: RecurringRule, nuovaData: IsoDate, giorno: IsoDate = OGGI) {
+  const result = previewMaterialization(rewindDraft(rule, nuovaData), giorno)
+  if (!result.ok) throw new Error(`anteprima rifiutata: ${result.reason}`)
+  return {
+    result,
+    copy: rewindCopy(
+      {
+        count: result.count,
+        firstDate: result.firstDate,
+        lastDate: result.lastDate,
+        totalCents: result.totalCents,
+        backdated: result.backdated,
+      },
+      nuovaData,
+      giorno,
+    ),
+  }
+}
+
+describe('la bozza del riavvolgimento', () => {
+  it('e quella di una regola appena creata con quella data: nessun segnaposto', () => {
+    // E' il punto di ADR 018 dopo la correzione. Con il segnaposto dentro, la
+    // finestra resterebbe chiusa e non nascerebbe niente: e' il **no-op
+    // silenzioso** che questa consegna chiude, e vive o muore in questa riga.
+    const regola = makeRule({
+      startDate: '2026-08-01',
+      lastMaterializedDate: OGGI,
+      amountCents: 90_000,
+    })
+    const bozza = rewindDraft(regola, '2026-01-01')
+    expect(bozza.lastMaterializedDate).toBeUndefined()
+    expect(Object.hasOwn(bozza, 'lastMaterializedDate')).toBe(false)
+    expect(bozza.startDate).toBe('2026-01-01')
+    // L'importo e' quello del **record**: la transazione ri-deriva la somma con
+    // quello del disco, e un importo diverso qui darebbe `stale-preview`.
+    expect(bozza.amountCents).toBe(90_000)
+  })
+
+  it('l ancora mensile e quella scritta nel record, non il giorno della data nuova', () => {
+    // ADR 020. Retrodatare una regola "il 1 del mese" al 23 giugno non la
+    // trasforma in "il 23 del mese": le istanze gia' generate il 1 resterebbero
+    // fuori calendario, con id deterministici che nessuna finestra ripropone.
+    const regola = makeRule({ startDate: '2026-08-01', cadence: 'monthly', anchorDay: 1 })
+    const bozza = rewindDraft(regola, '2026-06-23')
+    expect(bozza.anchorDay).toBe(1)
+    const { result } = rewindOf(regola, '2026-06-23')
+    expect(result.firstDate).toBe('2026-07-01')
+    expect(result.lastDate).toBe('2026-08-01')
+  })
+
+  it('una settimanale non si porta dietro nessuna ancora', () => {
+    const bozza = rewindDraft(makeRule({ startDate: '2026-08-01', cadence: 'weekly' }), '2026-07-04')
+    expect(bozza.cadence).toBe('weekly')
+    expect(bozza.anchorDay).toBeUndefined()
+  })
+
+  it('la data di fine viaggia, perche restringe la finestra', () => {
+    const conFine = rewindDraft(
+      makeRule({ startDate: '2026-08-01', endDate: '2026-12-31' }),
+      '2026-01-01',
+    )
+    expect(conFine.endDate).toBe('2026-12-31')
+    const senzaFine = rewindDraft(makeRule({ startDate: '2026-08-01' }), '2026-01-01')
+    expect(Object.hasOwn(senzaFine, 'endDate')).toBe(false)
+  })
+})
+
+describe('cosa dice il riavvolgimento prima di scrivere', () => {
+  it('il caso vero: l affitto partito a gennaio dice 8 spese, le date e il totale', () => {
+    // I tre numeri che l'utente deve vedere prima di confermare una scrittura in
+    // blocco su dati veri: quante, da quando a quando, quanto in tutto.
+    const regola = makeRule({
+      startDate: '2026-08-01',
+      anchorDay: 1,
+      amountCents: 90_000,
+      lastMaterializedDate: OGGI,
+    })
+    const { result, copy } = rewindOf(regola, '2026-01-01')
+    expect(result.count).toBe(8)
+    expect(copy.text).toContain('8 spese')
+    expect(copy.text).toContain('1 gennaio')
+    expect(copy.text).toContain('1 agosto')
+    expect(copy.text).toContain('7200,00')
+    // Il bottone dice cosa scrive, e la casella pure: sono i due bersagli che si
+    // attraversano per arrivare alla scrittura.
+    expect(copy.confirmLabel).toContain('8')
+    expect(copy.saveLabel).toContain('8')
+    expect(copy.saveLabel).toContain('7200,00')
+  })
+
+  it('una sola spesa arretrata non si scrive "1 spese"', () => {
+    // Il 15 luglio e non il 1: cosi' la finestra riaperta contiene un solo
+    // primo-del-mese (il 1 agosto), che e' il caso a uno.
+    const regola = makeRule({ startDate: '2026-08-01', anchorDay: 1, amountCents: 90_000 })
+    const { result, copy } = rewindOf(regola, '2026-07-15')
+    expect(result.count).toBe(1)
+    expect(copy.text).toContain('1 spesa arretrata')
+    expect(norm(copy.saveLabel)).toBe('Crea 1 spesa · 900,00 €')
+  })
+
+  it('niente da creare nel passato: la data si sposta, e la frase lo dice', () => {
+    // Una regola che non ha ancora cominciato, retrodatata a un giorno che e'
+    // ancora nel futuro. `count: 0` e' legittimo, e "0 spese" non e' una frase.
+    // Senza questo ramo il piede resterebbe muto proprio dove serve dire che
+    // qualcosa **e'** cambiato.
+    const regola = makeRule({ startDate: '2026-10-01', anchorDay: 1 })
+    const { result, copy } = rewindOf(regola, '2026-09-01')
+    expect(result.count).toBe(0)
+    expect(copy.text).toContain('1 settembre')
+    // Niente da confermare: una casella che compare sempre smette di essere
+    // letta, ed e' questo ramo a tenerla onesta.
+    expect(copy.confirmLabel).toBeNull()
+    expect(copy.saveLabel).toBe('Sposta la data d’inizio')
+  })
+
+  it('la spesa di oggi non e "arretrata": e il solo caso di count>0 senza arretrato', () => {
+    // Una regola che parte domani riportata a oggi. Chiamarla arretrata sarebbe
+    // falso di un giorno, e il giorno singolo e' proprio cio' che questa
+    // operazione esiste per correggere.
+    const domani = '2026-08-20'
+    const regola = makeRule({ startDate: domani, cadence: 'daily', amountCents: 1200 })
+    const { result, copy } = rewindOf(regola, OGGI)
+    expect(result.count).toBe(1)
+    expect(result.backdated).toBe(false)
+    expect(norm(copy.text)).toBe('Crea la spesa di oggi: 12,00 €.')
+    expect(copy.confirmLabel).toBe('Crea anche la spesa di oggi')
+    expect(copy.saveLabel).toContain('12,00')
+  })
+
+  it('le stesse frasi esistono in inglese, e non sono le italiane', () => {
+    setLanguage('en')
+    const regola = makeRule({ startDate: '2026-08-01', anchorDay: 1, amountCents: 90_000 })
+    const arretrato = rewindOf(regola, '2026-01-01').copy
+    expect(arretrato.text).toContain('8 past expenses')
+    expect(arretrato.confirmLabel).toContain('8')
+    const nulla = rewindOf(makeRule({ startDate: '2026-10-01', anchorDay: 1 }), '2026-09-01').copy
+    expect(nulla.text).toContain('Nothing to create in the past')
+    expect(nulla.saveLabel).toBe('Move the start date')
+    setLanguage('it')
+  })
+})
+
+describe('quando il riavvolgimento dice di no', () => {
+  it('la mezzanotte: la stessa frase dell altra porta, perche e lo stesso fatto', () => {
+    const testo = rewindRefusalText(
+      {
+        ok: false,
+        reason: 'stale-preview',
+        stale: { staleness: 'day', previewedOn: '2026-08-18', today: OGGI },
+      },
+      OGGI,
+    )
+    expect(testo).toContain('ieri')
+    expect(testo).toContain('ricontrolla e conferma')
+  })
+
+  it('l impronta cambiata dice di rifare, e non cita nessun numero', () => {
+    // `announced` e `actual` sono due impronte, e la seconda e' gia' quella che
+    // si legge nel piede: un numero nel messaggio sarebbe un numero da
+    // riconciliare con lo schermo.
+    const testo = rewindRefusalText(
+      {
+        ok: false,
+        reason: 'stale-preview',
+        stale: {
+          staleness: 'footprint',
+          announced: { count: 8, totalCents: 720_000, firstDate: '2026-01-01', lastDate: '2026-08-01' },
+          actual: { count: 8, totalCents: 736_000, firstDate: '2026-01-01', lastDate: '2026-08-01' },
+        },
+      },
+      OGGI,
+    )
+    expect(testo).toContain('è cambiata')
+    expect(testo).toContain('ricontrolla e conferma')
+    expect(testo).not.toMatch(/\d/)
+  })
+
+  it('il verso sbagliato porta tutte e due le date, e dice cosa fare', () => {
+    const testo = rewindRefusalText(
+      { ok: false, reason: 'not-earlier', startDate: '2026-09-01', currentStartDate: '2026-08-01' },
+      OGGI,
+    )
+    expect(testo).toContain('1 settembre')
+    expect(testo).toContain('1 agosto')
+    expect(testo).toContain('Scegline un’altra')
+  })
+
+  it('un record che non si legge non si sposta, e non si mostra il messaggio del core', () => {
+    // `validateRule` risponde con una stringa da log ("anchorDay non valido:
+    // 44"): a chi non ha scritto quel record a mano non dice niente.
+    const testo = rewindRefusalText(
+      { ok: false, reason: 'invalid', message: 'anchorDay non valido: 44' },
+      OGGI,
+    )
+    expect(testo).not.toContain('anchorDay')
+    expect(testo).toContain('non torna')
+  })
+
+  it('la regola sparita riusa la frase che esiste: non c e niente da riconfermare', () => {
+    const testo = rewindRefusalText({ ok: false, reason: 'unknown' }, OGGI)
+    expect(testo).toContain('non c’è più')
+    expect(testo).not.toContain('conferma')
+  })
+
+  it('i quattro rifiuti esistono in inglese', () => {
+    setLanguage('en')
+    expect(
+      rewindRefusalText(
+        { ok: false, reason: 'not-earlier', startDate: '2026-09-01', currentStartDate: '2026-08-01' },
+        OGGI,
+      ),
+    ).toContain('Pick another day')
+    expect(
+      rewindRefusalText({ ok: false, reason: 'invalid', message: 'x' }, OGGI),
+    ).toContain('does not add up')
+    expect(
+      rewindRefusalText(
+        {
+          ok: false,
+          reason: 'stale-preview',
+          stale: {
+            staleness: 'footprint',
+            announced: { count: 1, totalCents: 1, firstDate: null, lastDate: null },
+            actual: { count: 2, totalCents: 2, firstDate: null, lastDate: null },
+          },
+        },
+        OGGI,
+      ),
+    ).toContain('changed in the meantime')
+    expect(rewindRefusalText({ ok: false, reason: 'unknown' }, OGGI)).toContain('gone')
+    setLanguage('it')
   })
 })

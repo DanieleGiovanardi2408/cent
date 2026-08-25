@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { buildBackup, parseBackup } from './backup'
+import { occurrencesBetween } from './recurrence'
 import { SCHEMA_VERSION } from './schema'
 import { makeBudget, makeCategory, makeExpense, makeRule, makeSettings, tickingClock } from './testing'
 import type { DataSet } from './types'
@@ -395,5 +396,127 @@ describe('l import non puo essere la porta di servizio del tetto', () => {
     expect(
       preview.issues.some((i) => i.path === 'categories' && i.message.includes('archivio')),
     ).toBe(true)
+  })
+})
+
+/**
+ * L'ancora mensile all'ingresso: **la strada che la migrazione non copre**.
+ *
+ * `parseBackup` fa girare le migrazioni (`migrateRawData`) prima di validare,
+ * quindi un file che dichiara lo schema 2 o 3 riceve l'ancora dal passo 3 -> 4.
+ * Ma un file puo' anche dichiarare **gia'** lo schema 4 — scritto a mano,
+ * modificato, o esportato da una versione futura di se stesso — e allora non
+ * c'e' nessun passo da applicargli. Li' l'unica difesa e' `parseRule`.
+ *
+ * L'esito richiesto e' lo stesso in tutti i casi: una **regola valida**. Non un
+ * rifiuto (si perderebbe l'unica copia di un record che l'utente non ha
+ * altrove) e non un record a meta' (una mensile senza ancora non e' nemmeno
+ * rappresentabile dallo schema 4 in avanti).
+ */
+describe('l ancora mensile all ingresso di un import', () => {
+  function file(
+    schemaVersion: number,
+    regola: Record<string, unknown>,
+  ): Record<string, unknown> {
+    return {
+      app: 'cent',
+      schemaVersion,
+      exportedAt: '2026-08-25T09:00:00.000Z',
+      data: {
+        expenses: [],
+        categories: [
+          { id: 'cat-1', name: 'Casa', emoji: '🏠', color: '#4c9f70', order: 70, archived: false },
+        ],
+        recurringRules: [regola],
+        budgets: [],
+        settings: { id: 'settings', weekStartsOn: 1, theme: 'auto', schemaVersion },
+      },
+    }
+  }
+
+  function mensileSenzaAncora(startDate: string): Record<string, unknown> {
+    return {
+      id: 'r-affitto',
+      createdAt: '2026-01-01T10:00:00.000Z',
+      updatedAt: '2026-01-01T10:00:00.000Z',
+      amountCents: 90_000,
+      categoryId: 'cat-1',
+      cadence: 'monthly',
+      interval: 1,
+      startDate,
+      active: true,
+    }
+  }
+
+  it('schema 3: la migrazione gliela scrive, e la regola entra intera', () => {
+    const preview = parseBackup(file(3, mensileSenzaAncora('2026-01-01')))
+    expect(preview.ok).toBe(true)
+    expect(preview.discarded).toBe(0)
+    expect(preview.counts.recurringRules).toBe(1)
+    expect(preview.data?.recurringRules[0]?.anchorDay).toBe(1)
+    expect(preview.data?.recurringRules[0]?.amountCents).toBe(90_000)
+  })
+
+  it('schema 2: la catena 2 -> 3 -> 4 arriva fino in fondo', () => {
+    const preview = parseBackup(file(2, mensileSenzaAncora('2026-06-23')))
+    expect(preview.ok).toBe(true)
+    expect(preview.discarded).toBe(0)
+    expect(preview.data?.recurringRules[0]?.anchorDay).toBe(23)
+  })
+
+  it('schema 4 gia dichiarato: nessuna migrazione da applicare, la deriva parseRule', () => {
+    // Qui `migrateRawData` non ha niente da fare. Senza la derivazione in
+    // `parseRule` questa regola verrebbe **scartata**, cioe' l'unico esito che
+    // un import non deve poter produrre.
+    const preview = parseBackup(file(SCHEMA_VERSION, mensileSenzaAncora('2026-03-09')))
+    expect(preview.ok).toBe(true)
+    expect(preview.discarded).toBe(0)
+    expect(preview.counts.recurringRules).toBe(1)
+    expect(preview.data?.recurringRules[0]?.anchorDay).toBe(9)
+  })
+
+  it('un ancora fuori scala non fa piu perdere la regola: si deriva e si dice', () => {
+    // Prima costava l'intero record — importo, categoria, calendario — per un
+    // campo che si sa ricavare. Adesso costa un avviso nell'anteprima, che e'
+    // il posto in cui l'utente decide.
+    const preview = parseBackup(
+      file(SCHEMA_VERSION, { ...mensileSenzaAncora('2026-05-12'), anchorDay: 45 }),
+    )
+    expect(preview.ok).toBe(true)
+    expect(preview.discarded).toBe(0)
+    expect(preview.data?.recurringRules[0]?.anchorDay).toBe(12)
+    expect(preview.issues.some((i) => i.path.endsWith('.anchorDay'))).toBe(true)
+  })
+
+  it('su una cadenza che non la vuole l ancora si scarta, e lo si dice', () => {
+    const preview = parseBackup(
+      file(SCHEMA_VERSION, {
+        ...mensileSenzaAncora('2026-05-12'),
+        cadence: 'weekly',
+        anchorDay: 12,
+      }),
+    )
+    expect(preview.ok).toBe(true)
+    expect(preview.data?.recurringRules[0] && 'anchorDay' in preview.data.recurringRules[0]).toBe(
+      false,
+    )
+    expect(preview.issues.some((i) => i.message.includes('solo per le regole mensili'))).toBe(true)
+  })
+
+  it('l ancora derivata attraversa il motore: 31 gennaio resta ultimo giorno del mese', () => {
+    // Il requisito duro, verificato **sulla catena intera** e non sul motore
+    // da solo: un archivio scritto prima dello schema 4, importato adesso,
+    // deve continuare a produrre il 28 febbraio e non il 3 marzo.
+    const preview = parseBackup(file(2, mensileSenzaAncora('2026-01-31')))
+    const regola = preview.data?.recurringRules[0]
+    expect(regola?.anchorDay).toBe(31)
+    if (regola === undefined) throw new Error('regola attesa')
+    expect(occurrencesBetween(regola, '2026-01-01', '2026-05-31')).toEqual([
+      '2026-01-31',
+      '2026-02-28',
+      '2026-03-31',
+      '2026-04-30',
+      '2026-05-31',
+    ])
   })
 })

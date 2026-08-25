@@ -727,6 +727,7 @@ describe('categorie: cancellare davvero', () => {
       amountCents: 90_000,
       categoryId: svago?.id ?? '',
       cadence: 'monthly',
+      anchorDay: 1,
       interval: 1,
       startDate: '2026-08-01',
     })
@@ -797,6 +798,7 @@ describe('ricorrenti: cancellare davvero una regola', () => {
     amountCents: 90_000,
     categoryId: 'cat-1',
     cadence: 'monthly' as const,
+    anchorDay: 1,
     interval: 1,
     startDate: '2026-08-01',
   }
@@ -863,7 +865,15 @@ describe('ricorrenti: cancellare davvero una regola', () => {
 
   it('basta una istanza viva per trattenere, e il numero e quello visibile', async () => {
     const { repo, disk } = await open()
-    const regola = creaRegola(repo, { ...nuovaRegola, cadence: 'daily', startDate: '2026-08-20' })
+    // Non uno spread su `nuovaRegola`: quella e' mensile e porta l'ancora, che
+    // su una giornaliera non e' un campo in piu' — e' un campo che non esiste.
+    const regola = creaRegola(repo, {
+      amountCents: nuovaRegola.amountCents,
+      categoryId: nuovaRegola.categoryId,
+      cadence: 'daily',
+      interval: 1,
+      startDate: '2026-08-20',
+    })
     await repo.flush()
     await repo.materializeRecurring('2026-08-22')
     const generate = disk.expenses.filter((e) => e.recurringId === regola.id)
@@ -1039,6 +1049,7 @@ describe('ricorrenze dal repository', () => {
       amountCents: 90_000,
       categoryId: 'cat-1',
       cadence: 'monthly',
+      anchorDay: 1,
       interval: 1,
       startDate: '2026-06-01',
     })
@@ -1147,6 +1158,7 @@ describe('ricorrenze dal repository', () => {
       amountCents: 90_000,
       categoryId: 'cat-1',
       cadence: 'monthly',
+      anchorDay: 1,
       interval: 1,
       startDate: '2026-06-01',
     })
@@ -1434,6 +1446,7 @@ describe('due contesti, mai simultanei', () => {
       amountCents: 90_000,
       categoryId: 'cat-1',
       cadence: 'monthly',
+      anchorDay: 1,
       interval: 1,
       startDate: '2026-06-01',
     })
@@ -1445,6 +1458,7 @@ describe('due contesti, mai simultanei', () => {
     rivediRegola(a.repo, regola.id, {
       amountCents: 92_000,
       cadence: 'monthly',
+      anchorDay: 1,
       interval: 1,
       startDate: '2026-06-01',
     })
@@ -1473,6 +1487,7 @@ describe('due contesti, mai simultanei', () => {
       amountCents: 90_000,
       categoryId: 'cat-1',
       cadence: 'monthly',
+      anchorDay: 1,
       interval: 1,
       startDate: '2026-06-01',
     })
@@ -1772,6 +1787,7 @@ describe('l anteprima e obbligatoria nel tipo, e scade a mezzanotte', () => {
   const bozzaAffitto = {
     amountCents: 90_000,
     cadence: 'monthly' as const,
+    anchorDay: 1,
     interval: 1,
     startDate: '2026-01-01',
   }
@@ -2193,15 +2209,18 @@ describe('ADR 018: il segnaposto arretra solo su richiesta', () => {
     nuovaData: string,
     giorno: string,
   ): Extract<ReturnType<typeof previewMaterialization>, { ok: true }> {
+    const comune = {
+      amountCents: regola.amountCents,
+      interval: regola.interval,
+      startDate: nuovaData,
+      ...(regola.endDate !== undefined ? { endDate: regola.endDate } : {}),
+    }
+    // Cadenza e ancora insieme: retrodatare cambia una data sola, e il giorno
+    // del mese resta quello scritto nel record.
     const p = previewMaterialization(
-      {
-        amountCents: regola.amountCents,
-        cadence: regola.cadence,
-        interval: regola.interval,
-        ...(regola.anchorDay !== undefined ? { anchorDay: regola.anchorDay } : {}),
-        startDate: nuovaData,
-        ...(regola.endDate !== undefined ? { endDate: regola.endDate } : {}),
-      },
+      regola.cadence === 'monthly'
+        ? { ...comune, cadence: 'monthly', anchorDay: regola.anchorDay }
+        : { ...comune, cadence: regola.cadence },
       giorno,
     )
     if (!p.ok) throw new Error(`anteprima rifiutata: ${p.reason}`)
@@ -2536,6 +2555,7 @@ describe('ADR 018: il segnaposto arretra solo su richiesta', () => {
       amountCents: 90_000,
       categoryId: 'cat-1',
       cadence: 'monthly' as const,
+      anchorDay: 1,
       interval: 1,
       startDate: '2026-08-01',
     }
@@ -2600,6 +2620,7 @@ describe('ADR 018: il segnaposto arretra solo su richiesta', () => {
       amountCents: 90_000,
       categoryId: 'cat-1',
       cadence: 'monthly' as const,
+      anchorDay: 1,
       interval: 1,
       startDate: '2026-08-01',
     }

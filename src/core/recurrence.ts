@@ -80,7 +80,14 @@ export function validateRule(rule: RecurringRule): string | null {
   if (!Number.isInteger(rule.interval) || rule.interval < 1) {
     return `interval non valido: ${rule.interval}`
   }
-  if (rule.anchorDay !== undefined) {
+  // Sulle mensili l'ancora c'e' **per tipo** (`WithCadence`), quindi qui non si
+  // sta sorvegliando un campo opzionale: si sta controllando che il numero sia
+  // in scala. Il caso `undefined` resta raggiungibile da un'unica strada — un
+  // record letto dal disco, che `loadAll` non valida — e li' e' giusto che la
+  // regola risulti **non utilizzabile** invece di farsi derivare un'ancora a
+  // tavolino: quella derivazione l'ha gia' fatta la migrazione allo schema 4,
+  // quando `startDate` era ancora quella vera.
+  if (rule.cadence === 'monthly') {
     if (!Number.isInteger(rule.anchorDay) || rule.anchorDay < 1 || rule.anchorDay > 31) {
       return `anchorDay non valido: ${rule.anchorDay}`
     }
@@ -119,7 +126,10 @@ export function nextOccurrenceOnOrAfter(rule: RecurringRule, from: IsoDate): Iso
 
   let date: IsoDate
   if (rule.cadence === 'monthly') {
-    const anchorDay = rule.anchorDay ?? toDateParts(rule.startDate).day
+    // Nessun fallback su `startDate`: l'ancora e' un campo del record, non una
+    // conseguenza di un altro campo. Era il ramo che faceva scivolare il giorno
+    // del mese ogni volta che qualcuno retrodatava la regola.
+    const anchorDay = rule.anchorDay
     const start = toDateParts(rule.startDate)
     const target = toDateParts(floor)
     const monthsDiff = (target.year - start.year) * 12 + (target.month - start.month)

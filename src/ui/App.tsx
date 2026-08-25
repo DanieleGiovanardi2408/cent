@@ -16,7 +16,7 @@ import { BudgetSheet } from './BudgetSheet'
 import { CategorySheet } from './CategorySheet'
 import type { CategoryDraft, CategoryMode } from './CategorySheet'
 import { RuleSheet } from './RuleSheet'
-import type { RuleDraft } from './RuleSheet'
+import type { RuleDraft, RuleRewind } from './RuleSheet'
 import { ExpenseActions } from './ExpenseActions'
 import { Fit } from './Fit'
 import { Guide } from './Guide'
@@ -25,7 +25,7 @@ import { Home } from './Home'
 import { Mark } from './Mark'
 import { planRecurringRuleDeletion, previewMaterialization } from '../core/recurring-plan'
 import type { RecurringRuleWrite } from '../core/recurring-plan'
-import { calendarChanged, refusalText } from './recurring-view'
+import { calendarChanged, refusalText, rewindRefusalText } from './recurring-view'
 import { Settings } from './Settings'
 import { activePeriod, currentBudgetCents } from './budget-view'
 import { Toast } from './Toast'
@@ -36,6 +36,7 @@ import {
   cadenceLabel,
   dayHeading,
   detectLanguage,
+  fullDayLabel,
   money,
   resolveLanguage,
   setLanguage,
@@ -615,6 +616,69 @@ export function App() {
     )
     void repo.materializeRecurring(getAppState().day).catch(() => {
       // Nessun canale nuovo: cio' che conta e' gia' in `writeFailures`, e
+      // l'avviso in cima all'app lo mostra da solo.
+    })
+    return null
+  }
+
+  /**
+   * Sposta indietro la data d'inizio di una regola, e **subito dopo
+   * materializza** — come ogni altra porta che scrive un calendario.
+   *
+   * ## Perche' e' l'unica porta asincrona di questo gruppo
+   *
+   * Perche' il permesso lo da' il **disco**, non il mirror. Le altre quattro
+   * spendono un'anteprima calcolata sullo stesso mirror da cui poi scrivono: un
+   * confronto li' sarebbe la funzione confrontata con se stessa. Qui invece la
+   * transazione **ri-deriva l'impronta dai record veri** — conteggio, somma e i
+   * due estremi — e se anche uno solo dei quattro numeri non coincide con
+   * quello annunciato non scrive niente. Quel confronto vive dentro
+   * `WriteBatch`, quindi l'esito arriva quando la transazione ha risposto.
+   *
+   * ## `refreshDay()` prima, come in `saveRule`, e per la stessa ragione
+   *
+   * Il permesso porta con se' il giorno su cui i numeri sono stati calcolati, e
+   * il repository legge il **proprio** al momento di scrivere. Se fra le due
+   * letture e' passata la mezzanotte, il rifiuto arriva e il foglio deve gia'
+   * avere sotto gli occhi i numeri rifatti: `refreshDay()` li rifa' prima che il
+   * no compaia. Ricalcolare qui su "oggi" avrebbe fatto passare la scrittura,
+   * annunciando meno di quanto si scrive.
+   *
+   * ## Il toast dice cosa e' successo, e i tre casi non sono lo stesso caso
+   *
+   * `count` viene dal permesso confermato, e la transazione lo ha appena
+   * verificato sui record veri: dirlo qui non e' un secondo calcolo. Zero non e'
+   * "0 spese create", e' un'altra cosa — la data si e' mossa e basta — e il
+   * singolare comprende anche la spesa di **oggi**, che arretrata non e'.
+   */
+  async function rewindRule(rewind: RuleRewind): Promise<string | null> {
+    const repo = app.repo
+    const target = ruleTarget
+    if (!repo || target === null) return t('rule.hint.failed')
+    refreshDay()
+    const name = ruleName(target)
+    try {
+      const outcome = await repo.rewindRecurringRule(target.id, rewind.startDate, rewind.previewed)
+      if (!outcome.ok) return rewindRefusalText(outcome, getAppState().day)
+    } catch {
+      // Un import sta sostituendo i dati, o la scrittura non e' arrivata al
+      // disco. Il pannello resta aperto dove si riprova: un toast qui finirebbe
+      // dietro al velo.
+      return t('rule.hint.failed')
+    }
+    closeSheet()
+    showToast(
+      rewind.count === 0
+        ? t('toast.ruleBack.none', {
+            name,
+            day: fullDayLabel(rewind.startDate, getAppState().day),
+          })
+        : rewind.count === 1
+          ? t('toast.ruleBack.one', { name })
+          : t('toast.ruleBack.other', { name, count: rewind.count }),
+    )
+    void repo.materializeRecurring(getAppState().day).catch(() => {
+      // Come in `saveRule`: cio' che conta e' gia' in `writeFailures`, e
       // l'avviso in cima all'app lo mostra da solo.
     })
     return null
@@ -1335,6 +1399,7 @@ export function App() {
           day={app.day}
           leaving={sheet.leaving}
           onSave={saveRule}
+          onRewind={rewindRule}
           onDeactivate={deactivateRule}
           onDelete={deleteRule}
           onClose={closeSheet}

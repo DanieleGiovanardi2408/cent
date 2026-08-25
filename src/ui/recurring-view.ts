@@ -18,6 +18,8 @@
  *    non descrive piu' adesso la scrittura dice di no. Sono le parole di quel no.
  * 4. **Il rifiuto della cancellazione** (`deletionRefusalText`), con dentro il
  *    numero di spese gia' generate.
+ * 5. **Il riavvolgimento** (`rewindCopy`, `rewindRefusalText`): cosa succede a
+ *    spostare indietro la data d'inizio, e le parole dei quattro no.
  */
 
 import { isAfter, isBefore } from '../core/date'
@@ -28,6 +30,7 @@ import type {
   MaterializationPreview,
   RecurrenceDraft,
   RecurringRuleDeletion,
+  RecurringRuleRewind,
   RecurringRuleWrite,
 } from '../core/recurring-plan'
 import type { RecurringRule } from '../core/types'
@@ -371,4 +374,181 @@ export function calendarChanged(rule: RecurringRule, draft: RecurrenceDraft): bo
     rule.anchorDay !== draft.anchorDay ||
     rule.endDate !== draft.endDate
   )
+}
+
+/* ------------------------------------------------------------------------- *
+ * 5. Spostare indietro la data d'inizio (ADR 018)
+ * ------------------------------------------------------------------------- */
+
+/**
+ * La bozza su cui si calcola l'anteprima di un riavvolgimento.
+ *
+ * **E' la regola come sara' dopo**: la data nuova, e **nessun segnaposto**.
+ * Cioe' e' esattamente la bozza di una regola **appena creata** con quella data
+ * d'inizio — nessun campo la distingue, ed e' il punto di ADR 018: retrodatare
+ * e ricreare percorrono lo **stesso ramo** di `materializationWindow`, quindi
+ * la coerenza fra i due gesti non e' una proprieta' da verificare caso per
+ * caso.
+ *
+ * Nessuna funzione di dominio la costruisce, e non e' una dimenticanza:
+ * sarebbe un'API di `src/core` con un chiamante solo, e questo repo ne ha gia'
+ * cancellate due per quel motivo (`expensesInRange`, `planBudgetChange`).
+ * Sbagliarla non produce una scrittura sbagliata: produce uno `stale-preview`
+ * dalla transazione, che ri-deriva l'impronta dai record veri e la confronta su
+ * quattro numeri. La guardia sta nel confronto, non in un aiutante.
+ *
+ * ## L'importo e' quello del **record**, non quello che si sta digitando
+ *
+ * Il riavvolgimento scrive due campi e nessuno dei due e' l'importo: la somma
+ * annunciata deve quindi essere `rule.amountCents` per il numero di occorrenze,
+ * o l'impronta non tornerebbe — la transazione la ri-deriva con l'importo del
+ * **disco**. Chi ha una modifica dell'importo non salvata nel foglio la vede
+ * ignorata qui, ed e' corretto: e' un'altra operazione, e la nota del pannello
+ * lo dice a parole.
+ *
+ * Da cui anche il fatto che qui non serve la scorciatoia dell'`amountCents: 1`
+ * di `RuleSheet`: l'importo non cambia mentre si sceglie una data, quindi
+ * l'anteprima che si **mostra** e quella che si **spende** possono essere la
+ * stessa senza aprire nessuna trappola.
+ */
+export function rewindDraft(rule: RecurringRule, startDate: IsoDate): RecurrenceDraft {
+  const common = {
+    amountCents: rule.amountCents,
+    interval: rule.interval,
+    startDate,
+    ...(rule.endDate !== undefined ? { endDate: rule.endDate } : {}),
+  }
+  // Cadenza e ancora nella stessa espressione (ADR 020): il giorno del mese e'
+  // quello **scritto nel record** e non si ricava dalla data nuova. Spostare la
+  // data d'inizio di una regola "il 1 del mese" non la trasforma in "il 23 del
+  // mese", e le istanze gia' generate il 1 restano in calendario.
+  return rule.cadence === 'monthly'
+    ? { ...common, cadence: 'monthly', anchorDay: rule.anchorDay }
+    : { ...common, cadence: rule.cadence }
+}
+
+export interface RewindCopy {
+  /** Cosa succede se si conferma. **Mai vuota**: anche "niente" e' un fatto. */
+  readonly text: string
+  /**
+   * L'etichetta della conferma, `null` quando non c'e' niente da confermare.
+   *
+   * Qui la condizione e' `count > 0` e **non** `backdated`, e la differenza e'
+   * voluta. Nel foglio della regola si conferma l'arretrato perche' il gesto
+   * ordinario — creare una regola che parte oggi — non deve pagare niente. Qui
+   * il gesto ordinario **e'** la scrittura in blocco: si e' entrati apposta in
+   * un pannello che serve solo a quello. Resta il ramo muto (`count: 0`), che e'
+   * cio' che impedisce alla casella di comparire sempre.
+   */
+  readonly confirmLabel: string | null
+  /** Cosa scrive il bottone che conferma. Con dentro i numeri, sempre. */
+  readonly saveLabel: string
+}
+
+/**
+ * Le parole di un riavvolgimento: quante spese nascono, da che giorno a che
+ * giorno, e quanto in tutto.
+ *
+ * Entra una `MaterializationPreview` — i numeri e basta — per la stessa ragione
+ * di `previewCopy`: chi mostra non deve avere in mano il permesso di scrivere.
+ * Qui i due coinciderebbero senza danno (l'importo e' vero), ma la firma che
+ * non lo ammette e' cio' che rende la regola verificabile invece che ricordata.
+ *
+ * ## I tre rami, e perche' il terzo esiste
+ *
+ * - `count: 0` — si sposta solo la data. Capita retrodatando una regola che non
+ *   ha ancora cominciato: legittimo, e "0 spese" non e' una frase da mostrare.
+ * - `count: 1` **su oggi** — l'unico modo di generare senza generare arretrato:
+ *   una regola che parte domani riportata a oggi. Chiamarla "arretrata"
+ *   sarebbe falso di un giorno, e il singolo giorno e' proprio cio' che questa
+ *   operazione esiste per correggere.
+ * - il resto — l'arretrato vero, con le stesse parole del foglio della regola:
+ *   e' lo stesso fatto ("questa regola creera' N spese arretrate"), e due copie
+ *   diverse della stessa frase si allontanerebbero al primo ritocco.
+ */
+export function rewindCopy(
+  preview: MaterializationPreview,
+  startDate: IsoDate,
+  today: IsoDate,
+): RewindCopy {
+  const total = money(preview.totalCents)
+  if (preview.count === 0) {
+    return {
+      text: t('rewind.preview.none', { day: fullDayLabel(startDate, today) }),
+      confirmLabel: null,
+      saveLabel: t('rewind.save.none'),
+    }
+  }
+  if (!preview.backdated) {
+    return {
+      text: t('rewind.preview.today', { total }),
+      confirmLabel: t('rewind.confirm.today'),
+      saveLabel: t('rule.save.back.one', { total }),
+    }
+  }
+  const first = preview.firstDate ?? startDate
+  const last = preview.lastDate ?? first
+  return {
+    text:
+      preview.count === 1
+        ? t('rule.preview.back.one', { from: fullDayLabel(first, today), total })
+        : t('rule.preview.back.other', {
+            count: preview.count,
+            range: dayRangeLabel(first, last, today),
+            total,
+          }),
+    confirmLabel:
+      preview.count === 1
+        ? t('rule.confirm.one')
+        : t('rule.confirm.other', { count: preview.count }),
+    saveLabel:
+      preview.count === 1
+        ? t('rule.save.back.one', { total })
+        : t('rule.save.back.other', { count: preview.count, total }),
+  }
+}
+
+/** I quattro rifiuti di `rewindRecurringRule`. */
+export type RewindRefusal = Extract<RecurringRuleRewind, { ok: false }>
+
+/**
+ * Le parole di un no. Quattro esiti, e nessuno e' un errore dell'utente.
+ *
+ * Due riusano le frasi che esistono, perche' sono lo **stesso fatto**: la
+ * regola sparita (`rule.refused.gone`) e la mezzanotte (`rule.refused.stale`)
+ * non cambiano natura per essere arrivate da qui.
+ *
+ * ## `stale-preview` si divide in due, e serve
+ *
+ * `'day'` e' la mezzanotte: i numeri erano di ieri. `'footprint'` e' l'altra
+ * meta' — quello che l'impronta annunciava non e' piu' quello che la
+ * transazione ri-deriva dai record veri (un altro contesto ha cambiato
+ * l'importo, o il calendario). Il rimedio e' lo stesso in tutti e due i casi:
+ * **rifai l'anteprima, non scrivere** — e infatti tutte e due le frasi
+ * finiscono con "ricontrolla e conferma", perche' i numeri qui sotto sono gia'
+ * rifatti nell'istante in cui il rifiuto compare.
+ *
+ * Il rifiuto sulla forma non cita **nessun numero**: `announced` e `actual`
+ * sono due impronte, e la seconda e' gia' quella che si legge nel piede. Un
+ * numero in piu' nel messaggio sarebbe un numero da riconciliare con lo
+ * schermo, che e' esattamente cio' che questo progetto non fa dire ai messaggi.
+ */
+export function rewindRefusalText(refusal: RewindRefusal, today: IsoDate): string {
+  switch (refusal.reason) {
+    case 'unknown':
+      return t('rule.refused.gone')
+    case 'not-earlier':
+      return t('rewind.refused.notEarlier', {
+        day: fullDayLabel(refusal.startDate, today),
+        current: fullDayLabel(refusal.currentStartDate, today),
+      })
+    case 'invalid':
+      return t('rewind.refused.invalid')
+    case 'stale-preview':
+      return refusal.stale.staleness === 'day'
+        ? t('rule.refused.stale', {
+            day: dayHeading(refusal.stale.previewedOn, today).toLowerCase(),
+          })
+        : t('rewind.refused.changed')
+  }
 }
