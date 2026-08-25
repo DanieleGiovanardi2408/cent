@@ -30,10 +30,20 @@
  *
  * ## Perche' il nome del file comincia per "a"
  *
- * Perche' con `workers: 1` e `fullyParallel: false` i file girano in ordine
- * alfabetico, e una premessa che si legge **dopo** i cento fallimenti che
- * spiega non spiega piu' niente. Chi aggiungera' un altro `*.spec.ts` di
- * premesse lo chiami in modo che resti davanti.
+ * Perche' una premessa che si legge **dopo** i cento fallimenti che spiega non
+ * spiega piu' niente. Chi aggiungera' un altro `*.spec.ts` di premesse lo
+ * chiami in modo che resti davanti.
+ *
+ * Il meccanismo e' `fullyParallel: false`: l'unita' che lo scheduler distribuisce
+ * e' il **file**, e i file vengono consegnati ai worker in ordine alfabetico.
+ * Questo e' quindi il primo lavoro che parte, e dura 130-430 ms: esce dalla
+ * stampa prima di qualunque fallimento che avrebbe spiegato.
+ *
+ * Diceva `workers: 1` fino al giorno in cui i worker sono diventati meta'
+ * macchina, e la riga era ancora li' — vera per caso. Non e' cambiato niente
+ * nei fatti (misurato: primo risultato stampato a 1 worker e a 4), ma la
+ * ragione scritta nominava un numero invece del meccanismo, ed e' il numero che
+ * era destinato a invecchiare.
  *
  * ## E perche' gira su tutti e tre i viewport, pur non misurando niente
  *

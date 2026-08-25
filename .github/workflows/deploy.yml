@@ -106,6 +106,13 @@ jobs:
 
       # `test:e2e` fa la build e poi lancia playwright: `vite preview` serve il
       # dist reale, base path `/cent/` compreso (ADR 001).
+      #
+      # Il comando non cambia con ADR 021: il parallelismo sta in
+      # `playwright.config.ts` (`workers: '50%'`, grano il file), non qui e non
+      # negli script npm. Su un runner con 4 vCPU la regola da **2 worker**,
+      # cioe' meno di cio' che e' stato misurato verde in locale a 4: se un
+      # giorno GitHub cambiasse taglia al runner, il numero si adegua da solo e
+      # resta dalla parte prudente.
       - name: Playwright
         run: npm run test:e2e
 

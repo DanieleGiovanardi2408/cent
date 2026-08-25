@@ -54,9 +54,13 @@ Sono ferme dal **24 agosto** e vanno fatte **in quest'ordine**:
 
 ## Soglie vicine a scattare
 
-- **La suite e' a 4m41s contro il tetto di 5 minuti** scritto piu' sotto. Al
-  superamento si divide in due comandi — uno veloce sempre, uno completo prima del
-  commit — e la decisione e' gia' presa: non si ridiscute e non si convive.
+- ~~**La suite e' a 4m41s contro il tetto di 5 minuti.**~~ **Scattata, e chiusa.**
+  Misurata a **6m40s** (209 passati, 16 saltati), si e' divisa fra i core invece
+  che fra due comandi: `workers: '50%'`, `fullyParallel: false` intatto, e
+  l'attesa torna a **2m13s**. Ragione, numeri e strade scartate in
+  [ADR 021](adr/021-la-suite-si-divide-fra-i-core-non-fra-due-comandi.md); il
+  paragrafo "Se la suite locale supera i 5 minuti" piu' sotto e' aggiornato di
+  conseguenza.
 - **Il bundle e' a 47,9 KB su 60.** Restano 12,1 KB per statistiche, import e
   packaging.
 - **Il disco della macchina di sviluppo e' a 3,0 GB liberi**, in calo costante e
@@ -465,17 +469,38 @@ Entrambe derivate da `lastBackupAt`, **nessun campo nuovo e nessuna migrazione**
 distinzione fra le due soglie e' `lastBackupAt` assente contro presente, che e' gia'
 nel modello.
 
-## Se la suite locale supera i 5 minuti, si divide
-
-Oggi gli e2e sono ~1,9 minuti su una macchina scarica e ~3 in CI. Va bene.
+## Se la suite locale supera i 5 minuti, si divide — successo il 25 agosto
 
 **La soglia e' decisa adesso, cosi' quando succede non si ridiscute**: se la suite
-locale supera i **5 minuti su una macchina scarica**, si divide in due comandi — uno
-veloce che si lancia sempre, uno completo prima del commit.
+locale supera i **5 minuti su una macchina scarica**, si divide.
 
 E' la stessa calibrazione dell'hook `pre-commit`, che esegue solo il typecheck e mai
 la suite: **una verifica abbastanza lenta viene saltata, e una verifica saltata e'
 peggio di una che non esiste** — perche' qualcuno crede che sia girata.
+
+### Com'e' andata
+
+La soglia e' scattata il 25 agosto: **6m40s**, 209 test su quattro progetti.
+L'attesa e' tornata a **2m13s** con `workers: '50%'` e `fullyParallel: false`
+lasciato dov'era. Nessun test rimosso, saltato o spostato: 209 passati e 16
+saltati prima, 209 passati e 16 saltati dopo, in due esecuzioni.
+
+**La forma decisa qui in anticipo era un'altra**, e va detto invece che
+riscritto: *"due comandi — uno veloce che si lancia sempre, uno completo prima
+del commit"*. Non e' quella applicata.
+
+L'argomento di questo paragrafo regge — una verifica lenta viene eseguita di
+meno. La sua **forma** no: "uno veloce e uno completo" sposta il difetto di un
+metro invece di toglierlo, perche' il comando completo diventa il comando che
+nessuno lancia. E la misura diceva che non c'era niente da tagliare: la suite
+occupava **0,63 core su 8**, cioe' aspettava. Si e' diviso il lavoro fra i
+processi, non i test fra due comandi. Tutto in
+[ADR 021](adr/021-la-suite-si-divide-fra-i-core-non-fra-due-comandi.md).
+
+**La prossima volta che il tetto si avvicina, la mossa non e' alzare i worker.**
+Il pavimento e' `ricorrenze.spec.ts` (~53s per progetto, il 40% dell'attesa di
+oggi): e' il blocco piu' grande che nessun worker puo' spezzare, e si abbassa
+dividendo quel file, non aggiungendo processi.
 
 ## Fase 3 — Prerequisiti per condividere
 

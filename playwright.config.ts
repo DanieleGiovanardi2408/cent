@@ -72,8 +72,42 @@ export default defineConfig({
   testDir: 'tests/e2e',
   // Un fallimento di geometria e' quasi sempre vero: ritentare lo nasconde.
   retries: 0,
+  // **Il grano del parallelismo e' il file, non il test.**
+  //
+  // `fullyParallel: false` non e' rimasto per inerzia: e' cio' che decide cosa
+  // un worker non puo' spezzare. I test dentro un file restano in ordine e nello
+  // stesso processo, quindi passare da un worker a piu' worker non cambia niente
+  // di cio' che un file assume su se stesso. Con `true` il grano diventerebbe il
+  // singolo test — piu' veloce di 20 secondi, e in cambio ogni file dovrebbe
+  // essere corretto anche letto a pezzi, che oggi nessuno verifica.
+  //
+  // La misura, su questa macchina (8 core), suite ferma e albero fermo:
+  //
+  //     workers  attesa    somma delle durate   tassa di contesa
+  //     1        6m40s     390,9s               —
+  //     4        2m13s     409,0s               +4,6%
+  //     6        1m56s     455,6s               +16,6%
+  //
+  // Il pavimento e' `ricorrenze.spec.ts`, che vale ~53s per progetto ed e' il
+  // blocco piu' grande che nessun worker puo' dividere: da li' in giu' non si
+  // scende aggiungendo processi. Fra 4 e 6 si comprano 17 secondi e si paga una
+  // tassa di contesa quattro volte piu' alta, cioe' ogni test che si avvicina al
+  // proprio timeout. Non e' lo scambio che vogliamo: il tetto dei 5 minuti
+  // (ROADMAP) e' gia' battuto di tre volte a 4, e "meglio lenta e vera che
+  // veloce e ogni tanto bugiarda" e' la stessa calibrazione dell'hook
+  // `pre-commit`.
+  //
+  // `'50%'` e non `4`: il numero che conta e' **meta' macchina lasciata
+  // libera**, non il quattro. Su un runner con 4 vCPU diventa 2, cioe' meno
+  // parallelo di cio' che e' stato misurato verde qui — la direzione sicura. E
+  // una regola sola vale ovunque, invece di una configurazione locale e una di
+  // CI che devono restare vere in due posti.
+  //
+  // Il resto delle premesse d'ambiente (ADR 013) non e' toccato: fuso, istante,
+  // lingua, font e movimento sono per contesto, e i contesti restano isolati
+  // uno per test come prima.
   fullyParallel: false,
-  workers: 1,
+  workers: '50%',
   reporter: process.env['CI'] ? 'github' : 'list',
   // La lingua e' **dichiarata**, non ereditata dal browser.
   //
