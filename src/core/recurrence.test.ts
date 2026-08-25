@@ -6,6 +6,7 @@ import {
   buildOccurrenceIndex,
   materializeRecurring,
   nextOccurrenceOnOrAfter,
+  occupiedOccurrenceDates,
   occurrencesBetween,
   recurringExpenseId,
   validateRule,
@@ -174,15 +175,8 @@ describe('confini della regola', () => {
     expect(nextOccurrenceOnOrAfter(rule, '2026-01-01')).toBe('2026-05-10')
   })
 
-  it('si ferma a endDate', () => {
-    const rule = makeRule({ startDate: '2026-05-01', endDate: '2026-05-03', cadence: 'daily' })
-    expect(occurrencesBetween(rule, '2026-05-01', '2026-12-31')).toEqual([
-      '2026-05-01',
-      '2026-05-02',
-      '2026-05-03',
-    ])
-    expect(nextOccurrenceOnOrAfter(rule, '2026-05-04')).toBeNull()
-  })
+  // C'era "si ferma a endDate", ed e' andato via con il campo: una regola non
+  // finisce piu'. Torna con lui, in fase 7, insieme al suo campo di input.
 
   it('finestra vuota o invertita restituisce nessuna occorrenza', () => {
     const rule = makeRule({ startDate: '2026-05-01', cadence: 'daily' })
@@ -192,9 +186,6 @@ describe('confini della regola', () => {
   it('validateRule segnala le regole impossibili', () => {
     expect(validateRule(makeRule({ startDate: '2026-01-01', interval: 0 }))).toContain('interval')
     expect(validateRule(makeRule({ startDate: '2026-01-01', anchorDay: 32 }))).toContain('anchorDay')
-    expect(
-      validateRule(makeRule({ startDate: '2026-05-01', endDate: '2026-04-01' })),
-    ).toContain('endDate')
     expect(validateRule(makeRule({ startDate: '2026-01-01' }))).toBeNull()
   })
 
@@ -414,6 +405,64 @@ describe('identita deterministica (ADR 006)', () => {
     // Due spese il 5 settembre: quella di agosto pagata tardi e quella di
     // settembre. E' esattamente cio' che l'utente ha pagato.
     expect(h.disk.expenses.filter((e) => e.date === '2026-09-05')).toHaveLength(2)
+  })
+})
+
+describe('occupiedOccurrenceDates: cio che il calendario non deve piu annunciare', () => {
+  it('guarda l id, non `date`: una occorrenza spostata a mano resta occupata dov era', () => {
+    // E' la stessa scelta di `buildOccurrenceIndex`, e la stessa ragione: chi
+    // paga l affitto di agosto in ritardo e sposta la spesa al 5 settembre non
+    // deve vedersi riproporre il 1 agosto. Un insieme costruito su `date`
+    // direbbe libero il 1 agosto e occupato il 5 settembre: sbagliato due volte.
+    const spostata = makeExpense({
+      id: recurringExpenseId('r1', '2026-08-01'),
+      date: '2026-09-05',
+      source: 'recurring',
+      recurringId: 'r1',
+    })
+    const occupate = occupiedOccurrenceDates('r1', [spostata])
+    expect(occupate.has('2026-08-01')).toBe(true)
+    expect(occupate.has('2026-09-05')).toBe(false)
+  })
+
+  it('le lapidi occupano: una spesa cancellata non e un giorno libero', () => {
+    // Il record esiste, tiene il suo id, `add` lo salta. Contarlo fra i nuovi
+    // significherebbe promettere una riga che non comparira'.
+    const lapide = makeExpense({
+      id: recurringExpenseId('r1', '2026-08-01'),
+      date: '2026-08-01',
+      source: 'recurring',
+      recurringId: 'r1',
+      deletedAt: '2026-08-02T10:00:00.000Z',
+    })
+    expect(occupiedOccurrenceDates('r1', [lapide]).has('2026-08-01')).toBe(true)
+  })
+
+  it('le spese manuali e quelle di altre regole non occupano niente', () => {
+    const manuale = makeExpense({ date: '2026-08-01' })
+    const altraRegola = makeExpense({
+      id: recurringExpenseId('r2', '2026-08-01'),
+      date: '2026-08-01',
+      source: 'recurring',
+      recurringId: 'r2',
+    })
+    expect(occupiedOccurrenceDates('r1', [manuale, altraRegola]).size).toBe(0)
+  })
+
+  it('e esattamente il predicato che il motore applica prima di scrivere', () => {
+    // La proprieta' che rende il numero annunciato uguale al numero scritto: le
+    // due difese non sono due elenchi da tenere allineati a mano, sono la stessa
+    // domanda fatta da due lati.
+    const spese = [
+      makeExpense({ id: recurringExpenseId('r1', '2026-08-01'), date: '2026-08-01', source: 'recurring', recurringId: 'r1' }),
+      makeExpense({ id: recurringExpenseId('r1', '2026-08-02'), date: '2026-01-01', source: 'recurring', recurringId: 'r1' }),
+      makeExpense({ date: '2026-08-03' }),
+    ]
+    const indice = buildOccurrenceIndex(spese)
+    const occupate = occupiedOccurrenceDates('r1', spese)
+    for (const giorno of ['2026-08-01', '2026-08-02', '2026-08-03', '2026-01-01']) {
+      expect(occupate.has(giorno)).toBe(indice.has(recurringExpenseId('r1', giorno)))
+    }
   })
 })
 
@@ -838,15 +887,9 @@ describe('materializzazione: regole ignorate', () => {
     expect(h.disk.recurringRules[0]?.lastMaterializedDate).toBeUndefined()
   })
 
-  it('una regola scaduta si ferma a endDate e non riparte piu', async () => {
-    const h = harness([
-      makeRule({ startDate: '2026-08-01', endDate: '2026-08-03', cadence: 'daily' }),
-    ])
-    await h.run('2026-08-20')
-    expect(h.disk.expenses).toHaveLength(3)
-    expect(h.disk.recurringRules[0]?.lastMaterializedDate).toBe('2026-08-03')
-    expect(await h.run('2026-09-20')).toBe(0)
-  })
+  // C'era "una regola scaduta si ferma a endDate e non riparte piu". Una regola
+  // scaduta non esiste piu': `endDate` aveva zero produttori ed e' stata tolta.
+  // Il test torna con il campo, in fase 7.
 
   it('la spesa generata porta importo e categoria della regola, e nessuna nota', () => {
     // La nota **non** c e: una regola non ne ha piu una, perche non esisteva

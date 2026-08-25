@@ -611,6 +611,52 @@ casuale.
 
 ## Compiti espliciti della fase 7
 
+### La data del backup nella conferma, e `ImportPreview.exportedAt`
+
+L'import mostrera' cosa entra, ma deve dire anche cosa **esce**, con la data del
+file che si sta importando:
+
+> «Le spese registrate dopo il 3 agosto non esistono piu', e quelle che avevi
+> cancellato dopo quella data torneranno.»
+
+La seconda meta' non e' un dettaglio: `importBackup` fa `replaceAll` e `buildBackup`
+include le lapidi, quindi una spesa cancellata **dopo** il backup torna viva. E' la
+parte che nessuno si aspetta, ed e' stata **verificata**, non supposta.
+
+Serve `ImportPreview.exportedAt: Timestamp | null` — oggi `buildBackup` scrive la
+data e `parseBackup` la **butta via** in lettura. `null` quando il file non ce l'ha:
+in quel caso la riga si scrive **senza data**, non con una inventata.
+
+Le due stringhe **non** sono state aggiunte in fase 5, di proposito: sarebbero state
+chiavi vive nel codice e morte nei fatti, cioe' `history.blank.install` un'altra
+volta. Arrivano insieme al dialogo che le mostra.
+
+### `RecurringRule.endDate` torna, col suo campo di input
+
+Tagliata in fase 5 per **zero produttori**: nessun foglio la scriveva, la scriveva
+solo `parseBackup` — quindi con zero produttori **nemmeno un backup poteva
+contenerla**, e anche quel supporto era morto. Quindici rami raggiungibili solo da
+un JSON scritto a mano.
+
+Non e' stata tagliata perche' l'idea sia sbagliata: **e' una funzione che questo
+prodotto vuole davvero.** Le spese fisse di un Erasmus **finiscono tutte** — la
+palestra a giugno, il tram ad agosto, l'affitto quando finisce il contratto. Una
+regola senza fine costringe a ricordarsi di disattivarla, cioe' a fare a mano una
+cosa che la data sapeva gia'.
+
+Torna **col suo campo di input, nello stesso commit**, come dice la regola: *un
+campo si spedisce insieme al suo produttore, o non si spedisce.* Cancellare del
+codice non e' cancellare un'intenzione, purche' l'intenzione sia scritta dove si
+rilegge.
+
+**Torna anche con le sue parole.** Sono uscite dai due dizionari insieme al campo,
+e non sono rimaste in attesa: `fixed.ended` (*"finita: {day}"*, il terzo motivo per
+cui una riga dell'elenco non pesa sul mese) e `rule.preview.done` (*"Questa spesa
+fissa e' finita: non creera' altre spese."*, il ramo `nextDate === null` di
+`settledText`). Tenerle vive sarebbe stato `history.blank.install` per la terza
+volta: chiavi vive nel codice e morte nei fatti. Rientrano insieme ai due rami che
+le leggono.
+
 ### L'anteprima dell'import non deve contare i record cancellati
 
 L'export contiene i record con `deletedAt` — nel primo backup reale erano **3 su

@@ -535,6 +535,14 @@ test.describe('la Home non salta, senza budget e senza spese', () => {
     // confronto: senza guscio da confrontare il gate sarebbe verde per assenza
     // di misura, che e' il modo peggiore in cui un test puo' passare.
     expect(m.firstHero, 'al primo frame il numero grande non e\' nel DOM').not.toBeNull()
+    // **E al primo frame era ancora vuoto.** Senza questa riga il gate confronta
+    // due geometrie che possono essere entrambe quelle *coi dati*: basta che il
+    // primo frame utile cada dopo l'arrivo del repository e il confronto diventa
+    // una tautologia, verde qualunque cosa succeda alla riserva d'altezza. La
+    // premessa non e' teorica — ADR 021 ha appena messo quattro processi sotto
+    // la stessa macchina, e un `firstHero.at` fra 1.500 e 2.200 ms e'
+    // esattamente il tipo di misura che comincia a lampeggiare a 4 vCPU.
+    expect(m.firstHero?.text, 'al primo frame i dati erano gia\' arrivati').toBe('')
     expect(m.fontAtFirstFrame, 'il font dichiarato non era pronto al primo frame').toBe(true)
     expect(
       drift(m.firstGeometry, m.finalGeometry),
@@ -560,6 +568,14 @@ test.describe('la Home non salta, con budget e 5.000 spese, sforando', () => {
     racconta(testInfo.project.name, 'home con budget e 5.000 spese', m)
 
     expect(m.firstHero, 'al primo frame il numero grande non e\' nel DOM').not.toBeNull()
+    // **E al primo frame era ancora vuoto.** Senza questa riga il gate confronta
+    // due geometrie che possono essere entrambe quelle *coi dati*: basta che il
+    // primo frame utile cada dopo l'arrivo del repository e il confronto diventa
+    // una tautologia, verde qualunque cosa succeda alla riserva d'altezza. La
+    // premessa non e' teorica — ADR 021 ha appena messo quattro processi sotto
+    // la stessa macchina, e un `firstHero.at` fra 1.500 e 2.200 ms e'
+    // esattamente il tipo di misura che comincia a lampeggiare a 4 vCPU.
+    expect(m.firstHero?.text, 'al primo frame i dati erano gia\' arrivati').toBe('')
     expect(m.fontAtFirstFrame, 'il font dichiarato non era pronto al primo frame').toBe(true)
     expect(
       drift(m.firstGeometry, m.finalGeometry),
@@ -658,6 +674,14 @@ test.describe('a 320 punti la Home non salta lo stesso', () => {
     racconta('320x568', 'home con budget', m)
 
     expect(m.firstHero, 'al primo frame il numero grande non e\' nel DOM').not.toBeNull()
+    // **E al primo frame era ancora vuoto.** Senza questa riga il gate confronta
+    // due geometrie che possono essere entrambe quelle *coi dati*: basta che il
+    // primo frame utile cada dopo l'arrivo del repository e il confronto diventa
+    // una tautologia, verde qualunque cosa succeda alla riserva d'altezza. La
+    // premessa non e' teorica — ADR 021 ha appena messo quattro processi sotto
+    // la stessa macchina, e un `firstHero.at` fra 1.500 e 2.200 ms e'
+    // esattamente il tipo di misura che comincia a lampeggiare a 4 vCPU.
+    expect(m.firstHero?.text, 'al primo frame i dati erano gia\' arrivati').toBe('')
     expect(m.fontAtFirstFrame, 'il font dichiarato non era pronto al primo frame').toBe(true)
     expect(
       drift(m.firstGeometry, m.finalGeometry),
@@ -914,6 +938,14 @@ test.describe('la Home con un budget nato a meta settimana', () => {
     racconta(testInfo.project.name, 'home con budget nato a meta settimana', m)
 
     expect(m.firstHero, 'al primo frame il numero grande non e\' nel DOM').not.toBeNull()
+    // **E al primo frame era ancora vuoto.** Senza questa riga il gate confronta
+    // due geometrie che possono essere entrambe quelle *coi dati*: basta che il
+    // primo frame utile cada dopo l'arrivo del repository e il confronto diventa
+    // una tautologia, verde qualunque cosa succeda alla riserva d'altezza. La
+    // premessa non e' teorica — ADR 021 ha appena messo quattro processi sotto
+    // la stessa macchina, e un `firstHero.at` fra 1.500 e 2.200 ms e'
+    // esattamente il tipo di misura che comincia a lampeggiare a 4 vCPU.
+    expect(m.firstHero?.text, 'al primo frame i dati erano gia\' arrivati').toBe('')
     expect(m.fontAtFirstFrame, 'il font dichiarato non era pronto al primo frame').toBe(true)
     expect(
       drift(m.firstGeometry, m.finalGeometry),
@@ -990,6 +1022,14 @@ test.describe('la Home con la lingua scelta diversa da quella del telefono', () 
     racconta(testInfo.project.name, 'home con lingua scelta ≠ rilevata', m)
 
     expect(m.firstHero, 'al primo frame il numero grande non e\' nel DOM').not.toBeNull()
+    // **E al primo frame era ancora vuoto.** Senza questa riga il gate confronta
+    // due geometrie che possono essere entrambe quelle *coi dati*: basta che il
+    // primo frame utile cada dopo l'arrivo del repository e il confronto diventa
+    // una tautologia, verde qualunque cosa succeda alla riserva d'altezza. La
+    // premessa non e' teorica — ADR 021 ha appena messo quattro processi sotto
+    // la stessa macchina, e un `firstHero.at` fra 1.500 e 2.200 ms e'
+    // esattamente il tipo di misura che comincia a lampeggiare a 4 vCPU.
+    expect(m.firstHero?.text, 'al primo frame i dati erano gia\' arrivati').toBe('')
     expect(m.fontAtFirstFrame, 'il font dichiarato non era pronto al primo frame').toBe(true)
     expect(
       drift(m.firstGeometry, m.finalGeometry),
@@ -1102,6 +1142,14 @@ test.describe('il promemoria di backup compare senza far saltare la Home', () =>
     racconta(testInfo.project.name, 'home + promemoria di backup', m)
 
     expect(m.firstHero, 'al primo frame il numero grande non e\' nel DOM').not.toBeNull()
+    // **E al primo frame era ancora vuoto.** Senza questa riga il gate confronta
+    // due geometrie che possono essere entrambe quelle *coi dati*: basta che il
+    // primo frame utile cada dopo l'arrivo del repository e il confronto diventa
+    // una tautologia, verde qualunque cosa succeda alla riserva d'altezza. La
+    // premessa non e' teorica — ADR 021 ha appena messo quattro processi sotto
+    // la stessa macchina, e un `firstHero.at` fra 1.500 e 2.200 ms e'
+    // esattamente il tipo di misura che comincia a lampeggiare a 4 vCPU.
+    expect(m.firstHero?.text, 'al primo frame i dati erano gia\' arrivati').toBe('')
     expect(m.fontAtFirstFrame, 'il font dichiarato non era pronto al primo frame').toBe(true)
     expect(
       drift(m.firstGeometry, m.finalGeometry),

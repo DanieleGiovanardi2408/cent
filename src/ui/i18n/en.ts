@@ -297,7 +297,7 @@ export const en: Record<keyof typeof it, string> = {
     'This only takes it off the grid: it stays on every expense that used it, and you keep seeing it in History.',
   'cat.delete': 'Delete for good',
   'cat.delete.note':
-    'Nothing uses it — not one expense, not even a deleted one. This is the only thing in Cent you cannot undo.',
+    'Nothing you can see uses it: no expense, no fixed cost, no budget. This is the only thing in Cent you cannot undo.',
   'pick.current': 'Current',
   'cat.emoji.current': 'The marked emoji is the one this category has now: it is not in the list.',
   'cat.color.current': 'The marked colour is the one this category has now: it is not in the palette.',
@@ -310,9 +310,7 @@ export const en: Record<keyof typeof it, string> = {
   'cat.inUse.both': '{a} and {b}',
   'cat.inUse.three': '{a}, {b} and {c}',
   'cat.inUse.text':
-    'Used by {what}: deleting it would leave those rows with no name, so it cannot go. Archiving does what you need — off the grid, History untouched.',
-  'cat.deletedOnly.text':
-    'Nothing you can see uses it, but expenses you deleted still do — and a deleted expense can come back. Archive it instead: off the grid, and nothing is lost.',
+    'Used by {what}. Deleting it would turn those rows into “{removed}” for good, and nothing can give them a category back. Archive it instead: off the grid, History untouched.',
   'cat.preview': 'How the grid will look',
   'cat.position': 'Position {index} of {total}',
   'cat.move.back': 'Move back',
@@ -369,8 +367,8 @@ export const en: Record<keyof typeof it, string> = {
   'fixed.add': 'Add a fixed cost',
   'fixed.list': 'Your fixed costs',
   'fixed.later': 'starts: {day}',
-  'fixed.ended': 'ended: {day}',
   'fixed.off': 'off',
+  'fixed.anchor': '{every}, on day {day}',
 
   'cad.daily.one': 'every day',
   'cad.daily.other': 'every {count} days',
@@ -397,6 +395,8 @@ export const en: Record<keyof typeof it, string> = {
   'rule.start.today': 'Today',
   'rule.start.pick': 'Pick the day it starts from',
   'rule.start.other': 'Another date',
+  'rule.anchor.day': 'Every month, on day {day}',
+  'rule.anchor.pick': 'Change the day of the month it goes out',
 
   'rule.preview.today': 'First expense: today.',
   'rule.preview.later': 'First expense: {day}.',
@@ -411,7 +411,6 @@ export const en: Record<keyof typeof it, string> = {
   'rule.save.edit': 'Save',
   'rule.save.on': 'Switch back on',
   'rule.preview.settled': 'There is nothing to catch up on.',
-  'rule.preview.done': 'This fixed cost is over: it will create no more expenses.',
 
   'rule.refused.stale':
     'Those numbers were from {day}: midnight changed them. I have redone them below — check and confirm.',

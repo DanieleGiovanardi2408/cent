@@ -22,7 +22,7 @@
  *    spostare indietro la data d'inizio, e le parole dei quattro no.
  */
 
-import { isAfter, isBefore } from '../core/date'
+import { isBefore } from '../core/date'
 import type { IsoDate } from '../core/date'
 import type { Cents } from '../core/money'
 import { monthlyCostCents, monthlyFixedCosts } from '../core/recurring-plan'
@@ -44,7 +44,7 @@ export interface FixedLine {
   readonly rule: RecurringRule
   /**
    * Il costo mensile normalizzato, oppure `null` se questa regola **non e' nel
-   * totale**: non e' ancora cominciata, e' finita, o e' spenta.
+   * totale**: non e' ancora cominciata, oppure e' spenta.
    *
    * `null` non e' zero, ed e' la differenza che la schermata deve poter dire:
    * una riga da `0,00 €` accanto a "Affitto" e' un numero sbagliato con l'aria
@@ -116,29 +116,50 @@ export function fixedList(rules: readonly RecurringRule[], onDate: IsoDate): Fix
 }
 
 /**
- * Perche' questa regola non pesa sul mese. Tre motivi, in ordine di quanto
- * capitano; il quarto — record non valido — non ha una parola sua di proposito:
+ * Perche' questa regola non pesa sul mese. **Due motivi**, in ordine di quanto
+ * capitano; il terzo — record non valido — non ha una parola sua di proposito:
  * dire "regola non valida" a chi non l'ha scritta a mano non aiuta nessuno, e
  * la riga si legge comunque per intero (importo, cadenza, data d'inizio).
  *
- * "Spenta" viene per prima perche' e' l'unica delle tre che si cambia con un
- * tap: una regola disattivata e una finita si assomigliano nell'elenco, ma
- * della seconda non c'e' niente da fare e della prima si'.
+ * Erano tre. Il terzo era "finita", e se n'e' andato con `endDate`: **una regola
+ * non finisce piu'**, quindi non c'e' nessuno stato da nominare. La parola
+ * (`fixed.ended`) e' uscita dai dizionari insieme al ramo — non e' rimasta in
+ * attesa della fase 7, perche' una chiave viva nel codice e morta nei fatti e'
+ * esattamente cio' che questo progetto ha gia' pagato una volta.
+ *
+ * "Spenta" viene per prima perche' e' l'unica delle due che si cambia con un
+ * tap.
  */
 function asideFor(rule: RecurringRule, onDate: IsoDate): string | null {
   if (!rule.active) return t('fixed.off')
   if (isBefore(onDate, rule.startDate)) {
     return t('fixed.later', { day: fullDayLabel(rule.startDate, onDate) })
   }
-  if (rule.endDate !== undefined && isAfter(onDate, rule.endDate)) {
-    return t('fixed.ended', { day: fullDayLabel(rule.endDate, onDate) })
-  }
   return null
 }
 
-/** La riga sotto il nome: `ogni mese · 900,00 €`. */
+/**
+ * La riga sotto il nome: `ogni mese, il giorno 25 · 900,00 €`.
+ *
+ * ## Il giorno del mese sta qui, e non e' un ornamento
+ *
+ * Su una mensile la cadenza da sola dice *"ogni mese"* e tace **quale giorno**,
+ * che e' l'unica cosa che decide quando escono i soldi. Finche' l'ancora si
+ * derivava da `startDate` la si poteva leggere altrove; da quando il rewind le
+ * separa, una regola riportata al 1 febbraio si legge "ogni mese" e continua a
+ * pagare il 25 — un numero che governa i soldi e che nessuna schermata cita.
+ *
+ * Solo sulle mensili, perche' solo li' esiste: una settimanale non ha
+ * un'ancora, e inventarle un giorno sarebbe peggio che tacerlo.
+ */
 export function fixedLineNote(rule: RecurringRule): string {
-  const every = cadencePhrase(rule.cadence, rule.interval)
+  const every =
+    rule.cadence === 'monthly'
+      ? t('fixed.anchor', {
+          every: cadencePhrase(rule.cadence, rule.interval),
+          day: rule.anchorDay,
+        })
+      : cadencePhrase(rule.cadence, rule.interval)
   // L'importo si ripete accanto alla cadenza **solo quando il numero a destra
   // e' un altro numero**: per una mensile da 900 la colonna dice gia' 900, e
   // scriverlo due volte sulla stessa riga fa dubitare che siano la stessa cosa.
@@ -236,10 +257,7 @@ function plainSave(mode: RuleMode): string {
  * passato e la frase "Prima spesa: 1 gennaio" sarebbe falsa — quella spesa
  * esiste gia' nello Storico da mesi.
  *
- * Su una regola **finita** (`nextDate` e' `null` a sua volta) vuol dire che non
- * ce ne saranno altre, e nessuna delle due frasi sopra lo dice.
- *
- * Le quattro frasi stanno in `settledText`, con la ragione di ognuna.
+ * Le tre frasi stanno in `settledText`, con la ragione di ognuna.
  */
 /**
  * La frase quando non c'e' nessun arretrato da dichiarare: quattro fatti
@@ -260,23 +278,30 @@ function plainSave(mode: RuleMode): string {
  * funzione che la materializzazione esegue davvero. Non c'e' piu' una data
  * costruita qui, quindi non c'e' piu' un ripiego da tenere onesto.
  *
- * ## I quattro rami
+ * ## I tre rami
  *
  * 1. **C'e' qualcosa nella finestra** (`firstDate !== null`). Senza arretrato la
  *    finestra chiude a oggi e non comincia prima, quindi quel giorno **e'**
  *    oggi: non serve una data, serve la parola.
- * 2. **La regola e' finita** (`nextDate === null`): `endDate` e' passata e non
- *    esiste nessuna occorrenza futura. Qui "Prima spesa: ..." non ha una forma
- *    vera, perche' non c'e' un giorno da scriverci dentro.
- * 3. **E' in pari** (c'e' il segnaposto): `count: 0` vuol dire "niente da
+ * 2. **E' in pari** (c'e' il segnaposto): `count: 0` vuol dire "niente da
  *    recuperare", non "parte piu' avanti". Dirle la data della prossima
  *    annuncerebbe come "prima" una spesa che sta nello Storico da mesi.
- * 4. **Comincia piu' avanti**: la finestra e' vuota perche' la regola non e'
+ * 3. **Comincia piu' avanti**: la finestra e' vuota perche' la regola non e'
  *    ancora partita, e la prima spesa e' `nextDate`.
  *
- * L'ordine fra 2 e 3 non e' indifferente: una regola finita **e** in pari cade
- * in tutti e due, e "non c'e' niente da recuperare" tacerebbe il fatto piu'
- * grosso — che non creera' mai piu' niente. Il fatto piu' grande per primo.
+ * ## Ce n'era un quarto, ed e' uscito con `endDate`
+ *
+ * Era *"questa spesa fissa e' finita"*, sul ramo `nextDate === null`. **Da
+ * quando una regola non finisce piu', quel giorno non esiste**: `nextDate` non
+ * e' mai `null`, e la sua parola (`rule.preview.done`) e' uscita dai dizionari
+ * insieme al ramo invece di restare a aspettare la fase 7.
+ *
+ * Il tipo continua a prevedere il `null` — e' la risposta giusta il giorno in
+ * cui la scadenza torna — quindi va **consumato**, non ignorato. Cade insieme
+ * a "e' in pari": senza una prossima occorrenza non c'e' niente da recuperare,
+ * che e' vero anche li'. Il giorno in cui la fase 7 riporta `endDate`, questo
+ * ramo torna a essere una frase sua: sta scritto in `docs/ROADMAP.md`, non in
+ * un ramo tenuto in vita per un caso irraggiungibile.
  */
 function settledText(
   preview: MaterializationPreview,
@@ -284,8 +309,9 @@ function settledText(
   today: IsoDate,
 ): string {
   if (preview.firstDate !== null) return t('rule.preview.today')
-  if (preview.nextDate === null) return t('rule.preview.done')
-  if (draft.lastMaterializedDate !== undefined) return t('rule.preview.settled')
+  if (draft.lastMaterializedDate !== undefined || preview.nextDate === null) {
+    return t('rule.preview.settled')
+  }
   return t('rule.preview.later', { day: fullDayLabel(preview.nextDate, today) })
 }
 
@@ -403,10 +429,11 @@ export function deletionRefusalText(deletion: RecurringRuleDeletion): string | n
  * si chiama. Cambiare solo la categoria non deve costare una riscrittura del
  * calendario — e' esattamente la divisione che ADR 017 mette fra le due porte.
  *
- * Guarda anche i campi che il foglio non mostra (`anchorDay`, `endDate`): sono
- * dentro `ruleShape`, quindi una bozza che li perdesse per strada li
- * cancellerebbe dal record. Confrontarli qui vuol dire che quella differenza,
- * se mai comparisse, si vede come un cambio invece che come una perdita.
+ * Guarda anche `anchorDay`, che dalla fase 5 il foglio mostra **e** lascia
+ * cambiare (vedi `RuleSheet`, il selettore del giorno del mese): e' dentro
+ * `ruleShape`, quindi una bozza che lo perdesse per strada lo cancellerebbe dal
+ * record, e una bozza che lo cambia deve passare dalla porta con il pedaggio —
+ * spostare il giorno del mese sposta ogni occorrenza futura.
  *
  * `lastMaterializedDate` **non** si guarda: non e' un campo che si modifica, e'
  * il segnaposto del motore, e la scrittura non lo tocca.
@@ -417,8 +444,7 @@ export function calendarChanged(rule: RecurringRule, draft: RecurrenceDraft): bo
     rule.cadence !== draft.cadence ||
     rule.interval !== draft.interval ||
     rule.startDate !== draft.startDate ||
-    rule.anchorDay !== draft.anchorDay ||
-    rule.endDate !== draft.endDate
+    rule.anchorDay !== draft.anchorDay
   )
 }
 
@@ -462,7 +488,6 @@ export function rewindDraft(rule: RecurringRule, startDate: IsoDate): Recurrence
     amountCents: rule.amountCents,
     interval: rule.interval,
     startDate,
-    ...(rule.endDate !== undefined ? { endDate: rule.endDate } : {}),
   }
   // Cadenza e ancora nella stessa espressione (ADR 020): il giorno del mese e'
   // quello **scritto nel record** e non si ricava dalla data nuova. Spostare la

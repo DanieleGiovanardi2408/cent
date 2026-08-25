@@ -540,7 +540,7 @@ E' successo tre volte in due giorni, sempre nella stessa forma:
 Il costo di sbagliare il livello di generalita' non e' un difetto: e' **un difetto
 che si crede gia' corretto**, ed e' per questo che non lo cerca nessuno.
 
-## Nessun messaggio cita un numero che l'utente non puo' vedere
+## Nessun messaggio afferma un fatto che l'utente non puo' verificare
 Se un messaggio dice *"la usano 8 spese"*, quelle otto devono essere raggiungibili
 da qualche schermata. Un numero che non si puo' riconciliare con lo schermo non
 informa: **lascia l'utente davanti a un rifiuto che non puo' verificare**, e da li'
@@ -554,6 +554,83 @@ citando un numero di spese che nello Storico **non si vedono**.
 E' la stessa malattia, in scala ridotta, del messaggio *"Non c'e' niente da
 recuperare"* mostrato mentre otto spese non venivano create: **un messaggio che
 afferma qualcosa che lo schermo non conferma.**
+
+### Il titolo diceva "un numero", e il numero era solo il caso visto per primo
+La regola e' nata guardando `expenses: N`, quindi parlava di numeri. Poi
+`planCategoryDeletion` ha ricevuto un esito `deleted-only` **senza nessun numero**
+— tolto dal tipo, non per disciplina — e la frase e' rimasta lo stesso
+inverificabile: *"la usano delle spese che hai cancellato"*, davanti a uno Storico
+dove quelle spese non ci sono e non c'e' modo di andarle a vedere.
+
+Togliere il numero aveva soddisfatto **la lettera**. L'argomento diceva *"lascia
+l'utente davanti a un rifiuto che non puo' verificare"*, e quello vale identico per
+un'affermazione senza cifre.
+
+**Il criterio e' sul fatto, non sulla sua forma numerica.**
+
+## Un argomento spostato di contesto va ri-derivato, non copiato
+*"Si annuncia piu' di quanto si fa"* e' una scelta giusta quando copre una
+**corsa**: fra l'anteprima e la conferma qualcosa puo' cambiare, e sbagliare per
+eccesso e' il verso sicuro.
+
+Lo stesso argomento e' stato copiato sul rewind, dove copre una **certezza**: il
+rewind esiste solo per regole gia' materializzate, quindi la sovrapposizione fra la
+finestra e cio' che e' gia' a disco e' **≥ 1 sempre, per costruzione**. Il numero
+non era sbagliato a volte: era gonfiato **ogni volta**, esattamente del numero di
+occorrenze gia' esistenti. Il pannello annunciava sette spese e 6.300 €, ne
+nascevano quattro, e nello Storico se ne vedevano sei per 5.420 €.
+
+E il numero esatto non e' solo piu' onesto, **e' quello che serve**: sette e 6.300
+sono l'ampiezza del calendario; cio' che l'utente sta per fare alla propria storia
+e' **+4 spese e +3.600 €**. La prima coppia non risponde a nessuna domanda che si
+stia facendo.
+
+E' "una decisione vale dove vale il suo argomento" applicata al **trasloco** invece
+che al tempo: la stessa frase, in una stanza diversa, puo' essere falsa.
+
+### Il test che difendeva il difetto era la parte piu' pericolosa
+`ricorrenze.spec.ts` asseriva **otto** annunciate e **sette** a schermo nello stesso
+test, con un commento che spiegava perche' la discrepanza andasse bene. Un test che
+codifica un difetto non lo nasconde soltanto: e' **l'artefatto che domani ne
+giustifica la reintroduzione**. Si ripara il test **prima** del codice, e il
+commento si toglie.
+
+## Le regole non bastano scritte: due si meccanizzano, la terza si struttura
+La fase 5 ha prodotto, contate a fine fase:
+
+- **cinque** occorrenze di *"regola scritta e non applicata"* — l'ultima e'
+  `endDate`, che era `note` con quindici lettori invece di tre, **tre giorni dopo**
+  che la regola sui produttori era stata scritta;
+- **tre** occorrenze di *"irraggiungibile dichiarato troppo presto"*;
+- **sei** test che passavano per il motivo sbagliato.
+
+Non e' disattenzione, ed e' per questo che **aggiungere un'altra regola scritta non
+servirebbe a niente**: il difetto e' che le regole di questo progetto **vivono in
+documenti e vengono applicate a memoria**. Chi le scrive e' la stessa entita' che
+deve ricordarsene, in una sessione diversa, tre giorni dopo.
+
+### A. Campi senza produttore — `scripts/audit.mjs`, in CI
+Per ogni campo dei tipi in `src/core/types.ts`: esiste una scrittura che **non** sia
+`parseBackup`, una migrazione o un test? Se no il campo e' morto, l'audit esce con
+errore e stampa **i lettori che tiene in vita**.
+
+Avrebbe preso `note` prima che lo trovassimo, e `endDate` tre giorni fa.
+
+### B. Chiavi i18n senza lettore raggiungibile — stesso script, stessa CI
+Ogni chiave dei due dizionari ha almeno un lettore? Avrebbe preso
+`history.blank.install` e `rule.preview.done`, e avrebbe **impedito** i due che
+stavamo per aggiungere per un dialogo d'import che non esiste.
+
+### C. Una dichiarazione di irraggiungibilita' enumera gli scrittori, o non vale
+La terza classe non si meccanizza, ma si struttura: **un commento o una ADR che dice
+"non puo' succedere" senza l'elenco di chi potrebbe scrivere quello stato va
+trattato come non dichiarato.** E' controllabile a occhio, e sposta il lavoro **dal
+ricordare al leggere**.
+
+I tre casi che l'hanno prodotta: *"un selettore sarebbe l'unico ingresso a questo
+ramo"* (falso gia' quando fu scritto), *"questo stato e' irraggiungibile"* su un
+ramo che il rewind avrebbe reso raggiungibile il giorno dopo, e
+`history.blank.install`.
 
 ## Dopo una correzione, la verifica si riesegue — non si deduce
 Il posto piu' probabile in cui trovare il prossimo difetto e' **dentro la

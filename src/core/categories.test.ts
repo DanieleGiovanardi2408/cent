@@ -264,24 +264,32 @@ describe('cancellare davvero: solo se nessuno la nomina', () => {
     })
   })
 
-  it('sole lapidi: si rifiuta con deleted-only, e non c e nessun numero da mostrare', () => {
-    // Tutto cio' che blocca e' invisibile, quindi l'esito non porta cifre: il
-    // numero delle lapidi non e' raggiungibile da nessuna schermata, e un tipo
-    // senza quel campo e' l'unico modo perche' nessuna copia possa citarlo.
+  it('sole lapidi: si cancella, perche la riga che tornerebbe non e rotta', () => {
+    // Prima qui c'era un rifiuto (`deleted-only`), e l'argomento era che la
+    // spesa ripristinata avrebbe avuto un `categoryId` orfano — *"non un orfano
+    // inerte: una riga rotta e visibile"*.
+    //
+    // L'argomento era falso. Tutti e quattro i posti che mostrano la categoria
+    // di una spesa — `ExpenseRow`, `ExpenseActions`, `AmountSheet`,
+    // `FixedCosts` — hanno gia' `category?.name ?? t('row.categoryRemoved')`, e
+    // quel ramo e' gia' raggiungibile: `parseBackup` importa di proposito le
+    // spese orfane, con un avviso.
+    //
+    // Quindi la cosa da togliere era il rifiuto, non il numero dentro la frase:
+    // *"ci sono spese cancellate che la usano"* resta un fatto che l'utente non
+    // puo' verificare anche senza cifre.
     const spese = [
       makeExpense({ date: '2026-08-01', categoryId: 'c-4', deletedAt: '2026-08-01T10:00:00.000Z' }),
       makeExpense({ date: '2026-08-02', categoryId: 'c-4', deletedAt: '2026-08-02T10:00:00.000Z' }),
     ]
     const esito = planCategoryDeletion(cats, spese, [], [], { id: 'c-4' })
-    expect(esito).toEqual({ ok: false, reason: 'deleted-only' })
-    // Nessun conteggio, nemmeno nascosto: le chiavi sono due e sono queste.
-    expect(Object.keys(esito).sort()).toEqual(['ok', 'reason'])
+    expect(esito.ok).toBe(true)
+    expect(esito.ok === true && esito.deleted.id).toBe('c-4')
   })
 
-  it('caso misto: 1 viva e 2 lapidi danno in-use con 1, non deleted-only', () => {
-    // La mossa alternativa — consentire la cancellazione quando sono tutte
-    // lapidi — non regge qui: con una viva e due lapidi direbbe ancora "3"
-    // davanti a uno Storico che ne mostra una.
+  it('caso misto: 1 viva e 2 lapidi danno in-use con 1, cioe il numero che lo Storico mostra', () => {
+    // Il rifiuto resta dove c'e' qualcosa di visibile, e cita **uno**, non tre:
+    // il numero delle lapidi non e' riconciliabile con nessuna schermata.
     const spese = [
       makeExpense({ date: '2026-08-01', categoryId: 'c-4' }),
       makeExpense({ date: '2026-08-02', categoryId: 'c-4', deletedAt: '2026-08-02T10:00:00.000Z' }),

@@ -179,6 +179,25 @@ interface Props {
    * dopo il tap. `null` quando non c'e' un bersaglio.
    */
   readonly deletion: RecurringRuleDeletion | null
+  /**
+   * I giorni del calendario di `target` **gia' occupati da un record sul
+   * disco**, lapidi comprese. `NO_OCCURRENCES` quando `target` e' `null`: una
+   * regola che ancora non esiste ha un id che nessun record porta.
+   *
+   * Arriva da `App` — che e' l'unico ad avere le spese — e non si ricava qui
+   * dentro: e' una scansione di tutte le spese, e questo foglio si ridipinge a
+   * ogni cifra digitata.
+   *
+   * ## Perche' e' un ingresso obbligatorio e non un default vuoto
+   *
+   * Perche' senza, i due `previewMaterialization` di questo file annunciano
+   * l'**ampiezza del calendario** invece delle spese che nasceranno davvero, e
+   * lo fanno in silenzio. Sul pannello del riavvolgimento la differenza non e'
+   * occasionale: quel pannello esiste **solo** per regole gia' materializzate,
+   * quindi la sovrapposizione e' >= 1 sempre, per costruzione. E' il difetto
+   * che annunciava 8 spese e 7.200 € per 5 spese e 4.500 € fatte.
+   */
+  readonly occupied: ReadonlySet<IsoDate>
   /** Il giorno civile corrente, calcolato al risveglio e non a ogni render. */
   readonly day: IsoDate
   readonly leaving: boolean
@@ -291,6 +310,18 @@ function dayOfMonth(date: IsoDate): number {
   return isIsoDate(date) ? toDateParts(date).day : 0
 }
 
+/**
+ * I giorni del mese offerti dal selettore dell'ancora: **tutti e trentuno**,
+ * senza tagliare al mese piu' corto.
+ *
+ * Il 31 non e' un valore invalido da difendere: `clampDayOfMonth` lo fa cadere
+ * sull'ultimo giorno del mese, quindi "il 31" a febbraio e' il 28 (o il 29) e
+ * non il 3 marzo. Un elenco che si fermasse al 28 renderebbe inesprimibile
+ * proprio la regola che questa app promette di sapere fare — l'affitto
+ * dell'ultimo giorno del mese.
+ */
+const MONTH_DAYS: readonly number[] = Array.from({ length: 31 }, (_, index) => index + 1)
+
 const CADENCES: readonly { readonly value: Cadence; readonly key: 'rule.cadence.monthly' | 'rule.cadence.weekly' | 'rule.cadence.daily' }[] = [
   // Il mensile per primo e preselezionato: affitto e abbonamenti sono il caso
   // reale, e il caso reale non deve costare un tap. Gli altri due restano, e
@@ -306,6 +337,7 @@ export function RuleSheet({
   current,
   target,
   deletion,
+  occupied,
   day,
   leaving,
   onSave,
@@ -327,6 +359,15 @@ export function RuleSheet({
    * passare da `rewindRecurringRule`, che il segnaposto lo toglie.
    */
   const [newStart, setNewStart] = useState<IsoDate>(day)
+  /**
+   * Il giorno del mese **scelto a mano**, o `null` finche' non lo si sceglie.
+   *
+   * `null` non e' "nessuna ancora": e' "quella che la regola ha gia'". Tenere
+   * la scelta separata dal valore in vigore e' cio' che permette al default di
+   * restare quello di ADR 020 — l'ancora congelata del record — senza doverlo
+   * ricopiare in uno stato all'apertura, dove poi divergerebbe dal mirror.
+   */
+  const [anchor, setAnchor] = useState<number | null>(null)
   /** La firma della bozza confermata, o `null`. Vedi la testata. */
   const [armed, setArmed] = useState<string | null>(null)
   /** Cio' che la scrittura ha rifiutato, gia' in parole. Vedi `Props.onSave`. */
@@ -372,35 +413,32 @@ export function RuleSheet({
   const panel = rewinding && target !== null
 
   /**
-   * I campi della regola che questo foglio **non mostra e non tocca**:
-   * l'intervallo, il giorno d'ancoraggio, la data di fine, il segnaposto.
+   * Il campo della regola che questo foglio **non mostra e non tocca**: il
+   * segnaposto. Erano tre, e adesso e' uno solo.
    *
-   * Vanno riportati dentro la bozza perche' `reviseRecurringRule` riscrive
-   * importo e calendario **dalla bozza e da nient'altro**: quello che non c'e'
-   * scritto viene cancellato dal record. Senza queste tre righe, aprire una
-   * regola con una data di fine per cambiarle la categoria le toglierebbe la
-   * data di fine — un campo che il foglio non mostra, sparito per un gesto che
-   * non lo nomina.
+   * Va riportato dentro la bozza perche' `reviseRecurringRule` riscrive importo
+   * e calendario **dalla bozza e da nient'altro**: quello che non c'e' scritto
+   * viene cancellato dal record.
    *
-   * Il segnaposto e' un caso a parte: non e' un campo modificabile, e' l'estremo
-   * da cui si apre la finestra. Sta qui perche' l'anteprima di una regola gia'
-   * materializzata deve partire da li' e non da `startDate`, o annuncerebbe
-   * mesi di arretrati che sono gia' nello Storico.
+   * Non e' un campo modificabile: e' l'estremo da cui si apre la finestra. Sta
+   * qui perche' l'anteprima di una regola gia' materializzata deve partire da li'
+   * e non da `startDate`, o annuncerebbe mesi di arretrati che sono gia' nello
+   * Storico.
    *
-   * L'ancora esce da questo gruppo e passa in `calendar()`, che e' l'unico posto
-   * in cui puo' stare da quando ADR 020 l'ha legata alla cadenza: qui restano i
-   * due campi che dalla cadenza non dipendono.
+   * Gli altri due se ne sono andati per due ragioni opposte, e la differenza
+   * vale la pena di dirla. **`endDate` non esiste piu'**: era un campo senza
+   * nessun produttore, quindi le righe che lo conservavano conservavano un
+   * valore che nessuno poteva aver scritto. **L'ancora invece si mostra e si
+   * cambia** (vedi `anchorDay` qui sotto): e' passata da "campo da conservare
+   * di nascosto" a campo del foglio, che e' l'unico posto in cui un numero che
+   * governa i soldi puo' stare.
    */
   const keptAnchor = target?.anchorDay
-  const endDate = target?.endDate
   const marker = target?.lastMaterializedDate
   const interval = target?.interval ?? INTERVAL
 
-  function keep(): Pick<RecurrenceDraftCommon, 'endDate' | 'lastMaterializedDate'> {
-    return {
-      ...(endDate !== undefined ? { endDate } : {}),
-      ...(marker !== undefined ? { lastMaterializedDate: marker } : {}),
-    }
+  function keep(): Pick<RecurrenceDraftCommon, 'lastMaterializedDate'> {
+    return marker !== undefined ? { lastMaterializedDate: marker } : {}
   }
 
   /**
@@ -428,31 +466,42 @@ export function RuleSheet({
    * secondo ramo, ed e' giusto: un'ancora che non c'era non e' un'ancora da
    * conservare.
    *
-   * ## Niente selettore del giorno del mese
+   * ## In modifica il giorno si vede e si cambia — e prima no
    *
-   * Il giorno si sceglie gia' scegliendo la data d'inizio, e un secondo
-   * controllo direbbe la stessa cosa due volte in un foglio che a 667 punti
-   * scorre gia'. Il caso che lo giustificherebbe — "parte il 5 ma pagalo il 27"
-   * — non ha ancora prodotto nessuna richiesta.
+   * Qui c'era scritto che un selettore non serviva, perche' *"il giorno si
+   * sceglie gia' scegliendo la data d'inizio"*. Quell'argomento era vero **prima
+   * che esistesse il rewind**: il rewind e' precisamente l'operazione che fa
+   * divergere le due cose, quindi l'argomento e' morto nell'istante in cui e'
+   * nata la funzione che lo smentisce.
    *
-   * ## Non era l'unico modo di separare l'ancora dalla data d'inizio
+   * Lo scenario, tutto intero: si crea "Affitto 900, mensile, da oggi" il 25
+   * agosto, e l'ancora nasce 25. Ci si accorge che l'affitto parte da febbraio,
+   * si apre il pannello e si riavvolge al 1 febbraio. Da quel momento il foglio
+   * dice "Data d'inizio: 1 febbraio", l'elenco dice "ogni mese", e il **25** non
+   * compare da nessuna parte — mentre continua a decidere quando escono 900 €
+   * al mese, per sempre. Una regola il cui giorno di pagamento non compare su
+   * nessuna schermata e' una regola che l'utente non puo' verificare.
    *
-   * Questa riga diceva che un selettore del giorno sarebbe stato **l'unico**
-   * ingresso a una regola la cui prima occorrenza non cade su `startDate`. Non
-   * lo era gia' allora: il **pannello del riavvolgimento** fa la stessa cosa, e
-   * apposta — sposta `startDate` indietro tenendo l'ancora del record (ADR 020).
-   * Una mensile ancorata al 15 che parte il 15 settembre, riportata al 5,
-   * riaperta in modifica, e' esattamente quello stato.
+   * Le due meta' vanno insieme e nessuna delle due regge da sola: **congelare
+   * l'ancora** preserva il significato della regola quando `startDate` si muove
+   * (ADR 020), ma senza un modo di correggerla e' una trappola; **mostrarla e
+   * basta** direbbe il numero sbagliato con piu' chiarezza.
    *
-   * Il costo si e' visto li': il piede annunciava *"Prima spesa: 5 settembre"*
-   * ripiegando su `draft.startDate` per mancanza di una data calcolata. Adesso
-   * il giorno arriva da `nextDate`, che il core calcola con la stessa funzione
-   * della materializzazione, quindi la separazione fra ancora e inizio non ha
-   * piu' una frase da far mentire — da qui **o** da un eventuale selettore.
+   * ## Perche' e' un campo e non una nuova operazione
+   *
+   * Cambiare l'ancora **non tocca nessuna istanza esistente**: quelle sono fatti
+   * storici, con la data dentro l'id, e la materializzazione va solo in avanti
+   * dal segnaposto. E' un aggiornamento normale della regola, come cambiare
+   * l'importo — passa dalla stessa porta (`calendarChanged` guarda `anchorDay`,
+   * quindi si va da `reviseRecurringRule`) e dalla stessa conferma.
+   *
+   * *La regola descrive il futuro; le istanze sono il passato.*
    */
+  const anchorDay = anchor ?? keptAnchor ?? dayOfMonth(start)
+
   function calendar(): WithCadence<unknown> {
     if (cadence !== 'monthly') return { cadence }
-    return { cadence, anchorDay: keptAnchor ?? dayOfMonth(start) }
+    return { cadence, anchorDay }
   }
 
   /**
@@ -496,8 +545,14 @@ export function RuleSheet({
           ...calendar(),
         },
         day,
+        // Le occorrenze che sul disco ci sono gia'. In creazione l'insieme e'
+        // vuoto — `App` passa `NO_OCCURRENCES`, perche' l'id della regola non
+        // esiste ancora — e in modifica e' quello della regola: e' cio' che
+        // rende il numero annunciato uguale al numero di righe che comparira'
+        // nello Storico, invece dell'ampiezza del calendario.
+        occupied,
       ),
-    [cadence, start, day, interval, keptAnchor, endDate, marker],
+    [cadence, start, day, interval, anchorDay, marker, occupied],
   )
 
   /**
@@ -538,8 +593,12 @@ export function RuleSheet({
    * Cambiare uno di questi numeri cambia cosa verrebbe scritto. Gli ultimi due
    * non sono campi del foglio: sono i due estremi della finestra, e cambiano
    * **da soli** (la mezzanotte, una materializzazione altrove).
+   *
+   * L'ancora e' entrata qui **insieme al selettore che la cambia**, non dopo:
+   * un campo che sposta ogni occorrenza futura e non sta nella firma lascia
+   * spuntata una conferma che dichiarava altre date.
    */
-  const signature = `${cents}|${cadence}|${start}|${day}|${marker ?? ''}`
+  const signature = `${cents}|${cadence}|${start}|${anchorDay}|${day}|${marker ?? ''}`
   const confirmed = armed === signature
   const needsConfirm = copy?.confirm === true
   const ready = !empty && categoryId !== null && copy !== null && (!needsConfirm || confirmed)
@@ -623,8 +682,18 @@ export function RuleSheet({
    * la riscrive), la data scelta, e il giorno civile.
    */
   const rewind = useMemo(
-    () => (target === null || backTo === null ? null : previewMaterialization(rewindDraft(target, backTo), day)),
-    [target, backTo, day],
+    () =>
+      target === null || backTo === null
+        ? null
+        : // **Qui l'insieme occupato non e' un'ottimizzazione: e' il numero.**
+          // Il pannello esiste solo per regole gia' materializzate, quindi
+          // riaprire la finestra sovrappone **sempre** cio' che c'e' gia'.
+          // Senza questo argomento il piede annuncia l'ampiezza del calendario
+          // — 8 spese e 7.200 € — per 5 spese e 4.500 € che nasceranno, e le
+          // tre di differenza sono righe che l'utente ha gia' sotto gli occhi
+          // nello Storico.
+          previewMaterialization(rewindDraft(target, backTo), day, occupied),
+    [target, backTo, day, occupied],
   )
 
   /**
@@ -958,6 +1027,47 @@ export function RuleSheet({
                     </svg>
                     <span>{t('rewind.action')}</span>
                   </button>
+                ) : null}
+
+                {/* **Il giorno di pagamento**, che senza questa riga non
+                    comparirebbe da nessuna parte appena l'ancora e la data
+                    d'inizio si separano — e a separarle e' il pannello qui
+                    sopra. Sta accanto alla data d'inizio perche' e' l'altra
+                    meta' della stessa domanda ("quando esce?"), e legge come un
+                    fatto anche prima di essere toccato.
+
+                    Solo in modifica: alla creazione l'ancora si deriva da
+                    `startDate` (ADR 020), quindi il giorno e' gia' scritto nel
+                    chip sopra e ripeterlo direbbe due volte la stessa cosa. Il
+                    selettore serve dove il default puo' essere sbagliato, cioe'
+                    dove qualcosa ha mosso `startDate` sotto un'ancora ferma. */}
+                {cadence === 'monthly' ? (
+                  <label class="chip chip--date anchor" data-on={anchor !== null || undefined}>
+                    <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true">
+                      <rect x="3" y="5" width="18" height="16" rx="3" />
+                      <path d="M3 10h18M8 3v4M16 3v4" />
+                    </svg>
+                    <span>{t('rule.anchor.day', { day: anchorDay })}</span>
+                    {/* Un `select` e non trentun chip: e' il selettore di
+                        sistema — su iOS la rotella — sotto un bersaglio che
+                        misura gia' 44px, e non e' la tastiera di sistema, che
+                        e' cio' che questo progetto vieta sugli importi. */}
+                    <select
+                      class="chip__input"
+                      value={String(anchorDay)}
+                      aria-label={t('rule.anchor.pick')}
+                      onChange={(event) => {
+                        const picked = Number(event.currentTarget.value)
+                        if (Number.isInteger(picked)) change(setAnchor)(picked)
+                      }}
+                    >
+                      {MONTH_DAYS.map((value) => (
+                        <option key={value} value={String(value)}>
+                          {t('rule.anchor.day', { day: value })}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
                 ) : null}
               </div>
             )}

@@ -228,7 +228,11 @@ export function createMemoryPersistence(disk: MemoryDisk = emptyDisk()): MemoryP
         // la si confronta con quella annunciata. Il doppio deve rifiutare
         // esattamente dove rifiuta la persistenza vera, altrimenti i test
         // provano una cosa e la produzione ne fa un'altra.
-        ruleRewind = planRecurringRuleRewind(next.recurringRules, batch.recurringRuleRewind)
+        ruleRewind = planRecurringRuleRewind(
+          next.recurringRules,
+          next.expenses,
+          batch.recurringRuleRewind,
+        )
         if (ruleRewind.ok) upsert(next.recurringRules, [ruleRewind.rule])
       }
       if (batch.advanceRecurringMarkers) {

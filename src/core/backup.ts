@@ -216,10 +216,15 @@ function parseRule(raw: RawRecord, path: string, c: Collector): RecurringRule | 
   }
   const startDate = isoDate(raw['startDate'])
   if (startDate === null) return c.error(`${path}.startDate`, 'data di inizio non valida')
-  const endDate = optionalIsoDate(raw['endDate'])
+  // `endDate` non si legge piu', e non e' una perdita: il campo non esiste piu'
+  // sul record (vedi `RecurringRuleCommon`), e **con zero produttori nemmeno un
+  // backup poteva contenerlo** — un backup e' l'export di dati scritti da
+  // quest'app. Un `endDate` in un JSON scritto a mano viene ignorato in
+  // silenzio, come qualunque altra chiave sconosciuta: non e' un dato che
+  // qualcuno abbia perso, e' una chiave che questa app non ha mai emesso.
   const lastMaterializedDate = optionalIsoDate(raw['lastMaterializedDate'])
-  if (endDate === false || lastMaterializedDate === false) {
-    return c.error(path, 'endDate o lastMaterializedDate non sono date valide')
+  if (lastMaterializedDate === false) {
+    return c.error(path, 'lastMaterializedDate non e una data valida')
   }
   const common = {
     ...b,
@@ -228,7 +233,6 @@ function parseRule(raw: RawRecord, path: string, c: Collector): RecurringRule | 
     interval,
     startDate,
     active: raw['active'] !== false,
-    ...(endDate !== undefined ? { endDate } : {}),
     ...(lastMaterializedDate !== undefined ? { lastMaterializedDate } : {}),
   }
   const anchorRaw = raw['anchorDay']

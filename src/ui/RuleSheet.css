@@ -186,6 +186,25 @@
   background-color: var(--surface-sunken);
 }
 
+/* --- il giorno di pagamento (solo in modifica) ---------------------------- */
+/*
+ * Lo stesso chip della data, con un `select` al posto dell'`input`: il tap apre
+ * la rotella di iOS su un bersaglio che misura gia' 44px per il pavimento di
+ * `.chip`, quindi qui non c'e' nessuna misura da dichiarare di nuovo.
+ *
+ * Allineato a sinistra e non centrato come gli altri chip: sta in una colonna
+ * (`.starts--read`) sotto "Data d'inizio: 1 febbraio", che e' testo allineato
+ * all'inizio, e le due righe rispondono alla stessa domanda. Centrarlo avrebbe
+ * fatto sembrare il secondo un bottone invece che il secondo fatto.
+ *
+ * `tabular-nums` perche' il numero cambia sotto il dito mentre la rotella gira:
+ * con le cifre proporzionali la riga si allarga e si stringe a ogni scatto.
+ */
+.anchor {
+  justify-content: flex-start;
+  font-variant-numeric: tabular-nums;
+}
+
 /* La data sbagliata di verso. E' una risposta a un tap, quindi si annuncia —
  * ed e' l'unica frase del pannello che compare e sparisce: il posto non si
  * riserva perche' sta **sopra** il resto del corpo che scorre, non nel piede,

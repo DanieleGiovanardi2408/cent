@@ -764,9 +764,9 @@ interface RuleIdentity {
  *
  * Prima qui c'erano due pezzi: una `ruleShape(draft)` che restituiva i campi
  * del calendario, e nel chiamante uno spread sul record corrente preceduto da
- * una destrutturazione che toglieva `anchorDay` ed `endDate` — perche' uno
- * spread non cancella niente, e una bozza che li ha persi deve poterli
- * cancellare davvero dal record.
+ * una destrutturazione che toglieva `anchorDay` (e, finche' e' esistita,
+ * `endDate`) — perche' uno spread non cancella niente, e una bozza che li ha
+ * persi deve poterli cancellare davvero dal record.
  *
  * Con il calendario diventato un'unione discriminata quella forma non regge
  * piu', e non e' un incidente: `Omit<RecurringRule, ...>` su un'unione **collassa
@@ -788,7 +788,6 @@ function ruleFromDraft(draft: RecurrenceDraft, identity: RuleIdentity): Recurrin
     amountCents: draft.amountCents,
     interval: draft.interval,
     startDate: draft.startDate,
-    ...(draft.endDate !== undefined ? { endDate: draft.endDate } : {}),
     ...(identity.lastMaterializedDate !== undefined
       ? { lastMaterializedDate: identity.lastMaterializedDate }
       : {}),
@@ -1159,9 +1158,9 @@ export async function openRepository(
     )
     if (!redeemed.ok) return redeemed
     // Il record si ricostruisce **intero** dalla bozza, non si sovrascrive a
-    // spread: cosi' `endDate` e `anchorDay` assenti nella bozza sono assenti
-    // nel record, senza doverli togliere prima con una destrutturazione che
-    // qualcuno puo' dimenticare. Vedi `ruleFromDraft`.
+    // spread: cosi' un `anchorDay` assente nella bozza e' assente nel record,
+    // senza doverlo togliere prima con una destrutturazione che qualcuno puo'
+    // dimenticare. Vedi `ruleFromDraft`.
     return {
       ok: true,
       rule: commitRule(

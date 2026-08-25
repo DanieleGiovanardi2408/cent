@@ -517,13 +517,16 @@ export function CategorySheet({
  * ## Perche' e' uno `switch` e non una catena di ternari
  *
  * Perche' e' **esaustivo per costruzione**: il tipo di ritorno non include
- * `undefined`, quindi un quinto esito di `planCategoryDeletion` diventa un
+ * `undefined`, quindi un quarto esito di `planCategoryDeletion` diventa un
  * errore di compilazione invece di cadere in un `null`. E' la stessa dottrina
  * della parita' delle chiavi di i18n — il compilatore, non un test.
  *
- * Non e' un'astrazione preventiva: la catena di ternari che c'era qui aveva gia'
- * mancato `'deleted-only'` il giorno in cui il quarto esito e' nato. Compilava,
- * e chi non poteva cancellare leggeva **niente**.
+ * Non e' un'astrazione preventiva, e la prova e' arrivata **due volte in versi
+ * opposti**. La catena di ternari che c'era qui aveva mancato `'deleted-only'`
+ * il giorno in cui quell'esito era nato: compilava, e chi non poteva cancellare
+ * leggeva **niente**. Quando lo stesso esito e' stato tolto, lo `switch` non ha
+ * compilato — cioe' ha segnalato il ramo morto invece di lasciarlo in giro con
+ * una chiave di dizionario attaccata.
  */
 function refusalCopy(deletion: Extract<CategoryDeletion, { ok: false }>): string | null {
   switch (deletion.reason) {
@@ -534,16 +537,13 @@ function refusalCopy(deletion: Extract<CategoryDeletion, { ok: false }>): string
     case 'unknown':
       return null
     case 'in-use':
+      // `removed` e' **la stessa stringa che comparirebbe sulla riga**, non una
+      // parafrasi: cosi' il rifiuto cita una cosa che l'utente puo' andare a
+      // vedere, invece di descriverla con parole sue.
       return t('cat.inUse.text', {
         what: usageLabel(deletion.expenses, deletion.recurringRules, deletion.budgets),
+        removed: t('row.categoryRemoved'),
       })
-    // **Nessun numero, e non per misura editoriale: l'esito non ne porta.** Le
-    // lapidi non compaiono in nessuna schermata, quindi contarle in una frase
-    // sarebbe un rifiuto che l'utente non puo' riconciliare con niente
-    // (CLAUDE.md, "Nessun messaggio cita un numero che l'utente non puo'
-    // vedere"). La frase parla del fatto, e dice cosa fare adesso.
-    case 'deleted-only':
-      return t('cat.deletedOnly.text')
   }
 }
 

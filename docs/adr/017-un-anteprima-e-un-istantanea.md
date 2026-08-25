@@ -24,8 +24,12 @@ Restavano due difetti piu' specifici, e nessuno dei due e' teorico.
 il giorno civile — regola creata alle 23:59:50, confermata alle 00:00:05 — la
 finestra di materializzazione si allarga di un giorno e la scrittura produce
 **un'occorrenza in piu' di quelle annunciate**. E' il verso sbagliato: la regola
-dichiarata su `previewMaterialization` e' *"si annuncia piu' di quanto si fa"*, e
-questo caso la viola. In questo progetto la mezzanotte ha gia' morso due volte —
+dichiarata allora su `previewMaterialization` era *"si annuncia piu' di quanto si
+fa"*, e questo caso la viola. **Quella regola non c'e' piu'** — ADR 022 l'ha
+sostituita con il conteggio esatto per sottrazione, dopo aver scoperto che sul
+rewind copriva una certezza invece di una corsa. La decisione di questa ADR non
+cambia: il confronto di uguaglianza sul giorno civile serve **a maggior ragione**
+se il numero annunciato dev'essere quello che comparira'. In questo progetto la mezzanotte ha gia' morso due volte —
 un test che confrontava due letture a cavallo delle 00:00, e un run di CI partito
 alle 23:58:47 che ha confrontato alle 00:00:00.
 

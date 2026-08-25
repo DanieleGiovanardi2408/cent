@@ -270,62 +270,70 @@ export type CategoryDeletion =
       /** Budget di categoria che la nominano, **storici compresi**. */
       readonly budgets: number
     }
-  /**
-   * **Solo lapidi.** Nessun record visibile la nomina, ma esistono spese
-   * cancellate che ci puntano: la cancellazione resta impedita, e non c'e'
-   * nessun numero da mostrare.
-   *
-   * ## Perche' resta impedita
-   *
-   * `restoreExpense` puo' riportare in vita una lapide in un tap — e' il verso
-   * dell'undo, ed e' offerto sempre. La spesa che torna avrebbe un `categoryId`
-   * che non punta a niente, e a differenza di `recurringId` questo campo lo
-   * **dereferenzia mezza app**: la riga dello Storico, la ripartizione delle
-   * statistiche, il chip. Non e' un orfano inerte, e' una riga rotta e visibile.
-   *
-   * ## Perche' un esito a se' invece di `in-use` con un numero
-   *
-   * Il numero delle lapidi e' **invisibile per definizione**: nessuna schermata
-   * mostra le spese cancellate. Un `in-use` che lo citasse violerebbe il criterio
-   * di CLAUDE.md — nessun messaggio cita un numero che l'utente non puo' vedere —
-   * ed e' esattamente il difetto che questo esito esiste per togliere.
-   *
-   * Quindi il numero non c'e' **nel tipo**: non e' una raccomandazione a non
-   * scriverlo, e' l'impossibilita' di scriverlo. La copia che accompagna questo
-   * esito parla del fatto ("ci sono spese cancellate che la usano: archiviala"),
-   * non di una quantita'.
-   *
-   * ## Il caso misto non arriva qui
-   *
-   * Con 3 spese vive e 5 lapidi l'esito e' `in-use` con `expenses: 3`, cioe' il
-   * numero che lo Storico mostra davvero. Questo esito vale **solo** quando
-   * tutto cio' che blocca e' invisibile.
-   */
-  | { readonly ok: false; readonly reason: 'deleted-only' }
 
 /**
  * Il piano per cancellare **davvero** una categoria.
  *
- * L'unica condizione e' che nessun record la nomini piu'. **Anche le spese
- * cancellate bloccano**: `restoreExpense` puo' riportarne una in vita in un tap,
- * e la riga che torna avrebbe un `categoryId` che non punta a niente — un campo
- * che lo Storico, le statistiche e il chip dereferenziano tutti.
+ * L'unica condizione e' che nessun record **visibile** la nomini: spese vive,
+ * regole ricorrenti, budget di categoria. **Le lapidi non bloccano piu'.**
  *
- * ## Ma non si contano, e la differenza non e' un dettaglio
+ * ## Perche' bloccavano, e perche' l'argomento era falso
+ *
+ * L'argomento era: `restoreExpense` puo' riportare in vita una lapide in un tap,
+ * e la riga che torna avrebbe un `categoryId` che non punta a niente — *"un
+ * orfano non inerte: una riga rotta e visibile"*.
+ *
+ * **Non e' rotta.** Tutti e quattro i posti in cui una spesa mostra la propria
+ * categoria — `ExpenseRow` (Storico e Home), `ExpenseActions`, `AmountSheet`,
+ * `FixedCosts` — leggono `category?.name ?? t('row.categoryRemoved')`, con
+ * `category?.emoji ?? '•'` e `category?.color ?? 'transparent'` accanto. Il
+ * fallback esiste, ha un nome che dice esattamente questo caso, ed e' **gia'
+ * raggiungibile**: `parseBackup` importa le spese orfane di proposito, con un
+ * avviso e non un rifiuto ("vengono importate lo stesso"). Non era codice morto
+ * tenuto in vita dal blocco; era codice vivo che il blocco nascondeva.
+ *
+ * Consentire la cancellazione lo rende raggiungibile da una **seconda** strada,
+ * ordinaria: e' un argomento a favore, non contro.
+ *
+ * ## Il criterio, che e' piu' largo di come era stato scritto
+ *
+ * Il rifiuto diceva *"ci sono spese cancellate che la usano"* — un fatto che
+ * nessuna schermata mostra. Non e' il caso di *"nessun messaggio cita un numero
+ * che l'utente non puo' vedere"*: quello era il caso particolare visto per
+ * primo. Il criterio e' **nessun messaggio afferma un fatto che l'utente non
+ * puo' verificare**, e togliere il numero da una frase inverificabile la lascia
+ * inverificabile.
+ *
+ * Fra riformulare la frase e togliere il rifiuto, si toglie il rifiuto: la
+ * conseguenza che lo giustificava non esiste.
+ *
+ * ## Cosa questo lascia scoperto, dichiarato
+ *
+ * Una lapide puo' restare con un `categoryId` orfano, e `restoreExpense` puo'
+ * riportarla in vita. La riga che torna dice "Categoria rimossa", con il pallino
+ * al posto dell'emoji: e' vero, ed e' esattamente quello che e' successo.
+ * **Non c'e' modo di riassegnarle una categoria** — nessun foglio lo offre — e
+ * quel nome le resta.
+ *
+ * Va detto quanto e' stretta la finestra in cui la cosa capita: l'unico
+ * chiamante di produzione di `restoreExpense` e' l'"Annulla" del toast, cioe'
+ * la spesa cancellata pochi secondi prima. Una lapide vecchia abbastanza perche'
+ * si stia cancellando la sua categoria non ha nessuna strada per tornare viva.
+ *
+ * Stesso vincolo di `recurringId`, ora esteso: **`categoryId` puo' restare
+ * orfano dopo la cancellazione di una categoria. Ogni lettore deve gestire
+ * l'assenza esplicitamente, non assumerla impossibile.** Oggi tutti e quattro lo
+ * fanno; `spentByCategory` raggruppa per id e non dereferenzia, quindi la
+ * schermata delle statistiche della fase 6 dovra' portarsi dietro lo stesso
+ * fallback.
+ *
+ * ## I numeri del rifiuto restano quelli visibili
  *
  * Le lapidi **non entrano in `expenses`**: nessuna schermata mostra le spese
  * cancellate, quindi un rifiuto che dicesse "la usano 8 spese" citerebbe un
- * numero che l'utente non puo' riconciliare con niente. E' il criterio di
- * CLAUDE.md, ed e' lo stesso che ha gia' corretto `planRecurringRuleDeletion`.
- *
- * Che li' la cancellazione venga **consentita** e qui no e' una differenza sulla
- * conseguenza — un `recurringId` orfano non lo dereferenzia nessuno, un
- * `categoryId` orfano lo dereferenzia mezza app — **non** sul diritto di citare
- * un numero. Il numero mostrato era sbagliato in tutti e due i posti allo stesso
- * modo, e in tutti e due si corregge allo stesso modo.
- *
- * Quando l'unica cosa che blocca sono le lapidi, l'esito e' `'deleted-only'`,
- * che di numeri non ne ha nessuno.
+ * numero che l'utente non puo' riconciliare con niente. Con 3 spese vive e 5
+ * lapidi l'esito e' `in-use` con `expenses: 3`, cioe' il numero che lo Storico
+ * mostra davvero.
  *
  * Contano anche le regole ricorrenti: una regola che nomina una categoria
  * inesistente genererebbe spese orfane per sempre, cioe' lo stesso danno che
@@ -361,10 +369,13 @@ export function planCategoryDeletion(
 ): CategoryDeletion {
   const target = categories.find((c) => c.id === request.id)
   if (target === undefined) return { ok: false, reason: 'unknown' }
-  const named = expenses.filter((e) => e.categoryId === request.id)
   // Solo le vive: sono quelle che lo Storico mostra, cioe' le uniche che si
-  // possono citare in un messaggio.
-  const usedByExpenses = named.filter((e) => e.deletedAt === undefined).length
+  // possono citare in un messaggio — **e le uniche che bloccano**. Una lapide
+  // che tornasse in vita mostrerebbe "Categoria rimossa", che e' un fallback che
+  // esiste in tutti e quattro i lettori, non una riga rotta.
+  const usedByExpenses = expenses.filter(
+    (e) => e.categoryId === request.id && e.deletedAt === undefined,
+  ).length
   const usedByRules = recurringRules.filter((r) => r.categoryId === request.id).length
   const usedByBudgets = budgets.filter((b) => b.categoryId === request.id).length
   if (usedByExpenses > 0 || usedByRules > 0 || usedByBudgets > 0) {
@@ -376,8 +387,5 @@ export function planCategoryDeletion(
       budgets: usedByBudgets,
     }
   }
-  // Niente di visibile la nomina, ma qualche lapide si'. Blocca lo stesso — una
-  // lapide si ripristina in un tap — e non porta nessun numero con se'.
-  if (named.length > 0) return { ok: false, reason: 'deleted-only' }
   return { ok: true, deleted: target }
 }

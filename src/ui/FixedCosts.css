@@ -81,10 +81,26 @@
   line-height: var(--lh-snug);
 }
 
+/* **Va a capo, e non taglia con i tre puntini come il nome sopra.**
+ *
+ * La differenza fra le due righe non e' estetica, e' di **contenuto**: il nome
+ * lo scrive l'utente e puo' essere lungo a piacere, quindi li' l'ellissi e'
+ * l'unica difesa possibile e cio' che si perde e' la coda di una parola che chi
+ * l'ha scritta riconosce lo stesso. Questa riga invece dice **quando escono i
+ * soldi** — "ogni mese, il giorno 25" — e la coda e' proprio il numero.
+ *
+ * Misurato a 320 punti (il vecchio SE, o lo Zoom schermo di iOS): la frase
+ * chiede 140px e ne ha 104. Con l'ellissi si leggeva "ogni mese, il gio…", cioe'
+ * l'unica cosa che questa riga esiste per dire spariva **senza che niente
+ * fallisse** — nessuno scroll orizzontale, nessun overflow, un difetto muto.
+ *
+ * Andare a capo costa una riga di altezza a 320 e niente a 375 in su, dove la
+ * frase ci sta intera. E' una lista che scorre in Impostazioni, non il percorso
+ * dei due tap: il bersaglio si allunga, e un bersaglio piu' alto non ha mai
+ * fatto male a nessuno. */
 .fixed__note {
   overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
   font-size: var(--fs-100);
   line-height: var(--lh-snug);
   color: var(--text-muted);

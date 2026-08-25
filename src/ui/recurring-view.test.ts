@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { toDateParts } from '../core/date'
 import type { IsoDate } from '../core/date'
+import { NO_OCCURRENCES } from '../core/recurrence'
 import { previewMaterialization } from '../core/recurring-plan'
 import type {
   MaterializationPreview,
@@ -60,7 +61,7 @@ function norm(text: string): string {
 function preview(
   draft: RecurrenceDraft,
 ): { readonly shown: MaterializationPreview; readonly draft: RecurrenceDraft } {
-  const result = previewMaterialization(draft, OGGI)
+  const result = previewMaterialization(draft, OGGI, NO_OCCURRENCES)
   if (!result.ok) throw new Error(`anteprima rifiutata: ${result.reason}`)
   return { shown: result, draft }
 }
@@ -169,23 +170,25 @@ describe('l anteprima prima di scrivere', () => {
     expect(copy.confirm).toBe(false)
   })
 
-  it('una regola finita non dice "Prima spesa": dice che non ne creera altre', () => {
-    // `nextDate` a `null` e' l'unico modo di sapere che non ci sara' nessuna
-    // prossima volta. "Non c'e' niente da recuperare" sarebbe vero e tacerebbe
-    // il fatto piu' grosso, e "Prima spesa: ..." non ha nemmeno un giorno da
-    // scriverci dentro.
-    const finita = preview(
-      mensile('2026-01-01', { endDate: '2026-06-01', lastMaterializedDate: OGGI }),
-    )
-    expect(finita.shown.count).toBe(0)
-    expect(finita.shown.nextDate).toBeNull()
-    const copy = previewCopy(finita.shown, finita.draft, OGGI, 'edit')
-    expect(copy.text).toBe('Questa spesa fissa è finita: non creerà altre spese.')
+  it('una regola in pari lo dice, e non annuncia come "prima" una spesa gia scritta', () => {
+    // Qui c'era il caso della regola **finita**, e non e' stato riscritto: e'
+    // stato tolto insieme allo stato che descriveva. Senza `endDate` una regola
+    // non finisce, quindi `nextDate` non e' mai `null` e non esiste nessuna
+    // finestra in cui quella frase sia vera. Torna in fase 7 con la scadenza.
+    //
+    // Quello che resta e' il ramo che il segnaposto distingue: `count: 0` su una
+    // regola gia' materializzata vuol dire "sei in pari", non "parte piu'
+    // avanti" — e "Prima spesa: 1 gennaio" sarebbe falso, quella spesa e' nello
+    // Storico da mesi.
+    const pari = preview(mensile('2026-01-01', { lastMaterializedDate: OGGI }))
+    expect(pari.shown.count).toBe(0)
+    const copy = previewCopy(pari.shown, pari.draft, OGGI, 'edit')
+    expect(copy.text).toBe('Non c’è niente da recuperare.')
     expect(copy.confirm).toBe(false)
 
     setLanguage('en')
-    expect(previewCopy(finita.shown, finita.draft, OGGI, 'edit').text).toBe(
-      'This fixed cost is over: it will create no more expenses.',
+    expect(previewCopy(pari.shown, pari.draft, OGGI, 'edit').text).toBe(
+      'There is nothing to catch up on.',
     )
     setLanguage('it')
   })
@@ -354,11 +357,12 @@ describe('quale porta aprire', () => {
     expect(calendarChanged(regola, mensile('2026-01-01', { amountCents: 100_000 }))).toBe(true)
   })
 
-  it('i campi che il foglio non mostra contano lo stesso', () => {
-    // `endDate` e `anchorDay` sono dentro `ruleShape`: una bozza che li
-    // perdesse per strada li cancellerebbe dal record, e quella differenza
-    // dev'essere un cambio visibile invece che una perdita silenziosa.
-    expect(calendarChanged(regola, mensile('2026-01-01', { endDate: '2026-12-31' }))).toBe(true)
+  it('spostare il giorno del mese e un cambio di calendario, e paga il pedaggio', () => {
+    // L'ancora e' dentro il record che la bozza detta: una bozza che la
+    // perdesse per strada la cancellerebbe, e una bozza che la **cambia** —
+    // adesso si puo', c'e' un selettore nel foglio — sposta ogni occorrenza
+    // futura. In tutti e due i casi dev'essere un cambio visibile, cioe' deve
+    // passare da `reviseRecurringRule` e dalla sua conferma.
     expect(calendarChanged(regola, mensile('2026-01-01', { anchorDay: 15 }))).toBe(true)
   })
 
@@ -407,11 +411,14 @@ describe('l elenco delle spese fisse', () => {
     expect(list.totalCents).toBe(90_000)
   })
 
-  it('una regola finita resta in elenco e dice che e finita', () => {
-    const finita = makeRule({ startDate: '2026-01-01', endDate: '2026-06-30', amountCents: 50_000 })
-    const list = fixedList([finita], OGGI)
+  it('una regola spenta resta in elenco, fuori dal totale, e dice che e spenta', () => {
+    // Qui c'era la regola **finita**, tolta insieme a `endDate`: senza scadenza
+    // quello stato non e' raggiungibile. Resta l'altro motivo per cui una riga
+    // non pesa sul mese, ed e' l'unico dei due che si cambia con un tap.
+    const spenta = makeRule({ startDate: '2026-01-01', amountCents: 50_000, active: false })
+    const list = fixedList([spenta], OGGI)
     expect(list.lines[0]?.monthlyCents).toBeNull()
-    expect(list.lines[0]?.aside).toContain('30 giugno')
+    expect(list.lines[0]?.aside).toBe('spenta')
     expect(list.totalCents).toBe(0)
   })
 
@@ -434,7 +441,39 @@ describe('l elenco delle spese fisse', () => {
 describe('la riga sotto il nome', () => {
   it('una mensile non ripete l importo: la colonna a destra dice gia quello', () => {
     const nota = fixedLineNote(makeRule({ startDate: '2026-01-01', amountCents: 90_000 }))
-    expect(nota).toBe('ogni mese')
+    expect(nota).toBe('ogni mese, il giorno 1')
+  })
+
+  it('il giorno del mese si legge anche quando non e quello della data d inizio', () => {
+    // **Lo stato che il rewind produce, ed e' l'unico modo di arrivarci.** Una
+    // mensile ancorata al 25 e riportata a inizio 1 febbraio: prima di questa
+    // riga l'elenco diceva "ogni mese" e il 25 non compariva da nessuna parte,
+    // pur decidendo quando escono 900 € al mese.
+    const nota = fixedLineNote(
+      makeRule({ startDate: '2026-02-01', cadence: 'monthly', anchorDay: 25, amountCents: 90_000 }),
+    )
+    expect(nota).toBe('ogni mese, il giorno 25')
+
+    setLanguage('en')
+    expect(
+      fixedLineNote(
+        makeRule({
+          startDate: '2026-02-01',
+          cadence: 'monthly',
+          anchorDay: 25,
+          amountCents: 90_000,
+        }),
+      ),
+    ).toBe('every month, on day 25')
+    setLanguage('it')
+  })
+
+  it('una settimanale non si inventa nessun giorno del mese: non ne ha uno', () => {
+    const nota = fixedLineNote(
+      makeRule({ startDate: '2026-01-01', amountCents: 43_481, cadence: 'weekly' }),
+    )
+    expect(nota).toContain('ogni settimana')
+    expect(nota).not.toContain('giorno')
   })
 
   it('una settimanale lo ripete, perche il numero a destra e un altro numero', () => {
@@ -468,7 +507,7 @@ describe('la riga sotto il nome', () => {
  * `rewindCopy` non lo accetta nemmeno.
  */
 function rewindOf(rule: RecurringRule, nuovaData: IsoDate, giorno: IsoDate = OGGI) {
-  const result = previewMaterialization(rewindDraft(rule, nuovaData), giorno)
+  const result = previewMaterialization(rewindDraft(rule, nuovaData), giorno, NO_OCCURRENCES)
   if (!result.ok) throw new Error(`anteprima rifiutata: ${result.reason}`)
   return {
     result,
@@ -524,14 +563,27 @@ describe('la bozza del riavvolgimento', () => {
     expect(bozza.anchorDay).toBeUndefined()
   })
 
-  it('la data di fine viaggia, perche restringe la finestra', () => {
-    const conFine = rewindDraft(
-      makeRule({ startDate: '2026-08-01', endDate: '2026-12-31' }),
+  it('la bozza porta solo cio che la regola ha: nessun campo inventato', () => {
+    // Qui c'era "la data di fine viaggia, perche' restringe la finestra". Non
+    // c'e' piu' niente da far viaggiare: `endDate` e' stata tagliata per zero
+    // produttori, e un test che la costruiva a mano avrebbe tenuto in vita un
+    // campo che nessuna schermata poteva scrivere.
+    //
+    // Cio' che resta e' la proprieta' che conta: la bozza del rewind e'
+    // **esattamente** quella di una regola appena creata con quella data —
+    // stesso ramo di `materializationWindow`, quindi niente da verificare caso
+    // per caso.
+    const bozza = rewindDraft(
+      makeRule({ startDate: '2026-08-01', cadence: 'monthly', anchorDay: 1 }),
       '2026-01-01',
     )
-    expect(conFine.endDate).toBe('2026-12-31')
-    const senzaFine = rewindDraft(makeRule({ startDate: '2026-08-01' }), '2026-01-01')
-    expect(Object.hasOwn(senzaFine, 'endDate')).toBe(false)
+    expect(Object.keys(bozza).sort()).toEqual([
+      'amountCents',
+      'anchorDay',
+      'cadence',
+      'interval',
+      'startDate',
+    ])
   })
 })
 

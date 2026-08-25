@@ -11,6 +11,7 @@
 import { today, toDateParts } from './date'
 import type { IsoDate } from './date'
 import type { DefaultCategoryNames } from './defaults'
+import { NO_OCCURRENCES, occupiedOccurrenceDates } from './recurrence'
 import { previewMaterialization } from './recurring-plan'
 import type { RecurrenceDraft } from './recurring-plan'
 import type { Repository } from './repository'
@@ -178,7 +179,9 @@ export type BozzaRegola = RecurrenceDraft & { readonly categoryId: string }
  */
 export function creaRegola(repo: Repository, bozza: BozzaRegola, giorno?: IsoDate): RecurringRule {
   for (let tentativo = 0; tentativo < 2; tentativo += 1) {
-    const anteprima = previewMaterialization(bozza, giorno ?? today())
+    // `NO_OCCURRENCES`: la regola non esiste ancora, il suo id sara' un UUID
+    // appena generato, nessun record puo' portarlo. E' un fatto, non un default.
+    const anteprima = previewMaterialization(bozza, giorno ?? today(), NO_OCCURRENCES)
     if (!anteprima.ok) throw new Error(`anteprima rifiutata: ${anteprima.reason}`)
     const esito = repo.addRecurringRule({ categoryId: bozza.categoryId }, anteprima.confirmed)
     if (esito.ok) return esito.rule
@@ -195,7 +198,14 @@ export function rivediRegola(
   giorno?: IsoDate,
 ): RecurringRule {
   for (let tentativo = 0; tentativo < 2; tentativo += 1) {
-    const anteprima = previewMaterialization(bozza, giorno ?? today())
+    // Le occorrenze di **questa** regola gia' a disco: la finestra si apre dopo
+    // il segnaposto, quindi di norma non ce n'e' nessuna dentro — ma "di norma"
+    // non e' un argomento, e il conteggio lo si prende dal mirror come fa la UI.
+    const anteprima = previewMaterialization(
+      bozza,
+      giorno ?? today(),
+      occupiedOccurrenceDates(id, repo.getState().expenses),
+    )
     if (!anteprima.ok) throw new Error(`anteprima rifiutata: ${anteprima.reason}`)
     const esito = repo.reviseRecurringRule(id, anteprima.confirmed)
     if (esito.ok) return esito.rule

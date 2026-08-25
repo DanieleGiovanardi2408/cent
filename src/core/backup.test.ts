@@ -35,7 +35,6 @@ function dataset(): DataSet {
         id: 'r1',
         startDate: '2026-01-01',
         anchorDay: 31,
-        endDate: '2027-01-01',
         lastMaterializedDate: '2026-08-02',
       }),
     ],

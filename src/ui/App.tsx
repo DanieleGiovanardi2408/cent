@@ -23,6 +23,7 @@ import { Guide } from './Guide'
 import { History } from './History'
 import { Home } from './Home'
 import { Mark } from './Mark'
+import { NO_OCCURRENCES, occupiedOccurrenceDates } from '../core/recurrence'
 import { planRecurringRuleDeletion, previewMaterialization } from '../core/recurring-plan'
 import type { RecurringRuleWrite } from '../core/recurring-plan'
 import { calendarChanged, refusalText, rewindRefusalText } from './recurring-view'
@@ -547,7 +548,18 @@ export function App() {
     if (!repo) return t('rule.hint.failed')
     refreshDay()
     const target = ruleTarget
-    const preview = previewMaterialization(draft.recurrence, draft.day)
+    // Le due porte in una riga: una regola **nuova** non ha nessun record che
+    // porti il suo id, quindi `NO_OCCURRENCES`; una regola **che si modifica**
+    // porta con se' cio' che ha gia' generato, e quelle date `addExpenses` le
+    // saltera'. Contarle produrrebbe un toast che annuncia piu' righe di quante
+    // ne compaiano nello Storico un istante dopo.
+    const preview = previewMaterialization(
+      draft.recurrence,
+      draft.day,
+      target === null
+        ? NO_OCCURRENCES
+        : occupiedOccurrenceDates(target.id, repo.getState().expenses),
+    )
     // Una bozza che il core non sa leggere: il foglio non la lascia arrivare
     // fin qui (il bottone e' spento senza un'anteprima), e se ci arrivasse il
     // messaggio direbbe comunque cosa fare invece di tacere.
@@ -751,7 +763,15 @@ export function App() {
     }
     refreshDay()
     const day = getAppState().day
-    const preview = previewMaterialization(rule, day)
+    // Riaccendere e' il terzo innesco della generazione retroattiva, e qui la
+    // regola **esiste da prima**: puo' aver gia' generato mesi di occorrenze.
+    // L'insieme non e' mai vuoto per costruzione, e il conteggio che finisce nel
+    // toast e' quello delle spese che nasceranno davvero.
+    const preview = previewMaterialization(
+      rule,
+      day,
+      occupiedOccurrenceDates(rule.id, repo.getState().expenses),
+    )
     if (!preview.ok) {
       showToast(t('toast.ruleFailed'))
       return
@@ -1179,6 +1199,27 @@ export function App() {
     return planRecurringRuleDeletion(data.recurringRules, data.expenses, { id: ruleTarget.id })
   }, [app.data, ruleTarget])
 
+  /**
+   * I giorni del calendario di questa regola **gia' occupati da un record**,
+   * lapidi comprese. E' cio' che il foglio sottrae per annunciare le spese che
+   * nasceranno invece dell'ampiezza del calendario.
+   *
+   * Si calcola qui e non nel foglio per una ragione di costo: e' una scansione
+   * di tutte le spese (5.000 in archivio), e il foglio si ridipinge a ogni cifra
+   * digitata. Qui il memo la rifa' solo quando il mirror si muove o cambia il
+   * bersaglio — cioe' quando l'insieme puo' davvero essere cambiato.
+   *
+   * `NO_OCCURRENCES` quando non c'e' un bersaglio: la regola non esiste ancora e
+   * il suo id e' un UUID che nessun record porta. E' la costante nominata e non
+   * un insieme vuoto costruito qui, perche' "non ce n'e' nessuna" e "non ho
+   * guardato" devono restare due cose diverse anche a valle.
+   */
+  const ruleOccupied = useMemo(() => {
+    const data = app.data
+    if (data === null || ruleTarget === null) return NO_OCCURRENCES
+    return occupiedOccurrenceDates(ruleTarget.id, data.expenses)
+  }, [app.data, ruleTarget])
+
   /** La categoria che il foglio sta mostrando, **riletta dal mirror** a ogni render. */
   const catTarget = catSheet?.id === undefined || catSheet.id === null ? null : categoryOf(catSheet.id) ?? null
 
@@ -1190,16 +1231,17 @@ export function App() {
    * una frase con dentro il motivo, invece di toccare un bottone e ricevere un
    * errore.
    *
-   * **Le lapidi bloccano ma non si contano**, e le due meta' hanno due ragioni
-   * diverse. Bloccano perche' `restoreExpense` riporta in vita una spesa
-   * cancellata con un tap, e la riga che torna ha un `categoryId` che lo
-   * Storico, le statistiche e il chip dereferenziano tutti. Non si contano
-   * perche' nessuna schermata le mostra: un numero che l'utente non puo'
-   * riconciliare con niente non informa, rifiuta e basta.
+   * **Le lapidi non bloccano piu' e non si contano.** Bloccavano perche' si
+   * riteneva che `restoreExpense` potesse riportare in vita una riga con un
+   * `categoryId` che punta al vuoto; l'argomento era falso — tutti e quattro i
+   * posti in cui una spesa mostra la propria categoria ripiegano su "Categoria
+   * rimossa", e `parseBackup` importa di proposito le spese orfane, quindi quel
+   * ramo e' gia' vivo. Un rifiuto che citava un fatto invisibile in nessuna
+   * schermata proteggeva da uno stato quasi irraggiungibile con
+   * un'affermazione che l'utente non poteva verificare.
    *
-   * Percio' gli esiti sono quattro e non tre. Quando a bloccare sono **solo**
-   * lapidi il core risponde `'deleted-only'`, che di numeri non ne porta
-   * nessuno — e il foglio ha una frase apposta, che parla del fatto.
+   * Percio' gli esiti sono tornati tre: `ok`, `unknown`, `in-use`. I numeri di
+   * `in-use` sono tutti visibili — spese **vive**, regole, budget.
    */
   const catDeletion = useMemo(() => {
     const data = app.data
@@ -1409,6 +1451,7 @@ export function App() {
           current={ruleTarget === null ? null : categoryOf(ruleTarget.categoryId) ?? null}
           target={ruleTarget}
           deletion={ruleDeletion}
+          occupied={ruleOccupied}
           day={app.day}
           leaving={sheet.leaving}
           onSave={saveRule}

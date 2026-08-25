@@ -23,6 +23,7 @@ import type { Cents } from './money'
 import {
   materializationWindow,
   nextOccurrenceOnOrAfter,
+  occupiedOccurrenceDates,
   occurrencesBetween,
   validateRule,
 } from './recurrence'
@@ -46,8 +47,8 @@ export const WEEKS_PER_YEAR = DAYS_PER_YEAR / 7
 const MONTHS_PER_YEAR = 12
 
 /**
- * Quante volte all'anno scatta questa regola, ignorando `startDate`, `endDate`
- * e `active`. Un tasso, non un conteggio: e' un numero con la virgola apposta.
+ * Quante volte all'anno scatta questa regola, ignorando `startDate` e `active`.
+ * Un tasso, non un conteggio: e' un numero con la virgola apposta.
  */
 function occurrencesPerYear(cadence: Cadence, interval: number): number {
   switch (cadence) {
@@ -89,10 +90,10 @@ function occurrencesPerYear(cadence: Cadence, interval: number): number {
  * una previsione di cassa: chi vuole sapere che cosa scatta in un mese preciso
  * usa `occurrencesBetween`, che risponde esatto.
  *
- * Non tiene conto di `startDate` ne' di `endDate`: una regola che finisce fra
- * tre giorni pesa qui come una senza scadenza. Il filtro su chi e' in vigore lo
- * fa `monthlyFixedCosts`, che e' l'unico posto in cui quella domanda ha una data
- * a cui riferirsi.
+ * Non tiene conto di `startDate`: una regola che comincia fra tre giorni pesa
+ * qui come una gia' in corso. Il filtro su chi e' in vigore lo fa
+ * `monthlyFixedCosts`, che e' l'unico posto in cui quella domanda ha una data a
+ * cui riferirsi.
  *
  * ## Una regola non valida vale zero
  *
@@ -128,13 +129,15 @@ export interface MonthlyFixedCosts {
  *
  * - `active`;
  * - `startDate <= onDate`: una regola che comincia il mese prossimo non e'
- *   ancora un costo, e metterla dentro direbbe che escono soldi che non escono;
- * - `endDate` assente o `>= onDate`: una regola finita non e' piu' un costo.
+ *   ancora un costo, e metterla dentro direbbe che escono soldi che non escono.
  *
- * Le due esclusioni sono deliberate e sono anche il limite dichiarato di questo
- * numero: e' la fotografia di **adesso**, non un piano. Chi vuole vedere in
- * anticipo il peso di una regola futura ha `monthlyCostCents` sulla singola
- * regola, che non guarda le date.
+ * Era una coppia: c'era anche "`endDate` assente o `>= onDate`", che se n'e'
+ * andata con il campo. Torna insieme a lui.
+ *
+ * L'esclusione e' deliberata ed e' anche il limite dichiarato di questo numero:
+ * e' la fotografia di **adesso**, non un piano. Chi vuole vedere in anticipo il
+ * peso di una regola futura ha `monthlyCostCents` sulla singola regola, che non
+ * guarda le date.
  *
  * L'arrotondamento e' per riga e poi si sommano interi: il totale mostrato e'
  * sempre esattamente la somma delle righe mostrate. L'alternativa — sommare i
@@ -151,7 +154,6 @@ export function monthlyFixedCosts(
   for (const rule of rules) {
     if (!rule.active) continue
     if (isBefore(onDate, rule.startDate)) continue
-    if (rule.endDate !== undefined && isAfter(onDate, rule.endDate)) continue
     // Una regola non valida non compare nemmeno come riga da zero: non e' un
     // costo, e' un record rotto. `monthlyCostCents` la porterebbe a 0 lo stesso,
     // ma una riga "Affitto — 0,00 €" e' un numero sbagliato con l'aria di
@@ -185,7 +187,6 @@ export interface RecurrenceDraftCommon {
   readonly amountCents: Cents
   readonly interval: number
   readonly startDate: IsoDate
-  readonly endDate?: IsoDate
   /**
    * Presente solo per una regola che esiste gia'. Assente su una regola nuova,
    * ed e' l'assenza che produce l'arretrato: si parte da `startDate`.
@@ -212,6 +213,13 @@ export type RecurrenceDraft = WithCadence<RecurrenceDraftCommon>
  * Non e' un riassunto per comodita': e' la parte dell'annuncio che chi scrive
  * puo' **ri-derivare da solo** e confrontare, dentro la transazione, con quello
  * che era stato mostrato.
+ *
+ * ## I quattro numeri sono quelli delle spese **nuove**, non del calendario
+ *
+ * Sono cio' che comparira' nello Storico, cioe' il calendario **meno** le
+ * occorrenze che sul disco ci sono gia' (`occupiedOccurrenceDates`). Vedi
+ * `previewMaterialization`: e' li' che la sottrazione ha una ragione, e non e'
+ * la stessa che aveva l'annuncio prudente.
  *
  * ## Perche' non viaggiano le date gia' calcolate
  *
@@ -268,18 +276,26 @@ export interface PreviewFootprint {
 }
 
 export interface MaterializationPreview {
-  /** Quante spese verrebbero scritte. Esatto, non un campione. */
+  /**
+   * Quante spese verrebbero **create**. Esatto, non un campione, e non e'
+   * l'ampiezza del calendario: le occorrenze gia' a disco sono gia' state
+   * sottratte.
+   */
   readonly count: number
-  /** La prima, o `null` se non ce n'e' nessuna. */
+  /** La prima **nuova**, o `null` se non ce n'e' nessuna. */
   readonly firstDate: IsoDate | null
-  /** L'ultima, o `null`. */
+  /** L'ultima **nuova**, o `null`. */
   readonly lastDate: IsoDate | null
-  /** `count` per l'importo della regola. */
+  /** `count` per l'importo della regola. Quanto la storia **cresce**. */
   readonly totalCents: Cents
   /**
    * La prima occorrenza **fuori** dalla finestra: quella che questa
    * materializzazione **non** genera e che nessuna materializzazione precedente
-   * ha gia' generato. `null` se la regola e' finita (`endDate` passata).
+   * ha gia' generato.
+   *
+   * **Da quando `endDate` non esiste non e' mai `null`**: una regola non
+   * finisce. Il tipo lo prevede ancora perche' e' la risposta giusta il giorno
+   * in cui la scadenza torna, e i chiamanti la gestiscono gia'.
    *
    * ## Il punto d'ancoraggio, che e' l'unica cosa da decidere qui
    *
@@ -312,9 +328,9 @@ export interface MaterializationPreview {
    * - regola retrodatata (`count > 0`): risponderebbe la **prima occorrenza
    *   arretrata**, cioe' esattamente `firstDate` — una spesa che fra un secondo
    *   sara' nello Storico, non la prossima;
-   * - regola gia' finita (`endDate` passata) e mai materializzata: risponderebbe
-   *   un'occorrenza dentro la finestra invece di `null`, cioe' direbbe che c'e'
-   *   una prossima spesa per una regola che non ne avra' piu'.
+   * - il secondo caso era la regola gia' finita e mai materializzata, dove
+   *   `window.from` avrebbe risposto un'occorrenza dentro la finestra invece di
+   *   `null`. E' andato via con `endDate`, e torna con lei.
    *
    * ## Non entra in `PreviewFootprint`, ed e' una conseguenza del suo significato
    *
@@ -373,18 +389,47 @@ export type MaterializationPreviewResult =
  * dalla scrittura e' peggio di nessuna anteprima, perche' e' una bugia con un
  * bottone di conferma sotto.
  *
- * ## Cosa **non** copre
+ * ## Il calendario meno cio' che c'e' gia': `occupied`
  *
- * Non sa se sul disco esistano gia' spese con quegli id. Per una regola nuova
- * non possono esistere (l'id contiene un UUID appena generato), e per una regola
- * esistente la finestra parte dopo il segnaposto, che per costruzione dichiara
- * gia' scritto tutto cio' che sta prima. Resta un solo caso scoperto: un altro
- * contesto che ha materializzato mentre questa schermata era aperta. Li'
- * l'anteprima conta di piu' di quel che verra' scritto — mai di meno, perche'
- * `addExpenses` salta e non sovrascrive. E' l'unico verso accettabile: si
- * annuncia piu' di quanto si fa.
+ * I quattro numeri annunciati sono quelli delle spese **nuove**. Le date del
+ * calendario che sono gia' occupate da un record — `occupiedOccurrenceDates`,
+ * lapidi comprese — non entrano in nessuno dei quattro, perche' `addExpenses`
+ * le saltera' e nello Storico non comparira' niente di nuovo al loro posto.
  *
- * ## Il caso che violava quel verso, e che adesso non passa piu'
+ * ## Perche' la sottrazione, e non l'annuncio prudente che c'era prima
+ *
+ * Qui c'era scritto che contare di piu' e' *"l'unico verso accettabile: si
+ * annuncia piu' di quanto si fa"*. Quell'argomento copriva una **corsa** — un
+ * altro contesto che materializza mentre la schermata e' aperta — dove la
+ * sovrapposizione e' **possibile**, e un annuncio prudente e' la risposta giusta
+ * a cio' che non si sa.
+ *
+ * Il rewind ha traslocato quell'argomento in un posto dove non vale piu': il
+ * rewind esiste **solo** per regole gia' materializzate, quindi la
+ * sovrapposizione fra la finestra riaperta e cio' che e' gia' a disco non e'
+ * possibile, e' **>= 1 sempre, per costruzione**. Il numero non era sbagliato a
+ * volte: era gonfiato **ogni volta**, esattamente del numero di occorrenze gia'
+ * esistenti nella finestra — 7 spese e 6.300 € annunciati per 4 spese e 3.600 €
+ * fatti, con 6 righe da 5.420 € nello Storico che non tornavano con nessuno dei
+ * due.
+ *
+ * E il numero esatto non e' solo piu' onesto, **e' quello che serve**: 7 e 6.300
+ * sono l'ampiezza del calendario; cio' che l'utente sta per fare alla sua storia
+ * e' +4 spese e +3.600 €. La prima coppia non risponde a nessuna domanda che si
+ * stia facendo.
+ *
+ * **Un argomento spostato di contesto va ri-derivato, non copiato.** E' "una
+ * decisione vale dove vale il suo argomento" applicata al **trasloco** invece
+ * che al tempo: la ragione di una decisione va riletta nel posto nuovo, e se
+ * nomina una condizione che li' non c'e', la decisione non ci arriva.
+ *
+ * La corsa vera resta coperta, ed e' l'unico residuo dichiarato: fra il calcolo
+ * dell'anteprima e la scrittura un altro contesto puo' materializzare, e allora
+ * si annuncia una spesa che non si fa. Sul rewind nemmeno quello passa — la
+ * transazione rifa' la stessa sottrazione sui record veri e rifiuta se i quattro
+ * numeri non coincidono.
+ *
+ * ## Il caso della mezzanotte
  *
  * Ce n'era uno, ed era il tempo. Un'anteprima calcolata alle 23:59:50 e spesa
  * alle 00:00:05 descrive una finestra piu' stretta di quella vera: annuncia
@@ -396,6 +441,15 @@ export type MaterializationPreviewResult =
 export function previewMaterialization(
   draft: RecurrenceDraft,
   today: IsoDate,
+  /**
+   * I giorni gia' occupati da un record su disco per **questa** regola.
+   * `NO_OCCURRENCES` per una regola che ancora non esiste.
+   *
+   * Non e' opzionale, e non e' pignoleria: un default vuoto avrebbe lasciato il
+   * conteggio gonfiato in ogni chiamante non aggiornato, cioe' esattamente dove
+   * il difetto era. Chi non ha guardato il disco deve **dirlo**, non ometterlo.
+   */
+  occupied: ReadonlySet<IsoDate>,
 ): MaterializationPreviewResult {
   // Una regola sintetica: `occurrencesBetween` chiede una `RecurringRule` e
   // legge solo i campi del calendario. L'id non finisce da nessuna parte —
@@ -409,7 +463,6 @@ export function previewMaterialization(
     interval: draft.interval,
     startDate: draft.startDate,
     active: true,
-    ...(draft.endDate !== undefined ? { endDate: draft.endDate } : {}),
     ...(draft.lastMaterializedDate !== undefined
       ? { lastMaterializedDate: draft.lastMaterializedDate }
       : {}),
@@ -439,9 +492,6 @@ export function previewMaterialization(
   if (!isIsoDate(draft.startDate)) {
     return { ok: false, reason: `startDate non valida: "${draft.startDate}"` }
   }
-  if (draft.endDate !== undefined && !isIsoDate(draft.endDate)) {
-    return { ok: false, reason: `endDate non valida: "${draft.endDate}"` }
-  }
   if (draft.lastMaterializedDate !== undefined && !isIsoDate(draft.lastMaterializedDate)) {
     return {
       ok: false,
@@ -453,7 +503,11 @@ export function previewMaterialization(
   if (problem !== null) return { ok: false, reason: problem }
 
   const window = materializationWindow(rule, today)
-  const dates = window === null ? [] : occurrencesBetween(rule, window.from, window.to)
+  const calendar = window === null ? [] : occurrencesBetween(rule, window.from, window.to)
+  // La sottrazione, che e' tutto il punto: cio' che si annuncia e' cio' che si
+  // crea, non l'ampiezza del calendario. Stesso predicato che
+  // `materializeRecurring` applica prima di scrivere.
+  const dates = calendar.filter((date) => !occupied.has(date))
 
   const first = dates[0] ?? null
   const last = dates[dates.length - 1] ?? null
@@ -479,7 +533,6 @@ export function previewMaterialization(
     amountCents: draft.amountCents,
     interval: draft.interval,
     startDate: draft.startDate,
-    ...(draft.endDate !== undefined ? { endDate: draft.endDate } : {}),
     ...(draft.lastMaterializedDate !== undefined
       ? { lastMaterializedDate: draft.lastMaterializedDate }
       : {}),
@@ -769,11 +822,14 @@ export type RecurringRuleDeletion =
  * di una regola. Nessun lettore lo dereferenzia; il primo che lo fara' deve
  * gestire l'assenza esplicitamente, non assumerla impossibile."*
  *
- * E' anche la differenza con `planCategoryDeletion`, che invece **blocca** sulle
- * lapidi: un `categoryId` orfano lo dereferenzia mezza app, e la riga che torna
- * da un ripristino sarebbe rotta e visibile. Conseguenze diverse, permessi
- * diversi — ma lo stesso identico criterio sul **numero mostrato**, che in
- * entrambi i posti esclude le lapidi perche' nessuna schermata le mostra.
+ * `planCategoryDeletion` fa **la stessa cosa**, e per un pezzo non e' stato
+ * cosi': li' le lapidi bloccavano, con l'argomento che un `categoryId` orfano
+ * *"lo dereferenzia mezza app"* e che la riga tornata da un ripristino sarebbe
+ * *"rotta e visibile"*. E' risultato falso — tutti e quattro i lettori hanno un
+ * fallback, `t('row.categoryRemoved')`, gia' raggiungibile dall'import — quindi
+ * l'esito `'deleted-only'` e' stato tolto. Adesso i due permessi coincidono, e
+ * coincide anche il criterio: le lapidi non bloccano e non si contano, perche'
+ * nessuna schermata le mostra.
  *
  * Se qualcuno la usa, la risposta non e' "no": e' **disattivala**
  * (`updateRecurringRule(id, { active: false })`). Che si puo' fare sempre, non
@@ -988,8 +1044,23 @@ export function redeemRewind(confirmed: ConfirmedPreview, today: IsoDate): Rewin
  * `count`, somma **e i due estremi** vengono ricalcolati con le **stesse** due
  * funzioni che la materializzazione esegue (`materializationWindow`,
  * `occurrencesBetween`), sulla regola letta dal disco con il rewind gia'
- * applicato. Se anche uno solo dei quattro non coincide con quello mostrato,
- * non si scrive niente.
+ * applicato, **meno le occorrenze che sul disco ci sono gia'**. Se anche uno
+ * solo dei quattro non coincide con quello mostrato, non si scrive niente.
+ *
+ * ## La sottrazione si rifa' qui, e per questo i tre numeri coincidono
+ *
+ * Il pannello, il bottone e il toast devono dire lo **stesso** numero, e deve
+ * essere quello che comparira' nello Storico. Ci arrivano perche' qui si rifa'
+ * la stessa sottrazione che l'anteprima ha fatto sul mirror
+ * (`occupiedOccurrenceDates`), ma **sui record del disco**: se fra l'anteprima e
+ * la conferma un altro contesto ha materializzato un'occorrenza che era nella
+ * finestra, il conteggio ri-derivato scende di uno e il rewind si rifiuta con
+ * `'stale-preview'` invece di scrivere un numero diverso da quello letto.
+ *
+ * **Le lapidi contano come esistenti.** Una spesa cancellata a mano occupa il
+ * suo id: `add` la salta, e quel giorno non produrra' niente. Contarla fra le
+ * nuove significherebbe promettere una riga che non comparira' — la stessa
+ * malattia, un giro dopo.
  *
  * I due estremi non sono completezza teorica: senza di loro passerebbe
  * **l'ancora mensile spostata** — stesso numero di occorrenze, stessa somma,
@@ -1002,6 +1073,12 @@ export function redeemRewind(confirmed: ConfirmedPreview, today: IsoDate): Rewin
  */
 export function planRecurringRuleRewind(
   rules: readonly RecurringRule[],
+  /**
+   * Le spese **del disco**, da cui si ricava che cosa e' gia' occupato. Come in
+   * `planRecurringRuleDeletion`: chi chiama le rilegge dentro la transazione,
+   * non le porta dal mirror (ADR 008).
+   */
+  expenses: readonly Expense[],
   request: RecurringRuleRewindRequest,
 ): RecurringRuleRewind {
   const target = rules.find((r) => r.id === request.id)
@@ -1031,7 +1108,12 @@ export function planRecurringRuleRewind(
   if (problem !== null) return { ok: false, reason: 'invalid', message: problem }
 
   const window = materializationWindow(rewound, request.today)
-  const dates = window === null ? [] : occurrencesBetween(rewound, window.from, window.to)
+  const calendar = window === null ? [] : occurrencesBetween(rewound, window.from, window.to)
+  // La stessa sottrazione dell'anteprima, rifatta sui record veri. L'insieme
+  // letto e' piccolo per definizione — le occorrenze di **questa** regola da
+  // quando e' nata — quindi non scala con la finestra riavvolta.
+  const occupied = occupiedOccurrenceDates(target.id, expenses)
+  const dates = calendar.filter((date) => !occupied.has(date))
   const actual: PreviewFootprint = {
     count: dates.length,
     totalCents: rewound.amountCents * dates.length,

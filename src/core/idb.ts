@@ -207,6 +207,11 @@ function storesOf(batch: WriteBatch): StoreName[] {
   // che ha generato. Anche qui l'elenco deve restare lo specchio esatto degli
   // argomenti di `planRecurringRuleDeletion`.
   if (batch.recurringRuleDeletion) names.add('expenses')
+  // E il rewind, per la stessa ragione: l'impronta ri-derivata e' il calendario
+  // **meno** cio' che sul disco c'e' gia', e cio' che c'e' gia' sono le spese
+  // che quella regola ha generato. Anche qui l'elenco deve restare lo specchio
+  // esatto degli argomenti di `planRecurringRuleRewind`.
+  if (batch.recurringRuleRewind) names.add('expenses')
   return [...names]
 }
 
@@ -352,10 +357,17 @@ async function runBatch(tx: WriteTx, batch: WriteBatch): Promise<WriteResult> {
     const store = tx.objectStore('recurringRules')
     // La regola si rilegge **qui dentro**, e l'impronta si ri-deriva da lei: cio'
     // che ha attraversato il confine e' l'intenzione piu' i numeri mostrati, non
-    // le date gia' calcolate (ADR 008). Nessun altro store serve — l'impronta e'
-    // calendariale, non guarda le spese gia' scritte, esattamente come
-    // l'anteprima che l'utente ha letto.
-    ruleRewind = planRecurringRuleRewind(await store.getAll(), batch.recurringRuleRewind)
+    // le date gia' calcolate (ADR 008).
+    //
+    // Le spese servono, e non sono un ripensamento: l'impronta e' il calendario
+    // **meno** le occorrenze gia' scritte, e quelle stanno solo qui. Una lettura
+    // sola, e la sottrazione la fa il piano — non N interrogazioni, una per
+    // data candidata, che su una giornaliera riavvolta di due anni sarebbero 730.
+    ruleRewind = planRecurringRuleRewind(
+      await store.getAll(),
+      await tx.objectStore('expenses').getAll(),
+      batch.recurringRuleRewind,
+    )
     if (ruleRewind.ok) enqueue(store.put(ruleRewind.rule))
   }
   if (batch.advanceRecurringMarkers) {

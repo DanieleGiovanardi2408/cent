@@ -124,7 +124,15 @@ export async function probe(page: Page): Promise<readonly Target[]> {
       return new DOMRect(left, top, right - left, bottom - top)
     }
 
-    const nodes = [...document.querySelectorAll<HTMLElement>('button, input, textarea, a[href]')]
+    // `select` e' entrato con il selettore del giorno di pagamento (ADR 023), ed
+    // e' la stessa lezione di sempre: la sonda dice *"per ogni bersaglio
+    // interattivo"*, e quell'argomento non nomina nessun elenco di tag. Il
+    // giorno in cui e' comparso il primo `select` dell'app la sonda l'avrebbe
+    // saltato in silenzio — cioe' avrebbe continuato a passare **proprio dove
+    // c'era qualcosa di nuovo da guardare**.
+    const nodes = [
+      ...document.querySelectorAll<HTMLElement>('button, input, select, textarea, a[href]'),
+    ]
     const out: Target[] = []
 
     for (const el of nodes) {

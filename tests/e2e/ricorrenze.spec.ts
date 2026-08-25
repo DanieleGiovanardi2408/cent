@@ -86,14 +86,20 @@ async function apriPrimaRegola(page: Page): Promise<void> {
 /** Le regole sul **disco**: e' li' che si legge l'importo che il permesso ha scritto. */
 async function regoleSuDisco(
   page: Page,
-): Promise<readonly { id: string; amountCents: number; active: boolean; startDate: string }[]> {
+): Promise<readonly { id: string; amountCents: number; active: boolean; startDate: string; anchorDay?: number }[]> {
   return page.evaluate(async () => {
     const db: IDBDatabase = await new Promise((resolve, reject) => {
       const request = indexedDB.open('cent')
       request.onsuccess = () => resolve(request.result)
       request.onerror = () => reject(request.error)
     })
-    const all: { id: string; amountCents: number; active: boolean; startDate: string }[] =
+    const all: {
+      id: string
+      amountCents: number
+      active: boolean
+      startDate: string
+      anchorDay?: number
+    }[] =
       await new Promise((resolve, reject) => {
         const request = db.transaction('recurringRules').objectStore('recurringRules').getAll()
         request.onsuccess = () => resolve(request.result)
@@ -306,7 +312,9 @@ test('il caso del brief: 900 al mese dal 1 gennaio, dichiarato, confermato, e ot
   // saltarlo quando invece serve.
   await expect(page.locator('.prefs__text--rate')).toHaveCount(0)
   await expect(page.locator('.fixed__row')).toHaveCount(1)
-  await expect(page.locator('.fixed__note')).toHaveText('ogni mese')
+  // **E il giorno del mese**, che senza questa meta' della riga non compare da
+  // nessuna parte appena il rewind separa l'ancora dalla data d'inizio.
+  await expect(page.locator('.fixed__note')).toHaveText('ogni mese, il giorno 1')
 })
 
 test('senza spese fisse nel periodo la Home non annuncia niente', async ({ page }) => {
@@ -1201,8 +1209,18 @@ test('la data d inizio si legge, si sposta solo indietro, e gli arretrati arriva
   //     nessun input da spostare in avanti.
   await apriPrimaRegola(page)
   await expect(page.locator('.starts__now')).toHaveText('Data d’inizio: 1 giugno')
-  await expect(page.locator('.starts .chip__input')).toHaveCount(0)
+  // Nessun `input[type=date]`: e' l'unica cosa che ADR 018 toglie da qui. Il
+  // selettore del giorno del mese qui sotto **c'e'**, e non e' la stessa cosa —
+  // cambia l'ancora, che non tocca nessuna istanza gia' scritta.
+  await expect(page.locator('.starts input[type="date"]')).toHaveCount(0)
   await expect(page.locator('.starts__back')).toHaveText(/Sposta indietro la data d’inizio/)
+
+  // --- **Il giorno di pagamento si vede, e si cambia.** La regola parte il 1
+  //     giugno e l'ancora e' 1: qui le due coincidono ancora. Cio' che conta e'
+  //     che il numero ci sia — dopo il riavvolgimento la data d'inizio andra' a
+  //     gennaio e l'ancora restera' 1 (ADR 020), cioe' le due si separeranno e
+  //     questa riga sara' l'unico posto in cui il giorno compare.
+  await expect(page.locator('.anchor')).toContainText('Ogni mese, il giorno 1')
 
   // --- Il pannello. Prima di scegliere non c'e' niente da confermare e il
   //     bottone che scrive e' spento: l'anteprima e' obbligatoria.
@@ -1226,31 +1244,37 @@ test('la data d inizio si legge, si sposta solo indietro, e gli arretrati arriva
   await expect(page.locator('.save')).toBeDisabled()
 
   // --- 1 gennaio. L'anteprima dice i tre numeri che decidono: quante, da
-  //     quando a quando, quanto in tutto. Otto e non cinque: si annuncia la
-  //     finestra intera, e cio' che c'e' gia' non verra' riscritto — l'unico
-  //     verso accettabile e' annunciare piu' di quanto si fa.
+  //     quando a quando, quanto in tutto — e sono i numeri delle spese che
+  //     **nasceranno**, non l'ampiezza del calendario. Il calendario riaperto
+  //     ha otto giorni; tre sono gia' occupati da un record (giugno, luglio,
+  //     agosto — lapide compresa), e `addExpenses` li saltera'. Quindi cinque,
+  //     dal 1 gennaio al 1 maggio, 4.500 €: dal 1 giugno in poi non nasce piu'
+  //     niente, ed e' per questo che anche l'estremo destro cambia.
   await picker.fill('2026-01-01')
   const anteprima = page.locator('.rule__preview')
-  await expect(anteprima).toContainText('8 spese arretrate')
+  await expect(anteprima).toContainText('5 spese arretrate')
   await expect(anteprima).toContainText('1 gennaio')
-  await expect(anteprima).toContainText('1 agosto')
-  await expect(anteprima).toContainText('7200,00')
+  await expect(anteprima).toContainText('1 maggio')
+  await expect(anteprima).toContainText('4500,00')
 
   // --- La conferma e' un bersaglio diverso da quello che scrive, e finche' non
   //     e' spuntata il bottone e' spento.
   const conferma = page.locator('.rule__confirm')
   await expect(conferma).toHaveAttribute('aria-checked', 'false')
   await expect(page.locator('.save')).toBeDisabled()
-  await expect(page.locator('.save')).toContainText('8')
+  await expect(page.locator('.save')).toContainText('5')
   await conferma.tap()
   await expect(page.locator('.save')).toBeEnabled()
 
   await page.locator('.save').tap()
   await expect(page.locator('.sheet--rule')).toHaveCount(0)
-  await expect(page.locator('.toast__box')).toContainText('8 spese arretrate create')
+  await expect(page.locator('.toast__box')).toContainText('5 spese arretrate create')
 
-  // --- Sul disco: otto record, e il segnaposto **rimosso**. La regola e'
-  //     tornata nello stato di una appena creata con quella data d'inizio.
+  // --- Sul disco: otto record — le cinque nuove piu' le tre che c'erano — e il
+  //     segnaposto **rimosso**. La regola e' tornata nello stato di una appena
+  //     creata con quella data d'inizio. Otto sul disco e cinque annunciate non
+  //     e' una discrepanza: e' esattamente cio' che l'anteprima ha promesso, e
+  //     le tre di differenza sono le righe che l'utente vede gia' nello Storico.
   await expect
     .poll(async () => (await speseSuDisco(page)).length, {
       message: 'la materializzazione non ha scritto gli arretrati',
@@ -1295,6 +1319,8 @@ test('la data d inizio si legge, si sposta solo indietro, e gli arretrati arriva
   //     fallisce: nessuna resurrezione. Era l'unica obiezione seria contro il
   //     rewind, ed e' falsa — qui si vede che e' falsa.
   await expect(page.locator('.day').filter({ hasText: '1 giugno' })).toHaveCount(0)
+  // Sette righe: le **cinque annunciate** piu' le due che erano gia' vive
+  // (luglio e agosto). Giugno resta la lapide che era.
   await expect(page.locator('.row')).toHaveCount(7)
 
   // --- Riaprire l'app non duplica niente: l'identita' di un'occorrenza e'
@@ -1345,4 +1371,116 @@ test('una regola che non ha ancora cominciato si sposta senza creare niente, e l
   // E l'elenco lo dice, con la data nuova.
   await page.locator('.app__action').tap()
   await expect(page.locator('.fixed__note').first()).toContainText('parte: 15 settembre')
+})
+
+/* ------------------------------------------------------------------------- *
+ * ADR 023 — il giorno di pagamento si vede e si cambia
+ * ------------------------------------------------------------------------- */
+
+test('il giorno di pagamento si legge dopo il riavvolgimento, e si corregge', async ({ page }) => {
+  // **Lo scenario intero, quello che nessuna schermata sapeva raccontare.**
+  //
+  // Si crea l'affitto oggi: l'ancora nasce dal giorno di oggi (ADR 020). Ci si
+  // accorge che l'affitto esiste da febbraio e si riavvolge. Da quel momento la
+  // data d'inizio dice "1 febbraio" e l'ancora resta 19 — e prima di ADR 023 il
+  // 19 non compariva da nessuna parte, pur decidendo quando escono 900 € al
+  // mese, per sempre.
+  //
+  // Qui si prova che compare in tutt'e due i posti che descrivono la regola, e
+  // che quando il default e' quello sbagliato **si corregge senza toccare
+  // niente di gia' scritto**.
+  expect(giornoDichiarato()).toBe('2026-08-19')
+
+  await page.goto('./')
+  await expect(page.locator('.fab')).toBeEnabled()
+  await chiudiGuida(page)
+
+  // --- 900 al mese da oggi. Nessun arretrato: niente da confermare.
+  await apriFoglioRegola(page)
+  await digita(page, '90000')
+  await page.locator('.cats--pick .cat').filter({ hasText: 'Casa' }).tap()
+  await expect(page.locator('.rule__confirm')).toHaveCount(0)
+  await page.locator('.save').tap()
+  await expect(page.locator('.sheet--rule')).toHaveCount(0)
+  await expect.poll(async () => (await speseSuDisco(page)).length, { timeout: 10_000 }).toBe(1)
+
+  // --- Finche' le due coincidono il giorno si leggeva gia' dalla data
+  //     d'inizio. La riga c'e' lo stesso: e' il fatto, non un avviso.
+  await apriPrimaRegola(page)
+  await expect(page.locator('.starts__now')).toHaveText('Data d’inizio: 19 agosto')
+  await expect(page.locator('.anchor')).toContainText('Ogni mese, il giorno 19')
+
+  // --- Il riavvolgimento al 1 febbraio. Sei spese e non sette: il 19 agosto e'
+  //     gia' sul disco, e `addExpenses` lo saltera' (ADR 022).
+  await page.locator('.starts__back').tap()
+  await page.locator('.starts .chip__input').fill('2026-02-01')
+  const anteprima = page.locator('.rule__preview')
+  await expect(anteprima).toContainText('6 spese arretrate')
+  await expect(anteprima).toContainText('19 febbraio')
+  await expect(anteprima).toContainText('19 luglio')
+  await expect(anteprima).toContainText('5400,00')
+  await page.locator('.rule__confirm').tap()
+  await page.locator('.save').tap()
+  await expect(page.locator('.sheet--rule')).toHaveCount(0)
+  await expect.poll(async () => (await speseSuDisco(page)).length, { timeout: 10_000 }).toBe(7)
+
+  // --- **Adesso le due sono separate**, ed e' lo stato del difetto: inizio 1
+  //     febbraio, pagamento il 19. L'elenco lo dice, e non "ogni mese".
+  await expect(page.locator('.fixed__note')).toHaveText('ogni mese, il giorno 19')
+  const primaDiCorreggere = await regoleSuDisco(page)
+  expect(primaDiCorreggere[0]?.startDate).toBe('2026-02-01')
+  expect(primaDiCorreggere[0]?.anchorDay).toBe(19)
+
+  // --- Il foglio lo dice a sua volta, accanto alla data d'inizio.
+  await apriPrimaRegola(page)
+  await expect(page.locator('.starts__now')).toHaveText('Data d’inizio: 1 febbraio')
+  await expect(page.locator('.anchor')).toContainText('Ogni mese, il giorno 19')
+
+  // --- E si cambia. Nessuna anteprima da confermare: la finestra e' chiusa
+  //     fino a oggi, quindi cambiare l'ancora non scrive nessuna spesa — e' un
+  //     aggiornamento della regola, come cambiare l'importo.
+  await page.locator('.anchor select').selectOption('25')
+  await expect(page.locator('.anchor')).toContainText('Ogni mese, il giorno 25')
+  await expect(page.locator('.rule__preview')).toHaveText('Non c’è niente da recuperare.')
+  await expect(page.locator('.rule__confirm')).toHaveCount(0)
+  await page.locator('.save').tap()
+  await expect(page.locator('.sheet--rule')).toHaveCount(0)
+
+  // --- Sul disco: l'ancora e' cambiata e **nient'altro**.
+  await expect.poll(async () => (await regoleSuDisco(page))[0]?.anchorDay).toBe(25)
+  const dopo = await regoleSuDisco(page)
+  expect(dopo[0]?.startDate).toBe('2026-02-01')
+  expect(dopo[0]?.amountCents).toBe(90_000)
+
+  // --- **Le istanze gia' scritte non si muovono.** Sono fatti storici, con la
+  //     data dentro l'id: se l'affitto di luglio e' uscito il 19, il 19 e' cio'
+  //     che e' successo. Cambiare l'ancora descrive il futuro.
+  const spese = await speseSuDisco(page)
+  expect(spese).toHaveLength(7)
+  expect(spese.every((e) => e.date.endsWith('-19'))).toBe(true)
+
+  // --- E l'elenco dice il numero nuovo.
+  await expect(page.locator('.fixed__note')).toHaveText('ogni mese, il giorno 25')
+
+  // --- **A 320 punti il giorno si legge ancora.** La riga taglia con i tre
+  //     puntini (`text-overflow: ellipsis`), quindi un testo troppo lungo non
+  //     produce uno scroll orizzontale: produce un difetto **piu' silenzioso**,
+  //     cioe' il numero che questa consegna esiste per mostrare tagliato via
+  //     senza che niente fallisca. Si misura il testo, non solo la pagina.
+  //
+  //     320 non e' un capriccio: e' il vecchio SE, ed e' anche quello che si
+  //     ottiene dallo Zoom schermo di iOS su un telefono normale.
+  await page.setViewportSize({ width: 320, height: 568 })
+  const misure = await page.evaluate(() => {
+    const nota = document.querySelector('.fixed__note')
+    return {
+      pagina: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      tagliata:
+        nota === null
+          ? true
+          : nota.scrollWidth > nota.clientWidth || nota.scrollHeight > nota.clientHeight,
+    }
+  })
+  expect(misure.pagina, 'c\'e\' scroll orizzontale a 320 punti').toBeLessThanOrEqual(0)
+  expect(misure.tagliata, 'il giorno di pagamento e\' tagliato dai tre puntini').toBe(false)
 })

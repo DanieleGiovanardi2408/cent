@@ -359,7 +359,7 @@ export const it = {
   // dove a bloccare sono solo spese cancellate. Dirlo qui una volta rende
   // leggibile li' un rifiuto che altrimenti sembra arbitrario.
   'cat.delete.note':
-    'Non la usa niente: nessuna spesa, nemmeno una che hai cancellato. È l’unica cosa in Cent che non si annulla.',
+    'Non la usa niente di quello che vedi: nessuna spesa, nessuna spesa fissa, nessun budget. È l’unica cosa in Cent che non si annulla.',
   // ADR 019 di nuovo, e la sua ragione non nominava le categorie: vale ovunque
   // un foglio di modifica offra un insieme da cui il valore attuale puo' essere
   // fuori. Qui succede a un dato arrivato da un backup scritto a mano — la
@@ -383,15 +383,14 @@ export const it = {
   // Tre numeri sono il caso completo, non un'ipotesi: un budget di categoria
   // arriva da un import, e chi importa ha gia' spese e ricorrenze.
   'cat.inUse.three': '{a}, {b} e {c}',
+  // **Il rifiuto e' giusto, la ragione scritta qui non lo era.** Diceva che
+  // cancellarla lascerebbe quelle righe *"senza nome"*: e' falso, direbbero
+  // "Categoria rimossa" — il ripiego esiste in tutti e quattro i lettori. La
+  // frase adesso cita **quelle due parole**, cioe' esattamente quello che si
+  // leggerebbe sullo schermo, e dice la cosa che davvero non si puo' disfare:
+  // non esiste nessun foglio che rimetta una categoria a una spesa.
   'cat.inUse.text':
-    'La usa {what}: cancellarla lascerebbe quelle righe senza nome, quindi non si può. Archiviarla fa quello che ti serve — sparisce dalla griglia e lo Storico resta intero.',
-  // **Nessun numero, e non per scelta: l'esito non ne porta nessuno.** Le
-  // lapidi non si vedono da nessuna parte, quindi contarle qui citerebbe una
-  // quantita' che l'utente non puo' riconciliare con niente. La frase apre
-  // dicendo perche' la schermata sembra dargli torto — non vede niente che la
-  // usi — e chiude con la sola cosa da fare adesso.
-  'cat.deletedOnly.text':
-    'Non la usa niente di quello che vedi, ma la usano ancora delle spese che hai cancellato — e una spesa cancellata può tornare. Archiviala: esce dalla griglia e non perdi niente.',
+    'La usa {what}. Cancellarla trasformerebbe quelle righe in “{removed}” per sempre, e non c’è modo di ridargli una categoria. Archiviala: esce dalla griglia e lo Storico resta intero.',
   'cat.preview': 'Come sarà la griglia',
   'cat.position': 'Posizione {index} di {total}',
   'cat.move.back': 'Sposta indietro',
@@ -471,11 +470,15 @@ export const it = {
   // Una regola che comincia piu' avanti c'e' ma non pesa ancora: si vede, e si
   // vede anche perche' non e' nel totale.
   'fixed.later': 'parte: {day}',
-  'fixed.ended': 'finita: {day}',
   // Una regola spenta resta nell'elenco e si legge per intero: e' l'unico dei
-  // tre motivi che si cambia con un tap, quindi e' anche l'unico che deve
-  // portare a qualcosa.
+  // due motivi che si cambia con un tap, quindi e' anche l'unico che deve
+  // portare a qualcosa. ("finita" non c'e' piu': una regola non finisce, e la
+  // chiave e' uscita insieme a `endDate` invece di restare senza lettore.)
   'fixed.off': 'spenta',
+  // **Il giorno di pagamento nell'elenco.** Senza, una mensile riavvolta al 1
+  // febbraio si legge "ogni mese" mentre esce il 25, e il 25 non compare da
+  // nessuna parte: un numero che governa i soldi e che nessuna schermata cita.
+  'fixed.anchor': '{every}, il giorno {day}',
 
   /* ogni quanto scatta */
   'cad.daily.one': 'ogni giorno',
@@ -511,6 +514,11 @@ export const it = {
   'rule.start.today': 'Oggi',
   'rule.start.pick': 'Scegli il giorno da cui parte',
   'rule.start.other': 'Un’altra data',
+  // Il giorno del mese in cui la regola scatta, nel foglio. Si legge come un
+  // fatto e si cambia toccandolo: e' l'unico modo perche' l'ancora congelata di
+  // ADR 020 sia un default e non una trappola.
+  'rule.anchor.day': 'Ogni mese, il giorno {day}',
+  'rule.anchor.pick': 'Cambia il giorno del mese in cui esce',
 
   /* --- l'anteprima, prima di scrivere ------------------------------------- *
    *
@@ -549,13 +557,11 @@ export const it = {
   // Una regola gia' in pari: `count: 0` qui non vuol dire "parte piu' avanti",
   // vuol dire "non c'e' niente da recuperare". Dire "Prima spesa: 1 gennaio"
   // sarebbe falso — quella spesa e' nello Storico da mesi.
+  // Copriva anche il caso della regola finita, che dalla fase 5 non esiste:
+  // senza `endDate` una regola non finisce, quindi `rule.preview.done` e' uscita
+  // dal dizionario invece di restare viva nel codice e morta nei fatti. Torna
+  // con la scadenza, in fase 7.
   'rule.preview.settled': 'Non c’è niente da recuperare.',
-  // La regola e' **finita**: `endDate` e' passata, quindi non esiste nessuna
-  // occorrenza futura da annunciare. Qui "Prima spesa: ..." non ha una forma
-  // vera — non c'e' un giorno da scriverci dentro — e "non c'e' niente da
-  // recuperare" direbbe il vero tacendo il fatto piu' grosso: che questa regola
-  // non creera' mai piu' niente. Sono due stati diversi e vanno detti diversi.
-  'rule.preview.done': 'Questa spesa fissa è finita: non creerà altre spese.',
 
   /* --- quando la scrittura dice di no ------------------------------------- *
    *

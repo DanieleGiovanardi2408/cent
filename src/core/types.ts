@@ -85,6 +85,31 @@ export type Cadence = 'daily' | 'weekly' | 'monthly'
  *
  * ---
  *
+ * **`endDate` non c'e' piu', per la stessa ragione e in forma piu' netta.**
+ *
+ * Aveva lettori dappertutto — la finestra di materializzazione, `validateRule`,
+ * `monthlyFixedCosts`, `sameCalendar`, l'anteprima, due chiavi di dizionario per
+ * lingua — e **zero produttori**: nessun foglio la scriveva. `RuleSheet` si
+ * limitava a ricopiarla da un record che non poteva averla, e l'unico posto che
+ * sapesse costruirne una era `parseBackup`.
+ *
+ * Ed e' qui che e' piu' netta che con `note`: **con zero produttori nemmeno un
+ * backup puo' contenerla**, perche' un backup e' l'export di dati scritti da
+ * quest'app. Quindi era morto anche il supporto in `parseRule` — quindici rami
+ * raggiungibili solo da un JSON scritto a mano.
+ *
+ * La motivazione **e' questa e nessun'altra**: zero produttori. Non "toglie una
+ * scorciatoia di performance": `amountCents: 1`, la doppia anteprima e i due
+ * `useMemo` di `RuleSheet` restano da valutare per conto loro, con il loro
+ * argomento.
+ *
+ * Nessuna migrazione, per lo stesso motivo di `note`: nessun record puo' averla.
+ *
+ * **L'idea non e' morta**, ed e' in `docs/ROADMAP.md` per la fase 7 con il suo
+ * argomento vero — le spese fisse di un Erasmus finiscono tutte: la palestra a
+ * giugno, il tram ad agosto, l'affitto con il contratto. Torna **insieme al suo
+ * campo di input**, nello stesso commit.
+ *
  * Qui ci sono i campi che **non dipendono dalla cadenza**. Gli altri due —
  * `cadence` e `anchorDay` — stanno in `WithCadence` qui sotto, insieme, perche'
  * il secondo esiste solo per uno dei valori del primo.
@@ -95,7 +120,6 @@ export interface RecurringRuleCommon extends EntityBase {
   /** Ogni quanti giorni / settimane / mesi. Intero >= 1. */
   readonly interval: number
   readonly startDate: IsoDate
-  readonly endDate?: IsoDate
   /**
    * Ultimo giorno **gia' materializzato e persistito**. Avanza solo dopo che la
    * transazione che ha scritto le spese di quel giorno e' andata a buon fine.

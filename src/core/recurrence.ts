@@ -92,9 +92,6 @@ export function validateRule(rule: RecurringRule): string | null {
       return `anchorDay non valido: ${rule.anchorDay}`
     }
   }
-  if (rule.endDate !== undefined && isBefore(rule.endDate, rule.startDate)) {
-    return `endDate (${rule.endDate}) precede startDate (${rule.startDate})`
-  }
   return null
 }
 
@@ -113,7 +110,12 @@ function monthlyOccurrence(rule: RecurringRule, anchorDay: number, k: number): I
 }
 
 /**
- * La prima occorrenza il giorno `from` o dopo. `null` se la regola e' finita.
+ * La prima occorrenza il giorno `from` o dopo.
+ *
+ * **Non risponde mai `null`** da quando `endDate` non esiste: una regola non
+ * finisce piu'. Il tipo lo dichiara ancora perche' il giorno in cui la scadenza
+ * torna (ROADMAP fase 7, insieme al suo campo di input) `null` e' la risposta
+ * giusta, e i chiamanti la gestiscono gia'.
  *
  * Non guarda `active`: descrive il calendario della regola, non se sia il caso
  * di applicarlo. Non fa nemmeno un ciclo giorno per giorno: l'indice
@@ -148,7 +150,6 @@ export function nextOccurrenceOnOrAfter(rule: RecurringRule, from: IsoDate): Iso
     date = addDays(rule.startDate, k * step)
   }
 
-  if (rule.endDate !== undefined && isAfter(date, rule.endDate)) return null
   return date
 }
 
@@ -184,7 +185,8 @@ export interface MaterializationWindow {
  * - `from` e' il giorno dopo il segnaposto, o `startDate` se la regola non ha
  *   mai prodotto niente. E' qui che nasce l'arretrato: una regola nuova con
  *   `startDate` a gennaio parte da gennaio, non da oggi;
- * - `to` e' oggi, tagliato a `endDate` se la regola e' gia' finita.
+ * - `to` e' oggi, e basta: da quando `endDate` non esiste non c'e' piu' niente
+ *   che tagli il bordo superiore.
  *
  * Sta in una funzione sola perche' ha **due** chiamanti: il motore e
  * `previewMaterialization`. Se l'anteprima ricalcolasse la finestra per conto
@@ -201,10 +203,8 @@ export function materializationWindow(
 ): MaterializationWindow | null {
   const from =
     rule.lastMaterializedDate === undefined ? rule.startDate : addDays(rule.lastMaterializedDate, 1)
-  const to =
-    rule.endDate !== undefined && isBefore(rule.endDate, today) ? rule.endDate : today
-  if (isAfter(from, to)) return null
-  return { from, to }
+  if (isAfter(from, today)) return null
+  return { from, to: today }
 }
 
 /**
@@ -246,6 +246,60 @@ export function buildOccurrenceIndex(expenses: readonly Expense[]): Set<string> 
     if (expense.recurringId !== undefined) index.add(expense.id)
   }
   return index
+}
+
+/**
+ * Nessuna occorrenza gia' a disco. E' lo stato di una regola **che ancora non
+ * esiste**: il suo id e' un UUID appena generato, quindi nessun record puo'
+ * portarlo.
+ *
+ * Esiste come costante nominata invece che come parametro opzionale perche' la
+ * differenza fra "non ce n'e' nessuna" e "non ho guardato" e' esattamente il
+ * difetto che questa sottrazione esiste per togliere: un default silenzioso
+ * avrebbe lasciato il conteggio gonfiato in ogni chiamante che non fosse stato
+ * aggiornato, cioe' proprio nel punto in cui il difetto era.
+ */
+export const NO_OCCURRENCES: ReadonlySet<IsoDate> = new Set<IsoDate>()
+
+/**
+ * I giorni del calendario di una regola gia' **occupati da un record su disco**.
+ * **Lapidi comprese**: una spesa cancellata a mano occupa il suo id, quindi
+ * `add` la salta e quel giorno non produrra' nessuna spesa nuova.
+ *
+ * ## E' la meta' leggibile dell'id deterministico
+ *
+ * `recurringExpenseId` dichiara che la coppia (regola, giorno) si rilegge
+ * dall'id senza ambiguita'. Questa funzione e' quella rilettura: si guarda
+ * **l'id**, non `date`, per la stessa ragione per cui `buildOccurrenceIndex`
+ * guarda l'id — `date` l'utente puo' cambiarla (l'affitto di agosto pagato in
+ * ritardo e spostato al 5 settembre), e un insieme costruito su `date`
+ * dichiarerebbe libero il 1 agosto e occupato il 5 settembre. Entrambe sbagliate.
+ *
+ * Il predicato e' quindi **lo stesso** che `materializeRecurring` applica prima
+ * di scrivere (`!seen.has(recurringExpenseId(rule.id, date))`): e' questo che
+ * rende il numero annunciato uguale al numero che comparira' nello Storico.
+ *
+ * ## Il costo, che e' la ragione della forma
+ *
+ * La forma cara sarebbe l'inversa — per ognuna delle N date candidate chiedere
+ * al disco se esiste — e su una giornaliera riavvolta di due anni sono 730
+ * interrogazioni. Qui si legge **una volta sola** cio' che esiste per quella
+ * regola e si sottrae: l'insieme e' piccolo **per definizione**, perche' sono le
+ * occorrenze generate da quando la regola e' nata. **Non scala con la finestra,
+ * scala con l'eta' della regola.**
+ */
+export function occupiedOccurrenceDates(
+  ruleId: string,
+  expenses: readonly Expense[],
+): ReadonlySet<IsoDate> {
+  const prefix = `rec:${ruleId}:`
+  const dates = new Set<IsoDate>()
+  for (const expense of expenses) {
+    if (expense.recurringId === undefined) continue
+    if (!expense.id.startsWith(prefix)) continue
+    dates.add(expense.id.slice(prefix.length))
+  }
+  return dates
 }
 
 export interface MaterializeOptions {
@@ -334,8 +388,7 @@ function sameCalendar(a: RecurringRule, b: RecurringRule): boolean {
     a.cadence === b.cadence &&
     a.interval === b.interval &&
     a.anchorDay === b.anchorDay &&
-    a.startDate === b.startDate &&
-    a.endDate === b.endDate
+    a.startDate === b.startDate
   )
 }
 
