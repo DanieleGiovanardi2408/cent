@@ -310,6 +310,20 @@ Metriche della dashboard: speso / budget / rimanente del periodo, giorni rimanen
 passo attuale vs passo sostenibile. Sforare non e' un errore: la UI lo mostra con
 calma, senza allarmi aggressivi.
 
+### Le ricorrenti non entrano nel budget
+Le spese con `source: 'recurring'` sono escluse dal calcolo del budget: **il
+budget serve a decidere se prendere quel caffe', e l'affitto non e' una
+decisione**. Ragione per esteso e conseguenze in
+[ADR 016](../docs/adr/016-due-tipi-di-soldi.md) — qui le tre che non si negoziano:
+
+1. **Storico e statistiche mostrano tutto.** Sono spese vere: e' solo il budget a
+   escluderle.
+2. **La Home lo dice**, accanto al numero grande: *"oltre alle spese fisse"*.
+   Un'esclusione taciuta e' un numero che mente per omissione.
+3. **Due numeri, non uno**: accanto al budget, il totale mensile delle fisse. La
+   seconda cifra ha senso solo se si vede la prima.
+
+
 ## Schermate
 1. **Home** — periodo corrente. Numero grande = quanto resta. Progresso.
    Riga "puoi spendere ~X EUR/giorno". Spese di oggi. FAB per aggiungere.
@@ -509,6 +523,21 @@ E' successo tre volte in due giorni, sempre nella stessa forma:
 
 Il costo di sbagliare il livello di generalita' non e' un difetto: e' **un difetto
 che si crede gia' corretto**, ed e' per questo che non lo cerca nessuno.
+
+## Nessun messaggio cita un numero che l'utente non puo' vedere
+Se un messaggio dice *"la usano 8 spese"*, quelle otto devono essere raggiungibili
+da qualche schermata. Un numero che non si puo' riconciliare con lo schermo non
+informa: **lascia l'utente davanti a un rifiuto che non puo' verificare**, e da li'
+o si fida o smette di fidarsi — nessuna delle due e' quello che volevamo.
+
+Il caso che l'ha prodotta: `planRecurringRuleDeletion` rifiuta con
+`reason: 'in-use', expenses: N` contando **anche le lapidi** (le spese cancellate).
+Una regola le cui uniche istanze sono cancellate rifiuta quindi la cancellazione
+citando un numero di spese che nello Storico **non si vedono**.
+
+E' la stessa malattia, in scala ridotta, del messaggio *"Non c'e' niente da
+recuperare"* mostrato mentre otto spese non venivano create: **un messaggio che
+afferma qualcosa che lo schermo non conferma.**
 
 ## Dopo una correzione, la verifica si riesegue — non si deduce
 Il posto piu' probabile in cui trovare il prossimo difetto e' **dentro la
