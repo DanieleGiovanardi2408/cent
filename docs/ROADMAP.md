@@ -1,3 +1,80 @@
+# Stato corrente — 25 agosto 2026
+
+**Da riscrivere a ogni ripartenza.** Non contiene decisioni (quelle stanno sotto e
+nelle ADR): contiene cio' che una sessione nuova **non puo' dedurre da nessun
+file** — cosa e' in volo, cosa aspetta una persona, e quali soglie stanno per
+scattare.
+
+## A che punto siamo
+
+Ultimo commit: **`62f8ce8`**, CI verde, in produzione su
+https://danielegiovanardi2408.github.io/cent/
+
+Fasi finite: **0, 1, 2, 4, 3, 5** (la 4 e' stata fatta prima della 3, vedi la
+tabella sotto). Restano **6** (statistiche), **7** (export/import completo con
+anteprima) e **8** (packaging e pubblicazione).
+
+Numeri all'ultimo commit: **533 test unitari**, **188 e2e** (+16 saltati e
+dichiarati), bundle **47,9 KB gzip** su 60, suite locale **4m41s**.
+
+## In volo adesso
+
+- **Il gate della fase 5 con `product-critic` e' in corso** e il suo report **non
+  e' ancora arrivato**. Ha quattro puntamenti oltre al giro normale: (1) il rename
+  `totalSpent` -> `budgetSpent` ha forzato una scelta in ogni chiamante, ma il
+  compilatore garantisce che *una* scelta sia stata fatta, non che sia quella
+  giusta; (2) ri-derivare i percorsi che generano occorrenze retroattive invece di
+  spuntare i tre noti; (3) il doppio numero fra Home e Storico il primo del mese;
+  (4) se la scorciatoia dell'1 centesimo sia chiusa o solo ristretta.
+- Se questa sessione riparte senza quel report, **il gate va rifatto**: nessuna
+  delle sue conclusioni e' stata applicata.
+
+## In sospeso sul telefono — nessuna di queste e' automatizzabile
+
+Sono ferme dal **24 agosto** e vanno fatte **in quest'ordine**:
+
+1. **Esportare un backup dall'app installata SENZA toccare la banda di
+   aggiornamento.** Per ADR 005 l'app aggiorna solo quando l'utente tocca, quindi
+   il telefono sta ancora allo **schema 2**: quello e' l'unico momento in cui si
+   puo' prendere uno stato pre-migrazione. Una rete esiste gia'
+   (`cent20260823.json`, `schemaVersion: 2`), ma copre solo fino al 23 agosto.
+2. **Toccare la banda.** Li' gira la **migrazione 2 -> 3** sul database reale — la
+   prima migrazione su dati veri del progetto. Il piano e' stato verificato su una
+   copia del backup vero, campo per campo, e `schema.ts` non e' cambiato da allora.
+3. **Creare la regola dell'affitto vero** con la data di inizio giusta: e' il
+   criterio di chiusura della fase 5, e serve a vedere l'anteprima degli arretrati
+   con numeri veri.
+4. **Dare il telefono a una persona che non ha mai visto l'app**, che non parla
+   italiano e che non fuma, **senza dire niente**. Deve capire cosa fa l'app,
+   sostituire una categoria con una sua e registrare una spesa. E' il criterio di
+   chiusura della fase 3, **e si consuma una volta sola**: i rilievi del critico
+   vanno corretti prima.
+   Nello stesso giro, a occhio: **il contenuto sotto il notch**, che la suite non
+   puo' vedere per costruzione (vedi "Verificabili solo sul dispositivo").
+
+## Soglie vicine a scattare
+
+- **La suite e' a 4m41s contro il tetto di 5 minuti** scritto piu' sotto. Al
+  superamento si divide in due comandi — uno veloce sempre, uno completo prima del
+  commit — e la decisione e' gia' presa: non si ridiscute e non si convive.
+- **Il bundle e' a 47,9 KB su 60.** Restano 12,1 KB per statistiche, import e
+  packaging.
+- **Il disco della macchina di sviluppo e' a 3,0 GB liberi**, in calo costante e
+  non per colpa del progetto. Era 21 GB il 22 agosto. Sotto il gigabyte questa
+  sessione si e' gia' bloccata una volta al punto di non poter eseguire nemmeno
+  `df`: se ricapita, la prima mossa e' liberare spazio da un Terminale vero, non
+  da qui.
+
+## Decisioni prese e non ancora applicate
+
+Nessuna in sospeso al momento di scrivere. Le ultime sono state chiuse con
+`62f8ce8`. **Se il report del critico arriva, le sue conclusioni approvate vanno
+qui finche' non sono nel codice** — e' successo due volte che una decisione
+restasse scritta e non applicata per due commit (la seconda soglia del promemoria,
+la Parte 2 del tastierino), ed entrambe le volte l'ha trovata un gate e non una
+grep.
+
+
 # Roadmap
 
 Le fasi. Una fase e' finita quando qualcosa gira davvero sul telefono, non
