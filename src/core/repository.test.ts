@@ -751,7 +751,6 @@ describe('categorie: cancellare davvero', () => {
       reason: 'in-use',
       expenses: 1,
       recurringRules: 0,
-      budgets: 0,
     })
     expect(disk.categories.some((c) => c.id === svago?.id)).toBe(true)
 
@@ -779,28 +778,14 @@ describe('categorie: cancellare davvero', () => {
     expect(esito.ok === false && esito.reason === 'in-use' && esito.recurringRules).toBe(1)
   })
 
-  it('un budget di categoria la trattiene: e un orfano che nessuna schermata vedrebbe', async () => {
-    // Non e' raggiungibile dalla UI di oggi (il foglio del budget non scrive
-    // `categoryId`), lo diventa con l'import della fase 7. Un budget che punta a
-    // una categoria cancellata resta li' per sempre: `resolveBudget` continua a
-    // sceglierlo e nessuna schermata puo' ne' mostrarlo ne' toglierlo.
-    const { repo, disk } = await open()
-    const leisure = repo.getState().categories.find((c) => c.name === 'Leisure')
-    repo.setBudget({
-      period: 'monthly',
-      amountCents: 20_000,
-      categoryId: leisure?.id ?? '',
-      effectiveFrom: '2026-08-01',
-    })
-    await repo.flush()
-
-    const esito = await repo.deleteCategory(leisure?.id ?? '')
-    expect(esito.ok === false && esito.reason).toBe('in-use')
-    expect(esito.ok === false && esito.reason === 'in-use' && esito.budgets).toBe(1)
-    expect(disk.categories).toHaveLength(DEFAULT_CATEGORY_SEEDS.length)
-  })
-
-  it('il budget generale non trattiene niente: altrimenti niente sarebbe piu cancellabile', async () => {
+  it('un budget non trattiene niente: dopo la fine di Budget.categoryId non puo per costruzione', async () => {
+    // Qui c'erano due test: uno in cui un budget **di categoria** tratteneva la
+    // cancellazione, e questo. Il primo raggiungeva l'unico ramo che
+    // `Budget.categoryId` avesse, ed e' sparito insieme al campo — che aveva
+    // zero produttori: il foglio del budget non ha mai scritto una categoria.
+    //
+    // Questo resta perche' e' l'invariante di prodotto, non il ramo: impostare
+    // un budget non deve rendere una categoria incancellabile.
     const { repo } = await open()
     const leisure = repo.getState().categories.find((c) => c.name === 'Leisure')
     repo.setBudget({ period: 'monthly', amountCents: 80_000, effectiveFrom: '2026-08-01' })

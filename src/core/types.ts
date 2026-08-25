@@ -169,12 +169,43 @@ export type BudgetPeriod = 'weekly' | 'monthly'
  * Budget storicizzato: non si modifica, si chiude e se ne apre uno nuovo.
  * Un record vale per i giorni in `[effectiveFrom, effectiveTo]`; senza
  * `effectiveTo` vale fino a nuovo ordine.
+ *
+ * ## `categoryId` non c'e', ed e' il terzo caso della stessa malattia
+ *
+ * Dopo `RecurringRule.note` (tre lettori) e `RecurringRule.endDate` (quindici),
+ * questo ne aveva **diciassette nel solo `budget.ts`** e zero produttori.
+ *
+ * L'unico chiamante di produzione di `setBudget` passa
+ * `{ period, amountCents, effectiveFrom }`: il foglio del budget non ha, e non
+ * ha mai avuto, un selettore di categoria. Le tre scritture che esistevano
+ * ricopiavano `change.categoryId` da un `BudgetChange` che nessuno riempiva —
+ * cioe' una catena di sole copie, che gira a vuoto. E' la definizione che vale
+ * qui: **un campo e' prodotto quando un valore entra da fuori almeno una
+ * volta.**
+ *
+ * Cosa faceva quel campo mentre era assente: `resolveBudget` confrontava
+ * `budget.categoryId !== categoryId` con `undefined` da entrambe le parti,
+ * `inRange` e `budgetSpent` avevano un filtro per categoria che nessuno
+ * attivava, `planResolvedBudgetChange` partizionava i record per una chiave
+ * composta il cui secondo membro era costante. Diciassette rami raggiungibili
+ * solo da un test.
+ *
+ * **Nessuna migrazione**, per lo stesso motivo di `note` e `endDate`: nessun
+ * record puo' averlo. Con zero produttori nemmeno un backup puo' contenerlo,
+ * perche' un backup e' l'export di dati scritti da quest'app. Se ne arrivasse
+ * uno da un JSON scritto a mano, `parseBudget` lo scarta e IndexedDB conserva
+ * la proprieta' in piu' senza che nessuno la legga.
+ *
+ * **L'idea non e' morta, ma non e' `endDate`.** `endDate` era
+ * un'implementazione rimandata, di forma nota e piccola; il budget per categoria
+ * e' una **domanda di design** — ogni categoria con il suo periodo? il
+ * complessivo resta? come si sommano? — e si incrocia con ADR 016, che tiene le
+ * ricorrenti fuori dal budget. Sta in `docs/ROADMAP.md` come domanda, non come
+ * arretrato.
  */
 export interface Budget extends EntityBase {
   readonly period: BudgetPeriod
   readonly amountCents: Cents
-  /** Assente = budget complessivo del periodo. Presente = budget di categoria. */
-  readonly categoryId?: string
   readonly effectiveFrom: IsoDate
   readonly effectiveTo?: IsoDate
 }

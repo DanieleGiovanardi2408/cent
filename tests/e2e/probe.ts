@@ -124,15 +124,110 @@ export async function probe(page: Page): Promise<readonly Target[]> {
       return new DOMRect(left, top, right - left, bottom - top)
     }
 
-    // `select` e' entrato con il selettore del giorno di pagamento (ADR 023), ed
-    // e' la stessa lezione di sempre: la sonda dice *"per ogni bersaglio
-    // interattivo"*, e quell'argomento non nomina nessun elenco di tag. Il
-    // giorno in cui e' comparso il primo `select` dell'app la sonda l'avrebbe
-    // saltato in silenzio — cioe' avrebbe continuato a passare **proprio dove
-    // c'era qualcosa di nuovo da guardare**.
-    const nodes = [
-      ...document.querySelectorAll<HTMLElement>('button, input, select, textarea, a[href]'),
-    ]
+    /**
+     * I ruoli ARIA che denotano un **comando singolo**: qualcosa che si tocca
+     * una volta e fa una cosa.
+     *
+     * Fuori restano, e non per svista:
+     *
+     * - i ruoli **compositi** (`grid`, `listbox`, `menu`, `menubar`,
+     *   `radiogroup`, `tablist`, `tree`, `treegrid`, `tabpanel`): il bersaglio
+     *   e' la voce dentro, non il contenitore. Contarli significherebbe
+     *   misurare i 44px di una griglia invece che di un chip;
+     * - i ruoli **di sola lettura** (`progressbar`, `separator`, `scrollbar`):
+     *   ARIA li definisce come stato mostrato, non come comando. La barra del
+     *   budget e' alta 6px per scelta, e non e' un bersaglio mancato;
+     * - tutto il resto (`group`, `dialog`, `status`, `alert`, `img`,
+     *   `presentation`): non e' interattivo per definizione del ruolo.
+     *
+     * Queste esclusioni **non sono un secondo elenco da tenere aggiornato**:
+     * sono cio' che avanza da un insieme chiuso. Il vocabolario dei ruoli ARIA
+     * lo scrive una specifica che non e' nostra, quindi niente di cio' che
+     * scriveremo domani puo' introdurre un ruolo operabile che non e' qui.
+     */
+    const COMANDI = new Set([
+      'button',
+      'checkbox',
+      'combobox',
+      'gridcell',
+      'link',
+      'menuitem',
+      'menuitemcheckbox',
+      'menuitemradio',
+      'option',
+      'radio',
+      'searchbox',
+      'slider',
+      'spinbutton',
+      'switch',
+      'tab',
+      'textbox',
+      'treeitem',
+    ])
+
+    /**
+     * Interattivo **per ruolo**, non per nome del tag.
+     *
+     * ## Perche' l'elenco di tag e' stato tolto
+     *
+     * `button, input, select, textarea, a[href]` era un'enumerazione scritta al
+     * tempo t e applicata al tempo t+n: `select` ci e' entrato solo dopo che
+     * qualcuno ci era inciampato con il selettore del giorno di pagamento
+     * (ADR 023). Il prossimo elemento nuovo sarebbe stato invisibile allo stesso
+     * modo, e stavolta senza nessuno che ci inciampasse — cioe' la sonda avrebbe
+     * continuato a passare **proprio dove c'era qualcosa di nuovo da guardare**.
+     * E' la stessa malattia dei campi senza produttore e delle irraggiungibilita'
+     * scadute: una lista che non invecchia insieme a cio' che descrive.
+     *
+     * ## Le due regole, e perche' sono un'unione e mai una sottrazione
+     *
+     * 1. **Il browser dice che si puo' operare**: `tabIndex >= 0`. E' la
+     *    focalizzabilita' sequenziale calcolata dal motore, non dedotta da noi:
+     *    misurata qui, prende `button`, `a[href]`, `input`, `select`,
+     *    `textarea`, `summary`, `[tabindex="0"]` — e prendera' da sola il
+     *    prossimo elemento operabile che la piattaforma aggiunge o che noi
+     *    cominciamo a usare. Nessun tag e' nominato qui.
+     * 2. **L'autore dichiara un comando**: un ruolo ARIA in `COMANDI`. Serve per
+     *    i widget a `tabindex` mobile — una `tab` non attiva porta
+     *    `tabindex="-1"` e resta un bersaglio da toccare — e per un
+     *    `role="button"` a cui qualcuno abbia scordato il `tabindex`, che e' un
+     *    difetto che vogliamo vedere, non nascondere.
+     *
+     * Sono in **OR**: un ruolo non nella lista non toglie mai niente. Un
+     * `<button role="img">` resterebbe un bersaglio per la regola 1. Cosi' una
+     * svista sul ruolo non puo' spegnere la sonda in silenzio — che e'
+     * esattamente il modo in cui l'elenco di tag falliva.
+     *
+     * ## L'unico buco della regola 1, misurato invece che supposto
+     *
+     * `contenteditable` era scritto qui dentro come "lo prende la regola 1". Non
+     * lo prende: in Chromium `tabIndex` di un `<div contenteditable>` vale
+     * **-1** anche se il div si mette a fuoco benissimo. La riga era una regola
+     * scritta e non applicata, con la particolarita' di essere falsa nel
+     * commento che la giustificava.
+     *
+     * Sta quindi nella regola 2, dove va: l'attributo **e'** una dichiarazione
+     * di comando dell'autore — il ruolo implicito di un `contenteditable` e'
+     * `textbox` — solo scritta in HTML invece che in ARIA. Non e' un terzo
+     * elenco: e' l'unico caso in cui la piattaforma dice "operabile" senza dirlo
+     * a `tabIndex`.
+     */
+    const operabile = (el: Element): el is HTMLElement | SVGElement => {
+      if (!(el instanceof HTMLElement || el instanceof SVGElement)) return false
+      if (el.tabIndex >= 0) return true
+      // L'**attributo**, non `isContentEditable`: quello e' calcolato ed
+      // eredita, quindi in `<div contenteditable><p>x</p></div>` conterebbe due
+      // bersagli dove ce n'e' uno. Il ruolo `textbox` sta sull'elemento che lo
+      // dichiara, e li' sta anche il rettangolo da misurare.
+      const editabile = el.getAttribute('contenteditable')
+      if (editabile !== null && editabile !== 'false') return true
+      const role = el.getAttribute('role')
+      // Il ruolo puo' essere una lista di ripiego ("switch button"): basta che
+      // uno solo dei nomi sia un comando.
+      return role !== null && role.trim().split(/\s+/).some((r) => COMANDI.has(r))
+    }
+
+    const nodes = [...document.querySelectorAll('*')].filter(operabile)
     const out: Target[] = []
 
     for (const el of nodes) {

@@ -188,9 +188,15 @@ test('la fascia rossa dice sempre qualcosa: i tre esiti della cancellazione', as
   await apriCategoria(page, 3)
   await expect(page.locator('.danger__action')).toHaveText('Elimina del tutto')
   // La nota diceva "nessuna spesa, **nemmeno una che hai cancellato**", ed era
-  // vera solo finche' le lapidi bloccavano. Adesso elenca i tre tipi di record
-  // che si vedono, che sono esattamente quelli che il rifiuto conta.
-  await expect(page.locator('.danger')).toContainText('nessun budget')
+  // vera solo finche' le lapidi bloccavano. Adesso elenca i **due** tipi di
+  // record che si vedono, che sono esattamente quelli che il rifiuto conta.
+  //
+  // Erano tre, e il terzo era il budget: `Budget.categoryId` non esiste piu',
+  // quindi un budget non puo' nominare una categoria e la nota prometteva un
+  // controllo su un record che non puo' partecipare. Questa riga asseriva
+  // proprio quella parola — cioe' teneva viva la copia sbagliata.
+  await expect(page.locator('.danger')).toContainText('nessuna spesa fissa')
+  await expect(page.locator('.danger')).not.toContainText('budget')
   await expect(page.locator('.danger')).not.toContainText('nemmeno una che hai cancellato')
   await chiudiFoglio(page)
 
@@ -216,7 +222,10 @@ test('la fascia rossa dice sempre qualcosa: i tre esiti della cancellazione', as
   await expect(page.locator('.sheet--cat')).toBeVisible()
   await still(page)
   await expect(page.locator('.danger__action')).toHaveCount(0)
-  await expect(page.locator('.danger')).toContainText('La usa 1 spesa ricorrente')
+  // "spesa fissa", che e' la parola con cui l'elenco qui sopra chiama la stessa
+  // riga: la frase diceva "1 spesa ricorrente", che non compare in nessuna
+  // schermata, e contava **regole** chiamandole spese.
+  await expect(page.locator('.danger')).toContainText('La usa 1 spesa fissa')
 
   await senzaScrollOrizzontale(page, 'in uso')
 })

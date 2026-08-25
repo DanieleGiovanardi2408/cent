@@ -51,7 +51,7 @@
  * nessun record la nomina piu'. Vedi `planCategoryDeletion`.
  */
 
-import type { Budget, Category, Expense, RecurringRule, Timestamp } from './types'
+import type { Category, Expense, RecurringRule, Timestamp } from './types'
 
 /**
  * Quante categorie stanno in griglia. Otto, cioe' 4x2 senza scroll.
@@ -267,15 +267,13 @@ export type CategoryDeletion =
       readonly expenses: number
       /** Regole ricorrenti che la nominano. Si vedono tutte in Impostazioni. */
       readonly recurringRules: number
-      /** Budget di categoria che la nominano, **storici compresi**. */
-      readonly budgets: number
     }
 
 /**
  * Il piano per cancellare **davvero** una categoria.
  *
- * L'unica condizione e' che nessun record **visibile** la nomini: spese vive,
- * regole ricorrenti, budget di categoria. **Le lapidi non bloccano piu'.**
+ * L'unica condizione e' che nessun record **visibile** la nomini: spese vive e
+ * regole ricorrenti. **Le lapidi non bloccano piu'.**
  *
  * ## Perche' bloccavano, e perche' l'argomento era falso
  *
@@ -339,19 +337,20 @@ export type CategoryDeletion =
  * inesistente genererebbe spese orfane per sempre, cioe' lo stesso danno che
  * arriva da solo invece che una volta.
  *
- * E contano i **budget di categoria**, storici compresi. Sono i quattro tipi di
- * record che possono nominare una categoria, ed erano tre: `Budget.categoryId`
- * mancava da questo elenco mentre la frase qui sopra diceva "nessun record".
- * Non e' raggiungibile dalla UI di oggi — il foglio del budget non scrive
- * `categoryId` — ma lo diventa con l'import: basta un file con un budget di
- * categoria, e la cancellazione lascerebbe un record che punta a un id
- * inesistente. `resolveBudget` continuerebbe a sceglierlo per sempre, e nessuna
- * schermata potrebbe ne' mostrarlo ne' toglierlo: e' un orfano peggiore degli
- * altri due, perche' non si vede.
+ * ## I budget non contano piu', e non e' un'eccezione: e' che non possono
  *
- * Contano anche i budget **chiusi** (`effectiveTo` valorizzato), per la stessa
- * ragione delle spese cancellate: un budget storicizzato resta nell'export e
- * resta la spiegazione di come e' stato calcolato un periodo passato.
+ * Per un po' qui si contavano anche i **budget di categoria**, storici
+ * compresi, con l'argomento che l'import poteva farne entrare uno e la
+ * cancellazione lo avrebbe lasciato orfano e invisibile. L'argomento e' caduto
+ * insieme al campo: `Budget.categoryId` non esiste piu' (vedi `types.ts`),
+ * quindi **nessun budget puo' nominare una categoria** — nemmeno uno importato,
+ * perche' `parseBudget` non legge piu' quel campo.
+ *
+ * Contarli era un ramo che esisteva solo per lui: `usedByBudgets` valeva zero
+ * a ogni chiamata dal giorno in cui il foglio del budget e' nato senza
+ * selettore di categoria, e la frase "e 2 budget" non e' mai stata mostrata a
+ * nessuno. Il giorno in cui il budget per categoria esistera' davvero, questo
+ * conteggio torna **insieme al suo campo di input**, nello stesso commit.
  *
  * Se qualcuno la usa, la risposta non e' "no": e' **archiviala**. Che e' gratis,
  * non perde niente, e produce esattamente cio' che l'utente voleva — la
@@ -364,7 +363,6 @@ export function planCategoryDeletion(
   categories: readonly Category[],
   expenses: readonly Expense[],
   recurringRules: readonly RecurringRule[],
-  budgets: readonly Budget[],
   request: CategoryDeletionRequest,
 ): CategoryDeletion {
   const target = categories.find((c) => c.id === request.id)
@@ -377,15 +375,8 @@ export function planCategoryDeletion(
     (e) => e.categoryId === request.id && e.deletedAt === undefined,
   ).length
   const usedByRules = recurringRules.filter((r) => r.categoryId === request.id).length
-  const usedByBudgets = budgets.filter((b) => b.categoryId === request.id).length
-  if (usedByExpenses > 0 || usedByRules > 0 || usedByBudgets > 0) {
-    return {
-      ok: false,
-      reason: 'in-use',
-      expenses: usedByExpenses,
-      recurringRules: usedByRules,
-      budgets: usedByBudgets,
-    }
+  if (usedByExpenses > 0 || usedByRules > 0) {
+    return { ok: false, reason: 'in-use', expenses: usedByExpenses, recurringRules: usedByRules }
   }
   return { ok: true, deleted: target }
 }

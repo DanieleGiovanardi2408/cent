@@ -10,6 +10,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "size": "node scripts/size.mjs",
+    "audit:source": "node scripts/dead-surface.mjs",
     "icons": "node scripts/generate-icons.mjs",
     "test:e2e": "npm run build && playwright test",
     "test:offline": "npm run build && playwright test tests/e2e/offline.spec.ts"

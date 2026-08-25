@@ -73,9 +73,8 @@ Tutte le entita': `id` (crypto.randomUUID), `createdAt`, `updatedAt`.
 - **RecurringRule**: `amountCents`, `categoryId`,
   `cadence: 'daily'|'weekly'|'monthly'`, `interval`, `anchorDay?`,
   `startDate`, `endDate?`, `lastMaterializedDate?`, `active`.
-  **`note` non c'e' piu'** (fase 5): tre lettori, zero produttori. La regola
-  generale che ne esce: **un campo si spedisce insieme al suo produttore, o non
-  si spedisce.**
+  **`note` non c'e' piu'** (fase 5): tre lettori, zero produttori. Vedi
+  **"Un campo e' prodotto quando un valore entra da fuori"**.
 - **Budget**: `period: 'weekly'|'monthly'`, `amountCents`, `categoryId?`,
   `effectiveFrom`, `effectiveTo?`. I budget sono **storicizzati**: cambiare il
   budget di oggi non deve riscrivere i totali dei periodi passati.
@@ -594,6 +593,33 @@ test, con un commento che spiegava perche' la discrepanza andasse bene. Un test 
 codifica un difetto non lo nasconde soltanto: e' **l'artefatto che domani ne
 giustifica la reintroduzione**. Si ripara il test **prima** del codice, e il
 commento si toglie.
+
+## Un campo e' prodotto quando un valore entra da fuori
+La prima formulazione era *"un campo si spedisce insieme al suo produttore, o non
+si spedisce"*. Dice la cosa giusta a un umano e **non si puo' controllare a
+macchina**, perche' non dice cosa sia un produttore.
+
+Quella che vale:
+
+> **Un campo e' prodotto quando un valore entra da fuori almeno una volta.** Una
+> scrittura la cui espressione contiene **solo letture dello stesso campo** e' una
+> **copia**, e una catena di sole copie gira a vuoto.
+
+**Come ci si e' arrivati, che e' la parte che impedisce di riallargarla.** Lo
+script scritto per meccanizzare la regola era **verde su un albero malato**: sui
+commit in cui `endDate` e `note` erano morti, trovava per ciascuno delle scritture
+— ed erano `draft.endDate`, `input.note`, `rule.note`. Tutte copie. Contandole come
+produzione, l'audit certificava vivi proprio i due campi da cui la regola era nata.
+
+Tre distinzioni ulteriori, ognuna nata da un errore dello script:
+
+- una **destrutturazione** non e' una scrittura;
+- `(endDate: IsoDate, weeks = 8)` e' una **lista di parametri**, non un letterale
+  (contandola, `stats.ts` "produceva" `endDate`);
+- `target?.interval ?? INTERVAL` **non** e' una copia: con la regola troppo larga
+  risultava morto `interval`, che e' vivissimo.
+
+Il controllo e' `scripts/dead-surface.mjs`, e gira in CI.
 
 ## Le regole non bastano scritte: due si meccanizzano, la terza si struttura
 La fase 5 ha prodotto, contate a fine fase:

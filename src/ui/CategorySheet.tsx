@@ -541,43 +541,49 @@ function refusalCopy(deletion: Extract<CategoryDeletion, { ok: false }>): string
       // parafrasi: cosi' il rifiuto cita una cosa che l'utente puo' andare a
       // vedere, invece di descriverla con parole sue.
       return t('cat.inUse.text', {
-        what: usageLabel(deletion.expenses, deletion.recurringRules, deletion.budgets),
+        what: usageLabel(deletion.expenses, deletion.recurringRules),
         removed: t('row.categoryRemoved'),
       })
   }
 }
 
 /**
- * "3 spese, 1 spesa ricorrente e 2 budget": i numeri veri, non "qualcosa la usa".
+ * "3 spese e 1 spesa fissa": i numeri veri, non "qualcosa la usa".
  *
- * Tre tipi di record possono nominare una categoria, e il terzo — i budget di
- * categoria, storici compresi — e' entrato quando `planCategoryDeletion` ha
- * smesso di dimenticarlo. Non e' raggiungibile dalla UI di oggi (il foglio del
- * budget non scrive `categoryId`) e lo diventa con l'import: un file con un
- * budget di categoria, la categoria cancellata, e resta un record che punta a
- * un id inesistente che nessuna schermata puo' ne' mostrare ne' togliere.
+ * **Due** tipi di record possono nominare una categoria. Erano tre finche'
+ * `Budget` aveva un `categoryId`: quel campo e' stato tolto in fase 5 perche'
+ * non aveva nessun produttore — `setBudget` ha un solo chiamante di produzione e
+ * non passa mai una categoria. Un budget di categoria non e' diventato raro:
+ * e' diventato **non rappresentabile**, quindi il terzo numero non aveva piu'
+ * un caso in cui mostrarsi.
  *
- * La frase si compone da una **lista**, non da rami annidati: con tre voci
- * facoltative i casi sono sette, e sette rami scritti a mano sono sette
- * occasioni di dimenticare una congiunzione in una lingua sola. La lista tiene
- * solo cio' che c'e' davvero — un "0 budget" sarebbe un numero in piu' da
- * leggere per dire che non conta.
+ * La frase si compone da una **lista** e non da rami annidati anche adesso che
+ * i casi sono quattro invece di sette: e' la forma che non chiede di riscrivere
+ * le congiunzioni in due lingue il giorno in cui una terza voce torna.
+ * La lista tiene solo cio' che c'e' davvero — uno "0 spese fisse" sarebbe un
+ * numero in piu' da leggere per dire che non conta.
+ *
+ * **E' esportata perche' la stessa frase serve al toast del rifiuto.** Il toast
+ * diceva *"Qualche spesa la usa ancora"*, cioe' parafrasava questa lista con
+ * parole sue — e le sue parole nominavano **un solo** tipo di record su due:
+ * quando a bloccare era una spesa fissa, mandava a cercare nello Storico delle
+ * spese che li' non ci sono. Interpolare la lista invece di descriverla rende
+ * la divergenza impossibile per costruzione, che e' l'unico modo in cui una
+ * copia in due posti resta d'accordo con se stessa.
  */
-function usageLabel(expenses: number, rules: number, budgets: number): string {
+export function usageLabel(expenses: number, rules: number): string {
   const parts = [
     counted(expenses, 'cat.inUse.expenses.one', 'cat.inUse.expenses.other'),
     counted(rules, 'cat.inUse.rules.one', 'cat.inUse.rules.other'),
-    counted(budgets, 'cat.inUse.budgets.one', 'cat.inUse.budgets.other'),
   ].filter((part) => part !== '')
 
   // Destrutturato e non indicizzato: con `noUncheckedIndexedAccess` ogni
-  // `parts[0]` sarebbe un `string | undefined` da smentire con un `!`, e i
-  // quattro casi qui sotto sono gia' l'elenco completo.
-  const [a, b, c] = parts
+  // `parts[0]` sarebbe un `string | undefined` da smentire con un `!`, e i tre
+  // casi qui sotto sono gia' l'elenco completo.
+  const [a, b] = parts
   if (a === undefined) return ''
   if (b === undefined) return a
-  if (c === undefined) return t('cat.inUse.both', { a, b })
-  return t('cat.inUse.three', { a, b, c })
+  return t('cat.inUse.both', { a, b })
 }
 
 /** Il nome di una quantita', o stringa vuota se quella quantita' e' zero. */

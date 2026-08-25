@@ -82,10 +82,30 @@ Un test che codifica un difetto non lo nasconde soltanto: e' **l'artefatto che
 domani ne giustifica la reintroduzione**. Quei commenti si tolgono, non si
 riscrivono.
 
-## Cosa non e' stato fatto, e perche'
+## L'indice su `recurringId`: rimandato, con la soglia scritta
 
 Non c'e' un indice su `recurringId`: la transazione fa un `getAll()` sullo store
-delle spese, identico a quello che la cancellazione di una regola fa gia'. Un indice
-sparso porterebbe la lettura da ~700 KB a ~1 KB su un archivio da 5.000 spese, ma
-costa uno `schemaVersion` 5 su **dati veri** per un gesto **raro**. Rimandato,
-dichiarato qui, e non dimenticato in un TODO.
+delle spese. **Non e' un costo nuovo**: lo stesso `getAll()` lo fa gia' la
+cancellazione di una regola, tre righe sopra, nello stesso file.
+
+Un indice sparso porterebbe la lettura da ~700 KB a ~1 KB su un archivio da 5.000
+spese — `getAllKeys(id)` restituisce esattamente gli id che servono senza clonare un
+record — e il passo di migrazione sarebbe **senza `transform`**, quindi senza
+rischio di perdita: IndexedDB popola l'indice da solo nella `versionchange`.
+
+Rimandato, e la ragione e' la scala vera: **5.000 spese sono quattordici al giorno
+per un anno.** Non e' la scala di nessuno degli utenti di oggi — al momento di
+questa decisione il database reale ne conteneva **sei**.
+
+**La soglia a cui si rivaluta, perche' fra sei mesi non si ridiscuta a memoria:**
+
+- **1.000 spese in archivio.** Sopra quel numero il clone dentro la `readwrite`
+  smette di essere gratis: a ~140 byte per record sono ~140 KB clonati mentre lo
+  store `expenses` e' bloccato in scrittura.
+- **Come si misura, senza aggiungere strumenti**: `scripts/audit.mjs` gira gia' su
+  un backup vero e ne conta i record. Il numero e' `data.expenses.length` di un
+  export; niente da costruire, solo da guardare.
+
+Sotto la soglia, il costo ricorrente di un indice — una voce mantenuta a ogni
+scrittura di spesa ricorrente, catch-up compreso — non e' ripagato da un gesto
+raro.

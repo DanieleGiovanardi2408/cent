@@ -40,7 +40,7 @@ function dataset(): DataSet {
     ],
     budgets: [
       makeBudget({ id: 'b1', amountCents: 100_000, effectiveFrom: '2026-01-01', effectiveTo: '2026-07-31' }),
-      makeBudget({ id: 'b2', amountCents: 80_000, effectiveFrom: '2026-08-01', categoryId: 'cat-1' }),
+      makeBudget({ id: 'b2', amountCents: 80_000, effectiveFrom: '2026-08-01' }),
     ],
     settings: makeSettings({ lastBackupAt: '2026-08-01T09:00:00.000Z' }),
   }
@@ -72,7 +72,6 @@ describe('round-trip export -> import', () => {
     expect(data?.recurringRules[0]?.anchorDay).toBe(31)
     expect(data?.recurringRules[0]?.lastMaterializedDate).toBe('2026-08-02')
     expect(data?.budgets[0]?.effectiveTo).toBe('2026-07-31')
-    expect(data?.budgets[1]?.categoryId).toBe('cat-1')
     expect(data?.settings.lastBackupAt).toBe('2026-08-01T09:00:00.000Z')
   })
 

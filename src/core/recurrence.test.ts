@@ -409,11 +409,17 @@ describe('identita deterministica (ADR 006)', () => {
 })
 
 describe('occupiedOccurrenceDates: cio che il calendario non deve piu annunciare', () => {
-  it('guarda l id, non `date`: una occorrenza spostata a mano resta occupata dov era', () => {
-    // E' la stessa scelta di `buildOccurrenceIndex`, e la stessa ragione: chi
-    // paga l affitto di agosto in ritardo e sposta la spesa al 5 settembre non
-    // deve vedersi riproporre il 1 agosto. Un insieme costruito su `date`
-    // direbbe libero il 1 agosto e occupato il 5 settembre: sbagliato due volte.
+  it('guarda l id, non `date`: un record con id e data discordi resta occupato dove dice l id', () => {
+    // Il record qui sotto **nessuna schermata lo produce**: gli scrittori di
+    // `Expense.date` sono quattro e nessuno lo sposta dopo (i due chiamanti di
+    // produzione di `updateExpense` passano solo `{ amountCents }`). L unica
+    // porta e l import di un JSON scritto a mano, che `parseExpense` accetta
+    // perche legge `id` e `date` separatamente senza confrontarli.
+    //
+    // Il test resta perche la proprieta non e lo scenario: l id e l identita
+    // (ADR 006), `date` e un attributo, e questo insieme deve rispondere sulla
+    // prima. Un insieme costruito su `date` direbbe libero il 1 agosto — dove
+    // un record c e gia e `add` lo salterebbe — e occupato il 5 settembre.
     const spostata = makeExpense({
       id: recurringExpenseId('r1', '2026-08-01'),
       date: '2026-09-05',

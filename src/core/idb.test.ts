@@ -444,37 +444,23 @@ describe('il budget si pianifica dentro la transazione', () => {
     persistence.close()
   })
 
-  it('i budget di categoria e quello complessivo non si chiudono a vicenda', async () => {
-    const name = dbName()
-    const persistence = createIdbPersistence({ name })
-    await persistence.write(cambio('2026-08-01', 100_000, 'b-generale'))
-    await persistence.write({
-      budgetChange: {
-        period: 'monthly',
-        amountCents: 20_000,
-        categoryId: 'cat-spesa',
-        effectiveFrom: '2026-08-10',
-        timestamp: '2026-08-10T09:00:00.000Z',
-        newRecordId: 'b-categoria',
-      },
-    })
-
-    const suDisco = await persistence.loadAll()
-    expect(suDisco.budgets).toHaveLength(2)
-    expect(suDisco.budgets.every((b) => b.effectiveTo === undefined)).toBe(true)
-    persistence.close()
-  })
 })
 
-describe('cancellare una categoria: il permesso lo danno tre store', () => {
+describe('cancellare una categoria: il permesso lo danno due store', () => {
   /*
    * Il conteggio si fa dentro la transazione, sui record del disco, e i record
-   * che possono nominare una categoria stanno in **tre** store: spese, regole e
-   * budget. Il terzo mancava.
+   * che possono nominare una categoria stanno in **due** store: spese e regole.
    *
-   * Questi test girano su IndexedDB vero perche' sono l'unico posto in cui lo
+   * Erano tre finche' `Budget.categoryId` e' esistito. Il campo aveva zero
+   * produttori — il foglio del budget non ha mai avuto un selettore di
+   * categoria — ed e' stato tolto: un budget non puo' piu' nominare una
+   * categoria, quindi aprire lo store `budgets` dentro questa transazione era
+   * bloccare una scrittura in piu' per leggere una risposta che era zero per
+   * costruzione.
+   *
+   * Questi test girano su IndexedDB vero perche' sono l'unico posto in cui uno
    * store dimenticato si vede: `memory-persistence` non ha transazioni con uno
-   * scope, quindi li' un `budgets` in meno nell'elenco non produce nessun
+   * scope, quindi li' un `expenses` in meno nell'elenco non produce nessun
    * sintomo. Su IndexedDB produce un `NotFoundError` su ogni cancellazione.
    */
 
@@ -487,26 +473,18 @@ describe('cancellare una categoria: il permesso lo danno tre store', () => {
     return persistence
   }
 
-  it('un budget di categoria sul disco la trattiene, e il rifiuto lo conta', async () => {
+  it('una spesa viva sul disco la trattiene, e il rifiuto la conta', async () => {
     const persistence = await conCategoria(dbName())
     await persistence.write({
-      budgets: [
-        makeBudget({
-          id: 'b-1',
-          effectiveFrom: '2026-08-01',
-          amountCents: 20_000,
-          categoryId: 'cat-svago',
-        }),
-      ],
+      expenses: [makeExpense({ id: 'e-1', date: '2026-08-01', categoryId: 'cat-svago' })],
     })
 
     const esito = await persistence.write({ categoryDeletion: { id: 'cat-svago' } })
     expect(esito.categoryDeletion).toEqual({
       ok: false,
       reason: 'in-use',
-      expenses: 0,
+      expenses: 1,
       recurringRules: 0,
-      budgets: 1,
     })
 
     const suDisco = await persistence.loadAll()
@@ -514,10 +492,16 @@ describe('cancellare una categoria: il permesso lo danno tre store', () => {
     persistence.close()
   })
 
-  it('senza nessun riferimento la cancellazione passa, budget compresi', async () => {
+  it('senza nessun riferimento la cancellazione passa', async () => {
     const persistence = await conCategoria(dbName())
-    // Un budget generale — quello che la UI scrive davvero — non nomina nessuna
-    // categoria e non deve trattenere niente.
+    // Una regola che nomina **un'altra** categoria: serve a far leggere davvero
+    // lo store `recurringRules` dentro la transazione. Se mancasse dallo scope
+    // questa write morirebbe con un `NotFoundError` invece di rispondere.
+    await persistence.write({
+      recurringRules: [makeRule({ id: 'r-1', startDate: '2026-08-01', categoryId: 'cat-altra' })],
+    })
+    // E un budget sul disco, che dopo la fine di `Budget.categoryId` non puo'
+    // piu' trattenere niente per costruzione: resta li' e la categoria se ne va.
     await persistence.write({
       budgets: [makeBudget({ id: 'b-1', effectiveFrom: '2026-08-01', amountCents: 80_000 })],
     })

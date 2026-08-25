@@ -631,7 +631,7 @@ Le due stringhe **non** sono state aggiunte in fase 5, di proposito: sarebbero s
 chiavi vive nel codice e morte nei fatti, cioe' `history.blank.install` un'altra
 volta. Arrivano insieme al dialogo che le mostra.
 
-### `RecurringRule.endDate` torna, col suo campo di input
+### DA FARE — `RecurringRule.endDate` torna, col suo campo di input
 
 Tagliata in fase 5 per **zero produttori**: nessun foglio la scriveva, la scriveva
 solo `parseBackup` — quindi con zero produttori **nemmeno un backup poteva
@@ -671,6 +671,36 @@ l'operazione piu' distruttiva dell'app, quella senza undo persistito.
 
 L'anteprima conta le spese vive (`isLive`), e se vuole nominare le altre lo fa a
 parte: "3 spese, piu' 3 cancellate".
+
+## DA VALUTARE — il budget per categoria
+
+**Non e' un rinvio, e' una domanda di design**, e va tenuta distinta da `endDate`
+qui sopra: quella ha forma nota e piccola — un campo "fino a", una data, il motore
+la sa gia' usare. Questo no.
+
+`Budget.categoryId` e' stato tagliato in fase 5 (**248 occorrenze in 24 file, zero
+produttori**: `setBudget` ha un solo chiamante e non passa mai una categoria; e
+diciassette letture in `budget.ts` filtravano per un campo che non poteva essere
+valorizzato). L'ha trovato `scripts/dead-surface.mjs` al primo giro, dopo che tre
+giorni di fase 5 non l'avevano visto.
+
+**L'argomento a favore**: *"quanto ho speso di coffeeshop questo mese contro quanto
+avevo deciso"* e' esattamente il tipo di domanda per cui esiste questa app.
+
+**Le domande da rispondere prima**, e sono la ragione per cui questa voce non e'
+un "da fare":
+
+- ogni categoria ha il suo periodo, o si eredita quello generale?
+- il budget settimanale resta, con otto budget per categoria accanto?
+- **come si sommano?** Il budget generale e' il totale di quelli per categoria, o
+  un tetto indipendente che li contiene? Le due cose danno numeri diversi sulla
+  stessa Home.
+- e l'incrocio con **ADR 016**: le ricorrenti stanno fuori dal budget. Un budget per
+  "Casa" con l'affitto escluso e' un numero che qualcuno leggera' come il contrario
+  di quello che dice.
+
+Finche' queste non hanno risposta, il campo non torna: **tornerebbe come e' andato
+via**, con la forma decisa a meta' e nessuno che la scrive.
 
 ## Verifica offline automatica — anticipata dalla fase 6
 

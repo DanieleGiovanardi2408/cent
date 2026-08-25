@@ -65,7 +65,6 @@ export const it = {
   'nav.label': 'Schermate',
   'nav.home': 'Home',
   'nav.history': 'Storico',
-  'nav.settings': 'Impostazioni',
   'title.home': 'Quanto ti resta',
   'title.history': 'Le tue spese',
   'title.settings': 'Impostazioni',
@@ -105,7 +104,11 @@ export const it = {
   'toast.catBack': '«{name}» è tornata in griglia',
   'toast.catDeleted': '«{name}» eliminata',
   'toast.catSaved': '«{name}» aggiornata',
-  'toast.catInUse': 'Qualche spesa la usa ancora: non si può cancellare.',
+  // `{what}` e' **la stessa lista** che il foglio mostra sul rifiuto, non una
+  // parafrasi: diceva "Qualche spesa la usa ancora" e nominava un tipo di
+  // record su due, cosi' quando a bloccare era una spesa fissa mandava a
+  // cercare nello Storico delle spese che li' non c'erano.
+  'toast.catInUse': 'La usa {what}: non si può cancellare.',
   'toast.catFailed': 'Non sono riuscito a cambiare le categorie. Riprova.',
 
   /* --- Home -------------------------------------------------------------- */
@@ -306,7 +309,7 @@ export const it = {
   'settings.cats.add': 'Aggiungi una categoria',
   'settings.cats.archivedTitle': 'In archivio',
   'settings.cats.archivedText':
-    'Fuori dalla griglia, non fuori dai dati: Storico e statistiche continuano a mostrarle. Tocca una categoria per rimetterla in griglia al posto di un’altra.',
+    'Fuori dalla griglia, non fuori dai dati: lo Storico continua a mostrarle. Tocca una categoria per rimetterla in griglia al posto di un’altra.',
   'settings.cats.placeOne': 'Rimetti {name} in griglia',
 
   /* --- i nomi delle otto categorie di default ------------------------------ *
@@ -354,12 +357,13 @@ export const it = {
   'cat.archive.note':
     'La toglie dalla griglia e basta: resta su ogni spesa che l’ha usata, e continui a vederla nello Storico.',
   'cat.delete': 'Elimina del tutto',
-  // La riga elencava due tipi di record su quattro, e taceva le lapidi. Non
-  // e' un dettaglio: e' la meta' che spiega il messaggio dell'esito accanto,
-  // dove a bloccare sono solo spese cancellate. Dirlo qui una volta rende
-  // leggibile li' un rifiuto che altrimenti sembra arbitrario.
+  // L'elenco qui e' **lo stesso** che `planCategoryDeletion` controlla, e per
+  // questo va riletto ogni volta che quello cambia: nominava anche i budget,
+  // che da quando `Budget.categoryId` non esiste piu' non possono nominare una
+  // categoria. Prometteva quindi un controllo su un tipo di record che non puo'
+  // piu' partecipare — vero per caso, non per costruzione.
   'cat.delete.note':
-    'Non la usa niente di quello che vedi: nessuna spesa, nessuna spesa fissa, nessun budget. È l’unica cosa in Cent che non si annulla.',
+    'Non la usa niente di quello che vedi: nessuna spesa, nessuna spesa fissa. È l’unica cosa in Cent che non si annulla.',
   // ADR 019 di nuovo, e la sua ragione non nominava le categorie: vale ovunque
   // un foglio di modifica offra un insieme da cui il valore attuale puo' essere
   // fuori. Qui succede a un dato arrivato da un backup scritto a mano — la
@@ -373,16 +377,17 @@ export const it = {
     'Il colore marcato \u00e8 quello che questa categoria ha adesso: non \u00e8 in tavolozza.',
   'cat.inUse.expenses.one': '1 spesa',
   'cat.inUse.expenses.other': '{count} spese',
-  'cat.inUse.rules.one': '1 spesa ricorrente',
-  'cat.inUse.rules.other': '{count} spese ricorrenti',
-  // "budget" resta invariato al plurale in italiano: e' una parola presa
-  // dall'inglese, e "budgets" suonerebbe come un refuso.
-  'cat.inUse.budgets.one': '1 budget',
-  'cat.inUse.budgets.other': '{count} budget',
+  // **"Spesa fissa", non "spesa ricorrente".** Erano le uniche due stringhe
+  // su ventiquattro a chiamarla cosi', e la parola non compariva in nessuna
+  // schermata: chi leggeva "1 spesa ricorrente" andava a cercarla nello Storico
+  // e trovava una lista che si chiama "Spese fisse". Peggio, il numero conta le
+  // **regole**, non le spese che hanno generato: una regola con trenta spese a
+  // disco si annunciava come "1 spesa ricorrente".
+  'cat.inUse.rules.one': '1 spesa fissa',
+  'cat.inUse.rules.other': '{count} spese fisse',
+  // Due voci, quindi una congiunzione sola. La terza — i budget di categoria —
+  // e' uscita con `Budget.categoryId`: non e' rara, e' irrappresentabile.
   'cat.inUse.both': '{a} e {b}',
-  // Tre numeri sono il caso completo, non un'ipotesi: un budget di categoria
-  // arriva da un import, e chi importa ha gia' spese e ricorrenze.
-  'cat.inUse.three': '{a}, {b} e {c}',
   // **Il rifiuto e' giusto, la ragione scritta qui non lo era.** Diceva che
   // cancellarla lascerebbe quelle righe *"senza nome"*: e' falso, direbbero
   // "Categoria rimossa" — il ripiego esiste in tutti e quattro i lettori. La

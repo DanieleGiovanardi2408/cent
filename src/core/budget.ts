@@ -89,16 +89,13 @@ function prevails(candidate: Budget, best: Budget): boolean {
 /**
  * Il record di budget in vigore il giorno `onDay`, o `null` se non ce n'e'.
  *
- * `categoryId` assente = budget complessivo.
- *
  * ## La risoluzione e' totale: mai un throw, mai una scelta arbitraria
  *
  * Le sovrapposizioni non dovrebbero esistere — `planResolvedBudgetChange` chiude
  * il record vecchio nella stessa transazione in cui apre il nuovo — ma possono
  * arrivare lo stesso: un JSON modificato a mano e reimportato, un bug futuro.
- * Di fronte a due record aperti sullo stesso `period` e la stessa categoria
- * questa funzione applica `prevails`, che e' un ordine totale: stesso dato,
- * stessa risposta, sempre.
+ * Di fronte a due record aperti sullo stesso `period` questa funzione applica
+ * `prevails`, che e' un ordine totale: stesso dato, stessa risposta, sempre.
  *
  * Non lancia. Un comparatore che lancia rende inutilizzabile l'intera vista che
  * lo usa: qui vorrebbe dire la Home bianca al posto di "quanto posso spendere",
@@ -109,12 +106,10 @@ export function resolveBudget(
   budgets: readonly Budget[],
   period: BudgetPeriod,
   onDay: IsoDate,
-  categoryId?: string,
 ): Budget | null {
   let best: Budget | null = null
   for (const budget of budgets) {
     if (budget.period !== period) continue
-    if (budget.categoryId !== categoryId) continue
     if (!coversDay(budget, onDay)) continue
     if (best === null || prevails(budget, best)) best = budget
   }
@@ -158,8 +153,8 @@ export interface BudgetMetrics {
    */
   readonly budgetEffectiveFrom: IsoDate | null
   /**
-   * Vero se un budget dello stesso `period` e `categoryId` era in vigore il
-   * **primo giorno del periodo** (`range.start`).
+   * Vero se un budget dello stesso `period` era in vigore il **primo giorno
+   * del periodo** (`range.start`).
    *
    * Esiste per qualificare `budgetEffectiveFrom > range.start`, che da solo
    * confonde due storie diverse:
@@ -183,7 +178,7 @@ export interface BudgetMetrics {
    * record chiuso a meta' periodo e mai riaperto — che `planResolvedBudgetChange`
    * non produce mai (chiude solo aprendo) e che quindi puo' arrivare solo da un
    * JSON modificato a mano. Chi avesse davvero bisogno della domanda letterale la
-   * faccia a `resolveBudget(budgets, period, range.start, categoryId)`.
+   * faccia a `resolveBudget(budgets, period, range.start)`.
    */
   readonly budgetCoveredPeriodStart: boolean
   /**
@@ -239,8 +234,6 @@ export interface BudgetMetricsInput {
   readonly onDate: IsoDate
   /** Oggi: decide giorni rimanenti e budget vigente. */
   readonly today: IsoDate
-  /** Presente = metriche di una singola categoria. */
-  readonly categoryId?: string
 }
 
 /**
@@ -274,9 +267,8 @@ export function countsTowardBudget(expense: Expense): boolean {
   return expense.deletedAt === undefined && expense.source !== 'recurring'
 }
 
-function inRange(expense: Expense, range: PeriodRange, categoryId?: string): boolean {
-  if (isBefore(expense.date, range.start) || isAfter(expense.date, range.end)) return false
-  return categoryId === undefined || expense.categoryId === categoryId
+function inRange(expense: Expense, range: PeriodRange): boolean {
+  return !isBefore(expense.date, range.start) && !isAfter(expense.date, range.end)
 }
 
 /**
@@ -293,15 +285,11 @@ function inRange(expense: Expense, range: PeriodRange, categoryId?: string): boo
  * vero di un periodo non lo trova per sbaglio: lo chiede a `recurringSpent` in
  * piu', o passa dalle funzioni dello Storico.
  */
-export function budgetSpent(
-  expenses: readonly Expense[],
-  range: PeriodRange,
-  categoryId?: string,
-): Cents {
+export function budgetSpent(expenses: readonly Expense[], range: PeriodRange): Cents {
   const values: Cents[] = []
   for (const expense of expenses) {
     if (!countsTowardBudget(expense)) continue
-    if (!inRange(expense, range, categoryId)) continue
+    if (!inRange(expense, range)) continue
     values.push(expense.amountCents)
   }
   return sumCents(values)
@@ -320,16 +308,12 @@ export function budgetSpent(
  * Le spese cancellate restano fuori anche qui: un soft delete non e' un'uscita
  * ne' dentro ne' fuori dal budget.
  */
-export function recurringSpent(
-  expenses: readonly Expense[],
-  range: PeriodRange,
-  categoryId?: string,
-): Cents {
+export function recurringSpent(expenses: readonly Expense[], range: PeriodRange): Cents {
   const values: Cents[] = []
   for (const expense of expenses) {
     if (expense.deletedAt !== undefined) continue
     if (expense.source !== 'recurring') continue
-    if (!inRange(expense, range, categoryId)) continue
+    if (!inRange(expense, range)) continue
     values.push(expense.amountCents)
   }
   return sumCents(values)
@@ -343,12 +327,12 @@ export function computeBudgetMetrics(input: BudgetMetricsInput): BudgetMetrics {
       ? range.end
       : input.today
 
-  const budget = resolveBudget(input.budgets, input.period, referenceDay, input.categoryId)
+  const budget = resolveBudget(input.budgets, input.period, referenceDay)
   const budgetCents = budget?.amountCents ?? null
-  const spentCents = budgetSpent(input.expenses, range, input.categoryId)
+  const spentCents = budgetSpent(input.expenses, range)
   // Calcolato ma tenuto fuori da ogni altro numero: serve a **dichiarare**
   // l'esclusione, non a correggerla.
-  const recurringSpentCents = recurringSpent(input.expenses, range, input.categoryId)
+  const recurringSpentCents = recurringSpent(input.expenses, range)
 
   const daysTotal = daysBetween(range.start, range.end) + 1
   const daysRemaining = isAfter(input.today, range.end)
@@ -371,8 +355,7 @@ export function computeBudgetMetrics(input: BudgetMetricsInput): BudgetMetrics {
     // Seconda risoluzione, sul primo giorno del periodo invece che su oggi: e'
     // la sola domanda che distingue "non avevi un budget" da "l'hai cambiato".
     budgetCoveredPeriodStart:
-      budget !== null &&
-      resolveBudget(input.budgets, input.period, range.start, input.categoryId) !== null,
+      budget !== null && resolveBudget(input.budgets, input.period, range.start) !== null,
     spentCents,
     recurringSpentCents,
     remainingCents,
@@ -389,7 +372,6 @@ export function computeBudgetMetrics(input: BudgetMetricsInput): BudgetMetrics {
 export interface BudgetChange {
   readonly period: BudgetPeriod
   readonly amountCents: Cents
-  readonly categoryId?: string
   /** Da quando vale il nuovo importo. Di norma oggi. */
   readonly effectiveFrom: IsoDate
 }
@@ -407,7 +389,6 @@ export interface BudgetChange {
 export interface BudgetChangeRequest {
   readonly period: BudgetPeriod
   readonly amountCents: Cents
-  readonly categoryId?: string
   readonly effectiveFrom: IsoDate
   /** L'istante della modifica: finisce in `updatedAt`, e in `createdAt` del nuovo. */
   readonly timestamp: Timestamp
@@ -438,9 +419,7 @@ export function planResolvedBudgetChange(
   change: BudgetChangeRequest,
 ): readonly Budget[] {
   const timestamp = change.timestamp
-  const sameKey = budgets.filter(
-    (b) => b.period === change.period && b.categoryId === change.categoryId,
-  )
+  const sameKey = budgets.filter((b) => b.period === change.period)
 
   const sameDay = sameKey.find((b) => b.effectiveFrom === change.effectiveFrom)
   if (sameDay) {
@@ -458,7 +437,6 @@ export function planResolvedBudgetChange(
     period: change.period,
     amountCents: change.amountCents,
     effectiveFrom: change.effectiveFrom,
-    ...(change.categoryId !== undefined ? { categoryId: change.categoryId } : {}),
   }
   return [...closed, created]
 }

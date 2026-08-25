@@ -49,7 +49,6 @@ export const en: Record<keyof typeof it, string> = {
   'nav.label': 'Screens',
   'nav.home': 'Home',
   'nav.history': 'History',
-  'nav.settings': 'Settings',
   'title.home': 'What you have left',
   'title.history': 'Your spending',
   'title.settings': 'Settings',
@@ -86,7 +85,7 @@ export const en: Record<keyof typeof it, string> = {
   'toast.catBack': '“{name}” is back on the grid',
   'toast.catDeleted': '“{name}” deleted',
   'toast.catSaved': '“{name}” updated',
-  'toast.catInUse': 'Some expenses still use it: it cannot be deleted.',
+  'toast.catInUse': 'Used by {what}: it cannot be deleted.',
   'toast.catFailed': 'I could not change the categories. Try again.',
 
   /* --- Home -------------------------------------------------------------- */
@@ -260,7 +259,7 @@ export const en: Record<keyof typeof it, string> = {
   'settings.cats.add': 'Add a category',
   'settings.cats.archivedTitle': 'Archived',
   'settings.cats.archivedText':
-    'Off the grid, not out of your data: History and stats still show them. Tap one to put it back on the grid in place of another.',
+    'Off the grid, not out of your data: History still shows them. Tap one to put it back on the grid in place of another.',
   'settings.cats.placeOne': 'Put {name} back on the grid',
 
   /* --- i nomi delle otto categorie di default ------------------------------ */
@@ -297,18 +296,15 @@ export const en: Record<keyof typeof it, string> = {
     'This only takes it off the grid: it stays on every expense that used it, and you keep seeing it in History.',
   'cat.delete': 'Delete for good',
   'cat.delete.note':
-    'Nothing you can see uses it: no expense, no fixed cost, no budget. This is the only thing in Cent you cannot undo.',
+    'Nothing you can see uses it: no expense, no fixed cost. This is the only thing in Cent you cannot undo.',
   'pick.current': 'Current',
   'cat.emoji.current': 'The marked emoji is the one this category has now: it is not in the list.',
   'cat.color.current': 'The marked colour is the one this category has now: it is not in the palette.',
   'cat.inUse.expenses.one': '1 expense',
   'cat.inUse.expenses.other': '{count} expenses',
-  'cat.inUse.rules.one': '1 recurring expense',
-  'cat.inUse.rules.other': '{count} recurring expenses',
-  'cat.inUse.budgets.one': '1 budget',
-  'cat.inUse.budgets.other': '{count} budgets',
+  'cat.inUse.rules.one': '1 fixed cost',
+  'cat.inUse.rules.other': '{count} fixed costs',
   'cat.inUse.both': '{a} and {b}',
-  'cat.inUse.three': '{a}, {b} and {c}',
   'cat.inUse.text':
     'Used by {what}. Deleting it would turn those rows into “{removed}” for good, and nothing can give them a category back. Archive it instead: off the grid, History untouched.',
   'cat.preview': 'How the grid will look',

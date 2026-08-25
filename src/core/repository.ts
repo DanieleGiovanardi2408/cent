@@ -729,7 +729,6 @@ function sameBudget(a: Budget, b: Budget): boolean {
     a.id === b.id &&
     a.period === b.period &&
     a.amountCents === b.amountCents &&
-    a.categoryId === b.categoryId &&
     a.effectiveFrom === b.effectiveFrom &&
     a.effectiveTo === b.effectiveTo &&
     a.createdAt === b.createdAt &&
@@ -1428,7 +1427,6 @@ export async function openRepository(
       const request: BudgetChangeRequest = {
         period: change.period,
         amountCents: change.amountCents,
-        ...(change.categoryId !== undefined ? { categoryId: change.categoryId } : {}),
         effectiveFrom: change.effectiveFrom,
         timestamp: clock(),
         newRecordId: makeId(),

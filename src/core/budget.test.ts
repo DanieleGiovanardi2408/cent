@@ -61,18 +61,6 @@ describe('resolveBudget', () => {
     expect(resolveBudget(budgets, 'weekly', '2026-08-01')).toBeNull()
   })
 
-  it('un budget di categoria non risponde per il budget complessivo, e viceversa', () => {
-    const diCategoria = makeBudget({
-      amountCents: 20_000,
-      effectiveFrom: '2026-01-01',
-      categoryId: 'cat-spesa',
-    })
-    const all = [...budgets, diCategoria]
-    expect(resolveBudget(all, 'monthly', '2026-08-10')?.id).toBe('b-nuovo')
-    expect(resolveBudget(all, 'monthly', '2026-08-10', 'cat-spesa')?.id).toBe(diCategoria.id)
-    expect(resolveBudget(all, 'monthly', '2026-08-10', 'cat-altro')).toBeNull()
-  })
-
   it('con record sovrapposti vince il piu recente, senza lanciare', () => {
     const sovrapposto = makeBudget({
       id: 'b-sovrapposto',
@@ -85,8 +73,7 @@ describe('resolveBudget', () => {
   })
 
   /**
-   * Due record aperti sullo stesso `period` e la stessa categoria non
-   * dovrebbero esistere. Se esistono lo stesso — un JSON modificato a mano e
+   * Due record aperti sullo stesso `period` non dovrebbero esistere. Se esistono lo stesso — un JSON modificato a mano e
    * reimportato, una scrittura morta a meta' — la risposta non puo' dipendere
    * dall'ordine in cui l'array li presenta: la Home mostrerebbe due numeri
    * diversi per lo stesso dato. Ogni caso qui sotto viene quindi provato in
@@ -94,16 +81,12 @@ describe('resolveBudget', () => {
    */
   describe('sovrapposizioni: la scelta e deterministica, mai arbitraria', () => {
     function inEntrambiGliOrdini(uno: Budget, due: Budget, onDay: IsoDate): (Budget | null)[] {
-      return [
-        resolveBudget([uno, due], 'monthly', onDay, 'cat-casa'),
-        resolveBudget([due, uno], 'monthly', onDay, 'cat-casa'),
-      ]
+      return [resolveBudget([uno, due], 'monthly', onDay), resolveBudget([due, uno], 'monthly', onDay)]
     }
 
     it('due record aperti sovrapposti: vince l effectiveFrom piu recente', () => {
       const vecchio = makeBudget({
         id: 'b-vecchio-aperto',
-        categoryId: 'cat-casa',
         amountCents: 100_000,
         effectiveFrom: '2026-08-01',
         // Creato dopo, apposta: non e' `createdAt` a decidere quando i giorni
@@ -112,7 +95,6 @@ describe('resolveBudget', () => {
       })
       const recente = makeBudget({
         id: 'b-recente-aperto',
-        categoryId: 'cat-casa',
         amountCents: 50_000,
         effectiveFrom: '2026-08-05',
         createdAt: '2026-08-02T10:00:00.000Z',
@@ -131,14 +113,12 @@ describe('resolveBudget', () => {
     it('a parita di effectiveFrom vince il creato per ultimo', () => {
       const prima = makeBudget({
         id: 'b-prima',
-        categoryId: 'cat-casa',
         amountCents: 100_000,
         effectiveFrom: '2026-08-01',
         createdAt: '2026-08-01T09:00:00.000Z',
       })
       const dopo = makeBudget({
         id: 'b-dopo',
-        categoryId: 'cat-casa',
         amountCents: 70_000,
         effectiveFrom: '2026-08-01',
         createdAt: '2026-08-01T09:00:01.000Z',
@@ -152,19 +132,17 @@ describe('resolveBudget', () => {
     it('a parita anche di createdAt sceglie l id piu grande: sempre lo stesso, e non lancia', () => {
       const alfa = makeBudget({
         id: 'b-alfa',
-        categoryId: 'cat-casa',
         amountCents: 100_000,
         effectiveFrom: '2026-08-01',
         createdAt: '2026-08-01T09:00:00.000Z',
       })
       const beta = makeBudget({
         id: 'b-beta',
-        categoryId: 'cat-casa',
         amountCents: 70_000,
         effectiveFrom: '2026-08-01',
         createdAt: '2026-08-01T09:00:00.000Z',
       })
-      expect(() => resolveBudget([alfa, beta], 'monthly', '2026-08-10', 'cat-casa')).not.toThrow()
+      expect(() => resolveBudget([alfa, beta], 'monthly', '2026-08-10')).not.toThrow()
       for (const scelto of inEntrambiGliOrdini(alfa, beta, '2026-08-10')) {
         expect(scelto?.id).toBe('b-beta')
       }
@@ -174,21 +152,18 @@ describe('resolveBudget', () => {
       const record = [
         makeBudget({
           id: 'b-1',
-          categoryId: 'cat-casa',
           amountCents: 100_000,
           effectiveFrom: '2026-08-01',
           createdAt: '2026-08-01T09:00:00.000Z',
         }),
         makeBudget({
           id: 'b-2',
-          categoryId: 'cat-casa',
           amountCents: 70_000,
           effectiveFrom: '2026-08-03',
           createdAt: '2026-08-03T09:00:00.000Z',
         }),
         makeBudget({
           id: 'b-3',
-          categoryId: 'cat-casa',
           amountCents: 40_000,
           effectiveFrom: '2026-08-03',
           createdAt: '2026-08-03T09:00:01.000Z',
@@ -202,9 +177,7 @@ describe('resolveBudget', () => {
         [record[2], record[0], record[1]],
         [record[2], record[1], record[0]],
       ]
-      const scelti = permutazioni.map(
-        (p) => resolveBudget(p, 'monthly', '2026-08-10', 'cat-casa')?.id,
-      )
+      const scelti = permutazioni.map((p) => resolveBudget(p, 'monthly', '2026-08-10')?.id)
       expect(new Set(scelti)).toEqual(new Set(['b-3']))
     })
   })
@@ -336,7 +309,6 @@ describe('budget storicizzati: il passato non si riscrive', () => {
     })
     expect(scritti).toHaveLength(1)
     expect(scritti[0]?.period).toBe('weekly')
-    expect(scritti[0]?.categoryId).toBeUndefined()
   })
 })
 
@@ -487,26 +459,6 @@ describe('metriche del periodo', () => {
     expect(m.dailyAllowanceCents).toBeNull()
     expect(m.sustainablePaceCents).toBeNull()
     expect(m.spentCents).toBe(18_000)
-  })
-
-  it('il budget di categoria conta solo le spese di quella categoria', () => {
-    const miste = [
-      makeExpense({ date: '2026-08-02', amountCents: 4_000, categoryId: 'cat-spesa' }),
-      makeExpense({ date: '2026-08-03', amountCents: 9_000, categoryId: 'cat-svago' }),
-    ]
-    const perCategoria = [
-      makeBudget({ amountCents: 10_000, effectiveFrom: '2026-08-01', categoryId: 'cat-spesa' }),
-    ]
-    const m = computeBudgetMetrics({
-      expenses: miste,
-      budgets: perCategoria,
-      period: 'monthly',
-      onDate: '2026-08-22',
-      today: '2026-08-22',
-      categoryId: 'cat-spesa',
-    })
-    expect(m.spentCents).toBe(4_000)
-    expect(m.budgetCents).toBe(10_000)
   })
 
   it('un periodo futuro ha tutti i giorni davanti', () => {
@@ -792,20 +744,4 @@ describe('le ricorrenti fuori dal budget (ADR 016)', () => {
     expect(recurringSpent([corretta], agosto)).toBe(92_000)
   })
 
-  it('il filtro per categoria vale su entrambi i versanti', () => {
-    const miste = [
-      makeExpense({ date: '2026-08-03', amountCents: 4_000, categoryId: 'cat-cibo' }),
-      makeExpense({ date: '2026-08-04', amountCents: 7_000, categoryId: 'cat-casa' }),
-      makeExpense({
-        date: '2026-08-01',
-        amountCents: 90_000,
-        categoryId: 'cat-casa',
-        source: 'recurring',
-        recurringId: 'r-affitto',
-      }),
-    ]
-    expect(budgetSpent(miste, agosto, 'cat-casa')).toBe(7_000)
-    expect(recurringSpent(miste, agosto, 'cat-casa')).toBe(90_000)
-    expect(recurringSpent(miste, agosto, 'cat-cibo')).toBe(0)
-  })
 })

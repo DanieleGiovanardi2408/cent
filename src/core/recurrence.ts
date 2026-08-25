@@ -227,14 +227,24 @@ export function recurringExpenseId(recurringId: string, date: IsoDate): string {
  *
  * Una chiave sola, l'`id`, perche' dopo ADR 006 un'occorrenza ha una sola
  * identita' possibile. C'era anche la coppia `recurringId|date`, per gli
- * archivi scritti prima di ADR 006: e' stata tolta perche' guardava `date`, che
- * l'utente puo' cambiare. Chi sposta l'affitto di agosto al 5 settembre perche'
- * l'ha pagato in ritardo — la cosa piu' ovvia da fare — a settembre si vedeva
- * filtrare via l'occorrenza vera del 5 settembre; il segnaposto avanzava lo
- * stesso, quindi quel canone non veniva piu' ritentato. Nessun segnale, 900 EUR
- * in meno nel budget. I record pre-ADR 006 non esistono (l'app non e' mai stata
- * usata con dati veri e un backup riporta gli id com'erano), quindi la coppia
- * costava un caso di perdita silenziosa e non copriva niente.
+ * archivi scritti prima di ADR 006, ed e' stata tolta.
+ *
+ * **La ragione scritta qui era "`date` l'utente puo' cambiarla", e non regge
+ * come sta.** Nessuna schermata cambia la data di una spesa: i due soli
+ * chiamanti di produzione di `updateExpense` passano `{ amountCents }`. Lo
+ * scenario dell'affitto pagato in ritardo e spostato al 5 settembre non e'
+ * raggiungibile dal prodotto, quindi non puo' essere l'argomento.
+ *
+ * La ragione che regge e' che **`date` non e' un'identita'**: e' un attributo
+ * che il record porta, e niente impone che concordi con il giorno scritto
+ * nell'id. `parseExpense` legge `id` e `date` separatamente e non li
+ * confronta, e l'import di un JSON scritto a mano e' una porta dichiarata (le
+ * spese orfane entrano di proposito, con un avviso). Su un archivio cosi' la
+ * coppia dichiarerebbe occupato il 5 settembre, cioe' filtrerebbe via
+ * l'occorrenza **vera** di quel giorno mentre il segnaposto avanza lo stesso:
+ * un canone perso senza nessun segnale. I record pre-ADR 006 invece non
+ * esistono (l'app non e' mai stata usata con dati veri, e un backup riporta gli
+ * id com'erano), quindi la coppia copriva zero casi e ne apriva uno.
  *
  * Questa non e' la difesa che garantisce la correttezza — quella e' l'id
  * deterministico piu' la semantica add — ma senza, un catch-up ripetuto
@@ -270,14 +280,43 @@ export const NO_OCCURRENCES: ReadonlySet<IsoDate> = new Set<IsoDate>()
  *
  * `recurringExpenseId` dichiara che la coppia (regola, giorno) si rilegge
  * dall'id senza ambiguita'. Questa funzione e' quella rilettura: si guarda
- * **l'id**, non `date`, per la stessa ragione per cui `buildOccurrenceIndex`
- * guarda l'id — `date` l'utente puo' cambiarla (l'affitto di agosto pagato in
- * ritardo e spostato al 5 settembre), e un insieme costruito su `date`
- * dichiarerebbe libero il 1 agosto e occupato il 5 settembre. Entrambe sbagliate.
+ * **l'id**, non `date`.
  *
- * Il predicato e' quindi **lo stesso** che `materializeRecurring` applica prima
- * di scrivere (`!seen.has(recurringExpenseId(rule.id, date))`): e' questo che
- * rende il numero annunciato uguale al numero che comparira' nello Storico.
+ * ### La ragione **non** e' che l'utente sposta le spese
+ *
+ * Qui c'era scritto — e sta anche in ADR 022 — che `date` l'utente puo'
+ * cambiarla, con l'affitto di agosto spostato al 5 settembre che tiene l'id del
+ * 1 agosto. **E' falsa oggi.** Gli scrittori di `Expense.date` sono per intero
+ * quattro: `addExpense`, `updateExpense`, `materializeRecurring` e
+ * `parseBackup`. Il secondo ha due soli chiamanti di produzione (l'`AmountSheet`
+ * e il suo Annulla) e tutti e due passano `{ amountCents }`: **nessuna
+ * schermata cambia la data di una spesa.** Una decisione giusta difesa da una
+ * premessa falsa e' peggio di una decisione senza difesa, perche' la premessa
+ * viene riusata altrove.
+ *
+ * ### Le due ragioni vere
+ *
+ * **1. E' la stessa espressione che scrive, non una seconda definizione da
+ * tenere allineata a mano.** `materializeRecurring` salta un giorno se e solo
+ * se `seen.has(recurringExpenseId(rule.id, date))`, cioe' un confronto di id.
+ * Sottrarre qui su `date` darebbe due definizioni diverse di "gia' occupato"
+ * che devono rispondere uguale per disciplina; con l'id, *annunciato = scritto*
+ * e' una proprieta' della forma. E' quello che il test "e esattamente il
+ * predicato che il motore applica prima di scrivere" asserisce come identita',
+ * non come coincidenza.
+ *
+ * **2. `date` non e' un'identita', e la sua incoerenza con l'id ha una porta
+ * dichiarata.** L'id e' l'identita' (ADR 006); `date` e' un attributo, e niente
+ * impone che concordi con il giorno scritto nell'id. `parseExpense` legge i due
+ * campi separatamente e non li confronta, e importare un JSON scritto a mano e'
+ * una porta che questo progetto tiene aperta di proposito. Su un record cosi'
+ * un insieme costruito su `date` direbbe libero il giorno dell'id — e `add` lo
+ * salterebbe comunque, cioe' l'anteprima annuncerebbe una riga che non
+ * comparira'.
+ *
+ * Il giorno in cui una schermata offrisse "cambia data", la ragione 1 varrebbe
+ * identica e la 2 diventerebbe ordinaria: **la decisione non cambia, cambia
+ * solo quanto e' facile accorgersi che l'alternativa sbaglia.**
  *
  * ## Il costo, che e' la ragione della forma
  *

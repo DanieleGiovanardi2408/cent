@@ -293,14 +293,17 @@ function parseBudget(raw: RawRecord, path: string, c: Collector): Budget | null 
   if (effectiveFrom === null) return c.error(`${path}.effectiveFrom`, 'inizio validita non valido')
   const effectiveTo = optionalIsoDate(raw['effectiveTo'])
   if (effectiveTo === false) return c.error(`${path}.effectiveTo`, 'data di fine non valida')
-  const categoryId = optionalStr(raw['categoryId'])
-  if (categoryId === false) return c.error(`${path}.categoryId`, 'categoria non testuale')
+  // `categoryId` non si legge: il campo non esiste piu' su `Budget` (vedi
+  // `types.ts`). Con zero produttori nemmeno un backup puo' contenerlo, quindi
+  // sostenerlo qui sarebbe un ramo raggiungibile solo da un JSON scritto a
+  // mano — lo stesso che `endDate` aveva in `parseRule`. Un file che lo porta
+  // perde quel campo e tiene il budget: e' un budget complessivo, che e'
+  // l'unica cosa che questa app sa calcolare.
   return {
     ...b,
     period,
     amountCents,
     effectiveFrom,
-    ...(categoryId !== undefined ? { categoryId } : {}),
     ...(effectiveTo !== undefined ? { effectiveTo } : {}),
   }
 }

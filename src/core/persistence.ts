@@ -142,10 +142,10 @@ export interface WriteBatch {
    * Cancella **davvero** una categoria, se nessun record la nomina.
    *
    * Stessa dottrina: chi chiama porta l'intenzione ("cancella questa"), non il
-   * permesso gia' calcolato. Il conteggio di chi la usa — spese **vive**, regole
-   * ricorrenti e budget di categoria, storici compresi; le lapidi bloccano ma
-   * non si contano, vedi `planCategoryDeletion` — va fatto sui dati del
-   * disco dentro la stessa transazione: deciderlo sul mirror significa poter
+   * permesso gia' calcolato. Il conteggio di chi la usa — spese **vive** e
+   * regole ricorrenti; le lapidi non bloccano e non si contano, e i budget non
+   * possono piu' nominare una categoria, vedi `planCategoryDeletion` — va fatto
+   * sui dati del disco dentro la stessa transazione: deciderlo sul mirror significa poter
    * cancellare una categoria che una spesa scritta da un altro contesto sta
    * gia' usando, e l'orfano che resta non e' correggibile da nessuna schermata.
    *

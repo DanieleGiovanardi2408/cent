@@ -13,7 +13,7 @@ import { BackupNudge } from './BackupNudge'
 import { backupNudge, daysSince } from './backup-nudge'
 import { BackupPanel } from './BackupPanel'
 import { BudgetSheet } from './BudgetSheet'
-import { CategorySheet } from './CategorySheet'
+import { CategorySheet, usageLabel } from './CategorySheet'
 import type { CategoryDraft, CategoryMode } from './CategorySheet'
 import { RuleSheet } from './RuleSheet'
 import type { RuleDraft, RuleRewind } from './RuleSheet'
@@ -1107,7 +1107,14 @@ export function App() {
       .deleteCategory(id)
       .then((result) => {
         if (result.ok) showToast(t('toast.catDeleted', { name: target.name }))
-        else showToast(t(result.reason === 'in-use' ? 'toast.catInUse' : 'toast.catFailed'))
+        else if (result.reason === 'in-use') {
+          // La stessa frase del foglio, interpolata e non riscritta: il toast
+          // arriva dopo che il foglio si e' chiuso, quindi e' l'unica cosa che
+          // resta a schermo, e deve dire cio' che il foglio direbbe riaprendolo.
+          showToast(
+            t('toast.catInUse', { what: usageLabel(result.expenses, result.recurringRules) }),
+          )
+        } else showToast(t('toast.catFailed'))
       })
       .catch(() => showToast(t('toast.catFailed')))
   }
@@ -1241,18 +1248,19 @@ export function App() {
    * un'affermazione che l'utente non poteva verificare.
    *
    * Percio' gli esiti sono tornati tre: `ok`, `unknown`, `in-use`. I numeri di
-   * `in-use` sono tutti visibili — spese **vive**, regole, budget.
+   * `in-use` sono tutti visibili — spese **vive** nello Storico, regole in
+   * Impostazioni.
+   *
+   * **I budget non si contano piu' perche' non possono piu' nominare una
+   * categoria**: `Budget.categoryId` e' stato tolto in fase 5, zero produttori.
+   * Il terzo numero non e' stato nascosto, e' diventato impossibile.
    */
   const catDeletion = useMemo(() => {
     const data = app.data
     if (data === null || catTarget === null) return null
-    return planCategoryDeletion(
-      data.categories,
-      data.expenses,
-      data.recurringRules,
-      data.budgets,
-      { id: catTarget.id },
-    )
+    return planCategoryDeletion(data.categories, data.expenses, data.recurringRules, {
+      id: catTarget.id,
+    })
   }, [app.data, catTarget])
 
   return (

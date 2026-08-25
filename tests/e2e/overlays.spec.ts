@@ -788,7 +788,10 @@ test('Categorie: scambio, archivio e cancellazione, senza bersagli coperti', asy
   //     l'elenco lo dice a parole.
   await expect(page.locator('.arch__row')).toHaveCount(1)
   await expect(page.locator('.arch__name')).toHaveText(uscente)
-  await expect(page.locator('.prefs')).toContainText('Storico e statistiche continuano a mostrarle')
+  // Solo lo Storico: la schermata delle statistiche e' fase 6 e oggi non
+  // esiste, quindi la riga nominava un posto dove andare a guardare che non
+  // c'e'.
+  await expect(page.locator('.prefs')).toContainText('lo Storico continua a mostrarle')
   await still(page)
   await check('Impostazioni con l\'elenco delle archiviate')
 

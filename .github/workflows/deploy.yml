@@ -35,6 +35,18 @@ jobs:
       - name: Typecheck
         run: npx tsc --noEmit
 
+      # Campi dei tipi senza un produttore, chiavi dei dizionari senza un
+      # lettore. Sta **prima** dei test e dopo il typecheck di proposito: e' la
+      # classe di difetti che una suite verde non vede per definizione — un campo
+      # morto ha sempre i suoi test, sono loro a tenerlo in vita — e costa meno di
+      # un secondo, quindi non paga per sapere che 603 test passano su codice che
+      # nessuno raggiunge.
+      #
+      # Un reperto ferma la pipeline. La decisione su cosa cancellare resta
+      # umana: lo script non tocca niente, elenca.
+      - name: Campi e chiavi senza controparte
+        run: npm run audit:source
+
       - name: Test
         run: npm test
 
