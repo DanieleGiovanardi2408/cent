@@ -17,10 +17,15 @@
  * stesse funzioni che la materializzazione esegue davvero.
  */
 
-import { isAfter, isBefore, isIsoDate } from './date'
+import { addDays, isAfter, isBefore, isIsoDate } from './date'
 import type { IsoDate } from './date'
 import type { Cents } from './money'
-import { materializationWindow, occurrencesBetween, validateRule } from './recurrence'
+import {
+  materializationWindow,
+  nextOccurrenceOnOrAfter,
+  occurrencesBetween,
+  validateRule,
+} from './recurrence'
 import type { Cadence, Expense, RecurringRule, Timestamp, WithCadence } from './types'
 
 /* ------------------------------------------------------------------------- *
@@ -272,6 +277,54 @@ export interface MaterializationPreview {
   /** `count` per l'importo della regola. */
   readonly totalCents: Cents
   /**
+   * La prima occorrenza **fuori** dalla finestra: quella che questa
+   * materializzazione **non** genera e che nessuna materializzazione precedente
+   * ha gia' generato. `null` se la regola e' finita (`endDate` passata).
+   *
+   * ## Il punto d'ancoraggio, che e' l'unica cosa da decidere qui
+   *
+   * E' `nextOccurrenceOnOrAfter(rule, addDays(bordoConsiderato, 1))`, dove
+   * `bordoConsiderato` e' **il piu' avanti fra `today` e il segnaposto**.
+   *
+   * `today` perche' la finestra di `materializationWindow` chiude li', incluso:
+   * tutto cio' che cade fino a oggi lo scrive questa materializzazione, quindi
+   * la prima che *non* scrive e' la prima da domani in poi.
+   *
+   * Il segnaposto perche' puo' trovarsi **oltre** `today` senza che nessuno
+   * abbia sbagliato: un orologio che arretra, un fuso attraversato verso ovest,
+   * un import. In quel caso la finestra e' vuota (`from > to`) e le occorrenze
+   * fra domani e il segnaposto sono gia' nello Storico — annunciarle come
+   * "prima spesa" sarebbe di nuovo un numero che lo schermo non conferma. Il
+   * segnaposto **non** viene mai arretrato da qui: si legge e basta (ADR 018).
+   *
+   * ## Perche' non e' `window.from`
+   *
+   * L'altro ancoraggio proposto era il bordo **inferiore** della finestra
+   * (`max(startDate, segnaposto + 1)`, cioe' `window.from`). Sulla finestra
+   * vuota — regola che parte nel futuro, il caso che ha motivato questo campo —
+   * i due coincidono, perche' `nextOccurrenceOnOrAfter` alza comunque il pavimento
+   * a `startDate`: entrambi rispondono 15 settembre per un'ancora 15 che parte il
+   * 5 settembre.
+   *
+   * Divergono dove la finestra **non** e' vuota, e li' `window.from` e'
+   * sbagliato in tutti e due i versi:
+   *
+   * - regola retrodatata (`count > 0`): risponderebbe la **prima occorrenza
+   *   arretrata**, cioe' esattamente `firstDate` — una spesa che fra un secondo
+   *   sara' nello Storico, non la prossima;
+   * - regola gia' finita (`endDate` passata) e mai materializzata: risponderebbe
+   *   un'occorrenza dentro la finestra invece di `null`, cioe' direbbe che c'e'
+   *   una prossima spesa per una regola che non ne avra' piu'.
+   *
+   * ## Non entra in `PreviewFootprint`, ed e' una conseguenza del suo significato
+   *
+   * L'impronta e' cio' che si **scrive**, ri-derivato dentro la transazione e
+   * confrontato con cio' che era stato annunciato. `nextDate` e' per
+   * definizione cio' che **non** si scrive: metterlo li' farebbe rifiutare una
+   * scrittura per un giorno futuro che nessuna scrittura tocca.
+   */
+  readonly nextDate: IsoDate | null
+  /**
    * La prima occorrenza cade **prima di oggi**: salvare riscrive dei periodi
    * gia' passati.
    *
@@ -299,7 +352,8 @@ export type MaterializationPreviewResult =
   | { readonly ok: false; readonly reason: string }
 
 /**
- * Che cosa scriverebbe il motore se questa regola venisse salvata adesso.
+ * Che cosa scriverebbe il motore se questa regola venisse salvata adesso — e,
+ * con `nextDate`, la prima cosa che **non** scriverebbe.
  *
  * ## Perche' esiste
  *
@@ -403,6 +457,18 @@ export function previewMaterialization(
 
   const first = dates[0] ?? null
   const last = dates[dates.length - 1] ?? null
+
+  // Il bordo superiore di cio' che risulta **gia' considerato**: la finestra
+  // chiude a `today`, e il segnaposto puo' stare piu' avanti senza che nessuno
+  // abbia sbagliato (orologio arretrato, fuso, import). Vedi `nextDate`.
+  //
+  // `nextOccurrenceOnOrAfter` lancia su una regola non valida: qui non puo'
+  // succedere, perche' tutti i rifiuti — compresa `validateRule` — sono gia'
+  // passati sopra. E' la condizione che tiene questa funzione **senza throw**
+  // su una bozza a meta', che e' cio' che serve per chiamarla dentro un render.
+  const marker = rule.lastMaterializedDate
+  const consideredThrough = marker !== undefined && isAfter(marker, today) ? marker : today
+  const nextDate = nextOccurrenceOnOrAfter(rule, addDays(consideredThrough, 1))
   // La bozza si ricopia campo per campo invece di tenere il riferimento
   // ricevuto: `RecurrenceDraft` e' `readonly` per il compilatore, non a
   // runtime, e chi ha chiamato l'anteprima resta padrone dell'oggetto che ha
@@ -435,6 +501,8 @@ export function previewMaterialization(
     firstDate: first,
     lastDate: last,
     totalCents: footprint.totalCents,
+    // Fuori dall'impronta di proposito: e' cio' che **non** si scrive.
+    nextDate,
     backdated: first !== null && isBefore(first, today),
   }
 }

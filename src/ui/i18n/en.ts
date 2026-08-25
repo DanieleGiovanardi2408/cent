@@ -411,6 +411,7 @@ export const en: Record<keyof typeof it, string> = {
   'rule.save.edit': 'Save',
   'rule.save.on': 'Switch back on',
   'rule.preview.settled': 'There is nothing to catch up on.',
+  'rule.preview.done': 'This fixed cost is over: it will create no more expenses.',
 
   'rule.refused.stale':
     'Those numbers were from {day}: midnight changed them. I have redone them below — check and confirm.',
@@ -451,11 +452,13 @@ export const en: Record<keyof typeof it, string> = {
     'Your history has {count} expenses from this fixed cost, so it cannot be deleted: they stay. Switch it off and it will create no more.',
 
   'toast.ruleSaved': 'Fixed cost added: {name}',
-  'toast.ruleSavedBack': '{name}: {count} expenses created',
+  'toast.ruleSavedBack.one': '{name}: 1 expense created',
+  'toast.ruleSavedBack.other': '{name}: {count} expenses created',
   'toast.ruleUpdated': 'Fixed cost updated: {name}',
   'toast.ruleOff': '{name}: it will create no more expenses',
   'toast.ruleOn': '{name}: it will create expenses again',
-  'toast.ruleOnBack': '{name}: back on, {count} expenses created',
+  'toast.ruleOnBack.one': '{name}: back on, 1 expense created',
+  'toast.ruleOnBack.other': '{name}: back on, {count} expenses created',
   'toast.ruleBack.none': '{name}: the start date is now {day}',
   'toast.ruleBack.one': '{name}: 1 expense created',
   'toast.ruleBack.other': '{name}: {count} past expenses created',

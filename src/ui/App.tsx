@@ -601,17 +601,30 @@ export function App() {
     closeSheet()
     const name = ruleName({ ...write.rule, categoryId: draft.categoryId })
     const back = preview.backdated
+    // Il conteggio sceglie la chiave, non riempie un segnaposto: "1 spese
+    // create" e' un refuso, e il ramo a uno non e' raro (una mensile creata a
+    // meta' mese, o una dormiente il cui segnaposto e' fermo a un mese fa).
+    const one = preview.count === 1
     showToast(
       target === null
         ? back
-          ? t('toast.ruleSavedBack', { name, count: preview.count })
+          ? t(one ? 'toast.ruleSavedBack.one' : 'toast.ruleSavedBack.other', {
+              name,
+              count: preview.count,
+            })
           : t('toast.ruleSaved', { name })
         : !target.active
           ? back
-            ? t('toast.ruleOnBack', { name, count: preview.count })
+            ? t(one ? 'toast.ruleOnBack.one' : 'toast.ruleOnBack.other', {
+                name,
+                count: preview.count,
+              })
             : t('toast.ruleOn', { name })
           : back
-            ? t('toast.ruleSavedBack', { name, count: preview.count })
+            ? t(one ? 'toast.ruleSavedBack.one' : 'toast.ruleSavedBack.other', {
+                name,
+                count: preview.count,
+              })
             : t('toast.ruleUpdated', { name }),
     )
     void repo.materializeRecurring(getAppState().day).catch(() => {

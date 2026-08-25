@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { isAfter } from './date'
 import type { IsoDate } from './date'
 import { createMemoryPersistence } from './memory-persistence'
 import type { MemoryDisk } from './memory-persistence'
@@ -471,6 +472,171 @@ describe('previewMaterialization: cosa succede se salvo', () => {
       now: tickingClock(),
     })
     expect(disk.expenses).toHaveLength(41)
+  })
+})
+
+/* ------------------------------------------------------------------------- *
+ * 2 bis. La prima occorrenza che l'anteprima NON annuncia
+ * ------------------------------------------------------------------------- */
+
+/**
+ * Materializza `regola` fino a `giorno` e restituisce le date scritte, ordinate.
+ *
+ * Serve perche' `nextDate` e' una promessa sul motore — *"la prossima spesa
+ * sara' questa"* — e una promessa sul motore si verifica **facendo girare il
+ * motore**, non rileggendo la stessa formula da un'altra funzione.
+ */
+async function dateScritte(regola: RecurringRule, giorno: IsoDate): Promise<readonly IsoDate[]> {
+  const disk: MemoryDisk = {
+    expenses: [],
+    categories: [],
+    recurringRules: [regola],
+    budgets: [],
+    settings: null,
+  }
+  const persistence = createMemoryPersistence(disk)
+  await materializeRecurring({
+    today: giorno,
+    rules: disk.recurringRules,
+    expenses: disk.expenses,
+    write: (batch) => persistence.write(batch),
+    chunkSize: 7,
+    now: tickingClock(),
+  })
+  return disk.expenses.map((e) => e.date).sort()
+}
+
+describe('previewMaterialization: nextDate, cioe la prima che NON viene scritta', () => {
+  it('ancora 15 e inizio il 5 settembre: la prossima e il 15, non il 5', async () => {
+    // Il caso raggiungibile con soli tap dopo ADR 020: una mensile del 15 che
+    // viene retrodatata al 5 settembre. `rewindRecurringRule` sposta
+    // `startDate` e lascia `anchorDay` fermo, quindi il giorno d inizio e il
+    // giorno dell ancora sono due date diverse — e la finestra e' vuota perche'
+    // l inizio e' nel futuro.
+    //
+    // Con `count: 0` e `firstDate: null` il ripiego su `startDate` stampava
+    // "Prima spesa: 5 settembre", che e' il giorno in cui la regola comincia a
+    // esistere, non il giorno in cui produce qualcosa.
+    const regola = makeRule({
+      startDate: '2026-09-05',
+      cadence: 'monthly',
+      anchorDay: 15,
+      amountCents: 90_000,
+    })
+    const oggi: IsoDate = '2026-08-19'
+
+    const p = ok(previewMaterialization(regola, oggi))
+    expect(p.count).toBe(0)
+    expect(p.firstDate).toBe(null)
+    expect(p.backdated).toBe(false)
+    expect(p.nextDate).toBe('2026-09-15')
+
+    // E il motore e' d accordo: oggi non scrive niente, e la prima cosa che
+    // scrive quando ci si arriva e' proprio quel giorno.
+    expect(await dateScritte(regola, oggi)).toEqual([])
+    expect(await dateScritte(regola, '2026-09-15')).toEqual(['2026-09-15'])
+  })
+
+  it('una regola gia finita non ha una prossima: null, anche con arretrato da scrivere', async () => {
+    // La finestra qui **non** e' vuota: la regola non ha mai materializzato e
+    // `endDate` e' passata, quindi ci sono otto quindicinali arretrate da
+    // scrivere. E' il caso in cui ancorarsi al bordo **inferiore** della
+    // finestra risponderebbe "5 gennaio" — una prossima spesa per una regola
+    // che non ne avra' mai piu'.
+    const regola = makeRule({
+      startDate: '2026-01-05',
+      cadence: 'weekly',
+      interval: 2,
+      amountCents: 3_000,
+      endDate: '2026-04-30',
+    })
+    const oggi: IsoDate = '2026-08-22'
+
+    const p = ok(previewMaterialization(regola, oggi))
+    expect(p.count).toBeGreaterThan(0)
+    expect(p.firstDate).toBe('2026-01-05')
+    expect(p.nextDate).toBe(null)
+
+    // Dopo aver scritto l arretrato il motore non produce piu' niente: e'
+    // esattamente cio' che `null` annuncia.
+    const scritte = await dateScritte(regola, oggi)
+    expect(scritte).toHaveLength(p.count)
+    expect(await dateScritte(regola, '2027-12-31')).toEqual(scritte)
+  })
+
+  it('su una regola arretrata la prossima non e la prima: 1 settembre, non 1 gennaio', async () => {
+    // L affitto del brief. `firstDate` e' la prima delle otto che stanno per
+    // essere scritte; `nextDate` e' la nona, quella che ancora non esiste.
+    const regola = makeRule({
+      startDate: '2026-01-01',
+      cadence: 'monthly',
+      anchorDay: 1,
+      amountCents: 90_000,
+    })
+    const oggi: IsoDate = '2026-08-22'
+
+    const p = ok(previewMaterialization(regola, oggi))
+    expect(p.count).toBe(8)
+    expect(p.firstDate).toBe('2026-01-01')
+    expect(p.lastDate).toBe('2026-08-01')
+    expect(p.nextDate).toBe('2026-09-01')
+
+    // La nona non e' fra quelle scritte oggi, e lo diventa il giorno in cui
+    // cade: e' la definizione del campo, verificata sul motore.
+    const oggiScritte = await dateScritte(regola, oggi)
+    expect(oggiScritte).not.toContain('2026-09-01')
+    expect(await dateScritte(regola, '2026-09-01')).toContain('2026-09-01')
+  })
+
+  it('col segnaposto oltre oggi si ancora al segnaposto, non a domani', async () => {
+    // Il segnaposto puo' stare **avanti** rispetto all orologio senza che
+    // nessuno abbia sbagliato: un volo verso ovest, un fuso, un import. La
+    // finestra e' vuota (`from > to`) e le occorrenze fra domani e il
+    // segnaposto sono gia' nello Storico: annunciarne una come "prossima"
+    // sarebbe un numero che lo schermo non conferma.
+    const regola = makeRule({
+      startDate: '2026-08-01',
+      cadence: 'daily',
+      amountCents: 250,
+      lastMaterializedDate: '2026-08-25',
+    })
+    const oggi: IsoDate = '2026-08-22'
+
+    const p = ok(previewMaterialization(regola, oggi))
+    expect(p.count).toBe(0)
+    expect(p.nextDate).toBe('2026-08-26')
+
+    // Il motore, con quel segnaposto, non riapre niente fino al 26.
+    expect(await dateScritte(regola, oggi)).toEqual([])
+    expect(await dateScritte(regola, '2026-08-26')).toEqual(['2026-08-26'])
+  })
+
+  it('non cade mai dentro cio che viene scritto adesso', async () => {
+    // L invariante, sui casi che il resto del file usa gia': qualunque cosa
+    // `nextDate` risponda, non e' una delle date che questa materializzazione
+    // sta per scrivere.
+    const casi: readonly { readonly rule: RecurringRule; readonly today: IsoDate }[] = [
+      { rule: makeRule({ startDate: '2026-01-01', cadence: 'monthly' }), today: '2026-08-22' },
+      {
+        rule: makeRule({ startDate: '2026-01-31', cadence: 'monthly', anchorDay: 31 }),
+        today: '2026-08-22',
+      },
+      { rule: makeRule({ startDate: '2026-07-13', cadence: 'daily' }), today: '2026-08-22' },
+      {
+        rule: makeRule({ startDate: '2026-01-05', cadence: 'weekly', interval: 2 }),
+        today: '2026-08-22',
+      },
+      { rule: makeRule({ startDate: '2026-08-22', cadence: 'monthly' }), today: '2026-08-22' },
+      { rule: makeRule({ startDate: '2026-09-01', cadence: 'monthly' }), today: '2026-08-22' },
+    ]
+
+    for (const { rule, today } of casi) {
+      const p = ok(previewMaterialization(rule, today))
+      const scritte = await dateScritte(rule, today)
+      if (p.nextDate === null) continue
+      expect(isAfter(p.nextDate, today)).toBe(true)
+      expect(scritte).not.toContain(p.nextDate)
+    }
   })
 })
 

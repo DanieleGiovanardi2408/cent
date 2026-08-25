@@ -223,18 +223,72 @@ function plainSave(mode: RuleMode): string {
  * suo messaggio ("Quanto esce ogni volta?") finche' l'anteprima non ha una
  * risposta.
  *
- * ## `count: 0` sono due cose diverse
+ * ## `count: 0` sono tre cose diverse
  *
- * Su una regola **nuova** vuol dire che la data d'inizio e' nel futuro: la
- * finestra e' vuota, ma la prima spesa esiste eccome ed e' `startDate`. Dirlo e'
- * l'unico modo perche' "non succede niente adesso" non si legga come "non
- * succedera' niente".
+ * Su una regola **nuova** vuol dire che la finestra e' vuota perche' la regola
+ * non e' ancora partita, ma la prima spesa esiste eccome: e' `nextDate`, che
+ * **non** e' `startDate` — l'ancora e la data d'inizio si separano appena si
+ * modifica una regola, e li' il vecchio ripiego mentiva. Dirlo e' l'unico modo
+ * perche' "non succede niente adesso" non si legga come "non succedera' niente".
  *
  * Su una regola **gia' materializzata** (`lastMaterializedDate` c'e') vuol dire
  * l'opposto: e' in pari, non c'e' niente da recuperare. Li' `startDate` e' nel
  * passato e la frase "Prima spesa: 1 gennaio" sarebbe falsa — quella spesa
  * esiste gia' nello Storico da mesi.
+ *
+ * Su una regola **finita** (`nextDate` e' `null` a sua volta) vuol dire che non
+ * ce ne saranno altre, e nessuna delle due frasi sopra lo dice.
+ *
+ * Le quattro frasi stanno in `settledText`, con la ragione di ognuna.
  */
+/**
+ * La frase quando non c'e' nessun arretrato da dichiarare: quattro fatti
+ * diversi, e nessuno dei quattro si puo' dire con le parole di un altro.
+ *
+ * ## Il ripiego che c'era qui, e perche' mentiva
+ *
+ * Fino a ieri il ramo `count: 0` scriveva `preview.firstDate ?? draft.startDate`:
+ * senza una data calcolata, ripiegava sulla data d'inizio. Il ripiego dice il
+ * vero **solo** se la prima occorrenza cade sulla data d'inizio, che e' vero per
+ * come il foglio **crea** una regola (l'ancora si deriva da `startDate`) e falso
+ * appena l'ancora e la data d'inizio si separano — cioe' in modifica, che e'
+ * l'unica porta da cui quello stato arriva. Una mensile ancorata al **15**
+ * spostata a inizio **5 settembre** annunciava *"Prima spesa: 5 settembre"*: la
+ * prima vera e' il **15**, e il 5 e' un giorno in cui non succede niente.
+ *
+ * Adesso il giorno lo dice `nextDate`, che il core calcola con la stessa
+ * funzione che la materializzazione esegue davvero. Non c'e' piu' una data
+ * costruita qui, quindi non c'e' piu' un ripiego da tenere onesto.
+ *
+ * ## I quattro rami
+ *
+ * 1. **C'e' qualcosa nella finestra** (`firstDate !== null`). Senza arretrato la
+ *    finestra chiude a oggi e non comincia prima, quindi quel giorno **e'**
+ *    oggi: non serve una data, serve la parola.
+ * 2. **La regola e' finita** (`nextDate === null`): `endDate` e' passata e non
+ *    esiste nessuna occorrenza futura. Qui "Prima spesa: ..." non ha una forma
+ *    vera, perche' non c'e' un giorno da scriverci dentro.
+ * 3. **E' in pari** (c'e' il segnaposto): `count: 0` vuol dire "niente da
+ *    recuperare", non "parte piu' avanti". Dirle la data della prossima
+ *    annuncerebbe come "prima" una spesa che sta nello Storico da mesi.
+ * 4. **Comincia piu' avanti**: la finestra e' vuota perche' la regola non e'
+ *    ancora partita, e la prima spesa e' `nextDate`.
+ *
+ * L'ordine fra 2 e 3 non e' indifferente: una regola finita **e** in pari cade
+ * in tutti e due, e "non c'e' niente da recuperare" tacerebbe il fatto piu'
+ * grosso — che non creera' mai piu' niente. Il fatto piu' grande per primo.
+ */
+function settledText(
+  preview: MaterializationPreview,
+  draft: RecurrenceDraft,
+  today: IsoDate,
+): string {
+  if (preview.firstDate !== null) return t('rule.preview.today')
+  if (preview.nextDate === null) return t('rule.preview.done')
+  if (draft.lastMaterializedDate !== undefined) return t('rule.preview.settled')
+  return t('rule.preview.later', { day: fullDayLabel(preview.nextDate, today) })
+}
+
 export function previewCopy(
   preview: MaterializationPreview,
   draft: RecurrenceDraft,
@@ -242,16 +296,8 @@ export function previewCopy(
   mode: RuleMode,
 ): PreviewCopy {
   if (!preview.backdated) {
-    const started = draft.lastMaterializedDate !== undefined
     return {
-      text:
-        started && preview.count === 0
-          ? t('rule.preview.settled')
-          : preview.firstDate === today || (preview.count === 0 && draft.startDate === today)
-            ? t('rule.preview.today')
-            : t('rule.preview.later', {
-                day: fullDayLabel(preview.firstDate ?? draft.startDate, today),
-              }),
+      text: settledText(preview, draft, today),
       confirm: false,
       confirmLabel: null,
       saveLabel: plainSave(mode),

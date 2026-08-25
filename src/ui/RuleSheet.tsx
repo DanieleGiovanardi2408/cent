@@ -433,9 +433,22 @@ export function RuleSheet({
    * Il giorno si sceglie gia' scegliendo la data d'inizio, e un secondo
    * controllo direbbe la stessa cosa due volte in un foglio che a 667 punti
    * scorre gia'. Il caso che lo giustificherebbe — "parte il 5 ma pagalo il 27"
-   * — non ha ancora prodotto nessuna richiesta, e ha un costo che si vede: e'
-   * l'unico modo di costruire una regola la cui prima occorrenza **non** cade su
-   * `startDate`, cioe' l'unico ingresso al ramo muto di `previewCopy`.
+   * — non ha ancora prodotto nessuna richiesta.
+   *
+   * ## Non era l'unico modo di separare l'ancora dalla data d'inizio
+   *
+   * Questa riga diceva che un selettore del giorno sarebbe stato **l'unico**
+   * ingresso a una regola la cui prima occorrenza non cade su `startDate`. Non
+   * lo era gia' allora: il **pannello del riavvolgimento** fa la stessa cosa, e
+   * apposta — sposta `startDate` indietro tenendo l'ancora del record (ADR 020).
+   * Una mensile ancorata al 15 che parte il 15 settembre, riportata al 5,
+   * riaperta in modifica, e' esattamente quello stato.
+   *
+   * Il costo si e' visto li': il piede annunciava *"Prima spesa: 5 settembre"*
+   * ripiegando su `draft.startDate` per mancanza di una data calcolata. Adesso
+   * il giorno arriva da `nextDate`, che il core calcola con la stessa funzione
+   * della materializzazione, quindi la separazione fra ancora e inizio non ha
+   * piu' una frase da far mentire — da qui **o** da un eventuale selettore.
    */
   function calendar(): WithCadence<unknown> {
     if (cadence !== 'monthly') return { cadence }
@@ -502,6 +515,7 @@ export function RuleSheet({
         firstDate: schedule.firstDate,
         lastDate: schedule.lastDate,
         totalCents: cents * schedule.count,
+        nextDate: schedule.nextDate,
         backdated: schedule.backdated,
       }
     : null
@@ -629,6 +643,7 @@ export function RuleSheet({
             firstDate: rewind.firstDate,
             lastDate: rewind.lastDate,
             totalCents: rewind.totalCents,
+            nextDate: rewind.nextDate,
             backdated: rewind.backdated,
           },
           backTo,

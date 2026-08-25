@@ -139,20 +139,55 @@ describe('l anteprima prima di scrivere', () => {
     expect(copy.confirm).toBe(false)
   })
 
-  it('creando, la prima spesa cade SEMPRE sulla data d inizio: e cio che il piede annuncia', () => {
-    // La proprieta' che tiene onesto il ramo `count: 0`, dove il piede non ha
-    // una data calcolata e ripiega su `draft.startDate`. Quel ripiego dice il
-    // vero **solo** se la prima occorrenza e la data d'inizio coincidono, ed e'
-    // quello che l'ancora derivata da `startDate` garantisce: il foglio, in
-    // creazione, non sa costruire una regola che parte dopo il proprio inizio.
+  it('creando, la prima spesa cade SEMPRE sulla data d inizio, dentro o fuori dalla finestra', () => {
+    // La proprieta' che l'ancora derivata da `startDate` garantisce: il foglio,
+    // **in creazione**, non sa costruire una regola che parte dopo il proprio
+    // inizio. Non tiene piu' in piedi nessun ripiego — il giorno annunciato
+    // adesso e' `nextDate`, che lo calcola il core — ma resta cio' che fa
+    // coincidere le due strade, e si legge su tutte e due i campi insieme:
+    // `firstDate` quando l'occorrenza cade nella finestra, `nextDate` quando la
+    // regola non e' ancora partita.
     //
     // Il 31 e il 29 febbraio sono qui perche' sono gli unici giorni su cui
     // `clampDayOfMonth` interviene: se derivasse un'ancora fuori scala, la
-    // prima occorrenza scivolerebbe e questo ripiego mentirebbe.
-    for (const giorno of ['2026-01-01', '2026-07-31', '2026-08-18', OGGI, '2024-02-29']) {
+    // prima occorrenza scivolerebbe di giorni.
+    for (const giorno of ['2026-01-01', '2026-07-31', '2026-08-18', OGGI, '2024-02-29', '2026-09-01']) {
       const { shown } = preview(mensile(giorno))
-      expect([giorno, shown.firstDate ?? giorno]).toEqual([giorno, giorno])
+      expect([giorno, shown.firstDate ?? shown.nextDate]).toEqual([giorno, giorno])
     }
+  })
+
+  it('ancora al 15 e inizio il 5 settembre: la prima spesa e il 15, non il 5', () => {
+    // Il difetto vero, e l'unica porta da cui arriva: **modificando** una regola
+    // si sposta la data d'inizio mentre l'ancora resta quella scritta nel record
+    // (ADR 020), quindi le due si separano. Il piede ripiegava su
+    // `draft.startDate` e annunciava "Prima spesa: 5 settembre" — un giorno in
+    // cui non succede niente. Il 5 non e' nemmeno un'approssimazione: e' dieci
+    // giorni prima, e chi legge lo usa per decidere se salvare.
+    const copy = copyOf(mensile('2026-09-05', { anchorDay: 15 }), 'edit')
+    expect(copy.text).toBe('Prima spesa: 15 settembre.')
+    expect(copy.confirm).toBe(false)
+  })
+
+  it('una regola finita non dice "Prima spesa": dice che non ne creera altre', () => {
+    // `nextDate` a `null` e' l'unico modo di sapere che non ci sara' nessuna
+    // prossima volta. "Non c'e' niente da recuperare" sarebbe vero e tacerebbe
+    // il fatto piu' grosso, e "Prima spesa: ..." non ha nemmeno un giorno da
+    // scriverci dentro.
+    const finita = preview(
+      mensile('2026-01-01', { endDate: '2026-06-01', lastMaterializedDate: OGGI }),
+    )
+    expect(finita.shown.count).toBe(0)
+    expect(finita.shown.nextDate).toBeNull()
+    const copy = previewCopy(finita.shown, finita.draft, OGGI, 'edit')
+    expect(copy.text).toBe('Questa spesa fissa è finita: non creerà altre spese.')
+    expect(copy.confirm).toBe(false)
+
+    setLanguage('en')
+    expect(previewCopy(finita.shown, finita.draft, OGGI, 'edit').text).toBe(
+      'This fixed cost is over: it will create no more expenses.',
+    )
+    setLanguage('it')
   })
 
   it('con una sola arretrata il testo e al singolare, in tutte e tre le frasi', () => {
@@ -443,6 +478,7 @@ function rewindOf(rule: RecurringRule, nuovaData: IsoDate, giorno: IsoDate = OGG
         firstDate: result.firstDate,
         lastDate: result.lastDate,
         totalCents: result.totalCents,
+        nextDate: result.nextDate,
         backdated: result.backdated,
       },
       nuovaData,

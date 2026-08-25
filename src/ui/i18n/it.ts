@@ -550,6 +550,12 @@ export const it = {
   // vuol dire "non c'e' niente da recuperare". Dire "Prima spesa: 1 gennaio"
   // sarebbe falso — quella spesa e' nello Storico da mesi.
   'rule.preview.settled': 'Non c’è niente da recuperare.',
+  // La regola e' **finita**: `endDate` e' passata, quindi non esiste nessuna
+  // occorrenza futura da annunciare. Qui "Prima spesa: ..." non ha una forma
+  // vera — non c'e' un giorno da scriverci dentro — e "non c'e' niente da
+  // recuperare" direbbe il vero tacendo il fatto piu' grosso: che questa regola
+  // non creera' mai piu' niente. Sono due stati diversi e vanno detti diversi.
+  'rule.preview.done': 'Questa spesa fissa è finita: non creerà altre spese.',
 
   /* --- quando la scrittura dice di no ------------------------------------- *
    *
@@ -644,11 +650,22 @@ export const it = {
     'Nello Storico ci sono {count} spese create da questa spesa fissa, quindi non si cancella: restano. Disattivala e non ne creerà altre.',
 
   'toast.ruleSaved': 'Spesa fissa creata: {name}',
-  'toast.ruleSavedBack': '{name}: {count} spese create',
+  // Due chiavi e non una con `{count}` dentro, per la stessa ragione di
+  // `rule.save.back.one`: il caso a una sola spesa esiste (mensile dal primo del
+  // mese corrente, creata a meta' mese) e diceva **"1 spese create"**. Il
+  // singolare qui non dice "arretrata" perche' il conteggio comprende anche
+  // l'occorrenza di **oggi**, che arretrata non e'.
+  'toast.ruleSavedBack.one': '{name}: 1 spesa creata',
+  'toast.ruleSavedBack.other': '{name}: {count} spese create',
   'toast.ruleUpdated': 'Spesa fissa aggiornata: {name}',
   'toast.ruleOff': '{name}: non creerà altre spese',
   'toast.ruleOn': '{name}: torna a creare spese',
-  'toast.ruleOnBack': '{name}: riattivata, {count} spese create',
+  // Stesso refuso, stessa correzione: l'argomento sopra non nomina una chiave,
+  // quindi vale ovunque un conteggio finisca dentro una frase. Riaccendere una
+  // regola dormiente il cui segnaposto e' fermo a un mese fa genera **una**
+  // spesa, ed e' il ramo piu' comune dei due.
+  'toast.ruleOnBack.one': '{name}: riattivata, 1 spesa creata',
+  'toast.ruleOnBack.other': '{name}: riattivata, {count} spese create',
   // Tre esiti e non uno: la data spostata senza generare niente non e' "0 spese
   // create", e' un'altra cosa; e il singolare non dice "arretrata" perche' il
   // caso a uno comprende anche la spesa di **oggi**.
