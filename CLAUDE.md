@@ -70,9 +70,12 @@ Tutte le entita': `id` (crypto.randomUUID), `createdAt`, `updatedAt`.
 - **Expense**: `amountCents` (intero), `categoryId`, `date: 'YYYY-MM-DD'`, `note?`,
   `source: 'manual'|'recurring'`, `recurringId?`, `deletedAt?` (soft delete -> undo).
 - **Category**: `name`, `emoji`, `color`, `order`, `archived`.
-- **RecurringRule**: `amountCents`, `categoryId`, `note?`,
+- **RecurringRule**: `amountCents`, `categoryId`,
   `cadence: 'daily'|'weekly'|'monthly'`, `interval`, `anchorDay?`,
   `startDate`, `endDate?`, `lastMaterializedDate?`, `active`.
+  **`note` non c'e' piu'** (fase 5): tre lettori, zero produttori. La regola
+  generale che ne esce: **un campo si spedisce insieme al suo produttore, o non
+  si spedisce.**
 - **Budget**: `period: 'weekly'|'monthly'`, `amountCents`, `categoryId?`,
   `effectiveFrom`, `effectiveTo?`. I budget sono **storicizzati**: cambiare il
   budget di oggi non deve riscrivere i totali dei periodi passati.
@@ -380,6 +383,19 @@ E' successo due volte, in due forme diverse:
 **Regola operativa**: mettere in stage i **percorsi espliciti** di cio' che si e'
 scritto, mai `git add -A`, finche' un agente e' in corso. E rimandare le misure
 lunghe a quando l'albero e' fermo.
+
+**E il perche', che serve piu' del divieto.** La regola non elenca i comandi
+proibiti, perche' non e' un elenco: e' un criterio. Qualunque operazione che
+**sposti o legga l'albero intero** — `git add -A`, `git stash`, un `git checkout`
+largo, una misura lunga — mentre qualcuno ci sta scrivendo dentro non produce uno
+stato: produce **un'istantanea a meta' fra due salvataggi**. `git stash` e' il caso
+peggiore della famiglia, perche' non si limita a leggerla: **la mette via**, e cio'
+che l'agente stava scrivendo in quel momento finisce in un posto che l'agente non
+sa di dover cercare.
+
+Con il criterio in mano si decide caso per caso invece di ricordarsi un divieto —
+che e' il modo in cui questa regola ha una possibilita' di reggere il giorno in cui
+si hanno due agenti in volo e fretta.
 
 ### La regola da sola non basta: `.githooks/pre-commit`
 Questa e' esattamente il tipo di regola che fallisce, perche' chiede di ricordarsi

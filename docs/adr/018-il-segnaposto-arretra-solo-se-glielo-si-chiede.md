@@ -55,10 +55,36 @@ esisteva.
     rewindRecurringRule(ruleId, nuovaDataInizio, ConfirmedPreview)
 
 Un solo verso: **indietro**. Dentro la transazione scrive **due campi dello stesso
-record** — `startDate` e il segnaposto, entrambi alla data nuova — e nient'altro.
-Non cancella niente, non crea id nuovi, il `ruleId` resta.
+record** e nient'altro: `startDate` = la data nuova, **segnaposto = assente**. Non
+cancella niente, non crea id nuovi, il `ruleId` resta.
 
 Poi la UI chiama `materializeRecurring`, come gia' fa dopo aver salvato una regola.
+
+### Perche' il segnaposto si azzera invece di ricevere la data nuova
+
+La prima stesura diceva *"entrambi alla data nuova"*, ed era sbagliata di un
+giorno: `materializationWindow` apre a **segnaposto + 1**, quindi l'occorrenza che
+cade **esattamente sulla data scelta** non sarebbe nata. Retrodatare l'affitto al
+1 gennaio, con oggi al 22 agosto, avrebbe prodotto febbraio…agosto: **sette
+occorrenze invece di otto**, senza che l'anteprima mentisse — annunciava sette.
+
+Il difetto vero non era il giorno mancante: era che la lettera della ADR rendeva il
+rewind **incoerente con la creazione**. Creare oggi una regola con `startDate` nel
+passato genera gia' tutto l'arretrato, quel giorno compreso, perche' il segnaposto
+e' assente e la finestra apre esattamente su `startDate`. La stessa regola con la
+stessa data d'inizio avrebbe dato otto spese se creata e sette se retrodatata.
+
+Da cui la formulazione giusta, che e' anche piu' forte di "meno uno":
+
+> `rewindRecurringRule` riporta la regola nello **stato di una regola appena creata
+> con quella data d'inizio**. Non e' un'eccezione al motore: e' **il ramo che il
+> motore percorre a ogni creazione**, gia' sotto test.
+
+Cosi' la coerenza fra retrodatare e ricreare non e' una proprieta' da verificare
+caso per caso: **e' la stessa riga di codice.** Otto e otto perche' e' lo stesso
+ramo.
+
+Restano due campi dello stesso record: uno riceve un valore, l'altro viene rimosso.
 
 **In avanti non e' offerto**: spostare `startDate` avanti orfanerebbe le istanze
 gia' generate prima della nuova data, ed e' un bisogno che nessuno ha espresso. Il
@@ -84,3 +110,18 @@ spiega che il segnaposto avanza anche senza occorrenze da creare. Con questa ADR
 quel fatto diventa esprimibile per quello che e': **il segnaposto avanza a oggi
 perche' la finestra fino a oggi e' stata considerata, non perche' sia stato
 generato qualcosa.** Va detto nel **nome**, non nel commento.
+
+## Un vincolo dichiarato invece di una proprieta' accidentale
+
+Cancellare una regola non tocca le spese che ha generato — comprese le lapidi, che
+restano con un `recurringId` che non punta piu' a niente.
+
+> `recurringId` puo' restare orfano dopo la cancellazione di una regola. Nessun
+> lettore lo dereferenzia; il primo che lo fara' deve gestire l'assenza
+> **esplicitamente**, non assumerla impossibile.
+
+Oggi e' inerte, ed e' stato verificato invece che dedotto: l'indice delle
+occorrenze guarda solo **se** il campo c'e', il budget guarda `source`, e nessuna
+schermata risale dalla spesa alla regola. Ma *"inerte oggi"* e' la descrizione
+standard di una mina, e una riga qui la trasforma da proprieta' accidentale in
+vincolo dichiarato.
