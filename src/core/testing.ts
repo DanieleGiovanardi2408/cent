@@ -129,8 +129,8 @@ export function makeSettings(fields: Partial<Settings> = {}): Settings {
   }
 }
 
-/** Una regola come la si scrive: calendario, piu' i due campi che l'anteprima non guarda. */
-export type BozzaRegola = RecurrenceDraft & { readonly categoryId: string; readonly note?: string }
+/** Una regola come la si scrive: calendario, piu' il campo che l'anteprima non guarda. */
+export type BozzaRegola = RecurrenceDraft & { readonly categoryId: string }
 
 /**
  * Creare una regola costa a un test esattamente quello che costa alla UI:
@@ -150,13 +150,7 @@ export function creaRegola(repo: Repository, bozza: BozzaRegola, giorno?: IsoDat
   for (let tentativo = 0; tentativo < 2; tentativo += 1) {
     const anteprima = previewMaterialization(bozza, giorno ?? today())
     if (!anteprima.ok) throw new Error(`anteprima rifiutata: ${anteprima.reason}`)
-    const esito = repo.addRecurringRule(
-      {
-        categoryId: bozza.categoryId,
-        ...(bozza.note !== undefined ? { note: bozza.note } : {}),
-      },
-      anteprima.confirmed,
-    )
+    const esito = repo.addRecurringRule({ categoryId: bozza.categoryId }, anteprima.confirmed)
     if (esito.ok) return esito.rule
     if (esito.reason !== 'stale-preview') throw new Error(`scrittura rifiutata: ${esito.reason}`)
   }

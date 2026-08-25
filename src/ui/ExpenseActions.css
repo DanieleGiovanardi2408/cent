@@ -71,6 +71,7 @@
   font-weight: var(--fw-semibold);
 }
 
+.acts__fix,
 .acts__delete,
 .acts__close {
   min-block-size: var(--tap-min);
@@ -78,6 +79,19 @@
   border-radius: var(--radius-2);
   font-size: var(--fs-300);
   font-weight: var(--fw-semibold);
+}
+
+/* La mossa giusta su una spesa generata: conserva `id` e `source`, quindi il
+ * budget del periodo non si muove. Ha la superficie di "Elimina" ma il colore
+ * del testo normale — sono due azioni della stessa importanza visiva, e solo
+ * una delle due e' distruttiva. */
+.acts__fix {
+  color: var(--text);
+  background-color: var(--surface-sunken);
+}
+
+.acts__fix:active {
+  background-color: var(--brand-soft);
 }
 
 .acts__delete {

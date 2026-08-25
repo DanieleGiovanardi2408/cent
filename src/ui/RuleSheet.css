@@ -133,6 +133,46 @@
   background-color: var(--brand-soft);
 }
 
+/* --- il nono chip: cio' che c'e' adesso (ADR 019) ------------------------ */
+/*
+ * La categoria che questa regola usa ma che non e' piu' in griglia. Compare in
+ * fondo — le otto restano nelle loro posizioni, perche' si tocca per posizione
+ * e non leggendo l'etichetta — e si distingue in **due** modi che non
+ * dipendono dal colore: un contorno tratteggiato e la parola "Attuale" dentro
+ * il bersaglio.
+ *
+ * Tratteggiato e non pieno perche' dice una cosa diversa dal selezionato: non
+ * "questa e' scelta" ma "questa e' fuori dall'insieme". Le due si sovrappongono
+ * quasi sempre (il valore attuale e' anche quello selezionato all'apertura),
+ * quindi questa regola viene dopo e vince: il tratteggio e' l'informazione in
+ * piu', il pieno si ritrova su qualunque altro chip si tocchi.
+ */
+.cats--pick .cat[data-current] {
+  outline: 2px dashed var(--line-strong);
+  outline-offset: -2px;
+}
+
+.cats--pick .cat[data-current][aria-pressed="true"] {
+  outline-color: var(--brand);
+}
+
+/* Sotto il nome, dentro il chip: entra nel nome accessibile del bottone senza
+ * un `aria-label` che dovrebbe ripetere anche la categoria. Il corpo e'
+ * dichiarato in px e non con la scala, perche' `--fs-100` e' gia' il gradino
+ * piu' basso e qui serve stare **sotto** al nome senza rubargli una riga. */
+.cat__tag {
+  max-inline-size: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 0.625rem; /* 10px */
+  line-height: 1.2;
+  font-weight: var(--fw-semibold);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
 /* --- il piede: dichiarare, confermare, scrivere -------------------------- */
 /*
  * Tre altezze **riservate**, non calcolate dal contenuto, e la ragione e' una

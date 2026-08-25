@@ -16,7 +16,7 @@ import type { Repository } from './repository'
 import { previewMaterialization } from './recurring-plan'
 import type { Persistence } from './persistence'
 import { creaRegola, rivediRegola, sequentialIds, TEST_CATEGORY_NAMES, tickingClock } from './testing'
-import type { DataSet } from './types'
+import type { DataSet, RecurringRule } from './types'
 
 interface Fixture {
   readonly repo: Repository
@@ -689,8 +689,11 @@ describe('categorie: cancellare davvero', () => {
     expect(disk.categories).toHaveLength(DEFAULT_CATEGORY_SEEDS.length)
   })
 
-  it('una spesa cancellata la trattiene lo stesso: resta nello Storico e nell export', async () => {
-    const { repo } = await open()
+  it('una spesa cancellata la trattiene lo stesso, ma con deleted-only e senza numeri', async () => {
+    // La lapide blocca — `restoreExpense` la riporta in vita in un tap, e la
+    // riga che torna dereferenzia `categoryId` — ma non e' citabile: nello
+    // Storico non si vede. Quindi il rifiuto cambia forma, non severita'.
+    const { repo, disk } = await open()
     const svago = repo.getState().categories.find((c) => c.name === 'Leisure')
     const spesa = repo.addExpense({
       amountCents: 1_200,
@@ -701,8 +704,20 @@ describe('categorie: cancellare davvero', () => {
     await repo.flush()
 
     const esito = await repo.deleteCategory(svago?.id ?? '')
-    expect(esito.ok === false && esito.reason).toBe('in-use')
-    expect(esito.ok === false && esito.reason === 'in-use' && esito.expenses).toBe(1)
+    expect(esito).toEqual({ ok: false, reason: 'deleted-only' })
+    expect(disk.categories.some((c) => c.id === svago?.id)).toBe(true)
+
+    // E il ripristino, che e' la ragione per cui blocca, funziona ancora.
+    repo.restoreExpense(spesa.id)
+    await repo.flush()
+    const dopo = await repo.deleteCategory(svago?.id ?? '')
+    expect(dopo).toEqual({
+      ok: false,
+      reason: 'in-use',
+      expenses: 1,
+      recurringRules: 0,
+      budgets: 0,
+    })
   })
 
   it('una regola ricorrente la trattiene: genererebbe orfane per sempre', async () => {
@@ -827,17 +842,37 @@ describe('ricorrenti: cancellare davvero una regola', () => {
     expect(spenta?.active).toBe(false)
   })
 
-  it('una spesa generata e poi cancellata trattiene comunque', async () => {
+  it('cancellate tutte le istanze, la regola si cancella davvero', async () => {
+    // L uscita che prima non c era: una regola creata per sbaglio, le cui spese
+    // sono state cancellate, restava per sempre citando un numero invisibile.
     const { repo, disk } = await open()
     const regola = creaRegola(repo, nuovaRegola)
     await repo.flush()
     await repo.materializeRecurring('2026-08-22')
-    const generata = disk.expenses.find((e) => e.recurringId === regola.id)
-    repo.deleteExpense(generata?.id ?? '')
+    const generate = disk.expenses.filter((e) => e.recurringId === regola.id)
+    expect(generate.length).toBeGreaterThan(0)
+    for (const spesa of generate) repo.deleteExpense(spesa.id)
     await repo.flush()
 
     const esito = await repo.deleteRecurringRule(regola.id)
-    expect(esito.ok === false && esito.reason).toBe('in-use')
+    expect(esito.ok).toBe(true)
+    expect(disk.recurringRules).toHaveLength(0)
+    // Le lapidi restano dove sono: la storia non cambia retroattivamente.
+    expect(disk.expenses.filter((e) => e.recurringId === regola.id)).toHaveLength(generate.length)
+  })
+
+  it('basta una istanza viva per trattenere, e il numero e quello visibile', async () => {
+    const { repo, disk } = await open()
+    const regola = creaRegola(repo, { ...nuovaRegola, cadence: 'daily', startDate: '2026-08-20' })
+    await repo.flush()
+    await repo.materializeRecurring('2026-08-22')
+    const generate = disk.expenses.filter((e) => e.recurringId === regola.id)
+    expect(generate).toHaveLength(3)
+    for (const spesa of generate.slice(1)) repo.deleteExpense(spesa.id)
+    await repo.flush()
+
+    const esito = await repo.deleteRecurringRule(regola.id)
+    expect(esito).toMatchObject({ ok: false, reason: 'in-use', expenses: 1 })
   })
 
   it('il permesso lo da il disco: una spesa materializzata da un altro contesto conta', async () => {
@@ -1006,7 +1041,6 @@ describe('ricorrenze dal repository', () => {
       cadence: 'monthly',
       interval: 1,
       startDate: '2026-06-01',
-      note: 'Affitto',
     })
     await repo.flush()
 
@@ -2089,22 +2123,520 @@ describe('l anteprima e obbligatoria nel tipo, e scade a mezzanotte', () => {
    * La porta senza pedaggio resta senza pedaggio
    * --------------------------------------------------------------------- */
 
-  it('categoria e nota si cambiano senza anteprima, anche il giorno dopo', async () => {
+  it('la categoria si cambia senza anteprima, anche il giorno dopo', async () => {
     let istante = new Date(2026, 7, 22, 23, 59, 50)
     const { repo, disk } = await apriConOrologio(() => istante)
     const regola = creaRegola(repo, { ...bozzaAffitto, categoryId: 'cat-1' }, '2026-08-22')
 
     istante = new Date(2026, 7, 23, 0, 0, 5)
-    const cambiata = repo.updateRecurringRule(regola.id, { categoryId: 'cat-2', note: 'Affitto' })
+    const cambiata = repo.updateRecurringRule(regola.id, { categoryId: 'cat-2' })
     expect(cambiata?.categoryId).toBe('cat-2')
-    expect(cambiata?.note).toBe('Affitto')
-    // `null` cancella la nota, come su ogni altra patch di questo repository.
-    expect(repo.updateRecurringRule(regola.id, { note: null })?.note).toBeUndefined()
-    expect(repo.updateRecurringRule('r-mai-esistita', { note: 'x' })).toBeNull()
+    expect(repo.updateRecurringRule('r-mai-esistita', { categoryId: 'cat-3' })).toBeNull()
 
     await repo.flush()
     expect(disk.recurringRules[0]?.categoryId).toBe('cat-2')
     // E il calendario non l'ha sfiorato nessuno.
     expect(disk.recurringRules[0]?.startDate).toBe('2026-01-01')
+  })
+})
+
+/* ------------------------------------------------------------------------- *
+ * ADR 018 — Il segnaposto arretra solo se glielo si chiede
+ * ------------------------------------------------------------------------- */
+
+describe('ADR 018: il segnaposto arretra solo su richiesta', () => {
+  const OGGI = '2026-08-22'
+
+  async function apri(
+    orologio: () => Date,
+    disk: MemoryDisk = emptyDisk(),
+  ): Promise<{
+    readonly repo: Repository
+    readonly disk: MemoryDisk
+    readonly writeCount: () => number
+  }> {
+    const persistence = createMemoryPersistence(disk)
+    const repo = await openRepository(persistence, {
+      defaultCategoryNames: TEST_CATEGORY_NAMES,
+      now: tickingClock(),
+      newId: sequentialIds('rw'),
+      nowInstant: orologio,
+    })
+    return { repo, disk, writeCount: () => persistence.writeCount }
+  }
+
+  const quotidiana = {
+    amountCents: 900,
+    categoryId: 'cat-1',
+    cadence: 'daily' as const,
+    interval: 1,
+    startDate: '2026-08-20',
+  }
+
+  /**
+   * L'anteprima di un rewind e' quella della regola **come sara' dopo**:
+   * `startDate` alla data nuova e **nessun segnaposto**.
+   *
+   * Cioe' e' esattamente la bozza di una regola **nuova** con quella data
+   * d'inizio: nessun campo la distingue. E' il punto di ADR 018 dopo la
+   * correzione — retrodatare e ricreare percorrono lo stesso ramo di
+   * `materializationWindow`, quindi la coerenza fra i due gesti non e' una
+   * proprieta' da verificare caso per caso.
+   *
+   * Non esiste una funzione di dominio che la costruisca, e non e' una
+   * dimenticanza: chi sbaglia la bozza non ottiene una scrittura sbagliata,
+   * ottiene un `stale-preview` dalla transazione — l'impronta non torna. La
+   * guardia sta nel confronto, non in un aiutante.
+   */
+  function anteprimaRewind(
+    regola: RecurringRule,
+    nuovaData: string,
+    giorno: string,
+  ): Extract<ReturnType<typeof previewMaterialization>, { ok: true }> {
+    const p = previewMaterialization(
+      {
+        amountCents: regola.amountCents,
+        cadence: regola.cadence,
+        interval: regola.interval,
+        ...(regola.anchorDay !== undefined ? { anchorDay: regola.anchorDay } : {}),
+        startDate: nuovaData,
+        ...(regola.endDate !== undefined ? { endDate: regola.endDate } : {}),
+      },
+      giorno,
+    )
+    if (!p.ok) throw new Error(`anteprima rifiutata: ${p.reason}`)
+    return p
+  }
+
+  /* --------------------------------------------------------------------- *
+   * 1. L'orologio che torna indietro
+   * --------------------------------------------------------------------- */
+
+  it('1. orologio a ieri: nessuna scrittura, e il segnaposto resta a oggi', async () => {
+    // Il segnaposto non arretra per causa di un orologio: non per un fuso, non
+    // per una data rimessa a mano, non per un ripristino. Arretra solo per
+    // `rewindRecurringRule`.
+    let istante = new Date(2026, 7, 22, 12, 0)
+    const { repo, disk, writeCount } = await apri(() => istante)
+    creaRegola(repo, quotidiana, OGGI)
+    await repo.flush()
+    await repo.materializeRecurring()
+    await repo.flush()
+    expect(disk.recurringRules[0]?.lastMaterializedDate).toBe(OGGI)
+    const spesePrima = disk.expenses.length
+    const scritturePrima = writeCount()
+
+    istante = new Date(2026, 7, 21, 12, 0)
+    const esito = await repo.materializeRecurring()
+    await repo.flush()
+
+    expect(esito.created).toHaveLength(0)
+    expect(disk.expenses).toHaveLength(spesePrima)
+    // Nemmeno una transazione aperta: la finestra e' vuota e non si tocca il disco.
+    expect(writeCount()).toBe(scritturePrima)
+    expect(disk.recurringRules[0]?.lastMaterializedDate).toBe(OGGI)
+    expect(repo.getState().recurringRules[0]?.lastMaterializedDate).toBe(OGGI)
+  })
+
+  /* --------------------------------------------------------------------- *
+   * 2. Amsterdam -> Tokyo
+   * --------------------------------------------------------------------- */
+
+  it('2. Amsterdam -> Tokyo: il salto scavalca la mezzanotte e vale una istanza, non due', async () => {
+    // Sette ore di volo e la data civile locale avanza di uno. L'app vede solo
+    // la data civile: deve valere come **un** giorno, e la riapertura subito
+    // dopo non deve aggiungere niente.
+    let istante = new Date(2026, 7, 22, 23, 30)
+    const { repo, disk } = await apri(() => istante)
+    const regola = creaRegola(repo, quotidiana, OGGI)
+    await repo.flush()
+    await repo.materializeRecurring()
+    await repo.flush()
+    expect(disk.expenses.filter((e) => e.recurringId === regola.id)).toHaveLength(3)
+    expect(disk.recurringRules[0]?.lastMaterializedDate).toBe('2026-08-22')
+
+    istante = new Date(2026, 7, 23, 6, 30)
+    const atterrato = await repo.materializeRecurring()
+    await repo.flush()
+    expect(atterrato.created).toHaveLength(1)
+    expect(atterrato.created[0]?.date).toBe('2026-08-23')
+    expect(disk.recurringRules[0]?.lastMaterializedDate).toBe('2026-08-23')
+
+    const riaperta = await repo.materializeRecurring()
+    await repo.flush()
+    expect(riaperta.created).toHaveLength(0)
+    expect(disk.expenses.filter((e) => e.recurringId === regola.id)).toHaveLength(4)
+  })
+
+  /* --------------------------------------------------------------------- *
+   * 3. La correzione manuale sopravvive
+   * --------------------------------------------------------------------- */
+
+  it('3. rewind a 60 giorni con una correzione a 920 in mezzo: l importo resta 920', async () => {
+    // E' la proprieta' che rende sicuro arretrare il segnaposto: l'occorrenza
+    // corretta occupa gia' il suo id, e `addExpenses` salta invece di
+    // sovrascrivere (ADR 006).
+    const istante = new Date(2026, 7, 22, 12, 0)
+    const { repo, disk } = await apri(() => istante)
+    const regola = creaRegola(repo, quotidiana, OGGI)
+    await repo.flush()
+    await repo.materializeRecurring(OGGI)
+    await repo.flush()
+
+    const corretta = disk.expenses.find((e) => e.date === '2026-08-21')
+    expect(corretta).toBeDefined()
+    repo.updateExpense(corretta?.id ?? '', { amountCents: 920 })
+    await repo.flush()
+
+    const anteprima = anteprimaRewind(regola, '2026-06-23', OGGI)
+    // 23 giugno .. 22 agosto inclusi: sessantuno, perche' il segnaposto sparisce
+    // e la finestra si apre **sulla** data scelta, non il giorno dopo.
+    expect(anteprima.count).toBe(61)
+    expect(anteprima.totalCents).toBe(54_900)
+
+    const esito = await repo.rewindRecurringRule(regola.id, '2026-06-23', anteprima.confirmed)
+    expect(esito.ok).toBe(true)
+    await repo.flush()
+    expect(disk.recurringRules[0]?.startDate).toBe('2026-06-23')
+    // Il segnaposto non c'e': la regola e' tornata allo stato di una appena
+    // creata. Assente, non `undefined` — la chiave non esiste proprio.
+    expect(disk.recurringRules[0]?.lastMaterializedDate).toBeUndefined()
+    expect(Object.hasOwn(disk.recurringRules[0] ?? {}, 'lastMaterializedDate')).toBe(false)
+
+    const generate = await repo.materializeRecurring(OGGI)
+    await repo.flush()
+    // 61 annunciate meno le 3 che erano gia' sul disco: si annuncia piu' di
+    // quanto si scrive, che e' l'unico verso accettabile.
+    expect(generate.created).toHaveLength(58)
+    expect(disk.expenses.find((e) => e.date === '2026-08-21')?.amountCents).toBe(920)
+    expect(disk.expenses.filter((e) => e.date === '2026-08-21')).toHaveLength(1)
+  })
+
+  /* --------------------------------------------------------------------- *
+   * 4. La cancellazione sopravvive
+   * --------------------------------------------------------------------- */
+
+  it('4. rewind con una istanza cancellata in mezzo: resta cancellata', async () => {
+    // L'obiezione contro il rewind era "riaprire la finestra fa tornare le
+    // istanze cancellate". E' falsa: il soft delete lascia una lapide **sotto
+    // lo stesso id**, quindi la chiave resta occupata e `add` fallisce.
+    const istante = new Date(2026, 7, 22, 12, 0)
+    const { repo, disk } = await apri(() => istante)
+    const regola = creaRegola(repo, quotidiana, OGGI)
+    await repo.flush()
+    await repo.materializeRecurring(OGGI)
+    await repo.flush()
+
+    const daCancellare = disk.expenses.find((e) => e.date === '2026-08-21')
+    repo.deleteExpense(daCancellare?.id ?? '')
+    await repo.flush()
+    expect(disk.expenses.find((e) => e.date === '2026-08-21')?.deletedAt).toBeDefined()
+
+    const anteprima = anteprimaRewind(regola, '2026-06-23', OGGI)
+    expect((await repo.rewindRecurringRule(regola.id, '2026-06-23', anteprima.confirmed)).ok).toBe(
+      true,
+    )
+    await repo.flush()
+    const generate = await repo.materializeRecurring(OGGI)
+    await repo.flush()
+
+    expect(generate.created).toHaveLength(58)
+    const lapide = disk.expenses.filter((e) => e.date === '2026-08-21')
+    expect(lapide).toHaveLength(1)
+    expect(lapide[0]?.deletedAt).toBeDefined()
+    expect(generate.created.some((e) => e.date === '2026-08-21')).toBe(false)
+  })
+
+  /* --------------------------------------------------------------------- *
+   * 5. Due rewind di fila
+   * --------------------------------------------------------------------- */
+
+  it('5. due rewind di fila: il secondo non scrive niente', async () => {
+    // Un solo verso. La seconda richiesta chiede la stessa data, che non e' piu'
+    // precedente: si rifiuta, e il record resta identico byte per byte.
+    const istante = new Date(2026, 7, 22, 12, 0)
+    const { repo, disk } = await apri(() => istante)
+    const regola = creaRegola(repo, quotidiana, OGGI)
+    await repo.flush()
+    await repo.materializeRecurring(OGGI)
+    await repo.flush()
+
+    const primo = await repo.rewindRecurringRule(
+      regola.id,
+      '2026-06-23',
+      anteprimaRewind(regola, '2026-06-23', OGGI).confirmed,
+    )
+    expect(primo.ok).toBe(true)
+    await repo.flush()
+    const dopoIlPrimo = structuredClone(disk.recurringRules[0])
+
+    const corrente = repo.getState().recurringRules[0]
+    expect(corrente).toBeDefined()
+    const secondo = await repo.rewindRecurringRule(
+      regola.id,
+      '2026-06-23',
+      anteprimaRewind(corrente as RecurringRule, '2026-06-23', OGGI).confirmed,
+    )
+    await repo.flush()
+
+    expect(secondo).toMatchObject({
+      ok: false,
+      reason: 'not-earlier',
+      startDate: '2026-06-23',
+      currentStartDate: '2026-06-23',
+    })
+    expect(disk.recurringRules[0]).toEqual(dopoIlPrimo)
+    expect(repo.getState().recurringRules[0]).toEqual(dopoIlPrimo)
+  })
+
+  /* --------------------------------------------------------------------- *
+   * L'impronta economica
+   * --------------------------------------------------------------------- */
+
+  it('l impronta si ri-deriva dal disco: importo cambiato sotto, niente scrittura', async () => {
+    // Non attraversa il confine il risultato gia' calcolato (le date), ma
+    // l'intenzione piu' i numeri mostrati. La transazione li rifa' sui record
+    // veri: se l'insieme non e' piu' quello, non si scrive (ADR 008 + ADR 017).
+    const istante = new Date(2026, 7, 22, 12, 0)
+    const { repo, disk } = await apri(() => istante)
+    const regola = creaRegola(repo, quotidiana, OGGI)
+    await repo.flush()
+    await repo.materializeRecurring(OGGI)
+    await repo.flush()
+
+    const anteprima = anteprimaRewind(regola, '2026-06-23', OGGI)
+    expect(anteprima.totalCents).toBe(54_900)
+
+    // Un altro contesto alza il canone fra il calcolo e la conferma.
+    rivediRegola(
+      repo,
+      regola.id,
+      { ...quotidiana, amountCents: 1_000, lastMaterializedDate: OGGI },
+      OGGI,
+    )
+    await repo.flush()
+
+    const esito = await repo.rewindRecurringRule(regola.id, '2026-06-23', anteprima.confirmed)
+    await repo.flush()
+
+    expect(esito.ok).toBe(false)
+    if (!esito.ok && esito.reason === 'stale-preview') {
+      expect(esito.stale.staleness).toBe('footprint')
+      if (esito.stale.staleness === 'footprint') {
+        expect(esito.stale.announced).toEqual({
+          count: 61,
+          totalCents: 54_900,
+          firstDate: '2026-06-23',
+          lastDate: '2026-08-22',
+        })
+        expect(esito.stale.actual).toEqual({
+          count: 61,
+          totalCents: 61_000,
+          firstDate: '2026-06-23',
+          lastDate: '2026-08-22',
+        })
+      }
+    } else {
+      throw new Error(`atteso stale-preview, arrivato ${JSON.stringify(esito)}`)
+    }
+    // Il calendario non e' stato toccato: non e' stato scritto niente.
+    expect(disk.recurringRules[0]?.startDate).toBe('2026-08-20')
+    expect(disk.recurringRules[0]?.lastMaterializedDate).toBe(OGGI)
+  })
+
+  it('un anteprima di ieri non si spende, nemmeno per un rewind', async () => {
+    let istante = new Date(2026, 7, 22, 23, 59, 50)
+    const { repo, disk } = await apri(() => istante)
+    const regola = creaRegola(repo, quotidiana, OGGI)
+    await repo.flush()
+    await repo.materializeRecurring(OGGI)
+    await repo.flush()
+    const anteprima = anteprimaRewind(regola, '2026-06-23', OGGI)
+
+    istante = new Date(2026, 7, 23, 0, 0, 5)
+    const esito = await repo.rewindRecurringRule(regola.id, '2026-06-23', anteprima.confirmed)
+    await repo.flush()
+
+    expect(esito.ok).toBe(false)
+    if (!esito.ok && esito.reason === 'stale-preview') {
+      expect(esito.stale).toEqual({
+        staleness: 'day',
+        previewedOn: '2026-08-22',
+        today: '2026-08-23',
+      })
+    } else {
+      throw new Error(`atteso stale-preview, arrivato ${JSON.stringify(esito)}`)
+    }
+    expect(disk.recurringRules[0]?.startDate).toBe('2026-08-20')
+  })
+
+  it('un id sconosciuto e unknown, e il disco resta com era', async () => {
+    const istante = new Date(2026, 7, 22, 12, 0)
+    const { repo, disk } = await apri(() => istante)
+    const regola = creaRegola(repo, quotidiana, OGGI)
+    await repo.flush()
+    const esito = await repo.rewindRecurringRule(
+      'r-mai-esistita',
+      '2026-06-23',
+      anteprimaRewind(regola, '2026-06-23', OGGI).confirmed,
+    )
+    await repo.flush()
+    expect(esito).toEqual({ ok: false, reason: 'unknown' })
+    expect(disk.recurringRules[0]?.startDate).toBe('2026-08-20')
+  })
+
+  /* --------------------------------------------------------------------- *
+   * Il bordo della finestra: l'occorrenza sulla data scelta **nasce**
+   * --------------------------------------------------------------------- */
+
+  it('l occorrenza sulla data scelta nasce: il segnaposto si azzera, non si sposta', async () => {
+    // Il bordo, capovolto rispetto a com'era. Portare il segnaposto alla data
+    // nuova apriva la finestra al **giorno dopo** e toglieva in silenzio proprio
+    // la spesa che l'utente stava chiedendo — dice "l'inizio era il 10 agosto" e
+    // il 10 agosto e' il giorno che gli interessa.
+    //
+    // Azzerandolo, la finestra si apre **sulla** data scelta: e' lo stesso ramo
+    // di `materializationWindow` che percorre ogni creazione.
+    const istante = new Date(2026, 7, 22, 12, 0)
+    const { repo, disk } = await apri(() => istante)
+    const regola = creaRegola(repo, quotidiana, OGGI)
+    await repo.flush()
+    await repo.materializeRecurring(OGGI)
+    await repo.flush()
+
+    const anteprima = anteprimaRewind(regola, '2026-08-10', OGGI)
+    // 10..22 agosto: tredici, non dodici.
+    expect(anteprima.count).toBe(13)
+    expect(anteprima.firstDate).toBe('2026-08-10')
+
+    expect((await repo.rewindRecurringRule(regola.id, '2026-08-10', anteprima.confirmed)).ok).toBe(
+      true,
+    )
+    await repo.flush()
+    await repo.materializeRecurring(OGGI)
+    await repo.flush()
+
+    expect(disk.expenses.some((e) => e.date === '2026-08-10')).toBe(true)
+    expect(disk.expenses.filter((e) => e.recurringId === regola.id)).toHaveLength(13)
+  })
+
+  /* --------------------------------------------------------------------- *
+   * Retrodatare e ricreare: otto e otto, perche' e' lo stesso ramo
+   * --------------------------------------------------------------------- */
+
+  it('mensile retrodatata al 1 gennaio: otto occorrenze, le stesse di una regola creata cosi', async () => {
+    // Il caso canonico del brief — "Affitto, 900, mensile, dal 1 gennaio, creata
+    // ad agosto: otto spese per 7.200 €" — chiesto per rewind invece che per
+    // creazione. I due numeri devono coincidere **e coincidono per costruzione**:
+    // dopo il rewind i due record hanno esattamente gli stessi campi rilevanti,
+    // quindi la finestra la apre la stessa riga di codice.
+    const istante = new Date(2026, 7, 22, 12, 0)
+    const { repo, disk } = await apri(() => istante)
+    const mensile = {
+      amountCents: 90_000,
+      categoryId: 'cat-1',
+      cadence: 'monthly' as const,
+      interval: 1,
+      startDate: '2026-08-01',
+    }
+    const regola = creaRegola(repo, mensile, OGGI)
+    await repo.flush()
+    await repo.materializeRecurring(OGGI)
+    await repo.flush()
+    expect(disk.expenses.filter((e) => e.recurringId === regola.id)).toHaveLength(1)
+
+    const anteprima = anteprimaRewind(regola, '2026-01-01', OGGI)
+    expect(anteprima.count).toBe(8)
+    expect(anteprima.totalCents).toBe(720_000)
+    expect(anteprima.firstDate).toBe('2026-01-01')
+    expect(anteprima.lastDate).toBe('2026-08-01')
+
+    expect((await repo.rewindRecurringRule(regola.id, '2026-01-01', anteprima.confirmed)).ok).toBe(
+      true,
+    )
+    await repo.flush()
+    await repo.materializeRecurring(OGGI)
+    await repo.flush()
+
+    const generate = disk.expenses.filter((e) => e.recurringId === regola.id)
+    expect(generate).toHaveLength(8)
+    expect(generate.map((e) => e.date).sort()).toEqual([
+      '2026-01-01',
+      '2026-02-01',
+      '2026-03-01',
+      '2026-04-01',
+      '2026-05-01',
+      '2026-06-01',
+      '2026-07-01',
+      '2026-08-01',
+    ])
+
+    // L'altra meta' dell'"otto e otto": la stessa regola **creata** con quella
+    // data d'inizio produce lo stesso identico calendario. Non e' una coincidenza
+    // da riverificare a ogni cambiamento del motore, e' lo stesso ramo.
+    const { repo: repoB, disk: diskB } = await apri(() => istante)
+    const nuova = creaRegola(repoB, { ...mensile, startDate: '2026-01-01' }, OGGI)
+    await repoB.flush()
+    await repoB.materializeRecurring(OGGI)
+    await repoB.flush()
+    expect(diskB.expenses.filter((e) => e.recurringId === nuova.id).map((e) => e.date).sort()).toEqual(
+      generate.map((e) => e.date).sort(),
+    )
+  })
+
+  /* --------------------------------------------------------------------- *
+   * I due estremi dell'impronta
+   * --------------------------------------------------------------------- */
+
+  it('ancora mensile spostata sotto: stesso count e stessa somma, ma le date cambiano e si rifiuta', async () => {
+    // Il caso che l'impronta economica lasciava passare, ed e' il motivo per cui
+    // `firstDate` e `lastDate` ci sono. Fra il calcolo e la conferma un altro
+    // contesto sposta `anchorDay` dal 1 al 15: **otto occorrenze** prima e otto
+    // dopo, **720.000 centesimi** prima e dopo — e otto giorni tutti diversi da
+    // quelli che l'utente ha letto.
+    const istante = new Date(2026, 7, 22, 12, 0)
+    const { repo, disk } = await apri(() => istante)
+    const mensile = {
+      amountCents: 90_000,
+      categoryId: 'cat-1',
+      cadence: 'monthly' as const,
+      interval: 1,
+      startDate: '2026-08-01',
+    }
+    const regola = creaRegola(repo, mensile, OGGI)
+    await repo.flush()
+    await repo.materializeRecurring(OGGI)
+    await repo.flush()
+
+    const anteprima = anteprimaRewind(regola, '2026-01-01', OGGI)
+    expect(anteprima.count).toBe(8)
+    expect(anteprima.totalCents).toBe(720_000)
+
+    rivediRegola(repo, regola.id, { ...mensile, anchorDay: 15, lastMaterializedDate: OGGI }, OGGI)
+    await repo.flush()
+
+    const esito = await repo.rewindRecurringRule(regola.id, '2026-01-01', anteprima.confirmed)
+    await repo.flush()
+
+    expect(esito.ok).toBe(false)
+    if (!esito.ok && esito.reason === 'stale-preview' && esito.stale.staleness === 'footprint') {
+      const { announced, actual } = esito.stale
+      // I due numeri vecchi coincidono: da soli avrebbero lasciato passare
+      // la scrittura. E' esattamente questa riga a rendere il test una prova
+      // dei due estremi e non della loro presenza.
+      expect(actual.count).toBe(announced.count)
+      expect(actual.totalCents).toBe(announced.totalCents)
+      // Sono i due estremi a non tornare.
+      expect(announced.firstDate).toBe('2026-01-01')
+      expect(announced.lastDate).toBe('2026-08-01')
+      expect(actual.firstDate).toBe('2026-01-15')
+      expect(actual.lastDate).toBe('2026-08-15')
+    } else {
+      throw new Error(`atteso stale-preview/footprint, arrivato ${JSON.stringify(esito)}`)
+    }
+
+    // Non e' stato scritto niente: il calendario sul disco e' quello di prima.
+    expect(disk.recurringRules[0]?.startDate).toBe('2026-08-01')
+    expect(disk.recurringRules[0]?.lastMaterializedDate).toBe(OGGI)
   })
 })

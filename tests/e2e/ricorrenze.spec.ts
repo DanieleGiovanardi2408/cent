@@ -824,3 +824,290 @@ test('spegnere si annulla dal toast, e l annullamento non duplica niente', async
   // giorno), quindi la materializzazione che segue non ha niente da scrivere.
   await expect.poll(async () => (await speseSuDisco(page)).length).toBe(1)
 })
+
+/* ------------------------------------------------------------------------- *
+ * Correggere l'importo di un'istanza generata
+ * ------------------------------------------------------------------------- */
+
+/** Apre la Home, mette un budget settimanale e crea una fissa che parte oggi. */
+async function affittoDiOggi(page: Page, centesimi: string): Promise<void> {
+  await page.goto('./')
+  await expect(page.locator('.fab')).toBeEnabled()
+  await chiudiGuida(page)
+
+  await page.locator('.budget').tap()
+  await expect(page.locator('.sheet--budget')).toBeVisible()
+  await still(page)
+  await digita(page, '20000')
+  await page.locator('.save').tap()
+  await expect(page.locator('.sheet--budget')).toHaveCount(0)
+
+  await apriFoglioRegola(page)
+  await digita(page, centesimi)
+  await page.locator('.cats--pick .cat').filter({ hasText: 'Casa' }).tap()
+  // Parte oggi: nessun arretrato, quindi nessuna conferma da spuntare.
+  await expect(page.locator('.rule__confirm')).toHaveCount(0)
+  await page.locator('.save').tap()
+  await expect(page.locator('.sheet--rule')).toHaveCount(0)
+  await expect.poll(async () => (await speseSuDisco(page)).length, { timeout: 10_000 }).toBe(1)
+}
+
+test('correggere l importo di una fissa conserva id e source, e la riga Restano non si muove', async ({
+  page,
+}) => {
+  // Il caso vero: il canone cambia di 12 €. Fino a ieri l'unico rimedio era
+  // cancellare e riscrivere a mano — e quella riscrittura ha `source: 'manual'`,
+  // quindi la spesa **esce dalle fisse ed entra nel budget del periodo**
+  // (ADR 016). Il numero grande della Home si muoveva di 912 € per una
+  // correzione che non e' una spesa nuova.
+  await affittoDiOggi(page, '90000')
+
+  const prima = await speseSuDisco(page)
+  const id = prima[0]?.id
+  expect(id, 'la materializzazione non ha scritto l occorrenza').toBeDefined()
+  // Identita' deterministica (ADR 006): e' quella che si deve conservare.
+  expect(id?.startsWith('rec:')).toBe(true)
+
+  // --- Il numero grande **prima**. E' il termine di paragone di tutto il test:
+  //     200,00 € di budget settimanale e zero spese manuali. Si torna in Home:
+  //     la regola si e' creata da Impostazioni, che e' dove il foglio vive.
+  await page.locator('.nav__tab').first().tap()
+  await expect(page.locator('.hero__value')).toContainText('200,00')
+  const restano = await page.locator('.hero__value').textContent()
+  await expect(page.locator('.hero__fixed')).toHaveText('oltre a 900,00 € di spese fisse')
+
+  // --- Tre tap: la riga, "Correggi l'importo", "Salva". Le cifre non contano
+  //     come attrito (CLAUDE.md): l'importo e' contenuto, non navigazione.
+  await page.locator('.nav__tab').nth(1).tap()
+  await page.locator('.row').first().tap()
+  await expect(page.locator('.acts')).toBeVisible()
+  await page.locator('.acts__fix').tap()
+  await expect(page.locator('.sheet--amount')).toBeVisible()
+  await still(page)
+
+  // Il foglio dice quale spesa si sta correggendo, e **dichiara** che il budget
+  // non si muove: un'esclusione taciuta e' un numero che mente per omissione.
+  await expect(page.locator('.fix__name')).toHaveText('Casa')
+  await expect(page.locator('.fix__note')).toHaveText(
+    'Resta una spesa fissa: correggerla non tocca il budget del periodo.',
+  )
+  // Si apre sull'importo di adesso, e la **prima cifra lo sostituisce**: da
+  // 900,00 un tap sul 9 farebbe 9.000,09 €, cioe' un numero che nessuno vuole.
+  await expect(page.locator('.sheet--amount .amount')).toContainText('900')
+  await expect(page.locator('.sheet--amount .save')).toBeDisabled()
+
+  await digita(page, '91200')
+  await expect(page.locator('.sheet--amount .amount')).toContainText('912')
+  await page.locator('.sheet--amount .save').tap()
+  await expect(page.locator('.sheet--amount')).toHaveCount(0)
+  await expect(page.locator('.toast__box')).toContainText('912,00')
+
+  // --- Sul disco: **lo stesso record**. Stesso id, stesso `source`, un solo
+  //     record. Un id nuovo vorrebbe dire che la prossima materializzazione
+  //     ricrea il giorno di oggi.
+  await expect.poll(async () => (await speseSuDisco(page)).find((e) => e.id === id)?.amountCents)
+    .toBe(91_200)
+  const dopo = await speseSuDisco(page)
+  expect(dopo).toHaveLength(1)
+  expect(dopo[0]?.id).toBe(id)
+  expect(dopo[0]?.source).toBe('recurring')
+
+  // --- **Il punto del test.** La riga "Restano" non si muove di un centesimo:
+  //     correggere una fissa non tocca il budget del periodo (ADR 016 +
+  //     `countsTowardBudget`). Il totale delle fisse invece si muove, ed e'
+  //     giusto: sono due numeri diversi, e il secondo ha senso solo se si vede
+  //     il primo.
+  await page.locator('.nav__tab').first().tap()
+  await expect(page.locator('.hero__value')).toHaveText(restano ?? '')
+  await expect(page.locator('.hero__value')).toContainText('200,00')
+  await expect(page.locator('.hero__fixed')).toHaveText('oltre a 912,00 € di spese fisse')
+
+  // --- E la spesa resta una fissa anche a vedersi: il segno discreto e' ancora
+  //     sulla riga. Se `source` fosse cambiato, sparirebbe da qui.
+  await page.locator('.nav__tab').nth(1).tap()
+  await expect(page.locator('.row').first()).toContainText('912,00')
+  await expect(page.locator('.row__fixed')).toHaveCount(1)
+})
+
+test('la correzione si annulla dal toast, e l annullamento rimette l importo di prima', async ({
+  page,
+}) => {
+  // Correggere e' distruttivo: l'importo di prima non esiste piu' da nessuna
+  // parte. Quindi ha la stessa rete di ogni altra azione dell'app.
+  await affittoDiOggi(page, '90000')
+
+  await page.locator('.nav__tab').nth(1).tap()
+  await page.locator('.row').first().tap()
+  await page.locator('.acts__fix').tap()
+  await expect(page.locator('.sheet--amount')).toBeVisible()
+  await still(page)
+  await digita(page, '91200')
+  await page.locator('.sheet--amount .save').tap()
+  await expect(page.locator('.row').first()).toContainText('912,00')
+
+  await page.locator('.toast__action').tap()
+  await expect(page.locator('.toast__box')).toContainText('900,00')
+  await expect(page.locator('.row').first()).toContainText('900,00')
+  await expect.poll(async () => (await speseSuDisco(page))[0]?.amountCents).toBe(90_000)
+  // L'annullamento non e' una spesa nuova: un record solo, e sempre lo stesso.
+  expect(await speseSuDisco(page)).toHaveLength(1)
+})
+
+/* ------------------------------------------------------------------------- *
+ * ADR 019 — il foglio di modifica mostra sempre il valore attuale
+ * ------------------------------------------------------------------------- */
+
+test('la categoria archiviata resta nel foglio della regola, marcata come attuale', async ({
+  page,
+}) => {
+  // Il caso di ADR 019, dall'inizio: si crea la regola su "Casa", si archivia
+  // "Casa" — archiviare non ha vincoli e nessuno avvisa che una regola la usa —
+  // e si riapre il foglio. Senza l'unione, li' dentro **nessun chip e'
+  // premuto**, mentre l'elenco dietro continua a dire "Casa": due risposte
+  // diverse alla stessa domanda in due schermate adiacenti, e il gesto naturale
+  // — toccare un chip per sistemare — sposta l'affitto in silenzio.
+  await affittoDiOggi(page, '90000')
+
+  // --- Si archivia "Casa" dalla griglia di Impostazioni.
+  await page.locator('.app__action').tap()
+  await expect(page.locator('.prefs')).toBeVisible()
+  await page.locator('.cats--edit .cat').filter({ hasText: 'Casa' }).tap()
+  await expect(page.locator('.sheet--cat')).toBeVisible()
+  await still(page)
+  await page.locator('.editor__second').tap()
+  await expect(page.locator('.sheet--cat')).toHaveCount(0)
+  await expect(page.locator('.cats--edit .cat')).toHaveCount(7)
+  // In archivio, non cancellata: e' un'azione di visualizzazione, e il nome che
+  // la frase del foglio citera' e' raggiungibile da questa schermata.
+  await expect(page.locator('.arch__name').first()).toHaveText('Casa')
+
+  // --- L'elenco delle fisse continua a dire "Casa", e ha ragione.
+  await expect(page.locator('.fixed__name').first()).toHaveText('Casa')
+
+  // --- Il foglio: otto chip, non sette. Le sette attive **nelle stesse
+  //     posizioni** piu' quella che la regola ha adesso, in fondo.
+  await page.locator('.fixed__row').first().tap()
+  await expect(page.locator('.sheet--rule')).toBeVisible()
+  await still(page)
+  const chip = page.locator('.cats--pick .cat')
+  await expect(chip).toHaveCount(8)
+
+  const casa = chip.filter({ hasText: 'Casa' })
+  await expect(casa).toHaveCount(1)
+  // E' selezionata: la domanda "che categoria ha questa regola?" ha **una**
+  // risposta sola in tutta l'app.
+  await expect(casa).toHaveAttribute('aria-pressed', 'true')
+  // Ed e' marcata: un chip che comparisse senza distinzione fra gli altri
+  // direbbe che quella categoria e' ancora scegliibile, il che e' falso
+  // nell'altro verso.
+  await expect(casa).toHaveAttribute('data-current', 'true')
+  await expect(casa).toContainText('Attuale')
+  await expect(page.locator('.rule__current')).toContainText('Casa è in archivio')
+
+  // --- E si puo' cambiare, che e' il punto: l'unione offre, non impone.
+  const spesa = chip.filter({ hasText: 'Spesa' })
+  await spesa.tap()
+  await expect(spesa).toHaveAttribute('aria-pressed', 'true')
+  await expect(casa).toHaveAttribute('aria-pressed', 'false')
+  // Il chip di "Casa" resta li': l'insieme offerto non cambia sotto le dita,
+  // quindi tornare indietro e' un tap e non un ripensamento impossibile.
+  await expect(chip).toHaveCount(8)
+  await casa.tap()
+  await expect(casa).toHaveAttribute('aria-pressed', 'true')
+})
+
+test('la sonda sui due stati nuovi: correzione dell importo e nona categoria', async ({
+  page,
+}, testInfo) => {
+  // Due stati nuovi, e la regola "Sovrapposizioni" non ha eccezioni. Il primo e'
+  // un foglio col tastierino, cioe' la forma in cui questo progetto ha gia'
+  // trovato un "Annulla" dentro il tasto 9; il secondo fa crescere di una riga
+  // la griglia dentro il foglio piu' alto dell'app.
+  const viewport = `${testInfo.project.use.viewport?.width}x${testInfo.project.use.viewport?.height}`
+  const rows: string[] = []
+  const failures: Target[] = []
+
+  const check = async (state: string): Promise<void> => {
+    const targets = await probe(page)
+    expect(targets.length, `nessun bersaglio misurato in "${state}": la sonda non prova niente`)
+      .toBeGreaterThan(0)
+    rows.push(...report(viewport, state, targets))
+    failures.push(...targets.filter((t) => t.status === 'coperto' || t.status === 'piccolo'))
+  }
+
+  await affittoDiOggi(page, '90000')
+
+  // 1. Le azioni sulla spesa, che adesso sono tre invece di due.
+  await page.locator('.nav__tab').nth(1).tap()
+  await expect(page.locator('.toast__box')).toHaveCount(0)
+  await page.locator('.row').first().tap()
+  await expect(page.locator('.acts')).toBeVisible()
+  await still(page)
+  await check('azioni su una spesa, con "Correggi l importo"')
+
+  // 2. Il foglio della correzione, col tastierino.
+  await page.locator('.acts__fix').tap()
+  await expect(page.locator('.sheet--amount')).toBeVisible()
+  await still(page)
+  await check('foglio "correggi l importo" su una spesa fissa')
+
+  await digita(page, '91200')
+  await check('foglio "correggi l importo", importo digitato')
+
+  const scrollFoglio = await page.evaluate(() => {
+    const el = document.querySelector('.sheet--amount')
+    return {
+      page: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      sheet: el === null ? 0 : el.scrollWidth - el.clientWidth,
+    }
+  })
+  expect(scrollFoglio.page, 'c\'e\' scroll orizzontale in pagina').toBeLessThanOrEqual(0)
+  expect(scrollFoglio.sheet, 'c\'e\' scroll orizzontale nel foglio').toBeLessThanOrEqual(0)
+
+  // Il bottone che scrive sta tutto dentro il viewport: e' l'unico tap che
+  // scrive, e non puo' finire sotto la piega.
+  const dentro = await page.locator('.sheet--amount .save').evaluate((el) => {
+    const box = el.getBoundingClientRect()
+    return box.bottom <= innerHeight + 0.5 && box.top >= 0
+  })
+  expect(dentro, 'il bottone che salva non e\' interamente dentro il viewport').toBe(true)
+
+  await page.keyboard.press('Escape')
+  await expect(page.locator('.sheet--amount')).toHaveCount(0)
+
+  // 3. Il foglio della regola con il **nono** chip: la griglia cresce di una
+  //    riga dentro il foglio piu' alto dell'app.
+  await page.locator('.app__action').tap()
+  await page.locator('.cats--edit .cat').filter({ hasText: 'Casa' }).tap()
+  await expect(page.locator('.sheet--cat')).toBeVisible()
+  await still(page)
+  await page.locator('.editor__second').tap()
+  await expect(page.locator('.sheet--cat')).toHaveCount(0)
+  await page.locator('.fixed__row').first().tap()
+  await expect(page.locator('.sheet--rule')).toBeVisible()
+  await expect(page.locator('.cats--pick .cat')).toHaveCount(8)
+  await still(page)
+  await check('foglio di una spesa fissa con la categoria archiviata')
+
+  console.log(`\n${rows.join('\n')}\n`)
+
+  expect(
+    failures.map((t) => `${t.status}: ${t.label} (${t.rect}) risponde ${t.hit}`),
+    'un overlay copre un bersaglio, o un bersaglio e\' sotto i 44px',
+  ).toEqual([])
+
+  const scroll = await page.evaluate(() => {
+    const box = (selector: string): number => {
+      const el = document.querySelector(selector)
+      return el === null ? 0 : el.scrollWidth - el.clientWidth
+    }
+    return {
+      page: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      sheet: box('.sheet--rule'),
+      body: box('.rule'),
+    }
+  })
+  expect(scroll.page, 'c\'e\' scroll orizzontale in pagina').toBeLessThanOrEqual(0)
+  expect(scroll.sheet, 'c\'e\' scroll orizzontale nel foglio').toBeLessThanOrEqual(0)
+  expect(scroll.body, 'c\'e\' scroll orizzontale nel corpo del foglio').toBeLessThanOrEqual(0)
+})

@@ -33,8 +33,8 @@ import { DB_NAME, MIGRATIONS, SCHEMA_VERSION, STORE_NAMES, emptyRawDataSet, pend
 import type { MigrationStep, RawDataSet, RawRecord } from './schema'
 import { planResolvedBudgetChange } from './budget'
 import { planCategoryDeletion, planCategoryPlacement } from './categories'
-import { planRecurringRuleDeletion } from './recurring-plan'
-import type { RecurringRuleDeletion } from './recurring-plan'
+import { planRecurringRuleDeletion, planRecurringRuleRewind } from './recurring-plan'
+import type { RecurringRuleDeletion, RecurringRuleRewind } from './recurring-plan'
 import type { CategoryDeletion, CategoryPlacement } from './categories'
 import { isAfter } from './date'
 import { NOTHING_SKIPPED } from './persistence'
@@ -181,7 +181,12 @@ function storesOf(batch: WriteBatch): StoreName[] {
   ) {
     names.add('categories')
   }
-  if (batch.recurringRules || batch.advanceRecurringMarkers || batch.recurringRuleDeletion) {
+  if (
+    batch.recurringRules ||
+    batch.advanceRecurringMarkers ||
+    batch.recurringRuleDeletion ||
+    batch.recurringRuleRewind
+  ) {
     names.add('recurringRules')
   }
   if (batch.budgets || batch.budgetChange) names.add('budgets')
@@ -238,6 +243,7 @@ async function runBatch(tx: WriteTx, batch: WriteBatch): Promise<WriteResult> {
   let placement: CategoryPlacement | undefined
   let deletion: CategoryDeletion | undefined
   let ruleDeletion: RecurringRuleDeletion | undefined
+  let ruleRewind: RecurringRuleRewind | undefined
   const writes: Promise<unknown>[] = []
 
   /**
@@ -342,6 +348,16 @@ async function runBatch(tx: WriteTx, batch: WriteBatch): Promise<WriteResult> {
     )
     if (ruleDeletion.ok) enqueue(store.delete(ruleDeletion.deleted.id))
   }
+  if (batch.recurringRuleRewind) {
+    const store = tx.objectStore('recurringRules')
+    // La regola si rilegge **qui dentro**, e l'impronta si ri-deriva da lei: cio'
+    // che ha attraversato il confine e' l'intenzione piu' i numeri mostrati, non
+    // le date gia' calcolate (ADR 008). Nessun altro store serve — l'impronta e'
+    // calendariale, non guarda le spese gia' scritte, esattamente come
+    // l'anteprima che l'utente ha letto.
+    ruleRewind = planRecurringRuleRewind(await store.getAll(), batch.recurringRuleRewind)
+    if (ruleRewind.ok) enqueue(store.put(ruleRewind.rule))
+  }
   if (batch.advanceRecurringMarkers) {
     const store = tx.objectStore('recurringRules')
     // Rilettura **dentro** la transazione: quello che finisce sul disco e' la
@@ -389,6 +405,7 @@ async function runBatch(tx: WriteTx, batch: WriteBatch): Promise<WriteResult> {
     ...(placement !== undefined ? { categoryPlacement: placement } : {}),
     ...(deletion !== undefined ? { categoryDeletion: deletion } : {}),
     ...(ruleDeletion !== undefined ? { recurringRuleDeletion: ruleDeletion } : {}),
+    ...(ruleRewind !== undefined ? { recurringRuleRewind: ruleRewind } : {}),
   }
 }
 

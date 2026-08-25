@@ -25,8 +25,8 @@
 
 import { planResolvedBudgetChange } from './budget'
 import { planCategoryDeletion, planCategoryPlacement } from './categories'
-import { planRecurringRuleDeletion } from './recurring-plan'
-import type { RecurringRuleDeletion } from './recurring-plan'
+import { planRecurringRuleDeletion, planRecurringRuleRewind } from './recurring-plan'
+import type { RecurringRuleDeletion, RecurringRuleRewind } from './recurring-plan'
 import type { CategoryDeletion, CategoryPlacement } from './categories'
 import { isAfter } from './date'
 import { NOTHING_SKIPPED } from './persistence'
@@ -172,6 +172,7 @@ export function createMemoryPersistence(disk: MemoryDisk = emptyDisk()): MemoryP
       let placement: CategoryPlacement | undefined
       let deletion: CategoryDeletion | undefined
       let ruleDeletion: RecurringRuleDeletion | undefined
+      let ruleRewind: RecurringRuleRewind | undefined
       if (batch.addExpenses) {
         // Semantica add, identica a quella di `idb.ts`: l'id gia' presente si
         // salta, non si sovrascrive. Qui non serve nessuna transazione perche'
@@ -222,6 +223,14 @@ export function createMemoryPersistence(disk: MemoryDisk = emptyDisk()): MemoryP
           next.recurringRules = next.recurringRules.filter((r) => r.id !== id)
         }
       }
+      if (batch.recurringRuleRewind) {
+        // Come in `idb.ts`: si ri-deriva l'impronta dalla regola del "disco" e
+        // la si confronta con quella annunciata. Il doppio deve rifiutare
+        // esattamente dove rifiuta la persistenza vera, altrimenti i test
+        // provano una cosa e la produzione ne fa un'altra.
+        ruleRewind = planRecurringRuleRewind(next.recurringRules, batch.recurringRuleRewind)
+        if (ruleRewind.ok) upsert(next.recurringRules, [ruleRewind.rule])
+      }
       if (batch.advanceRecurringMarkers) {
         advanceMarkers(next.recurringRules, batch.advanceRecurringMarkers)
       }
@@ -245,7 +254,8 @@ export function createMemoryPersistence(disk: MemoryDisk = emptyDisk()): MemoryP
         budgetsWritten.length === 0 &&
         placement === undefined &&
         deletion === undefined &&
-        ruleDeletion === undefined
+        ruleDeletion === undefined &&
+        ruleRewind === undefined
       ) {
         return NOTHING_SKIPPED
       }
@@ -255,6 +265,7 @@ export function createMemoryPersistence(disk: MemoryDisk = emptyDisk()): MemoryP
         ...(placement !== undefined ? { categoryPlacement: placement } : {}),
         ...(deletion !== undefined ? { categoryDeletion: deletion } : {}),
         ...(ruleDeletion !== undefined ? { recurringRuleDeletion: ruleDeletion } : {}),
+        ...(ruleRewind !== undefined ? { recurringRuleRewind: ruleRewind } : {}),
       }
     },
     async replaceAll(data: DataSet): Promise<void> {

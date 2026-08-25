@@ -107,7 +107,7 @@ export function FixedCosts({ rules, categories, day, ready, onNew, onPick }: Pro
                   </span>
                   <span class="fixed__text">
                     <span class="fixed__name">
-                      {line.rule.note ?? category?.name ?? t('row.categoryRemoved')}
+                      {category?.name ?? t('row.categoryRemoved')}
                     </span>
                     {/* Il perche' non pesa **e** cosa fa: "spenta" da sola
                         avrebbe tolto la cadenza e l'importo proprio alla riga

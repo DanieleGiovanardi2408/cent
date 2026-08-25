@@ -371,7 +371,6 @@ describe('metriche del periodo', () => {
     // intenzionale l'errore n/(n-1). Vedi il commento su `currentPaceCents`.)
     expect(m.currentPaceCents).toBe(818)
     expect(m.sustainablePaceCents).toBe(1_935)
-    expect(m.overBudget).toBe(false)
   })
 
   it('il secondo giorno del periodo il passo non raddoppia', () => {
@@ -445,7 +444,6 @@ describe('metriche del periodo', () => {
       today: '2026-08-22',
     })
     expect(m.remainingCents).toBe(-1_000)
-    expect(m.overBudget).toBe(true)
     // -1000 su 10 giorni: -100 esatti. Con floor, mai un valore che consoli.
     expect(m.dailyAllowanceCents).toBe(-100)
   })
@@ -489,7 +487,6 @@ describe('metriche del periodo', () => {
     expect(m.dailyAllowanceCents).toBeNull()
     expect(m.sustainablePaceCents).toBeNull()
     expect(m.spentCents).toBe(18_000)
-    expect(m.overBudget).toBe(false)
   })
 
   it('il budget di categoria conta solo le spese di quella categoria', () => {
@@ -736,7 +733,6 @@ describe('le ricorrenti fuori dal budget (ADR 016)', () => {
     expect(m.range).toEqual({ start: '2026-08-31', end: '2026-09-06' })
     expect(m.spentCents).toBe(2_500)
     expect(m.remainingCents).toBe(17_500)
-    expect(m.overBudget).toBe(false)
     // 17500 / 6 giorni rimanenti = 2916,66 -> 2916. Un numero che si guarda
     // ancora, che e' esattamente il punto dell'ADR.
     expect(m.daysRemaining).toBe(6)

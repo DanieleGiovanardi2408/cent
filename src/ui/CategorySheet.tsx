@@ -182,9 +182,46 @@ export function CategorySheet({
   const swapping = !editing && free <= 0
   const named = editing || mode === 'place' || trimmed !== ''
   const draft: CategoryDraft = { name: trimmed, emoji, color }
-  const emojis = EMOJI.includes(emoji) ? EMOJI : [emoji, ...EMOJI]
+
+  /**
+   * Le due tavolozze offerte: **{ quelle in elenco } unito { quella che la
+   * categoria ha adesso }** — ADR 019, la cui ragione non nominava le
+   * categorie e vale quindi anche qui.
+   *
+   * ## Quando succede davvero
+   *
+   * Non per un'archiviazione, come nelle regole: questi due insiemi sono
+   * costanti e non cambiano sotto i piedi di nessuno. Succede a un dato
+   * **arrivato da un backup scritto a mano**, che e' l'unico modo di avere un
+   * colore fuori tavolozza (lo dice gia' `COLOR_NAMES`: una tinta cosi' resta
+   * senza nome proprio e si annuncia come "Colore").
+   *
+   * Il difetto e' identico: senza l'unione il foglio mostra **niente di
+   * selezionato** e invita a toccare una pastiglia per sistemare, cioe' a
+   * cambiare in silenzio un colore che nessuno voleva cambiare. Aprire un
+   * foglio per rinominare non deve poter cambiare un altro campo.
+   *
+   * ## Perche' l'unione si fa sul bersaglio e non sulla bozza
+   *
+   * Perche' "attuale" vuol dire *cio' che la categoria ha adesso*, non *cio'
+   * che si e' toccato un istante fa*. Sulla bozza, la pastiglia in piu'
+   * sparirebbe nel frame in cui se ne tocca un'altra — portandosi via l'unico
+   * modo di tornare indietro, e togliendo una cella alla griglia mentre il dito
+   * e' ancora appoggiato.
+   */
+  const ownEmoji = target !== null && !EMOJI.includes(target.emoji) ? target.emoji : null
+  const ownColor = target !== null && !PALETTE.includes(target.color) ? target.color : null
+  const emojis = ownEmoji === null ? EMOJI : [ownEmoji, ...EMOJI]
+  const colors = ownColor === null ? PALETTE : [...PALETTE, ownColor]
 
   const index = target === null ? -1 : active.findIndex((c) => c.id === target.id)
+
+  /**
+   * Il rifiuto in parole, calcolato una volta sola perche' decide **due** cose:
+   * cosa si legge, e se la fascia rossa esiste. Tenerle separate era il modo in
+   * cui un esito senza frase produceva una fascia vuota invece di niente.
+   */
+  const refusal = deletion === null || deletion.ok ? null : refusalCopy(deletion)
 
   async function place(replacing?: string): Promise<void> {
     if (busy || !named) return
@@ -267,6 +304,12 @@ export function CategorySheet({
                     key={one}
                     type="button"
                     class="picker__key"
+                    data-outside={one === ownEmoji || undefined}
+                    // L'emoji non ha un nome parlato: senza questa riga la
+                    // pastiglia marcata si annuncerebbe esattamente come le
+                    // altre diciotto, cioe' la marcatura sarebbe solo per chi
+                    // vede.
+                    aria-label={one === ownEmoji ? `${one} \u00b7 ${t('pick.current')}` : undefined}
                     aria-pressed={one === emoji}
                     onClick={() => setEmoji(one)}
                   >
@@ -274,18 +317,27 @@ export function CategorySheet({
                   </button>
                 ))}
               </div>
+              {ownEmoji === null ? null : (
+                <p class="editor__note">{t('cat.emoji.current')}</p>
+              )}
 
               <div class="picker picker--color" role="group" aria-label={t('cat.color')}>
-                {PALETTE.map((one) => {
+                {colors.map((one) => {
                   const spoken = COLOR_NAMES[one]
+                  const outside = one === ownColor
                   return (
                     <button
                       key={one}
                       type="button"
                       class="picker__key picker__key--color"
                       style={`--cat:${one}`}
+                      data-outside={outside || undefined}
                       aria-pressed={one === color}
-                      aria-label={t(spoken ?? 'cat.color')}
+                      aria-label={
+                        outside
+                          ? `${t(spoken ?? 'cat.color')} \u00b7 ${t('pick.current')}`
+                          : t(spoken ?? 'cat.color')
+                      }
                       onClick={() => setColor(one)}
                     >
                       {/* La spunta, non il solo colore: il selezionato deve
@@ -298,6 +350,9 @@ export function CategorySheet({
                 })}
               </div>
               <p class="editor__note">{t('cat.color.note')}</p>
+              {ownColor === null ? null : (
+                <p class="editor__note">{t('cat.color.current')}</p>
+              )}
             </>
           )}
 
@@ -367,9 +422,13 @@ export function CategorySheet({
             </>
           ) : null}
 
-          {target === null ? null : (
+          {/* La fascia rossa esiste solo se ha qualcosa da dire: il bottone,
+              oppure il motivo per cui il bottone non c'e'. Mai una zona vuota
+              sotto una linea — era esattamente il difetto del terzo esito, che
+              cadeva in un `null` e lasciava l'utente davanti a un rifiuto muto. */}
+          {target === null || deletion === null || (!deletion.ok && refusal === null) ? null : (
             <div class="danger">
-              {deletion?.ok === true ? (
+              {deletion.ok ? (
                 <>
                   <button
                     type="button"
@@ -381,20 +440,12 @@ export function CategorySheet({
                   </button>
                   <p class="editor__note">{t('cat.delete.note')}</p>
                 </>
-              ) : deletion !== null && deletion.reason === 'in-use' ? (
-                /* Il rifiuto arriva **prima** del bottone, con i numeri veri
-                   dentro: `planCategoryDeletion` e' pura, e chiederglielo
-                   prima e' cio' che trasforma un errore in una frase utile. */
-                <p class="editor__note">
-                  {t('cat.inUse.text', {
-                    what: usageLabel(
-                      deletion.expenses,
-                      deletion.recurringRules,
-                      deletion.budgets,
-                    ),
-                  })}
-                </p>
-              ) : null}
+              ) : (
+                /* Il rifiuto arriva **prima** del bottone, gia' in parole:
+                   `planCategoryDeletion` e' pura, e chiederglielo prima e' cio'
+                   che trasforma un errore in una frase utile. */
+                <p class="editor__note">{refusal}</p>
+              )}
             </div>
           )}
         </div>
@@ -458,6 +509,42 @@ export function CategorySheet({
       </div>
     </>
   )
+}
+
+/**
+ * Le parole del rifiuto, un esito per volta.
+ *
+ * ## Perche' e' uno `switch` e non una catena di ternari
+ *
+ * Perche' e' **esaustivo per costruzione**: il tipo di ritorno non include
+ * `undefined`, quindi un quinto esito di `planCategoryDeletion` diventa un
+ * errore di compilazione invece di cadere in un `null`. E' la stessa dottrina
+ * della parita' delle chiavi di i18n — il compilatore, non un test.
+ *
+ * Non e' un'astrazione preventiva: la catena di ternari che c'era qui aveva gia'
+ * mancato `'deleted-only'` il giorno in cui il quarto esito e' nato. Compilava,
+ * e chi non poteva cancellare leggeva **niente**.
+ */
+function refusalCopy(deletion: Extract<CategoryDeletion, { ok: false }>): string | null {
+  switch (deletion.reason) {
+    // La categoria non e' piu' sul disco. Da questo foglio non e' raggiungibile
+    // — il bersaglio si rilegge dal mirror a ogni render — e non c'e' niente di
+    // utile da dire a chi sta guardando una cosa che non esiste piu'. Qui `null`
+    // vuol dire "nessuna fascia", non "fascia vuota".
+    case 'unknown':
+      return null
+    case 'in-use':
+      return t('cat.inUse.text', {
+        what: usageLabel(deletion.expenses, deletion.recurringRules, deletion.budgets),
+      })
+    // **Nessun numero, e non per misura editoriale: l'esito non ne porta.** Le
+    // lapidi non compaiono in nessuna schermata, quindi contarle in una frase
+    // sarebbe un rifiuto che l'utente non puo' riconciliare con niente
+    // (CLAUDE.md, "Nessun messaggio cita un numero che l'utente non puo'
+    // vedere"). La frase parla del fatto, e dice cosa fare adesso.
+    case 'deleted-only':
+      return t('cat.deletedOnly.text')
+  }
 }
 
 /**

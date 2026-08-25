@@ -30,6 +30,15 @@
  *
  * ## Le altre due difese, che restano
  *
+ * **Il segnaposto dice fin dove si e' guardato, non che cosa si e' generato.**
+ * Avanza a `today` anche quando la finestra era vuota, perche' registra che la
+ * finestra e' stata **considerata**: e' l'unica cosa che evita di riesaminare
+ * ogni volta lo stesso intervallo gia' vuoto. Non e' il meccanismo di
+ * correttezza — quello e' l'id deterministico piu' la semantica *add* — e' il
+ * bordo inferiore della finestra, cioe' una cache. Da qui ADR 018: arretrarlo
+ * e' sicuro, ma **solo su richiesta esplicita** (`rewindRecurringRule`), mai
+ * come effetto collaterale di un orologio, di un fuso o di un import.
+ *
  * **Il segnaposto avanza solo su scritture gia' concluse.** Ogni blocco di
  * occorrenze viaggia in un `WriteBatch` unico che contiene *sia* le spese
  * generate *sia* l'avanzamento di `lastMaterializedDate`. La persistenza
@@ -306,7 +315,6 @@ function buildExpense(rule: RecurringRule, date: IsoDate, timestamp: Timestamp):
     date,
     source: 'recurring',
     recurringId: rule.id,
-    ...(rule.note !== undefined ? { note: rule.note } : {}),
   }
 }
 
@@ -364,9 +372,8 @@ export async function materializeRecurring(
 
     let current = rule
     let completed = true
-    // Anche senza occorrenze da creare il segnaposto avanza: e' l'unica cosa che
-    // evita di riesaminare ogni volta la stessa finestra gia' vuota.
-    for (let i = 0; i < Math.max(dates.length, 1); i += chunkSize) {
+    const stepsToDeclareWindowConsidered = Math.max(dates.length, 1)
+    for (let i = 0; i < stepsToDeclareWindowConsidered; i += chunkSize) {
       // Rilettura prima di ogni blocco: fra un blocco e l'altro l'utente ha
       // avuto tutto il tempo di cambiare idea, e la sua copia della regola vince
       // sempre sulla nostra.

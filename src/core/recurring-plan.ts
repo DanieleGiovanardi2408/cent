@@ -6,6 +6,9 @@
  * 2. **Cosa succede se la salvo** (`previewMaterialization`): quante spese
  *    arretrate, da quando a quando, per quanto.
  * 3. **Posso cancellarla** (`planRecurringRuleDeletion`).
+ * 4. **Posso farla ripartire da prima** (`planRecurringRuleRewind`, ADR 018):
+ *    l'unica operazione che fa **arretrare** il segnaposto, e l'unica di questo
+ *    file che gira dentro una transazione invece che davanti alla schermata.
  *
  * Tutto puro e sincrono, come `categories.ts`: nessun I/O, nessun orologio
  * implicito, il giorno di riferimento arriva sempre come argomento. Il motore
@@ -18,7 +21,7 @@ import { isAfter, isBefore, isIsoDate } from './date'
 import type { IsoDate } from './date'
 import type { Cents } from './money'
 import { materializationWindow, occurrencesBetween, validateRule } from './recurrence'
-import type { Cadence, Expense, RecurringRule } from './types'
+import type { Cadence, Expense, RecurringRule, Timestamp } from './types'
 
 /* ------------------------------------------------------------------------- *
  * 1. Il totale mensile delle fisse
@@ -187,6 +190,68 @@ export interface RecurrenceDraft {
   readonly lastMaterializedDate?: IsoDate
 }
 
+/**
+ * **L'impronta economica di un'anteprima**: quante spese ha annunciato e per
+ * quanti centesimi in tutto.
+ *
+ * Non e' un riassunto per comodita': e' la parte dell'annuncio che chi scrive
+ * puo' **ri-derivare da solo** e confrontare, dentro la transazione, con quello
+ * che era stato mostrato.
+ *
+ * ## Perche' non viaggiano le date gia' calcolate
+ *
+ * L'implementazione naturale sarebbe che l'anteprima calcoli le date e la
+ * conferma le passi allo scrittore. E' esattamente il caso che ADR 008 vieta:
+ * attraversa il confine della persistenza l'**intenzione**, non il **risultato
+ * gia' calcolato**. L'anteprima produce numeri **da mostrare**; la transazione
+ * **ri-deriva** dai record che ci sono sul disco in quel momento, e confronta.
+ *
+ * Se i due non coincidono non si scrive niente: l'anteprima non descrive piu'
+ * cio' che accadrebbe, e cio' che l'utente ha letto e' scaduto.
+ *
+ * ## Che cosa questo confronto aggiunge alla guardia di ADR 017
+ *
+ * La guardia di ADR 017 e' **temporale**: protegge dal cambio di giorno civile
+ * fra il calcolo e la conferma. Questa la estende a cio' che conta davvero:
+ * **che l'insieme sia ancora quello**. *"L'anteprima ha detto il vero"* smette
+ * di essere una speranza e diventa una condizione **verificata al momento della
+ * scrittura**.
+ *
+ * ## Perche' ci sono anche i due estremi, e non solo i due numeri
+ *
+ * `count` e somma da soli sono un'impronta **economica**, e lasciano passare
+ * esattamente il caso che si e' presentato: **l'ancora mensile che si sposta**.
+ * Una regola mensile la cui anteprima e' stata calcolata sul giorno 1 e che sul
+ * disco, nel frattempo, ha preso `anchorDay: 23` produce lo **stesso numero di
+ * occorrenze** e la **stessa somma** — ma su giorni tutti diversi. L'utente ha
+ * confermato "8 spese, 7.200 €, dal 1 gennaio al 1 agosto" e otterrebbe 8 spese
+ * da 7.200 € su otto date che non ha mai letto, in otto periodi diversi da
+ * quelli che gli erano stati mostrati.
+ *
+ * Quindi `firstDate` e `lastDate` viaggiano nell'impronta e si confrontano come
+ * gli altri due. Non sono le date **tutte** — quelle restano fuori, ADR 008: chi
+ * scrive le ri-deriva — sono i due estremi dell'intervallo annunciato, cioe' la
+ * parte del calendario che l'anteprima ha davvero messo sotto gli occhi
+ * dell'utente ("dal ... al ...").
+ *
+ * ## Cosa resta scoperto, dichiarato
+ *
+ * Due insiemi con stesso conteggio, stessa somma **e** stessi estremi ma con i
+ * giorni in mezzo diversi passano ancora. Serve un calendario cambiato in modo
+ * da conservare quattro numeri invece di due: nessuna delle modifiche
+ * raggiungibili da questa app lo fa.
+ */
+export interface PreviewFootprint {
+  /** Quante spese l'anteprima ha annunciato. */
+  readonly count: number
+  /** La somma annunciata, in centesimi interi. */
+  readonly totalCents: Cents
+  /** Il primo giorno annunciato, `null` se non c'era nessuna occorrenza. */
+  readonly firstDate: IsoDate | null
+  /** L'ultimo giorno annunciato, `null` se non c'era nessuna occorrenza. */
+  readonly lastDate: IsoDate | null
+}
+
 export interface MaterializationPreview {
   /** Quante spese verrebbero scritte. Esatto, non un campione. */
   readonly count: number
@@ -206,10 +271,6 @@ export interface MaterializationPreview {
    * smette di essere letta, come l'indicatore che grida tutti i mesi.
    */
   readonly backdated: boolean
-  /** Le prime `maxDates` occorrenze, per mostrarne un elenco. */
-  readonly dates: readonly IsoDate[]
-  /** Vero se `dates` e' stato tagliato: `count` resta il numero vero. */
-  readonly truncated: boolean
 }
 
 export type MaterializationPreviewResult =
@@ -226,8 +287,6 @@ export type MaterializationPreviewResult =
     } & MaterializationPreview)
   /** La regola non e' salvabile. `reason` e' il messaggio di `validateRule`. */
   | { readonly ok: false; readonly reason: string }
-
-const DEFAULT_MAX_DATES = 12
 
 /**
  * Che cosa scriverebbe il motore se questa regola venisse salvata adesso.
@@ -273,7 +332,6 @@ const DEFAULT_MAX_DATES = 12
 export function previewMaterialization(
   draft: RecurrenceDraft,
   today: IsoDate,
-  maxDates: number = DEFAULT_MAX_DATES,
 ): MaterializationPreviewResult {
   // Una regola sintetica: `occurrencesBetween` chiede una `RecurringRule` e
   // legge solo i campi del calendario. L'id non finisce da nessuna parte —
@@ -330,7 +388,6 @@ export function previewMaterialization(
 
   const first = dates[0] ?? null
   const last = dates[dates.length - 1] ?? null
-  const cap = Math.max(0, maxDates)
   // La bozza si ricopia campo per campo invece di tenere il riferimento
   // ricevuto: `RecurrenceDraft` e' `readonly` per il compilatore, non a
   // runtime, e chi ha chiamato l'anteprima resta padrone dell'oggetto che ha
@@ -348,16 +405,20 @@ export function previewMaterialization(
       ? { lastMaterializedDate: draft.lastMaterializedDate }
       : {}),
   }
-  return {
-    ok: true,
-    confirmed: { [CONFIRMED]: { day: today, draft: frozen } },
+  const footprint: PreviewFootprint = {
     count: dates.length,
+    totalCents: draft.amountCents * dates.length,
     firstDate: first,
     lastDate: last,
-    totalCents: draft.amountCents * dates.length,
+  }
+  return {
+    ok: true,
+    confirmed: { [CONFIRMED]: { day: today, draft: frozen, footprint } },
+    count: footprint.count,
+    firstDate: first,
+    lastDate: last,
+    totalCents: footprint.totalCents,
     backdated: first !== null && isBefore(first, today),
-    dates: dates.slice(0, cap),
-    truncated: dates.length > cap,
   }
 }
 
@@ -422,6 +483,17 @@ export interface PreviewedWrite {
    * due volte (`expensesInRange`, `planBudgetChange`).
    */
   readonly draft: RecurrenceDraft
+  /**
+   * **Cio' che l'anteprima ha mostrato**: quante spese e per quanti centesimi.
+   *
+   * Viaggia in ogni permesso, ma non tutte le porte lo spendono: lo spende chi
+   * scrive **dentro una transazione**, cioe' chi ha sotto mano i record veri
+   * per ri-derivarlo (`rewindRecurringRule`). Le porte sincrone
+   * (`addRecurringRule`, `reviseRecurringRule`) non hanno niente su cui
+   * confrontarlo che non sia il mirror da cui l'anteprima e' gia' stata
+   * calcolata: un confronto li' sarebbe la funzione confrontata con se stessa.
+   */
+  readonly footprint: PreviewFootprint
 }
 
 /**
@@ -559,7 +631,10 @@ export type RecurringRuleDeletion =
   | {
       readonly ok: false
       readonly reason: 'in-use'
-      /** Spese generate dalla regola, **cancellate comprese**. */
+      /**
+       * Spese generate dalla regola e **ancora visibili nello Storico**: le
+       * lapidi non contano. E' un numero che l'utente puo' andare a guardare.
+       */
       readonly expenses: number
     }
 
@@ -572,15 +647,48 @@ export type RecurringRuleDeletion =
  * stessa domanda devono avere la stessa API, o la seconda diventa un caso
  * particolare da ricordare a memoria.
  *
- * L'unica condizione e' che nessuna spesa la nomini. Le spese generate
- * **restano** — la storia non cambia mai retroattivamente, e cancellare la
- * regola non e' un pentimento sui soldi gia' usciti — quindi cancellare il
- * record lascerebbe dei `recurringId` che puntano al vuoto: righe che nessuna
+ * L'unica condizione e' che nessuna spesa **viva** la nomini. Le spese generate
+ * restano — la storia non cambia mai retroattivamente, e cancellare la regola
+ * non e' un pentimento sui soldi gia' usciti — quindi cancellare il record
+ * lascerebbe dei `recurringId` che puntano al vuoto: righe che nessuna
  * schermata sa piu' spiegare e che nessuno puo' riparare.
  *
- * Contano anche le spese **con `deletedAt`**, per la stessa ragione delle
- * categorie: un soft delete resta nello Storico e resta nell'export, quindi il
- * suo riferimento e' vivo a tutti gli effetti.
+ * ## Le lapidi non si contano, e la ragione e' il messaggio
+ *
+ * Fino a ieri qui si contavano anche le spese con `deletedAt`. La conseguenza
+ * era che una regola le cui uniche istanze erano cancellate rifiutava la
+ * cancellazione **per sempre**, citando un numero di spese che nello Storico
+ * **non si vede**: il caso piu' comune e' anche il piu' innocente — si crea una
+ * regola sbagliata, si cancella la spesa che ha generato, e da quel momento la
+ * regola non si toglie piu' e nessuna schermata spiega perche'.
+ *
+ * Vale il criterio di CLAUDE.md, *"nessun messaggio cita un numero che l'utente
+ * non puo' vedere"*: un rifiuto che non si puo' riconciliare con lo schermo non
+ * informa, lascia davanti a un no non verificabile.
+ *
+ * Delle due mosse possibili — escludere le lapidi dal conteggio, oppure
+ * consentire la cancellazione quando sono tutte lapidi — la prima e' l'unica
+ * che regge **anche nel caso misto**: con 3 spese vive e 5 lapidi, la seconda
+ * direbbe ancora "8" davanti a uno Storico che ne mostra 3.
+ *
+ * ## Cosa questo lascia scoperto, dichiarato
+ *
+ * Cancellata la regola, le lapidi restano con un `recurringId` che non punta
+ * piu' a niente, e `restoreExpense` puo' riportarne una in vita. Oggi e' inerte:
+ * **nessun lettore dereferenzia `recurringId`** — `buildOccurrenceIndex` guarda
+ * solo se c'e', il budget guarda `source`, e nessuna schermata risale dalla
+ * spesa alla regola.
+ *
+ * Che sia inerte era una proprieta' **accidentale**, e ADR 018 la trasforma in un
+ * vincolo dichiarato: *"`recurringId` puo' restare orfano dopo la cancellazione
+ * di una regola. Nessun lettore lo dereferenzia; il primo che lo fara' deve
+ * gestire l'assenza esplicitamente, non assumerla impossibile."*
+ *
+ * E' anche la differenza con `planCategoryDeletion`, che invece **blocca** sulle
+ * lapidi: un `categoryId` orfano lo dereferenzia mezza app, e la riga che torna
+ * da un ripristino sarebbe rotta e visibile. Conseguenze diverse, permessi
+ * diversi — ma lo stesso identico criterio sul **numero mostrato**, che in
+ * entrambi i posti esclude le lapidi perche' nessuna schermata le mostra.
  *
  * Se qualcuno la usa, la risposta non e' "no": e' **disattivala**
  * (`updateRecurringRule(id, { active: false })`). Che si puo' fare sempre, non
@@ -604,7 +712,264 @@ export function planRecurringRuleDeletion(
 ): RecurringRuleDeletion {
   const target = rules.find((r) => r.id === request.id)
   if (target === undefined) return { ok: false, reason: 'unknown' }
-  const generated = expenses.filter((e) => e.recurringId === request.id).length
+  const generated = expenses.filter(
+    (e) => e.recurringId === request.id && e.deletedAt === undefined,
+  ).length
   if (generated > 0) return { ok: false, reason: 'in-use', expenses: generated }
   return { ok: true, deleted: target }
+}
+
+/* ------------------------------------------------------------------------- *
+ * 4. Arretrare il segnaposto — ADR 018
+ * ------------------------------------------------------------------------- */
+
+/**
+ * Perche' un'anteprima non descrive piu' cio' che verrebbe scritto.
+ *
+ * Due modi di scoprirlo, e sono **due momenti diversi**, non due gusti:
+ *
+ * - `'day'` si scopre **prima** della transazione, confrontando il giorno
+ *   civile del permesso con l'orologio di adesso. E' la guardia di ADR 017, e
+ *   non puo' che stare fuori: dentro una transazione non c'e' nessun orologio
+ *   di cui fidarsi, e il giorno con cui si ri-deriva e' proprio quello che si
+ *   sta mettendo in dubbio.
+ * - `'footprint'` si scopre **dentro** la transazione, ri-derivando dai record
+ *   veri e confrontando con cio' che era stato mostrato.
+ *
+ * Il rifiuto e' uno solo — *"l'anteprima e' scaduta: ricalcola"* — perche' per
+ * chi legge lo schermo la mossa e' la stessa. Il campo dice quale delle due ha
+ * ceduto, cosi' chi scrive la frase puo' essere preciso senza aprire il file.
+ */
+export type StalePreview =
+  | {
+      readonly staleness: 'day'
+      /** Il giorno civile su cui l'anteprima era stata calcolata. */
+      readonly previewedOn: IsoDate
+      /** Il giorno civile di adesso. E' diverso: e' passata la mezzanotte. */
+      readonly today: IsoDate
+    }
+  | {
+      readonly staleness: 'footprint'
+      /** Cio' che l'anteprima ha mostrato. */
+      readonly announced: PreviewFootprint
+      /** Cio' che la transazione ha ri-derivato dai record veri. */
+      readonly actual: PreviewFootprint
+    }
+
+/**
+ * L'intenzione di far arretrare una regola, e **niente di gia' calcolato**.
+ *
+ * Attraversa il confine della persistenza quello che l'utente ha deciso — *"la
+ * data d'inizio in realta' era questa"* — piu' l'impronta di cio' che gli e'
+ * stato mostrato. Le date da generare **non** viaggiano: le ri-deriva la
+ * transazione, sui record che ci sono sul disco in quel momento (ADR 008).
+ *
+ * `today` e `updatedAt` si pregenerano fuori, come l'id e il timestamp di
+ * `BudgetChangeRequest`: servono a rendere la scrittura **ripetibile**. Un
+ * ritentativo dopo una connessione morta deve ri-derivare esattamente gli
+ * stessi numeri, e un `today` letto dentro la transazione non lo garantirebbe.
+ * Che quel `today` sia davvero oggi lo ha gia' verificato `redeemRewind` contro
+ * l'orologio, fuori.
+ */
+export interface RecurringRuleRewindRequest {
+  readonly id: string
+  /**
+   * La data nuova. Tocca **due campi dello stesso record**: `startDate` la
+   * riceve, `lastMaterializedDate` viene **rimosso** — e nient'altro. La data
+   * qui e' una sola perche' il segnaposto non ne prende nessuna.
+   */
+  readonly startDate: IsoDate
+  /** Il giorno civile su cui l'impronta e' stata calcolata, gia' verificato. */
+  readonly today: IsoDate
+  readonly footprint: PreviewFootprint
+  readonly updatedAt: Timestamp
+}
+
+export type RecurringRuleRewind =
+  | { readonly ok: true; readonly rule: RecurringRule }
+  | { readonly ok: false; readonly reason: 'unknown' }
+  | {
+      readonly ok: false
+      /**
+       * **Un solo verso: indietro.** In avanti non e' offerto, perche'
+       * orfanerebbe le occorrenze gia' generate prima della data nuova.
+       */
+      readonly reason: 'not-earlier'
+      readonly startDate: IsoDate
+      readonly currentStartDate: IsoDate
+    }
+  | {
+      readonly ok: false
+      /**
+       * La regola sul disco non e' utilizzabile (un import scritto a mano, un
+       * record di una versione futura). Non si lancia: `occurrencesBetween`
+       * lo farebbe, e un throw qui dentro abortirebbe la transazione con un
+       * errore che nessuna schermata sa spiegare.
+       */
+      readonly reason: 'invalid'
+      readonly message: string
+    }
+  | { readonly ok: false; readonly reason: 'stale-preview'; readonly stale: StalePreview }
+
+/**
+ * Spendere un permesso per un rewind: e' ancora di oggi?
+ *
+ * Restituisce **l'impronta e basta**. La bozza non serve: il rewind scrive una
+ * data che gli arriva come argomento esplicito e toglie un campo, non prende un
+ * calendario dall'anteprima — quindi qui non c'e' niente da "far entrare" nel
+ * record, ci sono solo dei numeri da portare fino alla transazione perche' li
+ * confronti.
+ *
+ * E' anche la ragione per cui non passa da `redeemPreview`: quella confronta il
+ * segnaposto dell'anteprima con quello della regola, che per un rewind sono
+ * diversi **per definizione** — l'anteprima e' calcolata sulla regola come sara'
+ * dopo, cioe' **senza** segnaposto, mentre quella sul disco ce l'ha ancora.
+ */
+export type RewindRedemption =
+  | { readonly ok: true; readonly footprint: PreviewFootprint }
+  | { readonly ok: false; readonly reason: 'stale-preview'; readonly stale: StalePreview }
+
+export function redeemRewind(confirmed: ConfirmedPreview, today: IsoDate): RewindRedemption {
+  const { day, footprint } = confirmed[CONFIRMED]
+  if (day !== today) {
+    return {
+      ok: false,
+      reason: 'stale-preview',
+      stale: { staleness: 'day', previewedOn: day, today },
+    }
+  }
+  return { ok: true, footprint }
+}
+
+/**
+ * Il record che un rewind scriverebbe, deciso **sui record del disco**.
+ *
+ * Gira dentro la transazione (`WriteBatch.recurringRuleRewind`), come
+ * `planRecurringRuleDeletion` e `planResolvedBudgetChange`.
+ *
+ * ## Che cosa scrive: la regola torna **appena creata con quella data**
+ *
+ * Tocca **due campi dello stesso record** e nient'altro: `startDate` prende la
+ * data nuova, e il **segnaposto viene rimosso**. Non lo si porta alla data
+ * nuova: lo si azzera.
+ *
+ * La differenza vale un'occorrenza — quella che cade **esattamente sulla data
+ * scelta** — ma la ragione non e' contarne una in piu'. Con il segnaposto
+ * assente, questa regola diventa indistinguibile da una **creata adesso con
+ * quella data d'inizio**, e la finestra la apre lo **stesso ramo** che
+ * `materializationWindow` percorre a ogni creazione:
+ * `lastMaterializedDate === undefined ? rule.startDate : addDays(...)`.
+ *
+ * Non e' quindi un'eccezione del motore da tenere allineata a mano: retrodatare
+ * e ricreare **sono la stessa riga di codice**, gia' sotto test da prima che il
+ * rewind esistesse. La coerenza fra i due gesti smette di essere una proprieta'
+ * da verificare caso per caso.
+ *
+ * Portare il segnaposto alla data nuova aveva anche l'effetto opposto a quello
+ * per cui il rewind esiste: chi scrive *"la data d'inizio in realta' era il 10
+ * agosto"* si aspetta la spesa del 10 agosto, e la finestra aperta al giorno
+ * **dopo** il segnaposto gliela toglieva in silenzio.
+ *
+ * ## Rimosso, non `undefined`
+ *
+ * Il campo si toglie con una destrutturazione, come in
+ * `Repository.rewriteFromPreview`. Non e' uno stile: `exactOptionalPropertyTypes`
+ * rende `lastMaterializedDate: undefined` **non assegnabile** a
+ * `RecurringRule` — il compilatore rifiuta la forma sbagliata prima che si possa
+ * scegliere. E la differenza conta davvero a valle: `store.put` di `idb` passa
+ * per lo structured clone, che **conserva le proprieta' proprie con valore
+ * `undefined`**, quindi il record riletto avrebbe la chiave presente; l'export
+ * JSON invece la perderebbe (`JSON.stringify` scarta `undefined`), e un
+ * round-trip export -> import cambierebbe la forma del record. Con la rimozione
+ * le due strade coincidono.
+ *
+ * Non cancella niente, non crea id nuovi, il `ruleId` resta. Le occorrenze le
+ * generera' la successiva `materializeRecurring`, **fuori** da questa
+ * transazione: vedi ADR 018, e la riga di `Repository.rewindRecurringRule` che
+ * spiega perche' allungarla sarebbe un rischio pagato per niente.
+ *
+ * ## Perche' arretrare il segnaposto e' sicuro
+ *
+ * Il segnaposto non e' il meccanismo di correttezza: l'idempotenza la garantisce
+ * l'id deterministico `rec:<ruleId>:<date>` piu' la semantica *add* (ADR 006).
+ * Riaprire la finestra su un intervallo gia' materializzato non duplica niente,
+ * **non resuscita le istanze cancellate** — un soft delete lascia una lapide
+ * sotto lo stesso id, quindi la chiave resta occupata e `add` fallisce — e
+ * **non riscrive le correzioni manuali**: il canone corretto a 920 occupa gia'
+ * il suo id.
+ *
+ * ## L'impronta si ri-deriva qui, e si confronta
+ *
+ * `count`, somma **e i due estremi** vengono ricalcolati con le **stesse** due
+ * funzioni che la materializzazione esegue (`materializationWindow`,
+ * `occurrencesBetween`), sulla regola letta dal disco con il rewind gia'
+ * applicato. Se anche uno solo dei quattro non coincide con quello mostrato,
+ * non si scrive niente.
+ *
+ * I due estremi non sono completezza teorica: senza di loro passerebbe
+ * **l'ancora mensile spostata** — stesso numero di occorrenze, stessa somma,
+ * tutte su giorni diversi da quelli letti. Vedi `PreviewFootprint`.
+ *
+ * L'importo usato e' quello **del disco**, non quello dell'anteprima: se un
+ * altro contesto ha cambiato l'importo della regola nel frattempo, la somma non
+ * torna e il rewind si rifiuta. E' il verso giusto — chi ha confermato
+ * "7 spese, 6.300 €" non deve poterne ottenere 7 da 9.200.
+ */
+export function planRecurringRuleRewind(
+  rules: readonly RecurringRule[],
+  request: RecurringRuleRewindRequest,
+): RecurringRuleRewind {
+  const target = rules.find((r) => r.id === request.id)
+  if (target === undefined) return { ok: false, reason: 'unknown' }
+  if (!isBefore(request.startDate, target.startDate)) {
+    return {
+      ok: false,
+      reason: 'not-earlier',
+      startDate: request.startDate,
+      currentStartDate: target.startDate,
+    }
+  }
+
+  // Il segnaposto si **toglie**: la regola torna nello stato di una appena
+  // creata con questa data d'inizio, e la finestra la aprira' lo stesso ramo di
+  // `materializationWindow` che percorre ogni creazione. Rimosso e non
+  // `undefined`: vedi il commento della funzione — `exactOptionalPropertyTypes`
+  // non lascerebbe compilare l'altra forma, e lo structured clone di `idb` la
+  // conserverebbe.
+  const { lastMaterializedDate: _marker, ...withoutMarker } = target
+  const rewound: RecurringRule = {
+    ...withoutMarker,
+    startDate: request.startDate,
+    updatedAt: request.updatedAt,
+  }
+  const problem = validateRule(rewound)
+  if (problem !== null) return { ok: false, reason: 'invalid', message: problem }
+
+  const window = materializationWindow(rewound, request.today)
+  const dates = window === null ? [] : occurrencesBetween(rewound, window.from, window.to)
+  const actual: PreviewFootprint = {
+    count: dates.length,
+    totalCents: rewound.amountCents * dates.length,
+    firstDate: dates[0] ?? null,
+    lastDate: dates[dates.length - 1] ?? null,
+  }
+  const announced = request.footprint
+  if (
+    actual.count !== announced.count ||
+    actual.totalCents !== announced.totalCents ||
+    // I due estremi, e il caso concreto che li ha messi qui: l'ancora mensile
+    // spostata dal 1 al 23 da' **stesso count e stessa somma** su otto giorni
+    // tutti diversi. Senza queste due righe l'utente confermerebbe "dal 1
+    // gennaio al 1 agosto" e otterrebbe otto spese su date che non ha letto.
+    actual.firstDate !== announced.firstDate ||
+    actual.lastDate !== announced.lastDate
+  ) {
+    return {
+      ok: false,
+      reason: 'stale-preview',
+      stale: { staleness: 'footprint', announced, actual },
+    }
+  }
+
+  return { ok: true, rule: rewound }
 }

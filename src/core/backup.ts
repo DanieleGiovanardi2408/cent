@@ -221,8 +221,6 @@ function parseRule(raw: RawRecord, path: string, c: Collector): RecurringRule | 
   if (endDate === false || lastMaterializedDate === false) {
     return c.error(path, 'endDate o lastMaterializedDate non sono date valide')
   }
-  const note = optionalStr(raw['note'])
-  if (note === false) return c.error(`${path}.note`, 'nota non testuale')
   const anchorRaw = raw['anchorDay']
   let anchorDay: number | undefined
   if (anchorRaw !== undefined && anchorRaw !== null) {
@@ -239,7 +237,6 @@ function parseRule(raw: RawRecord, path: string, c: Collector): RecurringRule | 
     interval,
     startDate,
     active: raw['active'] !== false,
-    ...(note !== undefined ? { note } : {}),
     ...(anchorDay !== undefined ? { anchorDay } : {}),
     ...(endDate !== undefined ? { endDate } : {}),
     ...(lastMaterializedDate !== undefined ? { lastMaterializedDate } : {}),

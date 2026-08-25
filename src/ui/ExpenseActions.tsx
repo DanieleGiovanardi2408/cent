@@ -22,12 +22,20 @@ import './ExpenseActions.css'
  * La riga era inerte — toccarla non faceva niente — cioe' un'affordance morta.
  * Ora la riga e' un bottone, con la freccia e lo stato premuto che lo dicono.
  *
- * ## Perche' Elimina e non Modifica
+ * ## Perche' adesso c'e' anche "Correggi l'importo"
  *
- * L'importo della spesa e' scritto qui sopra, nell'intestazione: lo si legge, si
- * cancella e si reinserisce in cinque secondi. Cancellare e reinserire e' un
- * rimedio **completo**, non una versione lossy della modifica. La modifica in
- * posto e' comodita', e arriva in fase 3 aggiungendo un bottone a questo foglio.
+ * Perche' su una spesa **generata da una regola** cancellare e reinserire non e'
+ * un rimedio completo: e' una perdita. La spesa riscritta a mano ha
+ * `source: 'manual'`, quindi esce dalle spese fisse ed **entra nel budget del
+ * periodo** (ADR 016) — il numero grande della Home si muove per una correzione
+ * che non e' una spesa nuova — e ha un id nuovo, mentre l'occorrenza generata ha
+ * un'identita' deterministica che serve al motore (ADR 006).
+ *
+ * Sta **prima** di "Elimina" per questo: e' la mossa giusta, e la si legge per
+ * prima. Su una spesa manuale non toglie niente a nessuno — correggere 12,00 in
+ * 12,50 e' un tap in meno di cancella-e-riscrivi — quindi non e' condizionata a
+ * `source`: un bottone che compare solo su certe righe si cerca proprio quando
+ * non c'e'.
  */
 
 interface Props {
@@ -35,11 +43,20 @@ interface Props {
   /** Puo' mancare: una categoria archiviata o cancellata resta referenziata. */
   readonly category: Category | undefined
   readonly day: IsoDate
+  /** Apre il foglio che corregge l'importo, conservando `id` e `source`. */
+  readonly onFixAmount: () => void
   readonly onDelete: () => void
   readonly onClose: () => void
 }
 
-export function ExpenseActions({ expense, category, day, onDelete, onClose }: Props) {
+export function ExpenseActions({
+  expense,
+  category,
+  day,
+  onFixAmount,
+  onDelete,
+  onClose,
+}: Props) {
   const dialog = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -90,6 +107,9 @@ export function ExpenseActions({ expense, category, day, onDelete, onClose }: Pr
         {/* "Chiudi" e' l'ultimo, cioe' il piu' vicino al pollice: se il tap che
             ha aperto il foglio rimbalza, atterra sulla cosa che non fa niente.
             E' anche l'ordine delle action sheet di iOS, per la stessa ragione. */}
+        <button type="button" class="acts__fix" onClick={onFixAmount}>
+          {t('acts.amount')}
+        </button>
         <button type="button" class="acts__delete" onClick={onDelete}>
           {t('acts.delete')}
         </button>

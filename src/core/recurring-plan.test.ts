@@ -1,16 +1,18 @@
 import { describe, expect, it } from 'vitest'
+import type { IsoDate } from './date'
 import { createMemoryPersistence } from './memory-persistence'
 import type { MemoryDisk } from './memory-persistence'
-import { materializeRecurring } from './recurrence'
+import { materializationWindow, materializeRecurring, occurrencesBetween } from './recurrence'
 import {
   DAYS_PER_YEAR,
   monthlyCostCents,
   monthlyFixedCosts,
   planRecurringRuleDeletion,
+  planRecurringRuleRewind,
   previewMaterialization,
   redeemPreview,
 } from './recurring-plan'
-import type { RecurrenceDraft } from './recurring-plan'
+import type { PreviewFootprint, RecurrenceDraft } from './recurring-plan'
 import { makeExpense, makeRule, tickingClock } from './testing'
 import type { RecurringRule } from './types'
 
@@ -239,26 +241,47 @@ describe('previewMaterialization: cosa succede se salvo', () => {
       lastDate: null,
       totalCents: 0,
       backdated: false,
-      dates: [],
-      truncated: false,
     })
   })
 
-  it('anchorDay 31 in anteprima cade a fine febbraio, esattamente come nel motore', () => {
-    const p = ok(
-      previewMaterialization(
-        {
-          amountCents: 10_000,
-          cadence: 'monthly',
-          interval: 1,
-          anchorDay: 31,
-          startDate: '2026-01-31',
-        },
-        '2026-05-01',
-      ),
-    )
-    expect(p.dates).toEqual(['2026-01-31', '2026-02-28', '2026-03-31', '2026-04-30'])
+  it('anchorDay 31 in anteprima cade a fine febbraio, esattamente come nel motore', async () => {
+    // Il confronto e' con **le spese che il motore scrive davvero**, non con un
+    // elenco che l anteprima porta con se: l invariante da difendere e che i due
+    // coincidano, e un elenco esposto apposta per il test la proverebbe solo
+    // contro se stesso.
+    const rule = makeRule({
+      startDate: '2026-01-31',
+      cadence: 'monthly',
+      anchorDay: 31,
+      amountCents: 10_000,
+    })
+    const today = '2026-05-01'
+    const p = ok(previewMaterialization(rule, today))
     expect(p.count).toBe(4)
+    expect(p.firstDate).toBe('2026-01-31')
+    expect(p.lastDate).toBe('2026-04-30')
+
+    const disk: MemoryDisk = {
+      expenses: [],
+      categories: [],
+      recurringRules: [rule],
+      budgets: [],
+      settings: null,
+    }
+    const persistence = createMemoryPersistence(disk)
+    await materializeRecurring({
+      today,
+      rules: disk.recurringRules,
+      expenses: disk.expenses,
+      write: (batch) => persistence.write(batch),
+      now: tickingClock(),
+    })
+    expect(disk.expenses.map((e) => e.date).sort()).toEqual([
+      '2026-01-31',
+      '2026-02-28',
+      '2026-03-31',
+      '2026-04-30',
+    ])
   })
 
   it('endDate taglia la finestra: una regola gia finita mostra solo le sue occorrenze', () => {
@@ -300,18 +323,19 @@ describe('previewMaterialization: cosa succede se salvo', () => {
     expect(invertita.ok).toBe(false)
   })
 
-  it('l elenco delle date si taglia, il conteggio no', () => {
+  it('una finestra lunga si conta per intero: 234 giorni, e il totale li segue', () => {
+    // Il numero che l utente legge e' `count`, e non e' mai un campione: nemmeno
+    // su una giornaliera aperta da otto mesi.
     const p = ok(
       previewMaterialization(
         { amountCents: 100, cadence: 'daily', interval: 1, startDate: '2026-01-01' },
         '2026-08-22',
-        5,
       ),
     )
     expect(p.count).toBe(234)
     expect(p.totalCents).toBe(23_400)
-    expect(p.dates).toHaveLength(5)
-    expect(p.truncated).toBe(true)
+    expect(p.firstDate).toBe('2026-01-01')
+    expect(p.lastDate).toBe('2026-08-22')
   })
 
   it('una regola gia materializzata parte dal segnaposto, non da startDate', () => {
@@ -328,8 +352,9 @@ describe('previewMaterialization: cosa succede se salvo', () => {
         '2026-08-22',
       ),
     )
-    expect(p.dates).toEqual(['2026-07-01', '2026-08-01'])
     expect(p.count).toBe(2)
+    expect(p.firstDate).toBe('2026-07-01')
+    expect(p.lastDate).toBe('2026-08-01')
   })
 
   /**
@@ -472,7 +497,10 @@ describe('planRecurringRuleDeletion', () => {
     })
   })
 
-  it('le spese cancellate contano lo stesso: restano nello Storico e nell export', () => {
+  it('le lapidi non contano: una regola con sole istanze cancellate si cancella', () => {
+    // Prima si contavano, e la conseguenza era un rifiuto **per sempre** che
+    // citava una spesa che nello Storico non si vede: il caso piu comune (regola
+    // creata per sbaglio, spesa cancellata) era anche quello senza uscita.
     const spese = [
       makeExpense({
         date: '2026-01-01',
@@ -481,7 +509,31 @@ describe('planRecurringRuleDeletion', () => {
         deletedAt: '2026-01-02T10:00:00.000Z',
       }),
     ]
-    expect(planRecurringRuleDeletion([regola], spese, { id: 'r-affitto' })).toMatchObject({
+    expect(planRecurringRuleDeletion([regola], spese, { id: 'r-affitto' })).toEqual({
+      ok: true,
+      deleted: regola,
+    })
+  })
+
+  it('nel caso misto il numero citato e quello che lo Storico mostra', () => {
+    // La ragione per cui si esclude invece di consentire-e-basta: con 1 viva e 2
+    // lapidi, "3" sarebbe un numero che nessuna schermata conferma.
+    const spese = [
+      makeExpense({ date: '2026-01-01', source: 'recurring', recurringId: 'r-affitto' }),
+      makeExpense({
+        date: '2026-02-01',
+        source: 'recurring',
+        recurringId: 'r-affitto',
+        deletedAt: '2026-02-02T10:00:00.000Z',
+      }),
+      makeExpense({
+        date: '2026-03-01',
+        source: 'recurring',
+        recurringId: 'r-affitto',
+        deletedAt: '2026-03-02T10:00:00.000Z',
+      }),
+    ]
+    expect(planRecurringRuleDeletion([regola], spese, { id: 'r-affitto' })).toEqual({
       ok: false,
       reason: 'in-use',
       expenses: 1,
@@ -677,5 +729,231 @@ describe('previewMaterialization: e l unica porta, quindi controlla tutto', () =
     )
     expect(esito.ok).toBe(false)
     expect(esito.ok === false && esito.reason).toContain('today')
+  })
+})
+
+/* ------------------------------------------------------------------------- *
+ * 4. Arretrare il segnaposto — ADR 018, la parte pura
+ * ------------------------------------------------------------------------- */
+
+describe('planRecurringRuleRewind: la regola torna appena creata', () => {
+  const OGGI = '2026-08-22'
+  const UPDATED = '2026-08-22T12:00:00.000Z'
+
+  /** L'impronta di una regola **come sara' dopo il rewind**: senza segnaposto. */
+  function impronta(base: RecurringRule, nuovaData: IsoDate, giorno: IsoDate): PreviewFootprint {
+    const p = previewMaterialization(
+      {
+        amountCents: base.amountCents,
+        cadence: base.cadence,
+        interval: base.interval,
+        ...(base.anchorDay !== undefined ? { anchorDay: base.anchorDay } : {}),
+        startDate: nuovaData,
+        ...(base.endDate !== undefined ? { endDate: base.endDate } : {}),
+      },
+      giorno,
+    )
+    if (!p.ok) throw new Error(`anteprima rifiutata: ${p.reason}`)
+    return { count: p.count, totalCents: p.totalCents, firstDate: p.firstDate, lastDate: p.lastDate }
+  }
+
+  it('il segnaposto viene rimosso, non portato alla data nuova ne messo a undefined', () => {
+    // La forma esatta del record scritto. Non `lastMaterializedDate: undefined`:
+    // `exactOptionalPropertyTypes` non lo lascerebbe compilare, e lo structured
+    // clone di `idb` conserverebbe la chiave con dentro `undefined` — cioe' un
+    // record che l'export JSON e il disco rappresenterebbero in due modi diversi.
+    const regola = makeRule({
+      startDate: '2026-08-01',
+      cadence: 'monthly',
+      amountCents: 90_000,
+      lastMaterializedDate: OGGI,
+    })
+    const esito = planRecurringRuleRewind([regola], {
+      id: regola.id,
+      startDate: '2026-01-01',
+      today: OGGI,
+      footprint: impronta(regola, '2026-01-01', OGGI),
+      updatedAt: UPDATED,
+    })
+    expect(esito.ok).toBe(true)
+    if (!esito.ok) throw new Error('atteso ok')
+    expect(esito.rule.startDate).toBe('2026-01-01')
+    expect(Object.hasOwn(esito.rule, 'lastMaterializedDate')).toBe(false)
+    expect(esito.rule.updatedAt).toBe(UPDATED)
+    // Nient'altro cambia: stesso id, stesso importo, stessa categoria, stesso
+    // `active`, stesso `createdAt`. I due campi toccati sono esattamente due, e
+    // il secondo e' toccato **togliendolo**.
+    const { lastMaterializedDate: _era, ...resto } = regola
+    expect(esito.rule).toEqual({ ...resto, startDate: '2026-01-01', updatedAt: UPDATED })
+  })
+
+  it('il record dopo il rewind e indistinguibile da una regola creata con quella data', () => {
+    // "Otto e otto perche' e' lo stesso ramo": non e' una coincidenza numerica
+    // da riverificare, e' l'uguaglianza dei due record su tutto cio' che il
+    // calendario guarda.
+    const regola = makeRule({
+      startDate: '2026-08-01',
+      cadence: 'monthly',
+      amountCents: 90_000,
+      lastMaterializedDate: OGGI,
+    })
+    const esito = planRecurringRuleRewind([regola], {
+      id: regola.id,
+      startDate: '2026-01-01',
+      today: OGGI,
+      footprint: impronta(regola, '2026-01-01', OGGI),
+      updatedAt: UPDATED,
+    })
+    if (!esito.ok) throw new Error('atteso ok')
+    const appenaCreata = makeRule({
+      startDate: '2026-01-01',
+      cadence: 'monthly',
+      amountCents: 90_000,
+    })
+    const calendario = (r: RecurringRule): unknown => ({
+      cadence: r.cadence,
+      interval: r.interval,
+      startDate: r.startDate,
+      anchorDay: r.anchorDay,
+      endDate: r.endDate,
+      marker: Object.hasOwn(r, 'lastMaterializedDate'),
+    })
+    expect(calendario(esito.rule)).toEqual(calendario(appenaCreata))
+
+    const finestraRewind = materializationWindow(esito.rule, OGGI)
+    const finestraNuova = materializationWindow(appenaCreata, OGGI)
+    expect(finestraRewind).toEqual(finestraNuova)
+    expect(finestraRewind).toEqual({ from: '2026-01-01', to: OGGI })
+    // Otto occorrenze, febbraio compreso, e la prima cade **sulla** data scelta.
+    expect(occurrencesBetween(esito.rule, '2026-01-01', OGGI)).toEqual([
+      '2026-01-01',
+      '2026-02-01',
+      '2026-03-01',
+      '2026-04-01',
+      '2026-05-01',
+      '2026-06-01',
+      '2026-07-01',
+      '2026-08-01',
+    ])
+  })
+
+  it('i due estremi bocciano l ancora spostata, che count e somma lasciavano passare', () => {
+    // **Il caso trovato oggi**, in forma pura. L'anteprima e' stata calcolata su
+    // una regola senza `anchorDay` (quindi ancorata al giorno 1 della data
+    // scelta); sul disco, nel frattempo, la regola ha preso `anchorDay: 15`.
+    //
+    // Otto occorrenze prima e otto dopo, 720.000 centesimi prima e dopo: se
+    // l'impronta fosse rimasta economica, questa scrittura sarebbe passata e
+    // avrebbe messo otto spese su otto giorni che l'utente non ha mai letto.
+    const anteprima = impronta(
+      makeRule({ startDate: '2026-08-01', cadence: 'monthly', amountCents: 90_000 }),
+      '2026-01-01',
+      OGGI,
+    )
+    expect(anteprima).toEqual({
+      count: 8,
+      totalCents: 720_000,
+      firstDate: '2026-01-01',
+      lastDate: '2026-08-01',
+    })
+
+    const spostata = makeRule({
+      startDate: '2026-08-01',
+      cadence: 'monthly',
+      amountCents: 90_000,
+      anchorDay: 15,
+      lastMaterializedDate: OGGI,
+    })
+    const esito = planRecurringRuleRewind([spostata], {
+      id: spostata.id,
+      startDate: '2026-01-01',
+      today: OGGI,
+      footprint: anteprima,
+      updatedAt: UPDATED,
+    })
+
+    expect(esito.ok).toBe(false)
+    if (esito.ok || esito.reason !== 'stale-preview') throw new Error('atteso stale-preview')
+    if (esito.stale.staleness !== 'footprint') throw new Error('attesa staleness footprint')
+    const { announced, actual } = esito.stale
+    // Le due righe che rendono questo test una prova **dei due estremi**: i
+    // numeri vecchi coincidono, quindi da soli non avrebbero fermato niente.
+    expect(actual.count).toBe(announced.count)
+    expect(actual.totalCents).toBe(announced.totalCents)
+    expect(actual.firstDate).toBe('2026-01-15')
+    expect(actual.lastDate).toBe('2026-08-15')
+  })
+
+  it('un rewind che non cambia niente passa: gli estremi non sono un rifiuto in piu', () => {
+    // La controprova del test sopra. Stessa regola, ancora non toccata: i
+    // quattro numeri coincidono e la scrittura avviene. Senza questa, il test
+    // precedente sarebbe compatibile con un'impronta che rifiuta sempre.
+    const regola = makeRule({
+      startDate: '2026-08-01',
+      cadence: 'monthly',
+      amountCents: 90_000,
+      anchorDay: 15,
+      lastMaterializedDate: OGGI,
+    })
+    const esito = planRecurringRuleRewind([regola], {
+      id: regola.id,
+      startDate: '2026-01-01',
+      today: OGGI,
+      footprint: impronta(regola, '2026-01-01', OGGI),
+      updatedAt: UPDATED,
+    })
+    expect(esito.ok).toBe(true)
+  })
+
+  it('una regola tutta nel futuro: zero occorrenze, e i due estremi sono null', () => {
+    // `firstDate`/`lastDate` a `null` devono confrontarsi come gli altri due,
+    // non essere un caso da saltare: e' lo stato in cui l'impronta di una regola
+    // che non ha ancora niente da generare deve poter passare.
+    const regola = makeRule({
+      startDate: '2026-12-01',
+      cadence: 'monthly',
+      amountCents: 90_000,
+    })
+    const anteprima = impronta(regola, '2026-10-01', OGGI)
+    expect(anteprima).toEqual({ count: 0, totalCents: 0, firstDate: null, lastDate: null })
+    const esito = planRecurringRuleRewind([regola], {
+      id: regola.id,
+      startDate: '2026-10-01',
+      today: OGGI,
+      footprint: anteprima,
+      updatedAt: UPDATED,
+    })
+    expect(esito.ok).toBe(true)
+    if (!esito.ok) throw new Error('atteso ok')
+    expect(Object.hasOwn(esito.rule, 'lastMaterializedDate')).toBe(false)
+  })
+
+  it('in avanti si rifiuta con not-earlier, e non si tocca niente', () => {
+    const regola = makeRule({ startDate: '2026-08-01', lastMaterializedDate: OGGI })
+    const esito = planRecurringRuleRewind([regola], {
+      id: regola.id,
+      startDate: '2026-09-01',
+      today: OGGI,
+      footprint: { count: 0, totalCents: 0, firstDate: null, lastDate: null },
+      updatedAt: UPDATED,
+    })
+    expect(esito).toEqual({
+      ok: false,
+      reason: 'not-earlier',
+      startDate: '2026-09-01',
+      currentStartDate: '2026-08-01',
+    })
+  })
+
+  it('un id sconosciuto e una risposta, non un errore', () => {
+    expect(
+      planRecurringRuleRewind([], {
+        id: 'mai-esistita',
+        startDate: '2026-01-01',
+        today: OGGI,
+        footprint: { count: 0, totalCents: 0, firstDate: null, lastDate: null },
+        updatedAt: UPDATED,
+      }),
+    ).toEqual({ ok: false, reason: 'unknown' })
   })
 })

@@ -64,10 +64,28 @@ export interface Category extends EntityBase {
 
 export type Cadence = 'daily' | 'weekly' | 'monthly'
 
+/**
+ * `note` non c'e', e non e' una dimenticanza.
+ *
+ * C'e' stata: tre lettori (l'etichetta della riga in `App.tsx`, quella in
+ * `FixedCosts.tsx`, e la copia sulla spesa generata) e **zero produttori** —
+ * nessuna schermata l'ha mai scritta, perche' il foglio della regola non ha mai
+ * avuto un campo nota. Un campo cosi' non e' "pronto per quando servira'": e'
+ * un ramo di codice che nessun test puo' raggiungere passando dal prodotto, e
+ * tre `?? fallback` che sembrano coprire un caso vivo.
+ *
+ * La regola generale: **un campo si spedisce insieme al suo produttore, o non
+ * si spedisce.** Il giorno in cui il foglio avra' il campo nota, questo torna
+ * insieme a lui.
+ *
+ * Nessuna migrazione: nessun record puo' averlo (l'unico modo di scriverlo era
+ * un `addRecurringRule` che nessuno ha mai chiamato con `note`). Se ne
+ * arrivasse uno da un JSON scritto a mano, IndexedDB lo conserva — `loadAll`
+ * non valida — e `parseRule` lo scarta in import.
+ */
 export interface RecurringRule extends EntityBase {
   readonly amountCents: Cents
   readonly categoryId: string
-  readonly note?: string
   readonly cadence: Cadence
   /** Ogni quanti giorni / settimane / mesi. Intero >= 1. */
   readonly interval: number

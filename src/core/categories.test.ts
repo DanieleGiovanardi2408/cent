@@ -244,7 +244,12 @@ describe('cancellare davvero: solo se nessuno la nomina', () => {
     })
   })
 
-  it('le spese cancellate contano quanto quelle vive', () => {
+  it('le spese cancellate bloccano ma non si contano: il numero e quello dello Storico', () => {
+    // La lapide trattiene la categoria — `restoreExpense` la riporta in vita in
+    // un tap, e la riga che torna dereferenzia `categoryId` — ma **non entra nel
+    // numero**: nessuna schermata mostra le spese cancellate, e un rifiuto che
+    // dicesse "2" davanti a uno Storico che ne mostra 1 e' un no non
+    // verificabile.
     const spese = [
       makeExpense({ date: '2026-08-01', categoryId: 'c-4' }),
       makeExpense({ date: '2026-08-02', categoryId: 'c-4', deletedAt: '2026-08-02T10:00:00.000Z' }),
@@ -253,8 +258,57 @@ describe('cancellare davvero: solo se nessuno la nomina', () => {
     expect(planCategoryDeletion(cats, spese, [], [], { id: 'c-4' })).toEqual({
       ok: false,
       reason: 'in-use',
-      expenses: 2,
+      expenses: 1,
       recurringRules: 0,
+      budgets: 0,
+    })
+  })
+
+  it('sole lapidi: si rifiuta con deleted-only, e non c e nessun numero da mostrare', () => {
+    // Tutto cio' che blocca e' invisibile, quindi l'esito non porta cifre: il
+    // numero delle lapidi non e' raggiungibile da nessuna schermata, e un tipo
+    // senza quel campo e' l'unico modo perche' nessuna copia possa citarlo.
+    const spese = [
+      makeExpense({ date: '2026-08-01', categoryId: 'c-4', deletedAt: '2026-08-01T10:00:00.000Z' }),
+      makeExpense({ date: '2026-08-02', categoryId: 'c-4', deletedAt: '2026-08-02T10:00:00.000Z' }),
+    ]
+    const esito = planCategoryDeletion(cats, spese, [], [], { id: 'c-4' })
+    expect(esito).toEqual({ ok: false, reason: 'deleted-only' })
+    // Nessun conteggio, nemmeno nascosto: le chiavi sono due e sono queste.
+    expect(Object.keys(esito).sort()).toEqual(['ok', 'reason'])
+  })
+
+  it('caso misto: 1 viva e 2 lapidi danno in-use con 1, non deleted-only', () => {
+    // La mossa alternativa — consentire la cancellazione quando sono tutte
+    // lapidi — non regge qui: con una viva e due lapidi direbbe ancora "3"
+    // davanti a uno Storico che ne mostra una.
+    const spese = [
+      makeExpense({ date: '2026-08-01', categoryId: 'c-4' }),
+      makeExpense({ date: '2026-08-02', categoryId: 'c-4', deletedAt: '2026-08-02T10:00:00.000Z' }),
+      makeExpense({ date: '2026-08-03', categoryId: 'c-4', deletedAt: '2026-08-03T10:00:00.000Z' }),
+    ]
+    expect(planCategoryDeletion(cats, spese, [], [], { id: 'c-4' })).toEqual({
+      ok: false,
+      reason: 'in-use',
+      expenses: 1,
+      recurringRules: 0,
+      budgets: 0,
+    })
+  })
+
+  it('lapidi piu una regola: in-use, e il numero visibile e quello della regola', () => {
+    // Cio' che blocca in modo visibile ha la precedenza: `expenses: 0` e'
+    // corretto — di spese nello Storico non ce n'e' nessuna — e la frase la
+    // regge la regola, che in Impostazioni si vede.
+    const spese = [
+      makeExpense({ date: '2026-08-01', categoryId: 'c-4', deletedAt: '2026-08-01T10:00:00.000Z' }),
+    ]
+    const regole = [makeRule({ startDate: '2026-01-01', categoryId: 'c-4' })]
+    expect(planCategoryDeletion(cats, spese, regole, [], { id: 'c-4' })).toEqual({
+      ok: false,
+      reason: 'in-use',
+      expenses: 0,
+      recurringRules: 1,
       budgets: 0,
     })
   })
@@ -321,8 +375,9 @@ describe('cancellare davvero: solo se nessuno la nomina', () => {
   })
 
   it('i quattro conteggi arrivano insieme, non uno alla volta', () => {
-    // Il rifiuto porta i numeri da mostrare: la UI dice "3 spese, 1 regola e 2
+    // Il rifiuto porta i numeri da mostrare: la UI dice "2 spese, 1 regola e 2
     // budget la usano", e per dirlo deve averli tutti in una risposta sola.
+    // La terza spesa e' una lapide e resta fuori dal conteggio.
     const spese = [
       makeExpense({ date: '2026-08-01', categoryId: 'c-4' }),
       makeExpense({ date: '2026-08-02', categoryId: 'c-4' }),
@@ -337,7 +392,7 @@ describe('cancellare davvero: solo se nessuno la nomina', () => {
     expect(planCategoryDeletion(cats, spese, regole, budgets, { id: 'c-4' })).toEqual({
       ok: false,
       reason: 'in-use',
-      expenses: 3,
+      expenses: 2,
       recurringRules: 1,
       budgets: 2,
     })

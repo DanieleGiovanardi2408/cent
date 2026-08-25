@@ -72,11 +72,13 @@ import type {
   CategoryPlacement,
   CategoryPlacementRequest,
 } from './categories'
-import { redeemPreview } from './recurring-plan'
+import { redeemPreview, redeemRewind } from './recurring-plan'
 import type {
   ConfirmedPreview,
   RecurrenceDraft,
   RecurringRuleDeletion,
+  RecurringRuleRewind,
+  RecurringRuleRewindRequest,
   RecurringRuleWrite,
 } from './recurring-plan'
 import { buildDefaultCategories, buildDefaultSettings } from './defaults'
@@ -196,9 +198,9 @@ export interface CategoryPatch {
  * Quindi i campi si dividono per **chi puo' allargare la finestra di
  * materializzazione**, e ogni gruppo ha un solo produttore:
  *
- * - `RecurringRulePatch` — `categoryId` e `note`. Non entrano in nessuno dei
+ * - `RecurringRulePatch` — `categoryId`, e basta. Non entra in nessuno dei
  *   numeri che l'anteprima annuncia (ne' `count`, ne' le date, ne' il totale),
- *   quindi **non pagano nessun pedaggio**: `updateRecurringRule` resta sincrona,
+ *   quindi **non paga nessun pedaggio**: `updateRecurringRule` resta sincrona,
  *   ottimistica e senza esito da controllare.
  * - `RecurrenceDraft` (importo + calendario) — viaggia **solo** dentro una
  *   `ConfirmedPreview`. Non esiste nessun altro modo di farlo entrare in una
@@ -219,12 +221,10 @@ export interface CategoryPatch {
  */
 export interface NewRecurringRule {
   readonly categoryId: string
-  readonly note?: string
 }
 
 export interface RecurringRulePatch {
   readonly categoryId?: string
-  readonly note?: string | null
 }
 
 export interface SettingsPatch {
@@ -440,7 +440,7 @@ export interface Repository {
   /**
    * Crea una regola a partire da **un'anteprima calcolata adesso**. L'importo e
    * il calendario vengono da li' e da nessun'altra parte: `input` porta solo
-   * cio' che l'anteprima non guarda (`categoryId`, `note`).
+   * cio' che l'anteprima non guarda (`categoryId`).
    *
    * **Non materializza niente da sola**: le occorrenze arretrate arrivano alla
    * prossima `materializeRecurring()`.
@@ -468,9 +468,9 @@ export interface Repository {
   addRecurringRule(input: NewRecurringRule, previewed: ConfirmedPreview): RecurringRuleWrite
 
   /**
-   * Nome della categoria e nota. **Nient'altro**, ed e' il punto.
+   * La categoria. **Nient'altro**, ed e' il punto.
    *
-   * Questi due campi non entrano in nessuno dei numeri che l'anteprima
+   * Non entra in nessuno dei numeri che l'anteprima
    * annuncia, quindi questa porta non paga nessun pedaggio: resta sincrona,
    * ottimistica, e non ha un esito da controllare. Cio' che puo' generare
    * spese arretrate non e' scrivibile da qui — non e' vietato, e' **assente dal
@@ -527,9 +527,9 @@ export interface Repository {
   reactivateRecurringRule(id: string, previewed: ConfirmedPreview): RecurringRuleWrite
 
   /**
-   * Cancella davvero una regola, e **solo se non ha mai generato nessuna
-   * spesa** — viva o cancellata che sia, perche' un soft delete resta nello
-   * Storico e nell'export.
+   * Cancella davvero una regola, e **solo se non ha nessuna spesa viva** che la
+   * nomini. Le lapidi non contano: un numero che nello Storico non si vede non
+   * puo' entrare in un rifiuto (vedi `planRecurringRuleDeletion`).
    *
    * Le spese gia' generate non vengono toccate in nessun caso: la storia non
    * cambia retroattivamente. E' proprio questo che rende la cancellazione
@@ -542,6 +542,72 @@ export interface Repository {
    * puoi disattivarla").
    */
   deleteRecurringRule(id: string): Promise<RecurringRuleDeletion>
+
+  /**
+   * Sposta **indietro** la data d'inizio di una regola, e con lei il segnaposto.
+   * L'unica operazione che fa arretrare `lastMaterializedDate`. Vedi ADR 018.
+   *
+   * ## Il difetto che chiude
+   *
+   * Retrodatare una regola gia' materializzata con `reviseRecurringRule` e' un
+   * **no-op silenzioso**: il motore riparte dal segnaposto, non da `startDate`,
+   * e il segnaposto avanza a oggi a ogni apertura anche quando non genera
+   * niente. Quindi la finestra e' sempre vuota, la schermata scrive "non c'e'
+   * niente da recuperare", e le otto spese non vengono create. Un messaggio che
+   * afferma qualcosa che lo schermo non conferma.
+   *
+   * ## Un solo verso, e uno stato solo: quello di una regola appena creata
+   *
+   * `startDate` prende la data nuova e il segnaposto viene **rimosso**, non
+   * portato alla data nuova. I due campi insieme rimettono la regola nello stato
+   * di una **appena creata con quella data d'inizio**: da li' in poi la finestra
+   * la apre lo **stesso ramo** che `materializationWindow` percorre a ogni
+   * creazione, non un ramo suo. Retrodatare e ricreare diventano la stessa riga
+   * di codice invece di due comportamenti da tenere allineati.
+   *
+   * E' anche cio' che l'utente ha chiesto: *"la data d'inizio in realta' era il
+   * 10 agosto"* vuol dire che la spesa del 10 agosto deve esserci. Con il
+   * segnaposto sulla data nuova la finestra si apriva al giorno **dopo**, e
+   * quella prima occorrenza spariva in silenzio.
+   *
+   * Nient'altro viene toccato: non si cancella niente, non si creano id nuovi,
+   * il `ruleId` resta. Se la data non e' precedente a quella attuale, si rifiuta
+   * (`'not-earlier'`): in avanti orfanerebbe le occorrenze gia' generate prima,
+   * ed e' un bisogno che nessuno ha espresso.
+   *
+   * ## Non materializza
+   *
+   * Come `addRecurringRule`, non genera niente da sola: chi chiama poi invoca
+   * `materializeRecurring()`, esattamente come gia' fa dopo aver salvato una
+   * regola.
+   *
+   * La materializzazione resta **fuori dalla transazione** di proposito.
+   * Un'interruzione fra le due lascia una regola col segnaposto indietro e delle
+   * occorrenze da generare — che e' lo **stato ordinario di ogni regola a ogni
+   * avvio**, gia' coperto dal codice che gira a ogni apertura: non c'e' niente
+   * da riparare perche' non c'e' niente di anomalo. Portarla dentro non
+   * comprerebbe niente e costerebbe: una transazione IndexedDB che si allunga su
+   * lavoro non-IDB **si auto-chiude quando la coda dei microtask si svuota**, ed
+   * e' un classico su WebKit.
+   *
+   * ## Il permesso, e che cosa se ne spende
+   *
+   * L'anteprima va calcolata **sulla regola come sara' dopo**: `startDate` alla
+   * data nuova e **nessun** `lastMaterializedDate` — cioe' la stessa bozza con
+   * cui si anteprima una regola nuova. Di quel permesso qui si spendono due cose
+   * e solo quelle — il **giorno civile** (ADR 017: un'anteprima di ieri non si
+   * spende) e l'**impronta**, che la transazione ri-deriva dai record veri e
+   * confronta su quattro numeri: conteggio, somma e i due estremi. Se non
+   * coincide, `'stale-preview'` e non si scrive niente.
+   *
+   * La bozza dentro il permesso **non entra nel record**: qui non c'e' nessun
+   * calendario da far passare, ci sono due date che arrivano come argomento.
+   */
+  rewindRecurringRule(
+    id: string,
+    startDate: IsoDate,
+    previewed: ConfirmedPreview,
+  ): Promise<RecurringRuleRewind>
 
   /**
    * Chiude il budget in vigore e ne apre uno nuovo. Vedi `budget.ts`.
@@ -683,7 +749,7 @@ function sameBudget(a: Budget, b: Budget): boolean {
  */
 function ruleShape(draft: RecurrenceDraft): Omit<
   RecurringRule,
-  'id' | 'createdAt' | 'updatedAt' | 'categoryId' | 'active' | 'note' | 'lastMaterializedDate'
+  'id' | 'createdAt' | 'updatedAt' | 'categoryId' | 'active' | 'lastMaterializedDate'
 > {
   return {
     amountCents: draft.amountCents,
@@ -1228,7 +1294,6 @@ export async function openRepository(
           updatedAt: timestamp,
           categoryId: input.categoryId,
           active: true,
-          ...(input.note !== undefined ? { note: input.note } : {}),
         }),
       }
     },
@@ -1236,12 +1301,9 @@ export async function openRepository(
     updateRecurringRule(id, patch) {
       const current = observable.get().recurringRules.find((r) => r.id === id)
       if (!current) return null
-      const note = patch.note === undefined ? current.note : (patch.note ?? undefined)
-      const { note: _note, ...rest } = current
       return commitRule({
-        ...rest,
+        ...current,
         ...(patch.categoryId !== undefined ? { categoryId: patch.categoryId } : {}),
-        ...(note !== undefined ? { note } : {}),
         updatedAt: clock(),
       })
     },
@@ -1273,6 +1335,43 @@ export async function openRepository(
         mutate((state) => ({
           ...state,
           recurringRules: state.recurringRules.filter((r) => r.id !== id),
+        }))
+      }
+      return outcome
+    },
+
+    async rewindRecurringRule(id, startDate, previewed) {
+      if (importing) throw new ImportInProgressError()
+      assertDate(startDate, 'startDate')
+      // Una lettura sola dell'orologio, come in `addRecurringRule`: il giorno
+      // che confronta il permesso e quello con cui la transazione ri-derivera'
+      // l'impronta devono essere **lo stesso**, o si aprirebbe fra i due
+      // esattamente la finestra che questa guardia esiste per chiudere.
+      const today = localInstant(readInstant()).date
+      const redeemed = redeemRewind(previewed, today)
+      if (!redeemed.ok) return redeemed
+      // `today` e `updatedAt` viaggiano nella richiesta: cosi' un ritentativo
+      // dopo una connessione morta ri-deriva gli stessi numeri invece di
+      // ricalcolarli su un giorno diverso (ADR 008, corollario sugli id
+      // pregenerati).
+      const request: RecurringRuleRewindRequest = {
+        id,
+        startDate,
+        today,
+        footprint: redeemed.footprint,
+        updatedAt: clock(),
+      }
+      const startedAt = generation
+      const result = await schedule({ recurringRuleRewind: request }, false)
+      const outcome = result.recurringRuleRewind
+      if (outcome === undefined) {
+        throw new TypeError('La persistenza non ha risposto a recurringRuleRewind')
+      }
+      if (outcome.ok && generation === startedAt && !importing) {
+        const written = outcome.rule
+        mutate((state) => ({
+          ...state,
+          recurringRules: replace(state.recurringRules, written),
         }))
       }
       return outcome

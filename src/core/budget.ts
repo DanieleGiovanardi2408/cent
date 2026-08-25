@@ -229,7 +229,6 @@ export interface BudgetMetrics {
   readonly currentPaceCents: Cents | null
   /** Budget diviso i giorni totali: il passo che si potrebbe tenere. */
   readonly sustainablePaceCents: Cents | null
-  readonly overBudget: boolean
 }
 
 export interface BudgetMetricsInput {
@@ -384,7 +383,6 @@ export function computeBudgetMetrics(input: BudgetMetricsInput): BudgetMetrics {
       remainingCents === null || daysRemaining === 0 ? null : divideCents(remainingCents, daysRemaining),
     currentPaceCents: daysElapsed === 0 ? null : divideCents(spentCents, daysLived),
     sustainablePaceCents: budgetCents === null ? null : divideCents(budgetCents, daysTotal),
-    overBudget: budgetCents !== null && spentCents > budgetCents,
   }
 }
 

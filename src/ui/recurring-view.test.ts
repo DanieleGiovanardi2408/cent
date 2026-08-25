@@ -239,7 +239,7 @@ describe('cancellare una regola', () => {
 
   it('una sola spesa non si scrive "1 spese"', () => {
     const testo = deletionRefusalText({ ok: false, reason: 'in-use', expenses: 1 })
-    expect(testo).toContain('1 spesa,')
+    expect(testo).toContain('1 spesa ')
     expect(testo).not.toContain('1 spese')
   })
 })

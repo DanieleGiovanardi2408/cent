@@ -8,6 +8,7 @@ import { nowTimestamp } from '../core/types'
 import type { BudgetPeriod, Category, Expense, Language, RecurringRule } from '../core/types'
 import { AddSheet } from './AddSheet'
 import type { SaveInput } from './AddSheet'
+import { AmountSheet } from './AmountSheet'
 import { BackupNudge } from './BackupNudge'
 import { backupNudge, daysSince } from './backup-nudge'
 import { BackupPanel } from './BackupPanel'
@@ -45,17 +46,19 @@ import { useApp } from './useApp'
 import './App.css'
 
 /**
- * Quale foglio e' aperto, e se sta gia' uscendo. Sono tre — inserimento, budget
- * e spesa fissa — e non possono essere aperti insieme: `null` significa nessuno.
+ * Quale foglio e' aperto, e se sta gia' uscendo. Sono quattro — inserimento,
+ * budget, spesa fissa e correzione dell'importo — e non possono essere aperti
+ * insieme: `null` significa nessuno.
  */
-type SheetKind = 'add' | 'budget' | 'rule'
+type SheetKind = 'add' | 'budget' | 'rule' | 'amount'
 /**
- * `id` e' la regola che il foglio delle spese fisse sta modificando, `null`
- * quando se ne sta creando una nuova (ed e' sempre `null` per gli altri due
- * fogli). E' **l'id e non il record**: dopo una modifica il record e' cambiato,
- * e un oggetto congelato qui dentro mostrerebbe lo stato di prima del tap
- * mentre l'elenco dietro ha gia' quello nuovo — la stessa ragione per cui il
- * foglio delle categorie tiene l'id.
+ * `id` e' la regola che il foglio delle spese fisse sta modificando, o la spesa
+ * di cui si sta correggendo l'importo; `null` quando si crea una regola nuova
+ * (ed e' sempre `null` per l'inserimento e per il budget). E' **l'id e non il
+ * record**: dopo una modifica il record e' cambiato, e un oggetto congelato qui
+ * dentro mostrerebbe lo stato di prima del tap mentre l'elenco dietro ha gia'
+ * quello nuovo — la stessa ragione per cui il foglio delle categorie tiene
+ * l'id.
  */
 type Sheet = {
   readonly kind: SheetKind
@@ -395,6 +398,86 @@ export function App() {
     return true
   }
 
+  /**
+   * Corregge l'importo di una spesa gia' scritta, **conservando `id` e
+   * `source`**.
+   *
+   * ## Cosa compra quella conservazione
+   *
+   * Su una spesa generata da una regola, l'unico rimedio possibile finora era
+   * cancellare e riscrivere a mano, e costava due cose:
+   *
+   * - `source` passava a `'manual'`, quindi la spesa **usciva dalle fisse ed
+   *   entrava nel budget del periodo** (ADR 016). L'affitto che cambia di 12 €
+   *   faceva muovere il numero grande della Home di 912: una correzione che non
+   *   e' una spesa nuova non deve toccare quel numero, e adesso non lo tocca;
+   * - l'id deterministico `rec:${ruleId}:${giorno}` (ADR 006) spariva, e con lui
+   *   la ragione per cui la prossima materializzazione **non** ricrea quel
+   *   giorno.
+   *
+   * `updateExpense` riscrive solo i campi del patch, quindi tutti e due si
+   * conservano senza che nessuno debba ricordarsene.
+   *
+   * ## Ottimistica, con l'Annulla
+   *
+   * Come ogni scrittura locale: il mirror si muove subito e la lista dietro ha
+   * gia' il numero nuovo mentre il foglio scende. Il toast porta "Annulla"
+   * perche' qui, a differenza del budget, **qualcosa si perde**: l'importo di
+   * prima non esiste piu' da nessuna parte. Il rimedio riscrive quello.
+   */
+  function saveAmount(amountCents: number): boolean {
+    const repo = app.repo
+    const target = amountTarget
+    if (repo === null || target === null) return false
+    const before = target.amountCents
+    let saved: Expense | null
+    try {
+      saved = repo.updateExpense(target.id, { amountCents })
+    } catch {
+      // Un import sta sostituendo i dati: il foglio resta aperto con l'importo
+      // digitato e lo dice dove si riprova.
+      return false
+    }
+    if (saved === null) {
+      // La spesa non c'e' piu' — cancellata da un altro contesto mentre il
+      // foglio era aperto. Il foglio si chiude: non c'e' piu' niente da
+      // correggere, e insistere su un record che non esiste non porta da
+      // nessuna parte.
+      closeSheet()
+      showToast(t('toast.gone'))
+      return true
+    }
+    closeSheet()
+    showToast(t('toast.amountFixed', { amount: money(amountCents) }), {
+      label: t('toast.undo'),
+      run: () => restoreAmount(repo, target.id, before),
+    })
+    return true
+  }
+
+  /**
+   * L'annullamento della correzione: rimette l'importo di prima.
+   *
+   * L'id viaggia nel toast, non il record: fra il tap e l'annullamento passano
+   * fino a sei secondi, e cio' che si riscrive e' un campo solo su qualunque
+   * versione del record ci sia adesso.
+   */
+  function restoreAmount(repo: Repository, id: string, amountCents: number): void {
+    let back: Expense | null
+    try {
+      back = repo.updateExpense(id, { amountCents })
+    } catch {
+      showToast(t('toast.restoreFailed'))
+      return
+    }
+    if (back === null) {
+      showToast(t('toast.gone'))
+      return
+    }
+    // Nessun secondo "Annulla": annullare un annullamento non lo fa nessuno.
+    showToast(t('toast.amountBack', { amount: money(amountCents) }))
+  }
+
   /* --- le spese fisse ---------------------------------------------------- *
    *
    * Cinque porte, e la divisione non e' arbitraria (ADR 017): la generazione
@@ -405,9 +488,9 @@ export function App() {
    * infatti non ha nemmeno una conferma davanti.
    */
 
-  /** Il nome con cui una regola si chiama nei messaggi: la nota, o la categoria. */
+  /** Il nome con cui una regola si chiama nei messaggi: la sua categoria. */
   function ruleName(rule: RecurringRule): string {
-    return rule.note ?? categoryOf(rule.categoryId)?.name ?? t('rule.label.edit')
+    return categoryOf(rule.categoryId)?.name ?? t('rule.label.edit')
   }
 
   /**
@@ -991,12 +1074,27 @@ export function App() {
       : app.data?.recurringRules.find((rule) => rule.id === sheet.id) ?? null
 
   /**
+   * La spesa di cui si sta correggendo l'importo, **riletta dal mirror a ogni
+   * render** come la regola qui sopra e per la stessa ragione: mentre il foglio
+   * e' aperto una materializzazione o un altro contesto possono averla toccata,
+   * e un oggetto congelato all'apertura proporrebbe come "importo di adesso" un
+   * numero che sul disco non c'e' piu'.
+   */
+  const amountTarget =
+    sheet?.kind !== 'amount' || sheet.id === null
+      ? null
+      : app.data?.expenses.find((expense) => expense.id === sheet.id) ?? null
+
+  /**
    * Il permesso di cancellare **una regola**, chiesto prima di mostrare il
    * bottone, esattamente come per le categorie: il rifiuto porta con se' il
-   * numero ("ha gia' creato 8 spese"), e con quel numero si scrive una frase
-   * che dice anche cosa fare invece. Le spese contano tutte, cancellate
-   * comprese: un soft delete resta nello Storico e nell'export, quindi il
-   * riferimento e' vivo.
+   * numero ("nello Storico ci sono 8 spese"), e con quel numero si scrive una
+   * frase che dice anche cosa fare invece.
+   *
+   * Contano solo le spese **vive**: le lapidi no. E' una decisione del core
+   * (`planRecurringRuleDeletion`), e la sua ragione e' proprio la frase che si
+   * legge qui — un rifiuto che cita un numero che nello Storico non si vede
+   * lascia davanti a un no non verificabile.
    */
   const ruleDeletion = useMemo(() => {
     const data = app.data
@@ -1013,8 +1111,18 @@ export function App() {
    * `planCategoryDeletion` e' pura e il rifiuto porta con se' i numeri ("3 spese
    * la usano"): chiederglielo qui vuol dire che chi non puo' cancellare legge
    * una frase con dentro il motivo, invece di toccare un bottone e ricevere un
-   * errore. Le spese contano tutte, cancellate comprese: un soft delete resta
-   * nello Storico e nell'export, quindi il riferimento e' vivo.
+   * errore.
+   *
+   * **Le lapidi bloccano ma non si contano**, e le due meta' hanno due ragioni
+   * diverse. Bloccano perche' `restoreExpense` riporta in vita una spesa
+   * cancellata con un tap, e la riga che torna ha un `categoryId` che lo
+   * Storico, le statistiche e il chip dereferenziano tutti. Non si contano
+   * perche' nessuna schermata le mostra: un numero che l'utente non puo'
+   * riconciliare con niente non informa, rifiuta e basta.
+   *
+   * Percio' gli esiti sono quattro e non tre. Quando a bloccare sono **solo**
+   * lapidi il core risponde `'deleted-only'`, che di numeri non ne porta
+   * nessuno — e il foglio ha una frase apposta, che parla del fatto.
    */
   const catDeletion = useMemo(() => {
     const data = app.data
@@ -1219,6 +1327,9 @@ export function App() {
         <RuleSheet
           key={session}
           categories={categories}
+          // ADR 019: quella che la regola ha **adesso**, anche se e' in
+          // archivio. Il foglio ne fa l'unione con le otto e la marca.
+          current={ruleTarget === null ? null : categoryOf(ruleTarget.categoryId) ?? null}
           target={ruleTarget}
           deletion={ruleDeletion}
           day={app.day}
@@ -1226,6 +1337,18 @@ export function App() {
           onSave={saveRule}
           onDeactivate={deactivateRule}
           onDelete={deleteRule}
+          onClose={closeSheet}
+        />
+      ) : null}
+
+      {sheet?.kind === 'amount' && amountTarget !== null ? (
+        <AmountSheet
+          key={session}
+          expense={amountTarget}
+          category={categoryOf(amountTarget.categoryId)}
+          day={app.day}
+          leaving={sheet.leaving}
+          onSave={saveAmount}
           onClose={closeSheet}
         />
       ) : null}
@@ -1252,6 +1375,11 @@ export function App() {
           expense={picked}
           category={categoryOf(picked.categoryId)}
           day={app.day}
+          onFixAmount={() => {
+            const target = picked
+            setPicked(null)
+            openSheet('amount', target.id)
+          }}
           onDelete={() => {
             const repo = app.repo
             const target = picked

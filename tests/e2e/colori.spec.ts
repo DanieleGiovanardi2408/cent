@@ -436,6 +436,57 @@ test('ogni testo dipinto sta sopra la soglia AA della sua taglia', async ({ page
         await expect(page.locator('.rule__confirm')).toHaveAttribute('aria-checked', 'true')
       },
     },
+    // Il foglio che corregge l'importo di una spesa **generata**: tre superfici
+    // nuove — l'intestazione con la pastiglia colorata, la riga che dichiara
+    // che il budget non si muove, e il bottone che scrive acceso. La spesa
+    // dev'essere una fissa, o quella riga non verrebbe dipinta affatto.
+    //
+    // La regola creata qui **resta**: le scene si susseguono sullo stesso
+    // database, e la prossima ne ha bisogno.
+    {
+      nome: 'foglio correggi l importo, su una spesa fissa',
+      vai: async () => {
+        await page.locator('.app__action').tap()
+        await expect(page.locator('.prefs')).toBeVisible()
+        await page.locator('.prefs__action').filter({ hasText: /spesa fissa/i }).tap()
+        await expect(page.locator('.sheet--rule')).toBeVisible()
+        await page.locator('.pad__key', { hasText: /^9$/ }).first().tap()
+        await page.locator('.pad__key--zero').tap()
+        await page.locator('.cats--pick .cat').filter({ hasText: 'Casa' }).tap()
+        await page.locator('.save').tap()
+        await expect(page.locator('.sheet--rule')).toHaveCount(0)
+
+        await page.locator('.nav__tab').nth(1).tap()
+        await expect(page.locator('.row').first()).toBeVisible()
+        await page.locator('.row').first().tap()
+        await expect(page.locator('.acts')).toBeVisible()
+        await page.locator('.acts__fix').tap()
+        await expect(page.locator('.sheet--amount')).toBeVisible()
+        // Una cifra: il bottone che scrive si accende, e il testo di un
+        // componente inattivo sarebbe esente dalla soglia.
+        await page.locator('.pad__key', { hasText: /^7$/ }).first().tap()
+        await expect(page.locator('.sheet--amount .save')).toBeEnabled()
+      },
+    },
+    // Lo stesso foglio della spesa fissa, con la **nona** categoria: quella che
+    // la regola ha adesso e che non e' piu' in griglia (ADR 019). Porta due
+    // testi che non esistono altrove — l'etichetta "Attuale" dentro il chip, a
+    // 10px, cioe' la taglia piu' severa dell'app, e la riga che spiega perche'
+    // c'e'.
+    {
+      nome: 'foglio spesa fissa, con la categoria archiviata',
+      vai: async () => {
+        await page.locator('.app__action').tap()
+        await expect(page.locator('.prefs')).toBeVisible()
+        await page.locator('.cats--edit .cat').filter({ hasText: 'Casa' }).tap()
+        await expect(page.locator('.sheet--cat')).toBeVisible()
+        await page.locator('.editor__second').tap()
+        await expect(page.locator('.sheet--cat')).toHaveCount(0)
+        await page.locator('.fixed__row').first().tap()
+        await expect(page.locator('.sheet--rule')).toBeVisible()
+        await expect(page.locator('.rule__current')).toBeVisible()
+      },
+    },
   ]
 
   const cattive: Misura[] = []

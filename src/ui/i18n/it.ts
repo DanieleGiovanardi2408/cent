@@ -153,8 +153,28 @@ export const it = {
   /* --- riga di spesa e azioni -------------------------------------------- */
   'row.categoryRemoved': 'Categoria rimossa',
   'acts.label': 'Azioni sulla spesa',
+  // Prima di "Elimina", e non e' un dettaglio d'ordine: su una spesa generata
+  // da una regola, cancellare e riscrivere a mano **cambia `source`**, cioe' la
+  // fa uscire dalle spese fisse ed entrare nel budget del periodo. La
+  // correzione sul posto e' la mossa giusta, quindi si legge per prima.
+  'acts.amount': 'Correggi l\u2019importo',
   'acts.delete': 'Elimina',
   'acts.close': 'Chiudi',
+
+  /* --- foglio "correggi l'importo" --------------------------------------- */
+  'amount.label': 'Correggi l\u2019importo',
+  'amount.hint.now': 'Adesso \u00e8 {amount}. Digita quello giusto.',
+  'amount.hint.check': 'Controlla e salva.',
+  'amount.hint.failed': 'Non sono riuscito a salvare. Tocca di nuovo Salva.',
+  // Il numero grande della Home non si muove, e questa riga lo dice **prima**
+  // che si tocchi Salva. Una correzione che non cambia il budget e' una buona
+  // notizia solo se si sa che era in dubbio (ADR 016 + CLAUDE.md, "l'esclusione
+  // taciuta e' un numero che mente per omissione").
+  'amount.fixed':
+    'Resta una spesa fissa: correggerla non tocca il budget del periodo.',
+  'amount.save': 'Salva {amount}',
+  'toast.amountFixed': 'Importo corretto: {amount}',
+  'toast.amountBack': 'Importo di nuovo {amount}',
 
   /* --- tastierino -------------------------------------------------------- */
   'keypad.erase': 'Cancella l’ultima cifra. Tieni premuto per azzerare',
@@ -334,7 +354,23 @@ export const it = {
   'cat.archive.note':
     'La toglie dalla griglia e basta: resta su ogni spesa che l’ha usata, e continui a vederla nello Storico.',
   'cat.delete': 'Elimina del tutto',
-  'cat.delete.note': 'Non la usa nessuna spesa e nessuna ricorrenza. Questa non si annulla.',
+  // La riga elencava due tipi di record su quattro, e taceva le lapidi. Non
+  // e' un dettaglio: e' la meta' che spiega il messaggio dell'esito accanto,
+  // dove a bloccare sono solo spese cancellate. Dirlo qui una volta rende
+  // leggibile li' un rifiuto che altrimenti sembra arbitrario.
+  'cat.delete.note':
+    'Non la usa niente: nessuna spesa, nemmeno una che hai cancellato. È l’unica cosa in Cent che non si annulla.',
+  // ADR 019 di nuovo, e la sua ragione non nominava le categorie: vale ovunque
+  // un foglio di modifica offra un insieme da cui il valore attuale puo' essere
+  // fuori. Qui succede a un dato arrivato da un backup scritto a mano — la
+  // tavolozza e l'elenco delle emoji non cambiano da soli — e senza l'unione il
+  // foglio mostrerebbe **niente di selezionato**, cioe' inviterebbe a toccare
+  // una pastiglia e a cambiare un colore che nessuno voleva cambiare.
+  'pick.current': 'Attuale',
+  'cat.emoji.current':
+    'L\u2019emoji marcata \u00e8 quella che questa categoria ha adesso: non \u00e8 fra quelle in elenco.',
+  'cat.color.current':
+    'Il colore marcato \u00e8 quello che questa categoria ha adesso: non \u00e8 in tavolozza.',
   'cat.inUse.expenses.one': '1 spesa',
   'cat.inUse.expenses.other': '{count} spese',
   'cat.inUse.rules.one': '1 spesa ricorrente',
@@ -349,6 +385,13 @@ export const it = {
   'cat.inUse.three': '{a}, {b} e {c}',
   'cat.inUse.text':
     'La usa {what}: cancellarla lascerebbe quelle righe senza nome, quindi non si può. Archiviarla fa quello che ti serve — sparisce dalla griglia e lo Storico resta intero.',
+  // **Nessun numero, e non per scelta: l'esito non ne porta nessuno.** Le
+  // lapidi non si vedono da nessuna parte, quindi contarle qui citerebbe una
+  // quantita' che l'utente non puo' riconciliare con niente. La frase apre
+  // dicendo perche' la schermata sembra dargli torto — non vede niente che la
+  // usi — e chiude con la sola cosa da fare adesso.
+  'cat.deletedOnly.text':
+    'Non la usa niente di quello che vedi, ma la usano ancora delle spese che hai cancellato — e una spesa cancellata può tornare. Archiviala: esce dalla griglia e non perdi niente.',
   'cat.preview': 'Come sarà la griglia',
   'cat.position': 'Posizione {index} di {total}',
   'cat.move.back': 'Sposta indietro',
@@ -529,16 +572,32 @@ export const it = {
    * rifiuto della cancellazione suggerisce, e mettere un ostacolo davanti
    * all'uscita di sicurezza la renderebbe scomoda proprio quando serve.
    */
+  // ADR 019: l'insieme offerto e' { validi } unito { attuale }, e l'attuale e'
+  // **marcato**. La categoria di una regola puo' uscire dalla griglia — basta
+  // archiviarla — e senza queste due stringhe il foglio direbbe "categoria non
+  // scelta" dove l'elenco dice "Casa".
+  //
+  // Il nome dentro la frase e' verificabile: una categoria che una regola usa
+  // non si puo' cancellare, quindi sta sempre in Impostazioni, sotto le
+  // archiviate. Nessun messaggio cita qualcosa che l'utente non puo' vedere.
+  'rule.cats.current':
+    '{name} \u00e8 in archivio, quindi non \u00e8 pi\u00f9 in griglia. Resta la categoria di questa spesa fissa finch\u00e9 non ne tocchi un\u2019altra.',
+
   'rule.deactivate': 'Disattiva',
   'rule.delete': 'Cancella la spesa fissa',
-  'rule.delete.note': 'Si può solo finché non ha creato nessuna spesa.',
+  'rule.delete.note': 'Si può solo finché non ha nessuna spesa nello Storico.',
   // Il rifiuto arriva **prima** del bottone, con il numero vero dentro, e dice
   // anche cosa fare invece: e' `planRecurringRuleDeletion` chiamato prima di
   // disegnare, come per le categorie.
+  // Il numero conta le spese **vive**: le lapidi no. E' la stessa regola del
+  // core (`planRecurringRuleDeletion`), e la ragione sta nella frase: "nello
+  // Storico" e' un posto dove si puo' andare a contarle. Con le cancellate
+  // dentro, una regola le cui uniche istanze sono state eliminate rifiutava per
+  // sempre citando spese che nello Storico non si vedono.
   'rule.inUse.one':
-    'Ha già creato 1 spesa, quindi non si cancella: quella spesa resta nello Storico. Disattivala e non ne creerà altre.',
+    'Nello Storico c’è 1 spesa creata da questa spesa fissa, quindi non si cancella: quella spesa resta. Disattivala e non ne creerà altre.',
   'rule.inUse.other':
-    'Ha già creato {count} spese, quindi non si cancella: restano nello Storico. Disattivala e non ne creerà altre.',
+    'Nello Storico ci sono {count} spese create da questa spesa fissa, quindi non si cancella: restano. Disattivala e non ne creerà altre.',
 
   'toast.ruleSaved': 'Spesa fissa creata: {name}',
   'toast.ruleSavedBack': '{name}: {count} spese create',

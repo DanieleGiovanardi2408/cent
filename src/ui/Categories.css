@@ -263,6 +263,29 @@
   visibility: visible;
 }
 
+/* --- cio' che la categoria ha adesso (ADR 019) --------------------------- */
+/*
+ * La pastiglia in piu': l'emoji o il colore che questa categoria ha **adesso**
+ * e che non e' fra quelli in elenco — un dato arrivato da un backup scritto a
+ * mano. Senza, il foglio mostrerebbe niente di selezionato e inviterebbe a
+ * toccare per sistemare, cioe' a cambiare in silenzio un campo che nessuno
+ * voleva cambiare.
+ *
+ * Tratteggiato, non pieno: dice "questa e' fuori dall'insieme", che e'
+ * un'informazione diversa da "questa e' scelta". Le due si sovrappongono
+ * all'apertura, quindi queste regole stanno **dopo** quelle del selezionato e
+ * vincono; la spunta del colore resta comunque visibile, perche' e' l'altro
+ * segnale e non dipende dal contorno.
+ */
+.picker__key[data-outside] {
+  outline: 2px dashed var(--line-strong);
+  outline-offset: -2px;
+}
+
+.picker__key[data-outside][aria-pressed="true"] {
+  outline-color: var(--text);
+}
+
 /* --- la posizione in griglia --------------------------------------------- */
 
 .move {

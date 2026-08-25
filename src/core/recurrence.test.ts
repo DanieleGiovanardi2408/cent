@@ -808,22 +808,24 @@ describe('materializzazione: regole ignorate', () => {
     expect(await h.run('2026-09-20')).toBe(0)
   })
 
-  it('la spesa generata porta importo, categoria e nota della regola', async () => {
+  it('la spesa generata porta importo e categoria della regola, e nessuna nota', () => {
+    // La nota **non** c e: una regola non ne ha piu una, perche non esisteva
+    // nessuna schermata capace di scriverla. Vedi la nota su `RecurringRule`.
     const h = harness([
       makeRule({
         startDate: '2026-08-01',
         cadence: 'daily',
         amountCents: 1234,
         categoryId: 'cat-affitto',
-        note: 'Abbonamento',
       }),
     ])
-    await h.run('2026-08-01')
-    const expense = h.disk.expenses[0]
-    expect(expense?.amountCents).toBe(1234)
-    expect(expense?.categoryId).toBe('cat-affitto')
-    expect(expense?.note).toBe('Abbonamento')
-    expect(expense?.source).toBe('recurring')
-    expect(expense?.recurringId).toBe(h.disk.recurringRules[0]?.id)
+    return h.run('2026-08-01').then(() => {
+      const expense = h.disk.expenses[0]
+      expect(expense?.amountCents).toBe(1234)
+      expect(expense?.categoryId).toBe('cat-affitto')
+      expect(expense?.note).toBeUndefined()
+      expect(expense?.source).toBe('recurring')
+      expect(expense?.recurringId).toBe(h.disk.recurringRules[0]?.id)
+    })
   })
 })

@@ -1,0 +1,106 @@
+/* Il foglio che corregge l'importo di una spesa gia' scritta.
+ *
+ * Il guscio, la riga di aiuto e l'importo arrivano da sheet.css; i tasti da
+ * Keypad.css; il bottone `.save` da BudgetSheet.css — che e' lo **stesso**
+ * bottone, per lo stesso ruolo (l'unico tap che scrive).
+ *
+ * Qui c'e' solo l'intestazione che dice quale spesa si sta correggendo e la
+ * riga che dichiara cosa **non** succede al budget.
+ */
+
+/* Piu' basso del budget (31rem): niente selettori, solo un'intestazione, il
+ * numero e i tasti. Sotto questo minimo i tasti si stringerebbero per niente. */
+.sheet--amount {
+  --sheet-min: 30rem;
+}
+
+/* Quale spesa. La stessa grammatica della riga in elenco — pastiglia colorata,
+ * nome, quando — perche' e' la stessa informazione e non deve chiedere di
+ * essere riletta con altri occhi. */
+.fix__head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  min-block-size: var(--tap-min);
+  padding-inline: var(--sp-1);
+}
+
+.fix__emoji {
+  flex: none;
+  display: grid;
+  place-items: center;
+  inline-size: 1.75rem;
+  block-size: 1.75rem;
+  border-radius: var(--radius-full);
+  /* Il colore resta superficie e non tinge mai il testo: nessun esadecimale
+   * puo' stare in AA sia sul chiaro sia sullo scuro. */
+  background-color: color-mix(in srgb, var(--cat) 40%, var(--surface));
+  font-size: 0.9375rem;
+  line-height: 1;
+}
+
+.fix__text {
+  flex: 1;
+  min-inline-size: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.fix__name {
+  font-size: var(--fs-300);
+  font-weight: var(--fw-semibold);
+  line-height: var(--lh-snug);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.fix__when {
+  font-size: var(--fs-100);
+  line-height: var(--lh-snug);
+  color: var(--text-muted);
+}
+
+/* "Resta una spesa fissa: correggerla non tocca il budget del periodo."
+ * Smorzata, non urlata: e' una rassicurazione, non un avviso. */
+.fix__note {
+  font-size: var(--fs-100);
+  line-height: var(--lh-snug);
+  color: var(--text-muted);
+  padding-inline: var(--sp-1);
+}
+
+/* --- il telefono girato --------------------------------------------------- */
+/* Stessa risposta degli altri fogli col tastierino: due colonne invece di una
+ * colonna che non ci sta. A sinistra il numero e i tasti, a destra chi si sta
+ * correggendo e — in fondo — l'unico tap che scrive. */
+@media (max-height: 480px) and (orientation: landscape) {
+  .sheet--amount {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto auto 1fr;
+    grid-template-areas:
+      "hint   head"
+      "amount note"
+      "pad    save";
+    column-gap: var(--sp-3);
+    row-gap: var(--sp-1);
+    max-inline-size: min(48rem, calc(100dvw - 6rem));
+    min-block-size: 100dvh;
+    padding-block: var(--sp-1) max(var(--sp-1), var(--safe-bottom));
+  }
+
+  .fix__head {
+    grid-area: head;
+  }
+
+  .fix__note {
+    grid-area: note;
+    align-self: start;
+  }
+
+  .sheet--amount .save {
+    grid-area: save;
+    align-self: end;
+  }
+}

@@ -20,7 +20,12 @@ import type {
   CategoryPlacementRequest,
 } from './categories'
 import type { IsoDate } from './date'
-import type { RecurringRuleDeletion, RecurringRuleDeletionRequest } from './recurring-plan'
+import type {
+  RecurringRuleDeletion,
+  RecurringRuleDeletionRequest,
+  RecurringRuleRewind,
+  RecurringRuleRewindRequest,
+} from './recurring-plan'
 import type { Budget, Category, DataSet, Expense, RecurringRule, Settings, Timestamp } from './types'
 
 /** Quello che c'e' su disco all'avvio. `settings: null` = database mai inizializzato. */
@@ -137,8 +142,9 @@ export interface WriteBatch {
    * Cancella **davvero** una categoria, se nessun record la nomina.
    *
    * Stessa dottrina: chi chiama porta l'intenzione ("cancella questa"), non il
-   * permesso gia' calcolato. Il conteggio di chi la usa — spese cancellate,
-   * regole ricorrenti e budget di categoria compresi — va fatto sui dati del
+   * permesso gia' calcolato. Il conteggio di chi la usa — spese **vive**, regole
+   * ricorrenti e budget di categoria, storici compresi; le lapidi bloccano ma
+   * non si contano, vedi `planCategoryDeletion` — va fatto sui dati del
    * disco dentro la stessa transazione: deciderlo sul mirror significa poter
    * cancellare una categoria che una spesa scritta da un altro contesto sta
    * gia' usando, e l'orfano che resta non e' correggibile da nessuna schermata.
@@ -148,12 +154,12 @@ export interface WriteBatch {
   readonly categoryDeletion?: CategoryDeletionRequest
   readonly recurringRules?: readonly RecurringRule[]
   /**
-   * Cancella **davvero** una regola ricorrente, se non ha mai generato niente.
+   * Cancella **davvero** una regola ricorrente, se nessuna spesa viva la nomina.
    *
    * Stessa dottrina di `categoryDeletion`, ed e' la stessa domanda: chi chiama
    * porta l'intenzione ("cancella questa"), non il permesso gia' calcolato. Il
-   * conteggio delle spese che la nominano — cancellate comprese — va fatto sui
-   * dati del disco dentro la stessa transazione. Deciderlo sul mirror significa
+   * conteggio delle spese che la nominano va fatto sui dati del disco dentro la
+   * stessa transazione. Deciderlo sul mirror significa
    * poter cancellare una regola le cui occorrenze un altro contesto ha
    * materializzato trenta secondi fa, e le spese che restano puntano a un
    * `recurringId` che non esiste piu': nessuna schermata sa ripararle.
@@ -165,6 +171,30 @@ export interface WriteBatch {
    * L'esito torna in `WriteResult.recurringRuleDeletion`.
    */
   readonly recurringRuleDeletion?: RecurringRuleDeletionRequest
+  /**
+   * Fa **arretrare** `startDate` di una regola e **toglie** il segnaposto, e
+   * nient'altro: la regola torna nello stato di una appena creata con quella
+   * data d'inizio. Vedi ADR 018 e `planRecurringRuleRewind`.
+   *
+   * Stessa dottrina delle altre tre porte strette: viaggia l'**intenzione**
+   * ("la data d'inizio in realta' era questa") piu' l'impronta di cio' che
+   * l'utente ha visto, non le date gia' calcolate. L'implementazione deve,
+   * **nella stessa transazione**: rileggere il record dal disco, chiamare
+   * `planRecurringRuleRewind`, e scrivere solo se l'esito e' positivo.
+   *
+   * E' l'unica operazione che porta indietro il segnaposto, e il nome lo dice.
+   * Un nome piu' generico — `setRecurringStartDate` — inviterebbe a farci
+   * passare una data **in avanti**, che orfanerebbe le occorrenze gia' generate
+   * prima di quella data: la stessa malattia di `patchRecurringRules`.
+   *
+   * Le occorrenze **non** si generano qui. La materializzazione resta fuori
+   * dalla transazione: un'interruzione fra le due lascia una regola col
+   * segnaposto indietro e delle occorrenze da generare, che e' lo **stato
+   * ordinario di ogni regola a ogni avvio**. Vedi ADR 018.
+   *
+   * L'esito torna in `WriteResult.recurringRuleRewind`.
+   */
+  readonly recurringRuleRewind?: RecurringRuleRewindRequest
   /**
    * Fa avanzare il segnaposto di una regola **senza portarsi dietro nient'altro
    * di quella regola**.
@@ -235,6 +265,8 @@ export interface WriteResult {
   readonly categoryDeletion?: CategoryDeletion
   /** Esito di `recurringRuleDeletion`. Assente quando il batch non ne conteneva una. */
   readonly recurringRuleDeletion?: RecurringRuleDeletion
+  /** Esito di `recurringRuleRewind`. Assente quando il batch non ne conteneva uno. */
+  readonly recurringRuleRewind?: RecurringRuleRewind
 }
 
 export interface Persistence {

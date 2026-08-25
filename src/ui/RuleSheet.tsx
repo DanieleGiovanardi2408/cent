@@ -116,7 +116,16 @@ import './RuleSheet.css'
  */
 
 interface Props {
+  /** Le otto in griglia. Vedi `grid`: cio' che si offre e' l'unione con l'attuale. */
   readonly categories: readonly Category[]
+  /**
+   * La categoria che la regola ha **adesso**, anche se e' in archivio.
+   *
+   * Arriva da `App` insieme al bersaglio e non si ricava da `categories`: e'
+   * proprio il caso in cui li' dentro non c'e'. `null` quando si crea una
+   * regola nuova, che non ha ancora un valore attuale da conservare.
+   */
+  readonly current: Category | null
   /**
    * La regola che si sta modificando, **riletta dal mirror a ogni render**.
    * `null` = se ne sta creando una nuova.
@@ -206,6 +215,7 @@ const CADENCES: readonly { readonly value: Cadence; readonly key: 'rule.cadence.
 
 export function RuleSheet({
   categories,
+  current,
   target,
   deletion,
   day,
@@ -326,8 +336,6 @@ export function RuleSheet({
         lastDate: schedule.lastDate,
         totalCents: cents * schedule.count,
         backdated: schedule.backdated,
-        dates: schedule.dates,
-        truncated: schedule.truncated,
       }
     : null
 
@@ -411,6 +419,38 @@ export function RuleSheet({
   }
 
   const inUse = deletion === null ? null : deletionRefusalText(deletion)
+
+  /**
+   * I chip che si offrono: **{ le attive } unito { quella che la regola ha
+   * adesso }** — ADR 019.
+   *
+   * ## Il difetto che chiude
+   *
+   * Archiviare una categoria non ha vincoli e non avvisa nessuno che una regola
+   * la usa. Senza l'unione, la regola dell'affitto su "Casa" archiviata apriva
+   * un foglio con **nessun chip premuto**, mentre l'elenco dietro continuava —
+   * giustamente — a chiamarla "Casa": due risposte diverse alla stessa domanda,
+   * in due schermate adiacenti. Il gesto naturale — toccare un chip per
+   * sistemare — spostava l'affitto su un'altra categoria in silenzio, e da li'
+   * in poi ci finivano tutte le spese generate.
+   *
+   * ## Perche' e' in fondo e marcata
+   *
+   * In fondo perche' le prime otto devono restare **nelle stesse posizioni**
+   * della griglia d'inserimento: si tocca per posizione, non leggendo
+   * l'etichetta. Marcata perche' un chip che compare senza distinzione fra gli
+   * altri direbbe che quella categoria e' ancora scegliibile, il che sarebbe
+   * falso nell'altro verso.
+   *
+   * Il nono chip fa crescere la griglia di una riga, e il corpo di questo
+   * foglio scorre gia' in modifica: e' il prezzo dichiarato, e si paga solo nel
+   * caso che lo richiede.
+   */
+  const orphan =
+    current !== null && !categories.some((category) => category.id === current.id)
+      ? current
+      : null
+  const grid = orphan === null ? categories : [...categories, orphan]
 
   const hint =
     atMax
@@ -516,22 +556,40 @@ export function RuleSheet({
               salvano niente. Il selezionato ha contorno e superficie, non il
               solo colore. */}
           <div class="cats cats--pick" role="group" aria-label={t('rule.cats')}>
-            {categories.map((category) => (
-              <button
-                key={category.id}
-                type="button"
-                class="cat"
-                style={`--cat:${category.color}`}
-                aria-pressed={categoryId === category.id}
-                onClick={() => change(setCategoryId)(category.id)}
-              >
-                <span class="cat__emoji" aria-hidden="true">
-                  {category.emoji}
-                </span>
-                <span class="cat__name">{category.name}</span>
-              </button>
-            ))}
+            {grid.map((category) => {
+              const outside = category.id === orphan?.id
+              return (
+                <button
+                  key={category.id}
+                  type="button"
+                  class="cat"
+                  style={`--cat:${category.color}`}
+                  data-current={outside || undefined}
+                  aria-pressed={categoryId === category.id}
+                  onClick={() => change(setCategoryId)(category.id)}
+                >
+                  <span class="cat__emoji" aria-hidden="true">
+                    {category.emoji}
+                  </span>
+                  <span class="cat__name">{category.name}</span>
+                  {/* Testo vero dentro il bersaglio, non un `title` e non un
+                      solo contorno: entra nel nome accessibile del chip senza
+                      un `aria-label` che dovrebbe poi ripetere anche il nome
+                      della categoria. */}
+                  {outside ? <span class="cat__tag">{t('pick.current')}</span> : null}
+                </button>
+              )
+            })}
           </div>
+
+          {/* Perche' c'e' un nono chip, con dentro il nome vero. Il fatto e'
+              verificabile: una categoria che una regola usa non si puo'
+              cancellare, quindi sta sempre in Impostazioni fra le archiviate. */}
+          {orphan === null ? null : (
+            <p class="editor__note rule__current">
+              {t('rule.cats.current', { name: orphan.name })}
+            </p>
+          )}
 
           {/* Le parti, non la stringa: i centesimi al 55% del corpo. Stesso
               cents-first, stessa virgola da 3 px, stesso rimedio. */}

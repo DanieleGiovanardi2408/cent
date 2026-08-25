@@ -134,8 +134,19 @@ export const en: Record<keyof typeof it, string> = {
   /* --- riga di spesa e azioni -------------------------------------------- */
   'row.categoryRemoved': 'Category removed',
   'acts.label': 'Expense actions',
+  'acts.amount': 'Fix the amount',
   'acts.delete': 'Delete',
   'acts.close': 'Close',
+
+  /* --- foglio "correggi l'importo" --------------------------------------- */
+  'amount.label': 'Fix the amount',
+  'amount.hint.now': 'Right now it is {amount}. Type the right one.',
+  'amount.hint.check': 'Check it and save.',
+  'amount.hint.failed': 'I could not save it. Tap Save again.',
+  'amount.fixed': 'It stays a fixed cost: fixing it does not touch this period\u2019s budget.',
+  'amount.save': 'Save {amount}',
+  'toast.amountFixed': 'Amount fixed: {amount}',
+  'toast.amountBack': 'Amount back to {amount}',
 
   /* --- tastierino -------------------------------------------------------- */
   'keypad.erase': 'Delete the last digit. Press and hold to clear',
@@ -285,7 +296,11 @@ export const en: Record<keyof typeof it, string> = {
   'cat.archive.note':
     'This only takes it off the grid: it stays on every expense that used it, and you keep seeing it in History.',
   'cat.delete': 'Delete for good',
-  'cat.delete.note': 'No expense and no recurring rule uses it. This one cannot be undone.',
+  'cat.delete.note':
+    'Nothing uses it — not one expense, not even a deleted one. This is the only thing in Cent you cannot undo.',
+  'pick.current': 'Current',
+  'cat.emoji.current': 'The marked emoji is the one this category has now: it is not in the list.',
+  'cat.color.current': 'The marked colour is the one this category has now: it is not in the palette.',
   'cat.inUse.expenses.one': '1 expense',
   'cat.inUse.expenses.other': '{count} expenses',
   'cat.inUse.rules.one': '1 recurring expense',
@@ -296,6 +311,8 @@ export const en: Record<keyof typeof it, string> = {
   'cat.inUse.three': '{a}, {b} and {c}',
   'cat.inUse.text':
     'Used by {what}: deleting it would leave those rows with no name, so it cannot go. Archiving does what you need — off the grid, History untouched.',
+  'cat.deletedOnly.text':
+    'Nothing you can see uses it, but expenses you deleted still do — and a deleted expense can come back. Archive it instead: off the grid, and nothing is lost.',
   'cat.preview': 'How the grid will look',
   'cat.position': 'Position {index} of {total}',
   'cat.move.back': 'Move back',
@@ -401,13 +418,16 @@ export const en: Record<keyof typeof it, string> = {
     'This fixed cost has created some expenses in the meantime. The numbers below are redone: check and confirm.',
   'rule.refused.gone': 'This fixed cost is gone. Close this, and look at the list.',
 
+  'rule.cats.current':
+    '{name} is archived, so it is no longer on the grid. It stays the category of this fixed cost until you tap another one.',
+
   'rule.deactivate': 'Switch off',
   'rule.delete': 'Delete the fixed cost',
-  'rule.delete.note': 'Only while it has not created any expense.',
+  'rule.delete.note': 'Only while it has no expense in your history.',
   'rule.inUse.one':
-    'It has already created 1 expense, so it cannot be deleted: that expense stays in your history. Switch it off and it will create no more.',
+    'Your history has 1 expense from this fixed cost, so it cannot be deleted: that expense stays. Switch it off and it will create no more.',
   'rule.inUse.other':
-    'It has already created {count} expenses, so it cannot be deleted: they stay in your history. Switch it off and it will create no more.',
+    'Your history has {count} expenses from this fixed cost, so it cannot be deleted: they stay. Switch it off and it will create no more.',
 
   'toast.ruleSaved': 'Fixed cost added: {name}',
   'toast.ruleSavedBack': '{name}: {count} expenses created',

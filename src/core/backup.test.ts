@@ -36,7 +36,6 @@ function dataset(): DataSet {
         anchorDay: 31,
         endDate: '2027-01-01',
         lastMaterializedDate: '2026-08-02',
-        note: 'Affitto',
       }),
     ],
     budgets: [
@@ -83,6 +82,25 @@ describe('round-trip export -> import', () => {
     // La spesa senza orario resta senza: nessun `undefined` esplicito, nessuno zero.
     expect('timeMinutes' in (preview.data?.expenses[1] ?? {})).toBe(false)
     expect('effectiveTo' in (preview.data?.budgets[1] ?? {})).toBe(false)
+  })
+
+  it('una regola senza segnaposto rientra senza segnaposto: e la forma che scrive il rewind', () => {
+    // `rewindRecurringRule` **toglie** `lastMaterializedDate` invece di
+    // portarlo alla data nuova, quindi la regola appena retrodatata ha
+    // esattamente questa forma. Se il round-trip la riportasse dentro come
+    // `undefined` esplicito, un backup fatto fra il rewind e la
+    // materializzazione rientrerebbe con un record diverso da quello uscito.
+    const base = dataset()
+    const { lastMaterializedDate: _tolto, ...senzaSegnaposto } = base.recurringRules[0] ?? {
+      lastMaterializedDate: undefined,
+    }
+    const data: DataSet = {
+      ...base,
+      recurringRules: [senzaSegnaposto as (typeof base.recurringRules)[number]],
+    }
+    const preview = roundTrip(data)
+    expect(preview.data).toEqual(data)
+    expect('lastMaterializedDate' in (preview.data?.recurringRules[0] ?? {})).toBe(false)
   })
 
   it('un archivio vuoto e un round-trip valido', () => {
