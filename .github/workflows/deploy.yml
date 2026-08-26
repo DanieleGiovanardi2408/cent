@@ -22,7 +22,14 @@ jobs:
     name: Build e test unitari
     runs-on: ubuntu-latest
     steps:
+      # `fetch-depth: 0` e non il default 1: `state --check` conta l'eta' dei
+      # giudizi con `git rev-list <sha>..HEAD`, e in un clone superficiale quei
+      # commit non ci sono. Col default lo script stampava quattro `fatal:` e
+      # diceva "da rigenerare" a ogni push, per la ragione sbagliata — e l'unico
+      # modo di scoprirlo era spingere. `.git` di questo repo pesa 6 MB.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
@@ -47,15 +54,40 @@ jobs:
       - name: Campi e chiavi senza controparte
         run: npm run audit:source
 
-      # ## Perche' questo avvisa e gli altri fermano
+
+      - name: Test
+        run: npm test
+
+      # Se typecheck o test falliscono il job si ferma qui e il job di deploy,
+      # che dipende da questo, non parte: nessun artefatto, nessuna pubblicazione.
+      - name: Build
+        run: npm run build
+
+      # ## I fatti fermano, i giudizi avvisano
       #
       # `npm run state` rigenera i fatti in cima a ROADMAP e timbra i giudizi con
-      # la loro eta' in commit. Qui gira in sola lettura e **non fallisce mai**,
-      # di proposito e per due ragioni distinte.
+      # la loro eta' in commit. Qui gira in sola lettura, e ha **due esiti**:
       #
-      # La prima e' quella dell'hook pre-commit, gia' scritta in CLAUDE.md: una
-      # guardia che blocca per una riga di prosa vecchia viene aggirata il terzo
-      # giorno, e una guardia aggirata e' peggio di nessuna guardia.
+      # - **fatti stantii -> fallisce.** La riparazione e' un comando solo, quindi
+      #   bloccare non costa niente. Un avviso su una cosa che si ripara con un
+      #   comando diventa carta da parati in due settimane, e allora si ha un
+      #   numero falso in cima alla ROADMAP con accanto un avviso che nessuno
+      #   legge: lo stato di partenza, piu' il rumore.
+      # - **giudizio vecchio -> avvisa.** Ripararlo vuol dire che una persona
+      #   rilegge della prosa e decide se e' ancora vera. Bloccare su quello si
+      #   aggira con --no-verify il terzo giorno, ed e' la calibrazione dell'hook.
+      #
+      # La riga: un controllo fallisce quando la riparazione e' meccanica, avvisa
+      # quando richiede un giudizio.
+      #
+      # ## Perche' DOPO il build e non prima
+      #
+      # Il peso del bundle si legge da `dist/`. Prima del build `dist/` non
+      # esiste, quindi il passo non poteva ne' verificarlo ne' fallirci sopra:
+      # lo avrebbe saltato dichiarandolo non misurabile, cioe' l'unico dei tre
+      # numeri che nessun'altra macchina controlla sarebbe rimasto senza
+      # controllo proprio dove c'era la macchina per farlo. Qui invece `dist/`
+      # e' appena stato costruito da questo commit, e il confronto e' vero.
       #
       # Il confronto **salta le righe di identita' del commit** (SHA, data, stato
       # dell'albero): cambiano a ogni push per costruzione, e includerle avrebbe
@@ -73,14 +105,6 @@ jobs:
       # rigenerarli, e da quanti commit un giudizio non viene riletto.
       - name: Stato corrente allineato
         run: npm run state -- --check
-
-      - name: Test
-        run: npm test
-
-      # Se typecheck o test falliscono il job si ferma qui e il job di deploy,
-      # che dipende da questo, non parte: nessun artefatto, nessuna pubblicazione.
-      - name: Build
-        run: npm run build
 
       - uses: actions/configure-pages@v5
 

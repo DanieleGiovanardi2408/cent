@@ -25,12 +25,21 @@
  * cui e' stato rivisto e **quanti commit fa**, cosi' chi legge sa da solo quanta
  * fiducia dargli invece di scoprirlo come l'abbiamo scoperto noi.
  *
- * ## Perche' avvisa e non fallisce
+ * ## Un controllo fallisce quando la riparazione e' meccanica, avvisa quando
+ * ## richiede un giudizio
  *
- * `--check` non esce mai con errore. Una guardia che blocca il commit per una
- * riga di prosa vecchia viene aggirata con `--no-verify` il terzo giorno, e una
- * guardia aggirata e' peggio di nessuna guardia — e' gia' scritto in CLAUDE.md
- * per l'hook pre-commit, e vale identico qui.
+ * `--check` ha **due esiti diversi**, e la riga sopra e' il criterio che li separa.
+ *
+ * **I fatti derivati fanno fallire** (uscita 1). La riparazione e' un comando solo,
+ * `npm run state`, quindi bloccare non costa niente a nessuno. Un avviso su una
+ * cosa che si ripara con un comando diventa carta da parati in due settimane, e
+ * allora si ha un numero falso in cima alla ROADMAP **con accanto un avviso che
+ * nessuno legge** — cioe' lo stato di partenza, piu' il rumore.
+ *
+ * **L'eta' dei giudizi avvisa** (uscita 0). Ripararla richiede che una persona
+ * rilegga della prosa e decida se e' ancora vera: non e' meccanica, e bloccare la
+ * pipeline su quello si aggira con `--no-verify` il terzo giorno. E' la
+ * calibrazione dell'hook pre-commit, applicata due volte nello stesso script.
  *
  * ## E perche' `--check` non guarda l'identita' del commit
  *
@@ -87,6 +96,7 @@ const BUDGET_BYTES = 60 * 1024
  * che si cerca — prima di scriverla bisogna sapere quanto vale l'effetto piu'
  * piccolo che deve fallire. Qui vale nove.
  */
+/** 5, perche' il caso reale valeva 9. */
 const JUDGMENT_MAX_AGE = 5
 
 const BEGIN = '<!-- STATE:BEGIN'
@@ -136,6 +146,59 @@ function unitFacts() {
   } catch {
     return null
   }
+}
+
+/**
+ * L'esito dell'**ultima esecuzione vera** della suite e2e, letto da
+ * `test-results/last.json` (il reporter json, vedi `playwright.config.ts`).
+ *
+ * Non si esegue la suite da qui: costa due minuti, e uno script che si lancia a
+ * ogni commit non puo' costare due minuti — diventerebbe lo script che nessuno
+ * lancia, cioe' lo stesso difetto che ADR 021 ha rifiutato per i due comandi.
+ *
+ * **Si legge l'artefatto, e si controlla la sua data** contro `src/` e `tests/`,
+ * esattamente come per `dist/`. Un verde di due commit fa non dice niente sul
+ * codice di adesso: se il file e' piu' vecchio dei sorgenti, il fatto e' **non
+ * misurato** e si scrive cosi'.
+ *
+ * I saltati arrivano da qui e non da `--list`, perche' i salti di questa suite
+ * sono **condizionali** (ADR 013): nessuna lettura statica puo' vederli, solo
+ * un'esecuzione.
+ */
+function e2eRunFacts() {
+  const REPORT = 'test-results/last.json'
+  let raw
+  try {
+    raw = readFileSync(REPORT, 'utf8')
+  } catch {
+    return { ok: false, why: "la suite e2e non e' mai stata eseguita qui (`npm run test:e2e`)" }
+  }
+  const reportAt = statSync(REPORT).mtimeMs
+  const sourcesAt = Math.max(newestMtime('src'), newestMtime('tests'))
+  if (reportAt < sourcesAt) {
+    return { ok: false, why: "l'ultima esecuzione e' piu' vecchia dei sorgenti — va rilanciata" }
+  }
+  let json
+  try {
+    json = JSON.parse(raw)
+  } catch {
+    return { ok: false, why: `${REPORT} non e' leggibile` }
+  }
+  const counts = { expected: 0, skipped: 0, unexpected: 0, flaky: 0 }
+  let durationMs = 0
+  const walk = (suite) => {
+    for (const spec of suite.specs ?? []) {
+      for (const test of spec.tests ?? []) {
+        const status = test.status ?? 'expected'
+        if (status in counts) counts[status]++
+        for (const r of test.results ?? []) durationMs = Math.max(durationMs, r.duration ?? 0)
+      }
+    }
+    for (const child of suite.suites ?? []) walk(child)
+  }
+  for (const suite of json.suites ?? []) walk(suite)
+  const wall = json.stats?.duration ?? 0
+  return { ok: true, ...counts, wallMs: wall }
 }
 
 /**
@@ -245,8 +308,11 @@ function judgmentFacts(text) {
     const sha = m[1]
     let distance = null
     try {
-      distance = Number(git('rev-list', '--count', `${sha}..HEAD`))
+      distance = Number(git('rev-list', '--count', `${sha}..HEAD`, '--'))
     } catch {
+      // La storia non c'e'. Non e' un errore del documento: e' un clone senza
+      // profondita' — `actions/checkout` ne fa uno cosi' per default. Vedi
+      // `stampLine` per cosa NON si fa in questo caso.
       distance = null
     }
     found.push({ sha, distance, index: m.index })
@@ -254,8 +320,23 @@ function judgmentFacts(text) {
   return found
 }
 
+/**
+ * Il timbro di un giudizio. `null` significa **"non ho potuto contare"**, non
+ * "il commit non esiste": chiama `stampLine` solo chi ha una distanza vera, e chi
+ * non ce l'ha **lascia il timbro com'e'** (vedi `restampJudgments`).
+ *
+ * La differenza e' costata un push per essere vista. In CI `actions/checkout` fa
+ * un clone a profondita' 1, quindi `rev-list <sha>..HEAD` fallisce per ogni
+ * giudizio; la prima versione ne concludeva "che in questo albero non esiste
+ * piu'" e **riscriveva quattro timbri buoni con una frase falsa**. Il ramo di
+ * lettura stampava quattro `fatal:` e diceva "da rigenerare" sempre; il ramo di
+ * scrittura avrebbe **danneggiato il documento**.
+ *
+ * Il workflow adesso chiede la storia intera (`fetch-depth: 0`, `.git` pesa 6 MB),
+ * cosi' il conteggio si fa davvero. Questo ramo resta per chiunque altro lanci lo
+ * script in un clone superficiale: **non sapere non e' un dato da scrivere.**
+ */
 function stampLine(j) {
-  if (j.distance === null) return `> Rivisto a \`${j.sha}\`, che in questo albero non esiste piu'.`
   const how =
     j.distance === 0
       ? "cioe' a questo commit"
@@ -270,6 +351,9 @@ function stampLine(j) {
 function restampJudgments(text, judgments) {
   let out = text
   for (const j of judgments) {
+    // Distanza sconosciuta: si lascia il timbro esistente intatto. Sovrascriverlo
+    // significherebbe sostituire un fatto vero con la propria ignoranza.
+    if (j.distance === null) continue
     const marker = `<!-- JUDGMENT rivisto=${j.sha} -->`
     const at = out.indexOf(marker)
     if (at === -1) continue
@@ -319,12 +403,24 @@ function renderBlock(f) {
 
   if (f.e2e) {
     L.push(
-      `- **Test e2e**: ${f.e2e.total} dichiarati in ${f.e2e.files} file, su ${f.e2e.projects.length} progetti ` +
-        `(${f.e2e.projects.join(', ')}). Quanti ne girano davvero dipende dall'ambiente: i salti di questa ` +
-        'suite sono condizionali (ADR 013) e nessuna lettura statica li vede.',
+      `- **Test e2e dichiarati**: ${f.e2e.total} in ${f.e2e.files} file, su ${f.e2e.projects.length} progetti ` +
+        `(${f.e2e.projects.join(', ')})`,
     )
   } else {
-    L.push('- **Test e2e**: non contati (`playwright --list` non ha risposto)')
+    L.push('- **Test e2e dichiarati**: non contati (`playwright --list` non ha risposto)')
+  }
+
+  if (f.e2eRun.ok) {
+    const min = (f.e2eRun.wallMs / 60000).toFixed(1)
+    const bad = f.e2eRun.unexpected
+    L.push(
+      `- **Test e2e eseguiti**: ${f.e2eRun.expected} passati, ${f.e2eRun.skipped} saltati` +
+        (f.e2eRun.flaky ? `, ${f.e2eRun.flaky} instabili` : '') +
+        (bad ? `, **${bad} falliti**` : '') +
+        `, in ${min} minuti. I saltati sono condizionali (ADR 013): solo un'esecuzione li vede.`,
+    )
+  } else {
+    L.push(`- **Test e2e eseguiti**: non misurato — ${f.e2eRun.why}`)
   }
 
   L.push(
@@ -356,6 +452,7 @@ const facts = {
   commit: commitFacts(),
   unit: unitFacts(),
   e2e: e2eFacts(),
+  e2eRun: e2eRunFacts(),
   bundle: bundleFacts(),
   schema: schemaFacts(),
 }
@@ -376,7 +473,24 @@ next = restampJudgments(next, judgments)
 const stale = judgments.filter((j) => j.distance !== null && j.distance > JUDGMENT_MAX_AGE)
 
 /**
- * Toglie le righe che cambiano a ogni commit **per costruzione**. Senza questo il
+ * I bollini dei fatti che **questo albero non puo' misurare adesso**. Le loro righe
+ * escono dal confronto: "non so misurare" non e' "il documento e' sbagliato".
+ *
+ * E' la stessa distinzione fatta per i giudizi non databili, e si e' vista per la
+ * stessa ragione — provandolo in un clone superficiale, dove manca `dist/`. Senza
+ * questo, in CI il check sarebbe fallito **a ogni run**: il passo gira prima di
+ * `npm run build`, quindi il bundle risultava "non misurato", quindi deriva,
+ * quindi uscita 1. Avremmo avuto un gate rosso permanente per un fatto che il
+ * documento riportava correttamente.
+ */
+const unmeasurable = []
+if (!facts.unit) unmeasurable.push({ label: 'Test unitari', why: 'vitest non ha risposto' })
+if (!facts.e2e) unmeasurable.push({ label: 'Test e2e dichiarati', why: 'playwright --list non ha risposto' })
+if (!facts.e2eRun.ok) unmeasurable.push({ label: 'Test e2e eseguiti', why: facts.e2eRun.why })
+if (!facts.bundle.ok) unmeasurable.push({ label: 'Bundle iniziale', why: facts.bundle.why })
+
+/**
+ * Toglie le righe che non possono essere confrontate onestamente. Senza questo il
  * check segnalerebbe sempre, cioe' mai. Vedi la testata.
  *
  * Sono due gruppi, e il secondo si e' visto solo provando il check **dopo** un
@@ -400,23 +514,52 @@ const withoutIdentity = (s) =>
     .filter(
       (line) =>
         !/^- \*\*(Ultimo commit|Data|Pushato|Albero di lavoro)\*\*/.test(line) &&
-        !/^> Rivisto a /.test(line),
+        !/^> Rivisto a /.test(line) &&
+        !unmeasurable.some((u) => line.startsWith(`- **${u.label}**`)),
     )
     .join('\n')
 
+const unknown = judgments.filter((j) => j.distance === null)
+
 if (check) {
   const drifted = withoutIdentity(next) !== withoutIdentity(text)
-  if (!drifted) console.log('\n  Stato corrente: allineato.')
-  else console.log(`\n  Stato corrente: **da rigenerare**. Lancia \`npm run state\`.`)
+
+  console.log(
+    drifted
+      ? '\n  Fatti: **stantii**. Lancia `npm run state` e ricommetti.'
+      : '\n  Fatti: allineati.',
+  )
   for (const j of stale) {
     console.log(
       `  Giudizio rivisto a ${j.sha}, ${j.distance} commit fa (soglia ${JUDGMENT_MAX_AGE}): da riguardare.`,
     )
   }
-  if (!stale.length && !drifted) console.log('  Nessun giudizio oltre la soglia.')
+  for (const u of unmeasurable) console.log(`  ${u.label}: non misurabile qui — ${u.why}`)
+  if (unknown.length) {
+    console.log(
+      `  ${unknown.length} giudizi non databili: la storia non c'e'. Clone superficiale?` +
+        ' Serve `fetch-depth: 0`.',
+    )
+  }
+  if (!stale.length && !unknown.length) console.log('  Giudizi: nessuno oltre la soglia.')
   console.log('')
-  // Non fallisce mai, di proposito: vedi la testata.
-  process.exit(0)
+
+  /*
+   * **I fatti fanno fallire, i giudizi no.** Vedi la testata: la riparazione di un
+   * fatto e' `npm run state`, cioe' meccanica, e bloccare non costa niente;
+   * la riparazione di un giudizio e' una persona che rilegge, e bloccare su quello
+   * si aggira.
+   *
+   * Ne' `unknown` ne' `unmeasurable` fanno fallire: non e' il documento a essere
+   * sbagliato, e' **questo albero** a non poter rispondere — un clone senza storia,
+   * un `dist/` non ancora costruito. Far fallire la pipeline per come e' stato
+   * fatto il clone sarebbe far pagare al documento un difetto della sua lettura.
+   *
+   * Il che significa che **un fatto non misurabile qui non viene verificato da
+   * nessuno qui**. Perche' in CI il bundle venga verificato davvero, il passo va
+   * messo **dopo** `npm run build`: e' quello che fa il workflow.
+   */
+  process.exit(drifted ? 1 : 0)
 }
 
 writeFileSync(ROADMAP, next)

@@ -284,7 +284,7 @@ export const en: Record<keyof typeof it, string> = {
   'cat.emoji': 'Emoji',
   'cat.color': 'Colour',
   'cat.color.note':
-    'Eight colours, not any colour: it is the same scale the charts use, picked so they stay apart even if you mix up red and green.',
+    'Eight colours, not eight at random: picked so they stay apart from each other even if you mix up red and green.',
   'cat.swap.title': 'Which one does it replace?',
   'cat.swap.text':
     'The tap saves. The one you tap goes to the archive: it stays on every expense that used it, and you can bring it back whenever you want.',

@@ -690,8 +690,20 @@ stantio.** I giudizi — cosa e' in volo, cosa aspetta una persona — non si de
 e restano scritti a mano, ma portano un **timbro**: lo SHA a cui sono stati rivisti
 e quanti commit fa. Oltre cinque commit, `npm run state -- --check` avvisa in CI.
 
-**Avvisa e non fallisce**, per la ragione dell'hook pre-commit: una guardia che
-blocca per una riga di prosa viene aggirata il terzo giorno.
+### Un controllo fallisce quando la riparazione e' meccanica, avvisa quando richiede un giudizio
+
+E' la riga che decide i due esiti di `state --check`, e vale per il prossimo
+controllo che si aggiunge.
+
+- **Fatti stantii -> fallisce.** La riparazione e' un comando solo, `npm run state`,
+  quindi bloccare non costa niente a nessuno. Un avviso su una cosa che si ripara
+  con un comando **diventa carta da parati in due settimane**, e allora si ha un
+  numero falso in cima alla ROADMAP con accanto un avviso che nessuno legge: lo
+  stato di partenza, piu' il rumore.
+- **Giudizio oltre la soglia -> avvisa.** Ripararlo vuol dire che una persona
+  rilegge della prosa e decide se e' ancora vera. Bloccare su quello si aggira con
+  `--no-verify` il terzo giorno — e' la calibrazione dell'hook pre-commit, applicata
+  una seconda volta.
 
 E **il confronto salta le righe di identita' del commit** — SHA, data, stato
 dell'albero — perche' cambiano a ogni push per costruzione: includerle avrebbe

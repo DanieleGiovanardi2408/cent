@@ -345,8 +345,23 @@ export const it = {
   'cat.hint.failed': 'Non sono riuscito a salvare. Riprova.',
   'cat.emoji': 'Emoji',
   'cat.color': 'Colore',
+  // Diceva **"e' la stessa scala dei grafici"**, e i grafici non esistono: le
+  // statistiche sono la fase 6. Era una **copia scritta prima della sua
+  // funzione** — la stessa famiglia dei campi senza produttore, vista dal lato
+  // del testo — e prometteva all'utente un fatto che nessuna schermata puo'
+  // confermare.
+  //
+  // Identica al difetto chiuso in `settings.cats.archivedText`, che prometteva
+  // "lo Storico **e le statistiche**": corretto li' e lasciato qui, a quindici
+  // righe di distanza nella stessa schermata. Una decisione vale dove vale il
+  // suo argomento, e quell'argomento non nominava una chiave.
+  //
+  // Quello che resta e' vero e **si verifica guardando**: gli otto colori sono un
+  // sistema (vedi CLAUDE.md, "Colori delle categorie"), e che diventeranno la
+  // palette dei grafici resta il progetto — ma si dira' quando i grafici ci
+  // saranno.
   'cat.color.note':
-    'Otto colori e non uno qualunque: è la stessa scala dei grafici, scelta perché resti distinguibile anche a chi confonde rosso e verde.',
+    'Otto colori, non otto a caso: scelti perché restino distinguibili fra loro anche a chi confonde rosso e verde.',
   'cat.swap.title': 'Quale sostituisce?',
   'cat.swap.text':
     'Il tap salva. Quella che tocchi va in archivio: resta su tutte le spese che l’hanno usata, e la puoi rimettere quando vuoi.',

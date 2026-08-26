@@ -10,13 +10,18 @@ rimandato: e' qualcosa che **e' rotto adesso** e che abbiamo scelto di tenere.
 
 ## Perche' questo file esiste
 
-Il messaggio di commit di `888699a` diceva, di quattordici copie che parafrasavano:
-*"Quattro erano gia' false e sono chiuse. **Le altre dieci sono elencate come
-debito.**"*
+Il messaggio di commit di `888699a` si chiudeva cosi', a proposito di alcune copie
+che parafrasavano: *"Quattro erano gia' false e sono chiuse. **Le altre sono
+elencate come debito.**"*
 
 **Non erano elencate da nessuna parte.** L'elenco esisteva nella sessione che lo
 aveva prodotto, ed e' morto con lei. Quando una sessione nuova e' andata a
 cercarlo — perche' il messaggio glielo prometteva — non c'era niente da leggere.
+
+La citazione sta qui come **reperto della promessa non mantenuta**, non come dato:
+i numeri che quel messaggio portava sono rimasti nel messaggio, e un numero che
+vive solo li' non e' una misura. Il conteggio vero e' quello della sezione 1, fatto
+da capo.
 
 E' la stessa curva di lettura di un campo senza produttore: **scritto una volta,
 letto mai.** Un messaggio di commit e' l'ultimo posto in cui mettere qualcosa che
@@ -52,19 +57,21 @@ davanti all'utente. E' esattamente cosi' che sono nati i quattro difetti chiusi 
 **18 copie in 9 famiglie.** Di queste, **16 non sono dichiarate** — nessun commento
 avverte che esiste un'altra copia da tenere allineata.
 
-**Non riesco a riconciliare 18 con i "dieci" del messaggio di commit**, e non provo
-a farlo: quei dieci non esistono in nessun file, quindi non c'e' niente con cui
-confrontarsi. Puo' darsi che la passata originale contasse le famiglie invece delle
-copie, o che il mio criterio sia piu' largo. Lo scrivo come discrepanza aperta e non
-come correzione: **una discrepanza non riprodotta e' un sospetto, non un fatto.**
+**Questo e' il dato**, e non si confronta con niente. Il messaggio di commit che
+prometteva l'elenco portava anche un conteggio, ma un numero in un messaggio di
+commit non e' una misura: e' una frase in un posto che abbiamo appena smesso di
+considerare memoria. Non esiste in nessun file, quindi non c'e' niente con cui
+confrontarsi — e riportarlo qui, fosse anche solo per contraddirlo, gli
+restituirebbe l'autorita' che gli stiamo togliendo.
 
 ### La conclusione che il numero porta
 
 Diciotto copie in nove famiglie **non sono quattro correzioni: sono una regola
 mancante.** Ripararle una a una lascerebbe in piedi la causa, ed e' gia' successo —
-`888699a` ne ha chiuse quattro, e le altre quattordici sono rimaste esattamente
-dov'erano, comprese due che erano la **gemella esatta** di una appena riparata
-(vedi 1.7 e 1.10).
+`888699a` ne ha chiuse quattro, e tutte le altre sono rimaste esattamente dov'erano
+— compresa una che era la **gemella esatta** di una appena riparata (1.7) e una che
+era **falsa allo stesso modo** di un'altra corretta quindici righe piu' su nella
+stessa schermata (1.10).
 
 **La forma della regola, presa da cio' che `888699a` ha fatto quando ha funzionato:**
 un fatto ha **una casa**, e chi lo ridice lo **compone dalla stessa fonte** invece
@@ -222,14 +229,28 @@ Questa e' **letteralmente lo stesso difetto** di uno dei quattro chiusi in
 e' stato corretto togliendo le statistiche. La stessa promessa, nella stessa
 schermata, a quindici righe di distanza, e' rimasta.
 
-**Non l'ho riparata, e la ragione non e' che sia meno grave — e' l'opposto.**
-Toccare una stringa che due dizionari e la suite e2e guardano richiede di
-rieseguire quella suite, e la suite e2e non si puo' lanciare finche' il disco sta
-al 99% (vedi ROADMAP, "Il disco"). CLAUDE.md dice che dopo una correzione la
-verifica si riesegue e non si deduce: preferisco lasciarla scritta qui che
-ripararla senza poterla verificare.
+**CHIUSA il 26 agosto 2026.** Adesso dice *"Otto colori, non otto a caso: scelti
+perche' restino distinguibili fra loro anche a chi confonde rosso e verde"* — un
+fatto che si verifica guardando lo schermo. Che quegli otto diventeranno la palette
+dei grafici resta il progetto (CLAUDE.md, "Colori delle categorie"): si dira'
+quando i grafici ci saranno.
 
-**E' il primo elemento da chiudere quando la e2e torna eseguibile.**
+### Come si e' arrivati a ripararla, che e' la parte che vale
+
+Era stata lasciata aperta con questa motivazione: *"toccare una stringa che la
+suite e2e guarda impone di rieseguire la e2e, e la e2e non si puo' lanciare per via
+del disco."*
+
+**La conclusione era prudente e la premessa non era stata controllata.** Il
+controllo costava dieci secondi — cercare la chiave e frammenti del suo testo dentro
+`tests/e2e/` — e l'esito e': **nessuna spec la nomina**, in nessuna delle due
+lingue, e in produzione la legge un solo posto (`CategorySheet.tsx:352`).
+
+*"Non posso verificarlo"* e' **una dichiarazione di irraggiungibilita'**, e questo
+progetto le tratta tutte allo stesso modo: si nomina chi produce quello stato, non
+si assume. Vedi CLAUDE.md, controllo C. Una prudenza non e' un fatto, e decidere su
+una prudenza lascia a schermo una frase falsa per una ragione che nessuno ha
+guardato.
 
 ---
 

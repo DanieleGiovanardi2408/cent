@@ -108,7 +108,25 @@ export default defineConfig({
   // uno per test come prima.
   fullyParallel: false,
   workers: '50%',
-  reporter: process.env['CI'] ? 'github' : 'list',
+  // Due reporter, e il secondo non e' per un umano.
+  //
+  // Il primo si legge mentre gira. Il secondo scrive `test-results/last.json`,
+  // che `scripts/state.mjs` legge per mettere l'esito della e2e fra i fatti
+  // rigenerati in cima a ROADMAP: quel numero costa due minuti a produrre,
+  // quindi non si puo' derivare a ogni invocazione dello script — si legge
+  // l'artefatto dell'ultima esecuzione vera.
+  //
+  // Ed e' per questo che `state.mjs` ne controlla la data contro `src/` e
+  // `tests/`, e lo dichiara **non misurato** se e' piu' vecchio: un esito verde
+  // di due commit fa non dice niente sul codice di adesso, e riportarlo come
+  // attuale sarebbe di nuovo un numero scritto una volta e vero solo allora.
+  //
+  // Il file e' in `test-results/`, gia' ignorato da git: e' una misura di questa
+  // macchina, non un fatto del repository.
+  reporter: [
+    [process.env['CI'] ? 'github' : 'list'],
+    ['json', { outputFile: 'test-results/last.json' }],
+  ],
   // La lingua e' **dichiarata**, non ereditata dal browser.
   //
   // Dalla fase 3 l'app ha due lingue e, senza una scelta esplicita in

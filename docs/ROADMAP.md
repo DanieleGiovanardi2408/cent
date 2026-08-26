@@ -25,13 +25,14 @@ sa gia', e per questo non puo' invecchiare. I giudizi — cosa e' in volo, cosa
 aspetta una persona — stanno sotto, scritti a mano e timbrati con lo SHA a cui
 sono stati rivisti.
 
-- **Ultimo commit**: `888699a` — refactor: due controlli in CI, e il terzo campo senza produttore
-- **Data**: 25/08/2026 23:45
+- **Ultimo commit**: `d134cf4` — refactor: i fatti si rigenerano, i giudizi dichiarano la propria eta'
+- **Data**: 26/08/2026 14:57
 - **Pushato**: si, `origin/main` e' allo stesso commit
 - **Albero di lavoro**: **non pulito**, ci sono modifiche non committate
 
 - **Test unitari**: 595 in 22 file, tutti verdi
-- **Test e2e**: 228 dichiarati in 12 file, su 4 progetti (iphone-se, iphone-14, landscape, dark). Quanti ne girano davvero dipende dall'ambiente: i salti di questa suite sono condizionali (ADR 013) e nessuna lettura statica li vede.
+- **Test e2e dichiarati**: 228 in 12 file, su 4 progetti (iphone-se, iphone-14, landscape, dark)
+- **Test e2e eseguiti**: 212 passati, 16 saltati, in 2.2 minuti. I saltati sono condizionali (ADR 013): solo un'esecuzione li vede.
 - **Bundle iniziale**: 51.7 KB gzip su 60.0 KB (8.3 KB di margine)
 
 - **Schema del database**: 4. La scala delle migrazioni:
@@ -49,7 +50,7 @@ sono stati rivisti.
 ## In volo adesso
 
 <!-- JUDGMENT rivisto=888699a -->
-> Rivisto a `888699a`, cioe' a questo commit.
+> Rivisto a `888699a`, un commit fa.
 
 **Niente.** Non c'e' nessun agente in volo e nessun lavoro a meta' nell'albero.
 
@@ -134,34 +135,50 @@ preferenza: ogni passo distrugge la possibilita' di fare il precedente.
   `node scripts/audit.mjs <backup.json>` conta i record, e il numero e'
   `data.expenses.length`. Ragione per esteso in
   [ADR 022](adr/022-si-annuncia-quello-che-comparira.md).
-- **Il disco della macchina di sviluppo.** Vedi il giudizio qui sotto: e' l'unica
-  soglia di questo elenco che non riguarda il progetto e che puo' comunque
-  fermarlo.
+- ~~**Il disco della macchina di sviluppo.**~~ **Scattata, e chiusa**: da 2,1 a
+  24 GB liberi. Vedi il giudizio qui sotto, che dice anche **da dove venivano** i
+  gigabyte spariti — non era una perdita.
 
 ## Il disco
 
 <!-- JUDGMENT rivisto=888699a -->
 
-**Misurato il 26 agosto: 2,1 GB liberi su 228**, dopo aver svuotato la cache npm
-(841 MB -> 566 MB). Durante una sola sessione di lavoro il libero e' passato da 6,4
-a 1,6 GB **senza che noi scrivessimo niente di paragonabile**: il progetto pesa
-**170 MB in tutto**, `node_modules` compreso. Sono snapshot APFS e spazio
-eliminabile, non noi.
+**Risolto il 26 agosto: da 2,1 GB liberi a 24 GB, dal 89% al 40%.** Cancellati i
+22 GB di modelli in `~/.ollama` (sei modelli locali), dopo aver fermato
+`ollama serve` — che era in esecuzione, e senza fermarlo `rm` non avrebbe liberato
+niente. Le chiavi in `~/.ollama` sono rimaste: 8 KB, e sono l'identita' di questa
+macchina. Per riaverli: `brew services start ollama`, poi `ollama pull`.
 
-Non e' un problema nostro e diventa nostro comunque. A quel livello un
-`npm run build` puo' fallire a meta', e **e' gia' successo di diagnosticare per ore
-un guasto che era il disco**.
+### La caccia alla perdita: non c'e' una perdita, c'e' un provisioning
 
-**Regola operativa: non si lancia `npm run test:e2e` finche' il libero non e'
-stabilmente a due cifre di giga.** Oggi non lo e', quindi **il numero della suite
-e2e e' un fatto non misurato** — e si scrive cosi', invece di riportare quello
-dell'ultima volta. E' la stessa dottrina del blocco rigenerato qui sopra, che sul
-bundle scrive "non misurato" se `dist/` e' vecchio: un indicatore che puo' sbagliare
-deve sbagliare verso l'allarme.
+Due misure sugli stessi percorsi a 6,5 minuti di distanza. **Niente e' cresciuto**
+tranne `~/Library/Logs`, +1 MB, che eravamo noi.
 
-La riserva grossa e' **`~/.ollama`, 22 GB**, misurata e **volutamente non toccata**:
-cancellarla e' irreversibile e la decisione e' di chi usa quei modelli, non di chi
-gli sta pulendo il disco.
+Il calo osservato durante la sessione — **da 6,4 a 1,6 GB** — ha invece un
+colpevole con nome e ora:
+
+    ~/Library/Application Support/Claude/vm_bundles/claudevm.bundle/
+      rootfs.img       10 GiB esatti, scritto durante la misura
+      rootfs.img.zst   1,1 GB, del 23 agosto
+      .cowork-adopted  scritto oggi alle 14:24
+
+E' l'immagine disco della **VM di Claude Code**, decompressa da 1,1 GB a 10 GiB
+allocati quando la sessione l'ha adottata, alle 14:24. Non e' una perdita: e'
+provisioning, e finisce.
+
+**E questo spiega perche' cancellarla non funzionava**: torna perche' viene
+**ricreata dal `.zst`** alla sessione successiva. Cancellarla e' un affitto di
+~9 GB fino alla prossima apertura, non un acquisto — e mentre una sessione e' viva
+il file e' in uso, quindi cancellarlo e' anche dannoso. La leva che funziona non e'
+cancellare: e' non far partire la VM, se non serve.
+
+### Cosa resta vero come regola
+
+Non si lancia `npm run test:e2e` sotto le due cifre di giga. Oggi ce ne sono 24,
+quindi **la e2e e' misurata e sta fra i fatti rigenerati** qui sopra, letta
+dall'artefatto dell'ultima esecuzione vera — con la sua guardia: se quel file e'
+piu' vecchio dei sorgenti, il fatto torna "non misurato" invece di riportare un
+verde che non riguarda piu' questo codice.
 
 Se il libero scende sotto il gigabyte questa sessione si e' gia' bloccata una volta
 al punto di non poter eseguire nemmeno `df`: se ricapita, la prima mossa e' liberare
