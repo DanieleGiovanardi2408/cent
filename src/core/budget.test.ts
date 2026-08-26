@@ -9,6 +9,7 @@ import {
   resolveBudget,
 } from './budget'
 import { daysBetween } from './date'
+import { divideCents } from './money'
 import type { IsoDate } from './date'
 import { makeBudget, makeExpense } from './testing'
 import type { Budget } from './types'
@@ -744,4 +745,164 @@ describe('le ricorrenti fuori dal budget (ADR 016)', () => {
     expect(recurringSpent([corretta], agosto)).toBe(92_000)
   })
 
+})
+
+describe('confrontabile con un budget', () => {
+  /*
+   * Il campo che decide se le statistiche disegnano una traccia. La domanda non
+   * e' "c'e' un budget", e' "un solo budget ha coperto tutto il periodo": dove
+   * la risposta e' no, il confronto non ha **una** risposta, e la geometria non
+   * deve suggerirne una.
+   */
+  const settimana = { period: 'weekly' as const, onDate: '2026-08-19', today: '2026-08-19' }
+
+  it('un budget che copre tutto il periodo e confrontabile', () => {
+    const m = computeBudgetMetrics({
+      ...settimana,
+      expenses: [],
+      budgets: [makeBudget({ period: 'weekly', effectiveFrom: '2026-08-01', amountCents: 20000 })],
+    })
+    expect(m.comparableToBudget).toBe(true)
+    expect(m.budgetCents).toBe(20000)
+  })
+
+  it('senza budget non e confrontabile', () => {
+    const m = computeBudgetMetrics({ ...settimana, expenses: [], budgets: [] })
+    expect(m.comparableToBudget).toBe(false)
+    expect(m.budgetCents).toBeNull()
+  })
+
+  /*
+   * Il caso vero dell'export del 26 agosto: budget creato domenica 23, che e'
+   * l'**ultimo** giorno della settimana 17-23. Copriva un giorno su sette, e
+   * senza questo campo la barra da 136,45 su una traccia da 200 avrebbe letto
+   * "sei stato bravo". E' la prima settimana di chiunque installi l'app.
+   */
+  it('un budget nato dentro il periodo non e confrontabile, e il budget si risolve lo stesso', () => {
+    const m = computeBudgetMetrics({
+      period: 'weekly',
+      onDate: '2026-08-19',
+      today: '2026-08-26',
+      expenses: [],
+      budgets: [makeBudget({ period: 'weekly', effectiveFrom: '2026-08-23', amountCents: 20000 })],
+    })
+    // `referenceDay` cade su range.end, che e' proprio il giorno in cui il
+    // budget e' nato: il numero c'e', ed e' esattamente cio' che rende il caso
+    // pericoloso invece che innocuo.
+    expect(m.budgetCents).toBe(20000)
+    expect(m.comparableToBudget).toBe(false)
+  })
+
+  /*
+   * **Il test che tiene separati i due campi.** Se qualcuno "semplifica"
+   * `comparableToBudget` in `budgetCoveredPeriodStart`, o in
+   * `budgetCents !== null`, questo cade e gli altri no.
+   */
+  it('un budget CAMBIATO dentro il periodo non e confrontabile, e qui i due campi divergono', () => {
+    const m = computeBudgetMetrics({
+      ...settimana,
+      expenses: [],
+      budgets: [
+        makeBudget({
+          period: 'weekly',
+          effectiveFrom: '2026-08-01',
+          effectiveTo: '2026-08-18',
+          amountCents: 20000,
+        }),
+        makeBudget({ period: 'weekly', effectiveFrom: '2026-08-19', amountCents: 25000 }),
+      ],
+    })
+    // Un budget c'era il primo giorno del periodo: la Home non ha niente da
+    // spiegare, ed e' giusto (ADR 010, il residuo e' il residuo).
+    expect(m.budgetCoveredPeriodStart).toBe(true)
+    expect(m.budgetCents).not.toBeNull()
+    // Ma i primi tre giorni sarebbero confrontati con un tetto che allora non
+    // esisteva. Le due domande sono diverse, e le risposte pure.
+    expect(m.comparableToBudget).toBe(false)
+  })
+
+  /*
+   * Il caso che una scansione dei soli `effectiveFrom` interni perderebbe:
+   * nessun record copre il giovedi. L'app non lo produce (chiude solo aprendo),
+   * un JSON scritto a mano si'.
+   */
+  it('un buco in mezzo al periodo non e confrontabile', () => {
+    const m = computeBudgetMetrics({
+      ...settimana,
+      expenses: [],
+      budgets: [
+        makeBudget({
+          period: 'weekly',
+          effectiveFrom: '2026-08-01',
+          effectiveTo: '2026-08-19',
+          amountCents: 20000,
+        }),
+        makeBudget({ period: 'weekly', effectiveFrom: '2026-08-21', amountCents: 20000 }),
+      ],
+    })
+    expect(m.comparableToBudget).toBe(false)
+  })
+
+  it('un budget di un altro periodo non rende confrontabile questo', () => {
+    const m = computeBudgetMetrics({
+      ...settimana,
+      expenses: [],
+      budgets: [makeBudget({ period: 'monthly', effectiveFrom: '2026-08-01', amountCents: 80000 })],
+    })
+    expect(m.comparableToBudget).toBe(false)
+  })
+})
+
+describe('giorni vissuti', () => {
+  /*
+   * `daysLived` esce allo scoperto per due lettori delle statistiche: il budget
+   * maturato e la parte di periodo non ancora accaduta. Qui si asserisce che
+   * **oggi conta**, che e' la decisione, e che a periodo chiuso satura.
+   */
+  it('oggi conta come vissuto', () => {
+    // Settimana 24-30, oggi mercoledi 26: lunedi, martedi, mercoledi.
+    const m = computeBudgetMetrics({
+      period: 'weekly',
+      onDate: '2026-08-26',
+      today: '2026-08-26',
+      expenses: [],
+      budgets: [],
+    })
+    expect(m.daysTotal).toBe(7)
+    expect(m.daysLived).toBe(3)
+    // Il campo che NON include oggi resta quello che era: se `daysLived`
+    // diventasse `daysElapsed` questa coppia collasserebbe.
+    expect(m.daysElapsed).toBe(2)
+    expect(m.daysLived).toBe(m.daysElapsed + 1)
+  })
+
+  it('a periodo chiuso i giorni vissuti sono tutti, quindi non resta niente di non accaduto', () => {
+    const m = computeBudgetMetrics({
+      period: 'weekly',
+      onDate: '2026-08-19',
+      today: '2026-08-26',
+      expenses: [],
+      budgets: [],
+    })
+    expect(m.daysLived).toBe(m.daysTotal)
+    expect(m.daysTotal - m.daysLived).toBe(0)
+  })
+
+  /*
+   * Il maturato si calcola dal budget e dai giorni, **non** moltiplicando il
+   * passo sostenibile: 28,57 x 7 fa 199,99, e il segno cadrebbe un centesimo
+   * prima della fine della traccia per sempre.
+   */
+  it('il maturato satura sul budget intero, il passo sostenibile moltiplicato no', () => {
+    const m = computeBudgetMetrics({
+      period: 'weekly',
+      onDate: '2026-08-19',
+      today: '2026-08-26',
+      expenses: [],
+      budgets: [makeBudget({ period: 'weekly', effectiveFrom: '2026-08-01', amountCents: 20000 })],
+    })
+    const maturato = divideCents(20000 * m.daysLived, m.daysTotal)
+    expect(maturato).toBe(20000)
+    expect((m.sustainablePaceCents ?? 0) * m.daysTotal).toBe(19999)
+  })
 })

@@ -702,6 +702,34 @@ export const it = {
   'toast.ruleInUse': 'Ha già creato delle spese: si può solo disattivare',
   'toast.ruleFailed': 'Non ci sono riuscito. Riprova.',
 
+  /* --- Statistiche (fase 6) ------------------------------------------------ *
+   *
+   * Due domande, due grafici, e due cifre in testa che non sono un grafico.
+   *
+   * **Non c'e' una chiave che dichiara l'esclusione delle fisse**, e non e' una
+   * dimenticanza: le due cifre in testa **sono** la dichiarazione. ADR 016 §3
+   * chiede "due numeri, non uno", e mostrarli entrambi dice l'esclusione meglio
+   * di una frase — che sarebbe la terza copia dello stesso fatto, dopo
+   * `hero.fixed` e `fixed.text`. Vedi DEBITO.md, famiglia 1.3.
+   */
+  'nav.stats': 'Statistiche',
+  'title.stats': 'Dove sono finiti i soldi',
+
+  // Lo stato vuoto dice **cosa comparira'**, non "nessun dato": e' la prima
+  // schermata che un amico apre il primo giorno, e "nessun dato" non insegna
+  // niente a chi non sa ancora cosa aspettarsi.
+  'stats.blank.title': 'Ancora niente da mostrare',
+  'stats.blank.text':
+    'Appena avrai qualche spesa, qui vedrai dove sono finiti i soldi e come va questo periodo rispetto ai precedenti.',
+
+  'stats.variable': 'Quotidiane',
+  'stats.fixed': 'Spese fisse',
+  'stats.perMonth': 'ogni mese',
+
+  'stats.byCategory': 'Dove sono finiti',
+  'stats.byPeriod.weekly': 'Settimana per settimana',
+  'stats.byPeriod.monthly': 'Mese per mese',
+
   /* --- una spesa che viene da una regola ---------------------------------- */
   // Discreto, non un avviso: e' un'informazione su **da dove arriva** quella
   // riga, e le spese generate restano modificabili e cancellabili come tutte.

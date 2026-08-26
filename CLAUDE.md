@@ -332,7 +332,15 @@ decisione**. Ragione per esteso e conseguenze in
 2. **Aggiungi spesa** — bottom sheet, tastierino numerico **custom** (non quello
    di iOS), categorie a chip, data = oggi, nota collassata. Conferma -> toast con Annulla.
 3. **Storico** — raggruppato per giorno con totale. Ricerca e filtri. Swipe per azioni.
-4. **Statistiche** — ripartizione per categoria, ultime 8 settimane. SVG scritto a mano.
+4. **Statistiche** — **due domande, due grafici**, piu' una coppia di cifre in testa:
+   *dove sono finiti i soldi* (ripartizione per categoria del **periodo corrente**)
+   e *sto spendendo piu' o meno delle altre settimane* (**una riga per settimana,
+   finestra fissa di otto**). SVG scritto a mano.
+   Questa riga diceva "ripartizione per categoria, ultime 8 settimane" e si leggeva
+   in due modi — la ripartizione **delle** otto settimane, oppure due pezzi
+   distinti. Ha sostenuto una decisione di fase 6 mentre era ambigua, ed e' stata
+   disambiguata subito: una riga che ha appena retto una scelta non aspetta il mese
+   in cui nessuno ricordera' che una scelta c'era stata.
 5. **Impostazioni** — categorie, budget, ricorrenze, export/import, tema.
 
 ## Backup

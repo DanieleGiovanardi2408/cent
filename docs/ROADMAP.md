@@ -25,15 +25,15 @@ sa gia', e per questo non puo' invecchiare. I giudizi — cosa e' in volo, cosa
 aspetta una persona — stanno sotto, scritti a mano e timbrati con lo SHA a cui
 sono stati rivisti.
 
-- **Ultimo commit**: `d134cf4` — refactor: i fatti si rigenerano, i giudizi dichiarano la propria eta'
-- **Data**: 26/08/2026 14:57
+- **Ultimo commit**: `3d1ff92` — fix: il controllo che non funzionava in CI, e la frase che prometteva grafici
+- **Data**: 26/08/2026 15:25
 - **Pushato**: si, `origin/main` e' allo stesso commit
 - **Albero di lavoro**: **non pulito**, ci sono modifiche non committate
 
-- **Test unitari**: 595 in 22 file, tutti verdi
-- **Test e2e dichiarati**: 228 in 12 file, su 4 progetti (iphone-se, iphone-14, landscape, dark)
-- **Test e2e eseguiti**: 212 passati, 16 saltati, in 2.2 minuti. I saltati sono condizionali (ADR 013): solo un'esecuzione li vede.
-- **Bundle iniziale**: 51.7 KB gzip su 60.0 KB (8.3 KB di margine)
+- **Test unitari**: 623 in 23 file, tutti verdi
+- **Test e2e dichiarati**: 246 in 13 file, su 4 progetti (iphone-se, iphone-14, landscape, dark)
+- **Test e2e eseguiti**: 230 passati, 16 saltati, in 2.2 minuti. I saltati sono condizionali (ADR 013): solo un'esecuzione li vede.
+- **Bundle iniziale**: 53.5 KB gzip su 60.0 KB (6.5 KB di margine)
 
 - **Schema del database**: 4. La scala delle migrazioni:
   - **1** — Schema iniziale: expenses, categories, recurringRules, budgets, settings
@@ -50,7 +50,7 @@ sono stati rivisti.
 ## In volo adesso
 
 <!-- JUDGMENT rivisto=888699a -->
-> Rivisto a `888699a`, un commit fa.
+> Rivisto a `888699a`, 2 commit fa.
 
 **Niente.** Non c'e' nessun agente in volo e nessun lavoro a meta' nell'albero.
 

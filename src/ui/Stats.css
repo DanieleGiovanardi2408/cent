@@ -1,0 +1,169 @@
+/* Le Statistiche. Una marca sola — la riga — usata da entrambe le sezioni.
+ *
+ * Le misure fisse sono tre e vengono dalla disciplina dei grafici: barra sottile
+ * (non un blocco), contorno invece di un bordo fra le marche, e griglia
+ * assente. Qui la griglia non serve proprio: l'importo e' scritto su ogni riga,
+ * quindi non c'e' nessun valore che un asse debba portare. */
+
+.stats {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5);
+  padding-block-end: var(--sp-6);
+}
+
+/* Il guscio senza dati ha la stessa altezza minima del contenuto piu' corto,
+ * cosi' l'arrivo dei dati non sposta la barra di navigazione sopra. */
+.stats--shell {
+  min-block-size: 12rem;
+}
+
+/* --- le due cifre in testa (ADR 016 §3) --------------------------------- */
+
+.stats__tiles {
+  display: flex;
+  gap: var(--sp-3);
+}
+
+.tile {
+  flex: 1 1 0;
+  min-inline-size: 0;
+  padding: var(--sp-3);
+  border-radius: var(--radius-2);
+  background-color: var(--surface-sunken);
+}
+
+.tile__label {
+  color: var(--text-muted);
+  font-size: var(--fs-100);
+  font-weight: var(--fw-semibold);
+}
+
+/* Cifre proporzionali e non tabulari: `tabular-nums` allarga i numeri e su una
+ * cifra grande e isolata li fa sembrare slegati. Le tabulari servono dove i
+ * numeri si incolonnano, e qui non si incolonnano. */
+.tile__value {
+  margin-block-start: var(--sp-1);
+  color: var(--text);
+  font-size: var(--fs-500);
+  font-weight: var(--fw-semibold);
+  font-variant-numeric: proportional-nums;
+}
+
+.tile__sub {
+  color: var(--text-muted);
+  font-size: var(--fs-100);
+}
+
+/* --- le sezioni --------------------------------------------------------- */
+
+.stats__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.stats__title {
+  color: var(--text-muted);
+  font-size: var(--fs-100);
+  font-weight: var(--fw-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.stats__rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+/* --- la riga: etichetta, barra, importo --------------------------------- */
+
+.stat {
+  display: grid;
+  /* La barra prende quello che avanza. Etichetta e importo si dimensionano sul
+   * contenuto, quindi **non troncano mai** — che e' la ragione per cui questa
+   * schermata non ha bisogno di una vista tabellare gemella: le due colonne di
+   * testo ci sono sempre, a qualunque larghezza e in tutte e due le lingue. */
+  grid-template-columns: minmax(0, auto) 1fr max-content;
+  align-items: center;
+  gap: var(--sp-2);
+  min-block-size: var(--tap-min);
+}
+
+/* Senza barra la riga e' due colonne: nome e importo, con lo spazio in mezzo. */
+.stats__rows:not([data-chart]) .stat {
+  grid-template-columns: minmax(0, 1fr) max-content;
+}
+
+.stat__label {
+  overflow: hidden;
+  color: var(--text);
+  font-size: var(--fs-200);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Le cifre si incolonnano davvero, qui: tabulari. */
+.stat__value {
+  color: var(--text);
+  font-size: var(--fs-200);
+  font-weight: var(--fw-semibold);
+  font-variant-numeric: tabular-nums;
+}
+
+.stat__plot {
+  position: relative;
+  display: block;
+  block-size: 0.75rem;
+  min-inline-size: 0;
+}
+
+/* La traccia del budget: una rotaia incassata, presente solo dove il periodo e'
+ * confrontabile. Dove manca, la barra e' nuda e non c'e' nessun verdetto. */
+.stat__track {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  border-radius: var(--radius-1);
+  background-color: var(--surface-sunken);
+}
+
+/* I giorni non ancora accaduti: si vede che il periodo non e' finito. Non e' un
+ * riempimento piu' chiaro — e' l'assenza della rotaia, ridipinta col fondo. */
+.stat__unlived {
+  position: absolute;
+  inset-block: 0;
+  border-radius: var(--radius-1);
+  background-color: var(--bg);
+}
+
+/* Il maturato. Un tratto pieno da 2px, mai tratteggiato: il tratteggio aggiunge
+ * rumore e si legge come "proiezione" dove qui c'e' un fatto. */
+.stat__accrued {
+  position: absolute;
+  inset-block: -2px;
+  inline-size: 2px;
+  margin-inline-start: -1px;
+  border-radius: 1px;
+  background-color: var(--line-strong);
+}
+
+/* La barra. Il contorno non e' decorazione: tre degli otto colori delle
+ * categorie stanno sotto 3:1 sul fondo (misurato col validatore, in entrambi i
+ * temi), quindi senza contorno la **forma** non si vedrebbe dove il riempimento
+ * non si stacca. Il valore si legge comunque — e' scritto a destra — ma una
+ * barra invisibile non e' un grafico. */
+.stat__bar {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-1);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .stat__bar {
+    transition: inline-size var(--dur-2) var(--ease-out);
+  }
+}

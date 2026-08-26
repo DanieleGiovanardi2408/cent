@@ -182,6 +182,75 @@ export interface BudgetMetrics {
    */
   readonly budgetCoveredPeriodStart: boolean
   /**
+   * **Un solo budget ha coperto questo periodo per intero**, quindi il periodo si
+   * puo' confrontare con un tetto e il confronto ha una risposta.
+   *
+   * ## L'argomento, che e' il campo
+   *
+   * Un periodo e' confrontabile con un budget **solo se un unico budget lo ha
+   * coperto dal primo all'ultimo giorno**. Altrimenti il confronto non ha una
+   * risposta — non una risposta approssimata, **nessuna** — e chi disegna non
+   * deve suggerirne una.
+   *
+   * I due casi in cui e' falso pur essendoci un budget oggi:
+   *
+   * - **nato dentro il periodo.** Budget creato domenica 23, settimana 17–23:
+   *   copriva **un giorno su sette**. Una barra da 136,45 su una traccia da 200
+   *   legge "sei stato bravo", e non e' una lettura sbagliata del grafico — e' il
+   *   grafico che afferma una cosa che i dati non sostengono. E' **la prima
+   *   settimana di chiunque**: si installa l'app, si segna, e il budget si mette
+   *   dopo.
+   * - **cambiato dentro il periodo.** Budget 200 da lunedi', portato a 250
+   *   mercoledi'. `budgetCoveredPeriodStart` e' **vero** (un budget c'era il
+   *   primo giorno) e la traccia sarebbe 250, con i primi tre giorni confrontati
+   *   con un tetto che allora non esisteva. E' lo stesso difetto del bordo,
+   *   spostato al centro.
+   *
+   * ## Perche' non basta `budgetCoveredPeriodStart`
+   *
+   * Quel campo risponde a *"c'era una regola il primo giorno?"*, ed esiste per
+   * una domanda diversa: distinguere **"non avevi un budget"** da **"l'hai
+   * cambiato"**, cioe' decidere se la Home ha qualcosa da spiegare. La sua
+   * documentazione dice, del secondo caso, *"non c'e' niente da spiegare"* — ed
+   * e' vero **del residuo**, dove ADR 010 stabilisce che il budget e' del periodo
+   * intero e il residuo e' quello che e'. Non dice niente sulla
+   * **confrontabilita' fra periodi**, che e' un'altra domanda. Stesso fatto, due
+   * domande, e "taci" vale solo per la prima.
+   *
+   * I due campi restano entrambi: hanno insiemi di verita' diversi e servono a
+   * decisioni diverse. Non si semplifica l'uno nell'altro.
+   *
+   * ## La forma, e perche' non e' una scansione
+   *
+   * Si risolve il budget sui **due estremi** e si confrontano gli id. Basta
+   * perche' `coversDay` e' un test su intervallo contiguo: **un record che copre
+   * i due estremi copre ogni giorno in mezzo**, per costruzione.
+   *
+   * Una scansione dei record con `effectiveFrom` interno all'intervallo avrebbe
+   * preso il cambio a meta' periodo — che `planResolvedBudgetChange` produce
+   * sempre cosi', chiudendo l'aperto a `effectiveFrom - 1` e aprendone uno nuovo
+   * — ma **non** avrebbe preso un buco: record A fino a mercoledi', record B da
+   * venerdi', giovedi' scoperto. L'app non lo produce (chiude solo aprendo), un
+   * JSON scritto a mano si'. Qui gli id sono diversi e il campo e' falso.
+   *
+   * ## Chi lo legge, e la conseguenza su `referenceDay`
+   *
+   * Le statistiche (fase 6): la traccia del budget si disegna **se e solo se**
+   * questo campo e' vero. Il predicato sta qui e non nel componente perche' una
+   * congiunzione scritta al chiamante viene "semplificata" in
+   * `budgetCents !== null` da qualcuno fra sei mesi, con i test verdi perche' nei
+   * dati di prova le due cose coincidono. E' la mossa dell'id deterministico e di
+   * `ConfirmedPreview`: la scelta sbagliata non e' sconsigliata, e'
+   * inesprimibile.
+   *
+   * E ne segue che **chi si fida di questo campo non dipende dal giorno su cui
+   * `referenceDay` risolve** (vedi il suo commento in `computeBudgetMetrics`): se
+   * un solo record copre tutto il periodo, risolverlo all'inizio, alla fine o in
+   * mezzo da' lo stesso record; e se non lo copre, il campo e' falso e non c'e'
+   * nessuna traccia da disegnare.
+   */
+  readonly comparableToBudget: boolean
+  /**
    * Speso nel periodo **secondo il budget**: spese vive, ricorrenti escluse
    * (ADR 016). Non e' il totale del periodo — quello lo mostrano Storico e
    * statistiche, e vale `spentCents + recurringSpentCents`.
@@ -207,6 +276,34 @@ export interface BudgetMetrics {
   readonly daysElapsed: number
   /** Giorni che restano, **oggi incluso**. 0 se il periodo e' finito. */
   readonly daysRemaining: number
+  /**
+   * I giorni del periodo **davvero vissuti, oggi compreso**. Su un periodo
+   * passato vale `daysTotal`; su uno futuro, 1.
+   *
+   * E' il divisore di `currentPaceCents` — l'arco su cui `spentCents` e' stato
+   * speso — ed era una costante locale finche' lo usava solo lui. Esce allo
+   * scoperto perche' le statistiche ne hanno bisogno per due cose, e averlo due
+   * volte scritto significherebbe due espressioni da tenere allineate:
+   *
+   * - **il budget maturato**, il segno contro cui si legge se il passo e' alto:
+   *   `budgetCents * daysLived / daysTotal`. **Non e' un pro-rata** e non tocca
+   *   ADR 010: non riduce `budgetCents` ne' `remainingCents`, e' un segnaposto di
+   *   passo. Va calcolato cosi' e **non** come `sustainablePaceCents * daysLived`,
+   *   che sembra la stessa cosa: 28,57 x 7 fa **199,99**, quindi a periodo chiuso
+   *   il segno cadrebbe un centesimo prima della fine della traccia, per sempre e
+   *   invisibile a occhio.
+   * - **la parte di periodo non ancora accaduta**, `daysTotal - daysLived`, che a
+   *   periodo chiuso vale zero. Cosi' l'incompletezza di un periodo in corso e'
+   *   un dato, non un ramo del disegno.
+   *
+   * **Oggi conta come vissuto**, e la ragione e' gia' scritta sotto
+   * `currentPaceCents`: `spentCents` somma tutto il periodo fino a oggi incluso,
+   * quindi mettere i giorni di spesa contro i giorni finiti sarebbe n/(n-1) —
+   * uno sforo dichiarato per costruzione, ogni giorno, proprio quando c'e' ancora
+   * tempo per correggere. Quell'argomento non nomina il passo: nomina cosa
+   * contiene `spentCents`, e vale identico qui.
+   */
+  readonly daysLived: number
   /** Rimanente diviso i giorni che restano. `null` a periodo finito o senza budget. */
   readonly dailyAllowanceCents: Cents | null
   /**
@@ -321,6 +418,33 @@ export function recurringSpent(expenses: readonly Expense[], range: PeriodRange)
 
 export function computeBudgetMetrics(input: BudgetMetricsInput): BudgetMetrics {
   const range = periodRange(input.period, input.onDate)
+  /*
+   * Il giorno su cui si risolve il budget: oggi, **limitato dentro il periodo**.
+   *
+   * ## I due rami di limite non hanno chiamanti di produzione
+   *
+   * L'unico chiamante di produzione e' `Home.tsx`, che passa
+   * `onDate: day, today: day` — lo stesso valore. Oggi sta sempre dentro il
+   * proprio periodo, quindi **`referenceDay` vale sempre `input.today`** e i due
+   * rami non girano mai fuori dai test (cinque chiamate su diciannove in
+   * `budget.test.ts`).
+   *
+   * Sono dichiarati qui invece di essere scoperti dal primo chiamante che li
+   * raggiunge. La semantica che portano, se qualcuno li raggiunge, e': **un
+   * periodo passato viene misurato contro il budget in vigore il suo ultimo
+   * giorno**, qualunque frazione del periodo quel budget abbia coperto. E'
+   * difendibile — e' l'ultima decisione che si applicava a quel periodo — ma non
+   * era scritta, e non essere scritta e' il difetto.
+   *
+   * ## E le statistiche non ne dipendono, di proposito
+   *
+   * Il primo chiamante che passera' un `onDate` passato sono le statistiche, che
+   * disegnano una riga per periodo. Non ereditano questa semantica: disegnano il
+   * confronto **solo** dove `comparableToBudget` e' vero, e li' un solo record
+   * copre tutto il periodo — quindi risolvere all'inizio, alla fine o in mezzo
+   * da' lo stesso record e la scelta del giorno non e' osservabile. Dove
+   * differirebbe, non c'e' niente da disegnare.
+   */
   const referenceDay = isBefore(input.today, range.start)
     ? range.start
     : isAfter(input.today, range.end)
@@ -342,8 +466,19 @@ export function computeBudgetMetrics(input: BudgetMetricsInput): BudgetMetrics {
       : daysBetween(input.today, range.end) + 1
   const daysElapsed = daysTotal - daysRemaining
   // I giorni davvero vissuti del periodo, oggi compreso: e' il divisore del
-  // passo attuale, perche' e' l'arco su cui `spentCents` e' stato speso.
+  // passo attuale, perche' e' l'arco su cui `spentCents` e' stato speso. Adesso
+  // esce anche nell'esito — vedi il campo, che ne ha due lettori in piu'.
   const daysLived = daysBetween(range.start, referenceDay) + 1
+
+  /*
+   * Confrontabile con un budget solo se **un unico record** copre i due estremi.
+   * L'argomento per esteso sta sul campo `comparableToBudget`; qui basta notare
+   * che le due risoluzioni sono su `range.start` e `range.end` e **non** su
+   * `referenceDay`: la domanda riguarda il periodo, non il giorno da cui lo si
+   * guarda.
+   */
+  const atStart = resolveBudget(input.budgets, input.period, range.start)
+  const atEnd = resolveBudget(input.budgets, input.period, range.end)
 
   const remainingCents = budgetCents === null ? null : budgetCents - spentCents
 
@@ -354,14 +489,15 @@ export function computeBudgetMetrics(input: BudgetMetricsInput): BudgetMetrics {
     budgetEffectiveFrom: budget?.effectiveFrom ?? null,
     // Seconda risoluzione, sul primo giorno del periodo invece che su oggi: e'
     // la sola domanda che distingue "non avevi un budget" da "l'hai cambiato".
-    budgetCoveredPeriodStart:
-      budget !== null && resolveBudget(input.budgets, input.period, range.start) !== null,
+    budgetCoveredPeriodStart: budget !== null && atStart !== null,
+    comparableToBudget: atStart !== null && atEnd !== null && atStart.id === atEnd.id,
     spentCents,
     recurringSpentCents,
     remainingCents,
     daysTotal,
     daysElapsed,
     daysRemaining,
+    daysLived,
     dailyAllowanceCents:
       remainingCents === null || daysRemaining === 0 ? null : divideCents(remainingCents, daysRemaining),
     currentPaceCents: daysElapsed === 0 ? null : divideCents(spentCents, daysLived),

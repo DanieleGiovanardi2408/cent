@@ -47,6 +47,7 @@ Questa domanda tornera' — quindi le tre ragioni, per esteso:
 3. **Romperebbe il confronto fra periodi.** "Questa settimana contro la scorsa"
    smetterebbe di essere una domanda con una risposta, perche' i due tetti non
    sarebbero piu' la stessa unita' di misura.
+   **Vedi sotto: quell'argomento vale meno di quanto sembra.**
 
 Il tutto per **addolcire un solo periodo, una volta sola**: quello in cui il
 budget e' nato. Un costo permanente per un problema transitorio.
@@ -82,3 +83,56 @@ lo sforo non e' nemmeno colpa di una scelta.
   **entita' diversa** — un obiettivo di spesa a scadenza — non una modalita' di
   `Budget`. Aggiungerla come modalita' riporterebbe tutte e tre le ragioni qui
   sopra.
+
+## Il terzo argomento difendeva un confronto che era gia' rotto
+
+*Aggiunto il 26 agosto 2026, progettando le statistiche (fase 6).*
+
+La terza ragione qui sopra scarta il pro-rata perche' **romperebbe il confronto fra
+periodi**. E' l'unica delle tre che parla di una cosa che questo ADR non possedeva:
+una schermata che quel confronto lo faccia davvero. Non esisteva quando e' stato
+scritto — arriva in fase 6 — e nel frattempo l'argomento e' stato **il piu' forte
+dei tre**, perche' nomina un beneficio futuro invece di un costo presente.
+
+**Il confronto che difendeva era gia' rotto, da un caso che questo ADR non ha
+considerato.**
+
+L'argomento assume che i due periodi confrontati **abbiano entrambi un budget per
+tutta la loro durata**. Due casi lo smentiscono, ed entrambi sono ordinari:
+
+1. **Il budget nasce dentro il periodo** — il caso che apre questo ADR, e che qui
+   e' trattato solo dal lato del residuo. Nell'export reale del 26 agosto il budget
+   ha `effectiveFrom` domenica 23, che e' l'**ultimo** giorno della settimana 17-23:
+   copriva **un giorno su sette**. Un grafico che confronta quella settimana con un
+   tetto da 200 dice "sei stato bravo" di una settimana in cui il tetto non
+   esisteva. E' **la prima settimana di chiunque installi l'app**.
+2. **Il budget cambia dentro il periodo.** 200 da lunedi', 250 mercoledi'. Qui
+   `budgetCoveredPeriodStart` e' **vero** — un budget c'era il primo giorno — e la
+   documentazione di quel campo dice, di questo caso, *"non c'e' niente da
+   spiegare"*. **E' vero del residuo, dove questo ADR ha ragione**, e non dice
+   niente sulla confrontabilita': i primi tre giorni verrebbero misurati contro un
+   tetto che allora non esisteva.
+
+Il pro-rata resta scartato, e le tre ragioni restano. Cambia il peso della terza:
+**non stava proteggendo un confronto sano da un cambiamento pericoloso.** Stava
+proteggendo da un cambiamento un confronto che, nei due casi qui sopra, non aveva
+gia' una risposta.
+
+## Cosa ne segue: `comparableToBudget`
+
+Il rimedio non e' rivedere questa decisione — e' **rendere dicibile** quando il
+confronto ha una risposta. `BudgetMetrics.comparableToBudget` e' vero se e solo se
+**un unico record di budget ha coperto il periodo dal primo all'ultimo giorno**.
+
+Chi disegna un confronto lo disegna solo li'. Dove e' falso non si disegna un
+confronto **approssimato**: non si disegna nessun confronto, perche' l'assenza si
+dichiara con la geometria e non con una nota — una traccia parziale leggerebbe
+"disastro" con la stessa disinvoltura con cui una traccia intera legge "bravo", e
+136,45 su 200 non e' nessuna delle due.
+
+E il campo sta in `BudgetMetrics` invece che nel componente per la ragione di
+sempre in questo progetto: una congiunzione scritta al chiamante viene
+"semplificata" da qualcuno fra sei mesi, con i test verdi perche' nei dati di prova
+le due condizioni coincidono. Come l'id deterministico e `ConfirmedPreview`, la
+scelta sbagliata non e' sconsigliata: e' inesprimibile.
+

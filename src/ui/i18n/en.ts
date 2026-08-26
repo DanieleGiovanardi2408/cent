@@ -461,5 +461,21 @@ export const en: Record<keyof typeof it, string> = {
   'toast.ruleInUse': 'It has already created expenses: you can only switch it off',
   'toast.ruleFailed': 'That did not work. Try again.',
 
+  /* --- Statistiche (fase 6) ------------------------------------------------ */
+  'nav.stats': 'Stats',
+  'title.stats': 'Where the money went',
+
+  'stats.blank.title': 'Nothing to show yet',
+  'stats.blank.text':
+    'Once you have a few expenses, this is where you see what the money went on, and how this period compares with the ones before it.',
+
+  'stats.variable': 'Day to day',
+  'stats.fixed': 'Fixed costs',
+  'stats.perMonth': 'every month',
+
+  'stats.byCategory': 'What it went on',
+  'stats.byPeriod.weekly': 'Week by week',
+  'stats.byPeriod.monthly': 'Month by month',
+
   'row.fixed': 'fixed cost',
 }

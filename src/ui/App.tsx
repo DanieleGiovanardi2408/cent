@@ -21,6 +21,7 @@ import { ExpenseActions } from './ExpenseActions'
 import { Fit } from './Fit'
 import { Guide } from './Guide'
 import { History } from './History'
+import { Stats } from './Stats'
 import { Home } from './Home'
 import { Mark } from './Mark'
 import { NO_OCCURRENCES, occupiedOccurrenceDates } from '../core/recurrence'
@@ -73,7 +74,7 @@ type Sheet = {
  * il tasto Indietro del browser, quindi un router sincronizzerebbe la UI con una
  * history che nessuno puo' guardare. Vedi ADR 002.
  */
-type View = 'home' | 'history' | 'settings'
+type View = 'home' | 'history' | 'stats' | 'settings'
 
 /** Il foglio delle categorie: quale gesto, su quale categoria. */
 type CatSheet =
@@ -217,11 +218,18 @@ export function App() {
   /**
    * Il periodo che la Home sta mostrando — cioe' quello dell'ultimo budget
    * impostato (`activePeriod`, e docs/ROADMAP.md "Il periodo della Home deriva
-   * dai budget"). Serve a due schermate: al foglio del budget, che si apre
-   * selezionato li', e a Impostazioni, che dice quale budget e' in vigore.
+   * dai budget"). Serve a **tre** schermate: al foglio del budget, che si apre
+   * selezionato li'; a Impostazioni, che dice quale budget e' in vigore; e alle
+   * Statistiche, le cui righe sono periodi.
    *
-   * Si calcola una volta qui e non in ognuna delle due: due chiamate sarebbero
-   * due risposte che divergono il giorno in cui la regola cambia.
+   * Si calcola una volta qui e non in ognuna delle tre: tre chiamate sarebbero
+   * tre risposte che divergono il giorno in cui la regola cambia.
+   *
+   * Per le Statistiche non e' solo economia. La riga piu' recente di "periodo per
+   * periodo" **e' lo stesso periodo** che la Home riassume, quindi lo speso di
+   * quella riga e la cifra della Home sono la stessa quantita': passando di qui
+   * lo sono per costruzione, e un test le confronta come identita' invece che
+   * come due numeri calcolati a parte.
    */
   const homePeriod = useMemo(
     () => activePeriod(app.data?.budgets ?? [], app.day),
@@ -1311,8 +1319,15 @@ export function App() {
           {/* La navigazione sta in barra e non in fondo allo schermo: in fondo
               c'e' la fascia riservata al FAB, e una barra di schede li' dentro
               sarebbe un secondo bersaglio a un pollice di distanza da quello che
-              vale piu' di tutti. Due schermate non hanno bisogno di piu' di due
-              parole. */}
+              vale piu' di tutti.
+
+              Erano due schede e questo commento diceva "due schermate non hanno
+              bisogno di piu' di due parole". Dalla fase 6 sono tre, e la frase
+              e' stata riscritta invece che lasciata li' a dichiarare un numero
+              che non e' piu' vero. La larghezza a tre schede e' **misurata**
+              dalla sonda dell'overflow, non stimata: il breakpoint a 359px
+              nasconde gia' l'etichetta di Impostazioni, ed e' li' che il conto
+              si stringe. */}
           <nav class="nav" aria-label={t('nav.label')}>
             <button
               type="button"
@@ -1329,6 +1344,14 @@ export function App() {
               onClick={() => setView('history')}
             >
               <Fit k="nav.history" />
+            </button>
+            <button
+              type="button"
+              class="nav__tab"
+              aria-current={view === 'stats' ? 'page' : undefined}
+              onClick={() => setView('stats')}
+            >
+              <Fit k="nav.stats" />
             </button>
           </nav>
         </header>
@@ -1354,7 +1377,15 @@ export function App() {
 
         <main class="app__main">
           <h1 class="visually-hidden">
-            {t(view === 'home' ? 'title.home' : view === 'history' ? 'title.history' : 'title.settings')}
+            {t(
+              view === 'home'
+                ? 'title.home'
+                : view === 'history'
+                  ? 'title.history'
+                  : view === 'stats'
+                    ? 'title.stats'
+                    : 'title.settings',
+            )}
           </h1>
           {view === 'home' ? (
             <Home
@@ -1365,6 +1396,16 @@ export function App() {
               day={app.day}
               onPick={pick}
               onEditBudget={() => openSheet('budget')}
+            />
+          ) : view === 'stats' ? (
+            <Stats
+              phase={app.phase}
+              expenses={app.data?.expenses ?? []}
+              categories={app.data?.categories ?? []}
+              rules={app.data?.recurringRules ?? []}
+              budgets={app.data?.budgets ?? []}
+              period={homePeriod}
+              day={app.day}
             />
           ) : view === 'history' ? (
             <History
