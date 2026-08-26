@@ -1,83 +1,195 @@
-# Stato corrente — 25 agosto 2026
+# Stato corrente
 
-**Da riscrivere a ogni ripartenza.** Non contiene decisioni (quelle stanno sotto e
-nelle ADR): contiene cio' che una sessione nuova **non puo' dedurre da nessun
-file** — cosa e' in volo, cosa aspetta una persona, e quali soglie stanno per
-scattare.
+**Questa sezione ha due meta', e la divisione e' la cosa che la tiene vera.**
 
-## A che punto siamo
+Sopra ci sono i **fatti**, che nessuno scrive: li rigenera `npm run state` dal
+repository. Sotto ci sono i **giudizi**, che nessuno puo' derivare — cosa e' in
+volo, cosa aspetta una persona — e che restano scritti a mano, ognuno **timbrato
+con lo SHA a cui e' stato rivisto e con quanti commit sono passati da allora**.
 
-Ultimo commit: **`62f8ce8`**, CI verde, in produzione su
-https://danielegiovanardi2408.github.io/cent/
+La divisione non e' estetica. Il 26 agosto una sessione nuova ha letto questo
+blocco e ci ha trovato **cinque righe false**: l'ultimo commit era indietro di
+**nove**, i tre numeri erano di due consegne prima, e la riga operativa sulla
+migrazione del telefono nominava una catena che lo schema aveva gia' superato.
+Tre delle cinque erano fatti derivabili scritti a mano; due erano giudizi
+invecchiati senza che si vedesse. Le prime tre non si possono piu' scrivere. I due
+giudizi restano, ma adesso dichiarano la propria eta', cosi' chi legge sa quanta
+fiducia dargli **prima** di fidarsi, invece di scoprirlo rileggendo il codice.
 
-Fasi finite: **0, 1, 2, 4, 3, 5** (la 4 e' stata fatta prima della 3, vedi la
-tabella sotto). Restano **6** (statistiche), **7** (export/import completo con
-anteprima) e **8** (packaging e pubblicazione).
+<!-- STATE:BEGIN — rigenerato da `npm run state`. Non scrivere qui a mano. -->
 
-Numeri all'ultimo commit: **533 test unitari**, **188 e2e** (+16 saltati e
-dichiarati), bundle **47,9 KB gzip** su 60, suite locale **4m41s**.
+## I fatti, rigenerati
+
+Questo blocco non si scrive: si rigenera. Contiene solo cio' che il repository
+sa gia', e per questo non puo' invecchiare. I giudizi — cosa e' in volo, cosa
+aspetta una persona — stanno sotto, scritti a mano e timbrati con lo SHA a cui
+sono stati rivisti.
+
+- **Ultimo commit**: `888699a` — refactor: due controlli in CI, e il terzo campo senza produttore
+- **Data**: 25/08/2026 23:45
+- **Pushato**: si, `origin/main` e' allo stesso commit
+- **Albero di lavoro**: **non pulito**, ci sono modifiche non committate
+
+- **Test unitari**: 595 in 22 file, tutti verdi
+- **Test e2e**: 228 dichiarati in 12 file, su 4 progetti (iphone-se, iphone-14, landscape, dark). Quanti ne girano davvero dipende dall'ambiente: i salti di questa suite sono condizionali (ADR 013) e nessuna lettura statica li vede.
+- **Bundle iniziale**: 51.7 KB gzip su 60.0 KB (8.3 KB di margine)
+
+- **Schema del database**: 4. La scala delle migrazioni:
+  - **1** — Schema iniziale: expenses, categories, recurringRules, budgets, settings
+  - **2** — Expense.timeMinutes (opzionale); le impostazioni dichiarano la versione 2
+  - **3** — Settings.language e Settings.onboardingCompletedAt (opzionali, default assente)
+  - **4** — RecurringRule.anchorDay esplicito e obbligatorio sulle regole mensili
+
+  Un dispositivo fermo a una versione precedente le esegue **tutte in fila fino alla 4**
+  alla prima apertura dopo l’aggiornamento. Da quale parta e' un fatto del telefono, non del
+  repository, e per questo non e' scritto qui.
+
+<!-- STATE:END -->
 
 ## In volo adesso
 
-- **Il gate della fase 5 con `product-critic` e' in corso** e il suo report **non
-  e' ancora arrivato**. Ha quattro puntamenti oltre al giro normale: (1) il rename
-  `totalSpent` -> `budgetSpent` ha forzato una scelta in ogni chiamante, ma il
-  compilatore garantisce che *una* scelta sia stata fatta, non che sia quella
-  giusta; (2) ri-derivare i percorsi che generano occorrenze retroattive invece di
-  spuntare i tre noti; (3) il doppio numero fra Home e Storico il primo del mese;
-  (4) se la scorciatoia dell'1 centesimo sia chiusa o solo ristretta.
-- Se questa sessione riparte senza quel report, **il gate va rifatto**: nessuna
-  delle sue conclusioni e' stata applicata.
+<!-- JUDGMENT rivisto=888699a -->
+> Rivisto a `888699a`, cioe' a questo commit.
+
+**Niente.** Non c'e' nessun agente in volo e nessun lavoro a meta' nell'albero.
+
+**Il gate della fase 5 con `product-critic` e' stato fatto**, e le sue conclusioni
+sono in main. Questa riga diceva il contrario — *"il report non e' ancora
+arrivato... se questa sessione riparte senza, il gate va rifatto"* — ed era il
+piu' costoso dei cinque errori: una sessione che le avesse creduto avrebbe rifatto
+un gate gia' chiuso, con le conclusioni gia' applicate, e nessuno se ne sarebbe
+accorto.
+
+Il gate ha prodotto **due ALTO**, che erano lo stesso nodo visto da due lati —
+l'app annunciava numeri non riconciliabili con lo schermo, e non diceva da nessuna
+parte il giorno in cui una regola paga. Chiusi in `406f417` (ADR 022 e 023). Il
+giro successivo, `888699a`, ha chiuso i due campi senza produttore che il controllo
+nuovo ha trovato al primo passaggio.
+
+I quattro puntamenti che questa riga elencava sono esauriti: il rename
+`totalSpent` -> `budgetSpent` e' in `budget.ts` con la nota per chi ci arriva; i
+percorsi che generano occorrenze retroattive sono **tre e ri-derivati**, non
+spuntati (creazione con data passata, riaccensione, rewind — `rule.hint.on` esiste
+proprio perche' il secondo e' il piu' silenzioso); il doppio numero fra Home e
+Storico e' la decisione di ADR 016, non un difetto; la scorciatoia dell'1 centesimo
+e' chiusa.
 
 ## In sospeso sul telefono — nessuna di queste e' automatizzabile
 
-Sono ferme dal **24 agosto** e vanno fatte **in quest'ordine**:
+Sono ferme dal **24 agosto** e vanno fatte **in quest'ordine**, che non e' una
+preferenza: ogni passo distrugge la possibilita' di fare il precedente.
+
+<!-- JUDGMENT rivisto=888699a -->
 
 1. **Esportare un backup dall'app installata SENZA toccare la banda di
    aggiornamento.** Per ADR 005 l'app aggiorna solo quando l'utente tocca, quindi
-   il telefono sta ancora allo **schema 2**: quello e' l'unico momento in cui si
-   puo' prendere uno stato pre-migrazione. Una rete esiste gia'
-   (`cent20260823.json`, `schemaVersion: 2`), ma copre solo fino al 23 agosto.
-2. **Toccare la banda.** Li' gira la **migrazione 2 -> 3** sul database reale — la
-   prima migrazione su dati veri del progetto. Il piano e' stato verificato su una
-   copia del backup vero, campo per campo, e `schema.ts` non e' cambiato da allora.
-3. **Creare la regola dell'affitto vero** con la data di inizio giusta: e' il
+   il telefono sta ancora a uno schema precedente: **quello e' l'unico momento in
+   cui si puo' prendere uno stato pre-migrazione**, e toccare la banda lo chiude
+   per sempre. Una rete esiste gia' (`cent20260823.json`), ma copre solo fino al
+   23 agosto: i giorni in mezzo li ha solo il telefono.
+2. **Toccare la banda.** Li' girano **tutte le migrazioni in fila fino a
+   `SCHEMA_VERSION`** — la scala completa, con i numeri veri, sta nel blocco
+   rigenerato qui sopra e non va ricopiata.
+
+   Questa riga diceva *"li' gira la migrazione 2 -> 3"* e *"`schema.ts` non e'
+   cambiato da allora"*. Erano gia' false: lo schema e' andato avanti, e il passo
+   che si e' aggiunto e' **l'unico dell'intero progetto che scrive un campo sui
+   record esistenti**. La riga adesso non nomina nessun numero d'arrivo, perche'
+   il numero d'arrivo e' derivabile e il numero di partenza e' un fatto del
+   telefono: scriverli a mano e' esattamente come questa riga era diventata falsa.
+
+   Il piano e' verificato: la catena e' stata provata su **una copia del backup
+   reale** — 6/6 spese, 8/8 categorie, 1/1 budget identici per valore e per
+   riferimento, somma 9693/9693, unico record cambiato `settings.schemaVersion`.
+   Con il limite dichiarato: quella prova **non esercita la derivazione
+   dell'ancora mensile**, perche' nel file vero non c'e' nessuna regola. Quella e'
+   coperta da un archivio sintetico.
+3. **Creare la regola dell'affitto vero** con la data di inizio giusta. E' il
    criterio di chiusura della fase 5, e serve a vedere l'anteprima degli arretrati
-   con numeri veri.
+   con numeri veri. Va **dopo** il passo 2: `anchorDay` e' obbligatorio sulle
+   mensili solo dallo schema 4, quindi crearla prima significherebbe crearla sotto
+   uno schema che non ha il campo.
 4. **Dare il telefono a una persona che non ha mai visto l'app**, che non parla
    italiano e che non fuma, **senza dire niente**. Deve capire cosa fa l'app,
    sostituire una categoria con una sua e registrare una spesa. E' il criterio di
-   chiusura della fase 3, **e si consuma una volta sola**: i rilievi del critico
-   vanno corretti prima.
+   chiusura della fase 3, **e si consuma una volta sola**: va da sola, dopo le
+   altre tre, e i rilievi aperti vanno chiusi prima.
    Nello stesso giro, a occhio: **il contenuto sotto il notch**, che la suite non
    puo' vedere per costruzione (vedi "Verificabili solo sul dispositivo").
 
 ## Soglie vicine a scattare
 
 - ~~**La suite e' a 4m41s contro il tetto di 5 minuti.**~~ **Scattata, e chiusa.**
-  Misurata a **6m40s** (209 passati, 16 saltati), si e' divisa fra i core invece
-  che fra due comandi: `workers: '50%'`, `fullyParallel: false` intatto, e
-  l'attesa torna a **2m13s**. Ragione, numeri e strade scartate in
-  [ADR 021](adr/021-la-suite-si-divide-fra-i-core-non-fra-due-comandi.md); il
-  paragrafo "Se la suite locale supera i 5 minuti" piu' sotto e' aggiornato di
-  conseguenza.
-- **Il bundle e' a 47,9 KB su 60.** Restano 12,1 KB per statistiche, import e
-  packaging.
-- **Il disco della macchina di sviluppo e' a 3,0 GB liberi**, in calo costante e
-  non per colpa del progetto. Era 21 GB il 22 agosto. Sotto il gigabyte questa
-  sessione si e' gia' bloccata una volta al punto di non poter eseguire nemmeno
-  `df`: se ricapita, la prima mossa e' liberare spazio da un Terminale vero, non
-  da qui.
+  Misurata a **6m40s**, si e' divisa fra i core invece che fra due comandi:
+  `workers: '50%'`, `fullyParallel: false` intatto, e l'attesa e' tornata sotto
+  la meta'. Ragione, numeri e strade scartate in
+  [ADR 021](adr/021-la-suite-si-divide-fra-i-core-non-fra-due-comandi.md).
+- **Il bundle.** Il numero e il margine stanno nel blocco rigenerato: non si
+  ricopiano qui. Quello che il blocco non sa dire e' **cosa deve ancora entrarci**
+  — statistiche (fase 6), import con anteprima (fase 7) e packaging (fase 8).
+- **L'indice su `recurringId`: soglia scritta, non ancora raggiunta.**
+  **1.000 spese in archivio.** Sopra quel numero il clone dentro la `readwrite`
+  smette di essere gratis (~140 byte per record, ~140 KB clonati mentre lo store
+  `expenses` e' bloccato in scrittura). Si misura senza aggiungere strumenti:
+  `node scripts/audit.mjs <backup.json>` conta i record, e il numero e'
+  `data.expenses.length`. Ragione per esteso in
+  [ADR 022](adr/022-si-annuncia-quello-che-comparira.md).
+- **Il disco della macchina di sviluppo.** Vedi il giudizio qui sotto: e' l'unica
+  soglia di questo elenco che non riguarda il progetto e che puo' comunque
+  fermarlo.
+
+## Il disco
+
+<!-- JUDGMENT rivisto=888699a -->
+
+**Misurato il 26 agosto: 2,1 GB liberi su 228**, dopo aver svuotato la cache npm
+(841 MB -> 566 MB). Durante una sola sessione di lavoro il libero e' passato da 6,4
+a 1,6 GB **senza che noi scrivessimo niente di paragonabile**: il progetto pesa
+**170 MB in tutto**, `node_modules` compreso. Sono snapshot APFS e spazio
+eliminabile, non noi.
+
+Non e' un problema nostro e diventa nostro comunque. A quel livello un
+`npm run build` puo' fallire a meta', e **e' gia' successo di diagnosticare per ore
+un guasto che era il disco**.
+
+**Regola operativa: non si lancia `npm run test:e2e` finche' il libero non e'
+stabilmente a due cifre di giga.** Oggi non lo e', quindi **il numero della suite
+e2e e' un fatto non misurato** — e si scrive cosi', invece di riportare quello
+dell'ultima volta. E' la stessa dottrina del blocco rigenerato qui sopra, che sul
+bundle scrive "non misurato" se `dist/` e' vecchio: un indicatore che puo' sbagliare
+deve sbagliare verso l'allarme.
+
+La riserva grossa e' **`~/.ollama`, 22 GB**, misurata e **volutamente non toccata**:
+cancellarla e' irreversibile e la decisione e' di chi usa quei modelli, non di chi
+gli sta pulendo il disco.
+
+Se il libero scende sotto il gigabyte questa sessione si e' gia' bloccata una volta
+al punto di non poter eseguire nemmeno `df`: se ricapita, la prima mossa e' liberare
+spazio da un Terminale vero, non da qui.
 
 ## Decisioni prese e non ancora applicate
 
-Nessuna in sospeso al momento di scrivere. Le ultime sono state chiuse con
-`62f8ce8`. **Se il report del critico arriva, le sue conclusioni approvate vanno
-qui finche' non sono nel codice** — e' successo due volte che una decisione
-restasse scritta e non applicata per due commit (la seconda soglia del promemoria,
-la Parte 2 del tastierino), ed entrambe le volte l'ha trovata un gate e non una
-grep.
+<!-- JUDGMENT rivisto=888699a -->
 
+**Nessuna.** Le conclusioni dei due gate della fase 5 sono tutte nel codice, in
+`406f417` e `888699a`.
+
+Quello che invece **e' aperto e non e' una decisione ma un debito**, sta in
+[DEBITO.md](DEBITO.md) — che esiste perche' questa riga, da sola, non bastava: i
+dieci difetti di copy trovati al gate erano stati dichiarati *"elencati come
+debito"* **nel messaggio di un commit**, cioe' in un posto scritto una volta e
+riletto mai. E' la stessa curva di lettura di un campo senza produttore.
+
+**La regola che ne esce, e vale da adesso:**
+
+- **Il debito si dichiara in un file.** Un messaggio di commit puo' rimandarci,
+  mai contenerlo.
+- **Ogni lista di chiusura di un gate entra qui quando viene concordata**, non
+  quando viene completata. La lista di chiusura della fase 5 e' stata consegnata a
+  voce, eseguita, e non e' mai esistita in nessun file: quando una sessione nuova
+  l'ha cercata per verificare cosa fosse fatto, non c'era niente da leggere.
+  Se una lista arriva in chat e non compare in un file, **dirlo e' responsabilita'
+  di chi la riceve tanto quanto di chi la manda.**
 
 # Roadmap
 
@@ -644,10 +756,19 @@ palestra a giugno, il tram ad agosto, l'affitto quando finisce il contratto. Una
 regola senza fine costringe a ricordarsi di disattivarla, cioe' a fare a mano una
 cosa che la data sapeva gia'.
 
-Torna **col suo campo di input, nello stesso commit**, come dice la regola: *un
-campo si spedisce insieme al suo produttore, o non si spedisce.* Cancellare del
-codice non e' cancellare un'intenzione, purche' l'intenzione sia scritta dove si
-rilegge.
+Torna **col suo campo di input, nello stesso commit**. La regola nella forma che
+vale — quella che `dead-surface.mjs` sa controllare — e': *un campo e' prodotto
+quando un valore entra da fuori almeno una volta; una scrittura la cui espressione
+contiene solo letture dello stesso campo e' una copia.* Un campo di input e' un
+valore che entra da fuori; `draft.endDate = rule.endDate` no, ed e' proprio la
+catena di copie su cui lo script era verde su un albero malato.
+
+(La prima formulazione era *"un campo si spedisce insieme al suo produttore, o non
+si spedisce"*: dice la cosa giusta a un umano e non si puo' controllare a macchina,
+perche' non dice cosa sia un produttore. E' stata sostituita, non ammorbidita.)
+
+Cancellare del codice non e' cancellare un'intenzione, purche' l'intenzione sia
+scritta dove si rilegge.
 
 **Torna anche con le sue parole.** Sono uscite dai due dizionari insieme al campo,
 e non sono rimaste in attesa: `fixed.ended` (*"finita: {day}"*, il terzo motivo per

@@ -47,6 +47,33 @@ jobs:
       - name: Campi e chiavi senza controparte
         run: npm run audit:source
 
+      # ## Perche' questo avvisa e gli altri fermano
+      #
+      # `npm run state` rigenera i fatti in cima a ROADMAP e timbra i giudizi con
+      # la loro eta' in commit. Qui gira in sola lettura e **non fallisce mai**,
+      # di proposito e per due ragioni distinte.
+      #
+      # La prima e' quella dell'hook pre-commit, gia' scritta in CLAUDE.md: una
+      # guardia che blocca per una riga di prosa vecchia viene aggirata il terzo
+      # giorno, e una guardia aggirata e' peggio di nessuna guardia.
+      #
+      # Il confronto **salta le righe di identita' del commit** (SHA, data, stato
+      # dell'albero): cambiano a ogni push per costruzione, e includerle avrebbe
+      # fatto segnalare questo passo sempre — cioe' la guardia che grida al lupo,
+      # che questo progetto ha gia' deciso di non sopportare altrove.
+      #
+      # Guarda invece cio' che costa misurare e che quindi nessuno rimisura
+      # leggendo: conteggi dei test, peso del bundle, scala delle migrazioni,
+      # eta' dei giudizi. Sono esattamente i due casi che hanno prodotto questo
+      # passo — "533 unitari" rimasto per due consegne, e "gira la migrazione
+      # 2 -> 3" con lo schema gia' a 4.
+      #
+      # Il valore non e' nel gate: e' nel fatto che quei numeri non si scrivono
+      # piu' a mano. Questo passo rende visibile chi ha dimenticato di
+      # rigenerarli, e da quanti commit un giudizio non viene riletto.
+      - name: Stato corrente allineato
+        run: npm run state -- --check
+
       - name: Test
         run: npm test
 

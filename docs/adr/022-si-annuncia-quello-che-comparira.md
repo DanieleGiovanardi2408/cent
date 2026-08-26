@@ -55,11 +55,41 @@ sono le occorrenze generate da quando la regola e' nata: **non scala con la
 finestra, scala con l'eta' della regola.** La transazione legge un insieme piccolo,
 non ne interroga uno grande.
 
-`occupiedOccurrenceDates` guarda **l'id**, non il campo `date`: l'id e'
-`rec:<ruleId>:<giorno>` (ADR 006) e il campo `date` l'utente puo' cambiarlo —
-l'affitto di agosto spostato al 5 settembre tiene l'id del 1 agosto. E' lo stesso
+`occupiedOccurrenceDates` guarda **l'id**, non il campo `date`. E' lo stesso
 predicato che `materializeRecurring` applica prima di scrivere, ed e' asserito come
 **identita'** in un test invece che confrontato a occhio.
+
+### La ragione scritta qui era falsa, e la decisione non lo era
+
+Fino al 26 agosto questo paragrafo diceva *"il campo `date` l'utente puo'
+cambiarlo — l'affitto di agosto spostato al 5 settembre tiene l'id del 1 agosto"*.
+
+**Non e' vero.** Gli scrittori di `Expense.date` sono quattro in tutto —
+`addExpense`, `updateExpense`, `materializeRecurring`, `parseBackup` — e il secondo
+ha **due soli chiamanti di produzione**, l'`AmountSheet` e il suo Annulla, che
+passano entrambi `{ amountCents }`. **Nessuna schermata cambia la data di una
+spesa**, e lo scenario dell'affitto spostato non e' raggiungibile dal prodotto.
+
+`888699a` aveva gia' ritirato quella premessa dal codice, in due punti di
+`recurrence.ts`, e il commento che la sostituiva diceva *"qui c'era scritto — **e
+sta anche in ADR 022** — che `date` l'utente puo' cambiarla."* Stava anche qui, ed
+e' rimasta un giorno in piu': la correzione era stata applicata dove il codice la
+usava, non dove l'argomento era scritto.
+
+**Le due ragioni che reggono davvero:**
+
+1. **`date` non e' un'identita'.** E' un attributo che il record porta, e niente
+   impone che concordi col giorno scritto nell'id: `parseExpense` li legge
+   separatamente e non li confronta.
+2. **L'import di un JSON scritto a mano e' una porta dichiarata** — le spese orfane
+   entrano di proposito, con un avviso. Su un archivio cosi' la coppia
+   `recurringId|date` dichiarerebbe occupato un giorno che l'id non occupa, cioe'
+   filtrerebbe via l'occorrenza **vera** mentre il segnaposto avanza lo stesso: un
+   canone perso senza nessun segnale.
+
+Una decisione giusta difesa da una premessa falsa e' **peggio** di una decisione
+senza difesa, perche' la premessa viene riusata altrove — ed e' esattamente cosi'
+che questa frase e' arrivata fin qui, copiata dal commento che la conteneva.
 
 Le lapidi contano come occupate: occupano l'id, `add` salta, quindi una spesa
 cancellata a mano non deve rientrare fra le nuove.

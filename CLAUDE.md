@@ -635,7 +635,7 @@ servirebbe a niente**: il difetto e' che le regole di questo progetto **vivono i
 documenti e vengono applicate a memoria**. Chi le scrive e' la stessa entita' che
 deve ricordarsene, in una sessione diversa, tre giorni dopo.
 
-### A. Campi senza produttore — `scripts/audit.mjs`, in CI
+### A. Campi senza produttore — `scripts/dead-surface.mjs` (`npm run audit:source`), in CI
 Per ogni campo dei tipi in `src/core/types.ts`: esiste una scrittura che **non** sia
 `parseBackup`, una migrazione o un test? Se no il campo e' morto, l'audit esce con
 errore e stampa **i lettori che tiene in vita**.
@@ -657,6 +657,48 @@ I tre casi che l'hanno prodotta: *"un selettore sarebbe l'unico ingresso a quest
 ramo"* (falso gia' quando fu scritto), *"questo stato e' irraggiungibile"* su un
 ramo che il rewind avrebbe reso raggiungibile il giorno dopo, e
 `history.blank.install`.
+
+### Due script, e non vanno confusi
+
+Questa sezione attribuiva i controlli A e B a `scripts/audit.mjs`. **Sono in
+`scripts/dead-surface.mjs`**, che e' un altro file.
+
+- **`dead-surface.mjs`** (`npm run audit:source`) guarda il **codice**: campi senza
+  produttore, chiavi i18n senza lettore. Gira **in CI**, a ogni push, senza
+  argomenti.
+- **`audit.mjs`** guarda i **dati**: si lancia a mano su un backup vero
+  (`node scripts/audit.mjs <backup.json>`) e conta i record. E' lo strumento con
+  cui si misura la soglia delle 1.000 spese di ADR 022.
+
+La distinzione e' scritta in [ADR 024](adr/024-un-controllo-sintattico-che-trova-difetti-di-prodotto.md).
+Qui era andata persa **il giorno stesso** in cui lo script nuovo e' nato, e per la
+ragione di sempre: il nome e' stato scritto a memoria invece che guardato.
+
+### D. Lo "Stato corrente" non si scrive a mano — `scripts/state.mjs`
+
+C'e' una quarta classe, trovata il 26 agosto: **fatti derivabili dal repository,
+scritti a mano in un documento**. Il blocco "Stato corrente" di `docs/ROADMAP.md`
+conteneva cinque righe false — l'ultimo commit indietro di **nove** commit, tre
+numeri di due consegne prima, e la riga operativa sulla migrazione del telefono
+che nominava una catena che lo schema aveva gia' superato.
+
+E' la stessa forma dei campi senza produttore, applicata alla **memoria del
+progetto** invece che ai tipi: scritto al tempo t, letto al tempo t+n, vero solo a t.
+
+`npm run state` rigenera quel blocco. **Un fatto rigenerato non puo' diventare
+stantio.** I giudizi — cosa e' in volo, cosa aspetta una persona — non si derivano
+e restano scritti a mano, ma portano un **timbro**: lo SHA a cui sono stati rivisti
+e quanti commit fa. Oltre cinque commit, `npm run state -- --check` avvisa in CI.
+
+**Avvisa e non fallisce**, per la ragione dell'hook pre-commit: una guardia che
+blocca per una riga di prosa viene aggirata il terzo giorno.
+
+E **il confronto salta le righe di identita' del commit** — SHA, data, stato
+dell'albero — perche' cambiano a ogni push per costruzione: includerle avrebbe
+fatto segnalare il check *sempre*, cioe' mai. Guarda cio' che costa misurare e che
+quindi nessuno rimisura leggendo: conteggi dei test, peso del bundle, scala delle
+migrazioni, eta' dei giudizi. **E' la differenza fra una guardia e un rumore**, ed
+e' la stessa scelta della calibrazione dell'hook.
 
 ## Dopo una correzione, la verifica si riesegue — non si deduce
 Il posto piu' probabile in cui trovare il prossimo difetto e' **dentro la
@@ -693,9 +735,32 @@ chiamavano. Prima di aggiungere un parametro "solo per i test" a qualcosa in
 un finto?** Quasi sempre si', e li' non lascia una superficie che qualcuno
 scambiera' per un'API.
 
+## Il debito si dichiara in un file, mai in un messaggio di commit
+
+Un messaggio di commit **puo' rimandare** a un elenco di difetti accettati; non
+puo' **essere** quell'elenco. E' scritto una volta e riletto mai: ha esattamente la
+curva di lettura di un campo senza produttore.
+
+Il caso che l'ha prodotta: `888699a` dichiarava *"le altre dieci sono elencate come
+debito"*, e **non erano elencate da nessuna parte**. L'elenco viveva nella sessione
+che lo aveva prodotto ed e' morto con lei; quando una sessione nuova e' andata a
+cercarlo — perche' il messaggio glielo prometteva — non c'era niente da leggere, e
+le dieci sono state riderivate da zero.
+
+Corollario che rende la regola controllabile: **un elenco che un commit dichiara
+esistente deve esistere prima del commit.** Sta in [docs/DEBITO.md](docs/DEBITO.md).
+
+Vale identico per le **liste di chiusura di un gate**: entrano in `docs/ROADMAP.md`
+**quando vengono concordate**, non quando vengono completate. La lista di chiusura
+della fase 5 e' stata consegnata a voce, eseguita, e non e' mai esistita in nessun
+file. Se una lista arriva in chat e non compare in un file, **dirlo e'
+responsabilita' di chi la riceve tanto quanto di chi la manda.**
+
 ## Convenzioni di lavoro
 - Conventional Commits (`feat:`, `fix:`, `perf:`, `docs:`, `refactor:`).
 - Ogni decisione architetturale non ovvia -> `docs/adr/NNN-titolo.md`.
+- Un difetto accettato e non riparato -> `docs/DEBITO.md`, con la condizione che lo
+  rende non piu' accettabile.
 - `src/core` e' TypeScript puro, senza DOM: testabile senza browser.
 - Niente TODO orfani: o si fa, o diventa una riga di `docs/ROADMAP.md`.
 
