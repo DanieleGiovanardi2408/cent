@@ -25,15 +25,15 @@ sa gia', e per questo non puo' invecchiare. I giudizi — cosa e' in volo, cosa
 aspetta una persona — stanno sotto, scritti a mano e timbrati con lo SHA a cui
 sono stati rivisti.
 
-- **Ultimo commit**: `3d1ff92` — fix: il controllo che non funzionava in CI, e la frase che prometteva grafici
-- **Data**: 26/08/2026 15:25
-- **Pushato**: si, `origin/main` e' allo stesso commit
+- **Ultimo commit**: `758af03` — wip: fase 6 a meta' — NON pubblicabile, tsc rosso e tre ALTO aperti
+- **Data**: 27/08/2026 00:49
+- **Pushato**: **no: 2 commit non pushati**
 - **Albero di lavoro**: **non pulito**, ci sono modifiche non committate
 
-- **Test unitari**: 623 in 23 file, tutti verdi
-- **Test e2e dichiarati**: 246 in 13 file, su 4 progetti (iphone-se, iphone-14, landscape, dark)
-- **Test e2e eseguiti**: 230 passati, 16 saltati, in 2.2 minuti. I saltati sono condizionali (ADR 013): solo un'esecuzione li vede.
-- **Bundle iniziale**: 53.5 KB gzip su 60.0 KB (6.5 KB di margine)
+- **Test unitari**: 676 in 23 file, tutti verdi
+- **Test e2e dichiarati**: 303 in 14 file, su 4 progetti (iphone-se, iphone-14, landscape, dark)
+- **Test e2e eseguiti**: non misurato — l'ultima esecuzione e' piu' vecchia dei sorgenti — va rilanciata
+- **Bundle iniziale**: non misurato — `dist/` e' piu' vecchio dei sorgenti — va ricostruito
 
 - **Schema del database**: 4. La scala delle migrazioni:
   - **1** — Schema iniziale: expenses, categories, recurringRules, budgets, settings
@@ -49,31 +49,60 @@ sono stati rivisti.
 
 ## In volo adesso
 
-<!-- JUDGMENT rivisto=888699a -->
-> Rivisto a `888699a`, 2 commit fa.
+<!-- JUDGMENT rivisto=758af03 -->
+> Rivisto a `758af03`, cioe' a questo commit.
 
-**Niente.** Non c'e' nessun agente in volo e nessun lavoro a meta' nell'albero.
+**Fase 6, secondo gate fatto.** Il lavoro sta su **`fase-6-wip`**, non su main: la
+schermata ha difetti aperti e main pubblica su GitHub Pages.
 
-**Il gate della fase 5 con `product-critic` e' stato fatto**, e le sue conclusioni
-sono in main. Questa riga diceva il contrario — *"il report non e' ancora
-arrivato... se questa sessione riparte senza, il gate va rifatto"* — ed era il
-piu' costoso dei cinque errori: una sessione che le avesse creduto avrebbe rifatto
-un gate gia' chiuso, con le conclusioni gia' applicate, e nessuno se ne sarebbe
-accorto.
+**`tsc` e' rosso.** `tests/e2e/statistiche.spec.ts:457` chiama `conSegnaposti`, un
+helper che un agente stava scrivendo quando la sessione si e' chiusa per crediti
+esauriti. E' la prima cosa da riparare: senza, il build non gira e le e2e non si
+possono misurare. 676 unitari sono verdi, `audit:source` pure.
 
-Il gate ha prodotto **due ALTO**, che erano lo stesso nodo visto da due lati —
-l'app annunciava numeri non riconciliabili con lo schermo, e non diceva da nessuna
-parte il giorno in cui una regola paga. Chiusi in `406f417` (ADR 022 e 023). Il
-giro successivo, `888699a`, ha chiuso i due campi senza produttore che il controllo
-nuovo ha trovato al primo passaggio.
+### Tre ALTO
 
-I quattro puntamenti che questa riga elencava sono esauriti: il rename
-`totalSpent` -> `budgetSpent` e' in `budget.ts` con la nota per chi ci arriva; i
-percorsi che generano occorrenze retroattive sono **tre e ri-derivati**, non
-spuntati (creazione con data passata, riaccensione, rewind — `rule.hint.on` esiste
-proprio perche' il secondo e' il piu' silenzioso); il doppio numero fra Home e
-Storico e' la decisione di ADR 016, non un difetto; la scorciatoia dell'1 centesimo
-e' chiusa.
+1. **A e' una sezione sola con una scala sola.** Con l'affitto dentro, su una
+   settimana vera sei righe su sette stanno dentro dieci pixel (misurato a 390:
+   Casa 192,73 · Trasporti 12,53 · Spesa 9,88 · Fuori 5,50 · Coffeeshop 3,41 ·
+   Sigarette 2,84). La decisione e' presa e non applicata: vedi sotto.
+2. **`stats.outside.text` promette *"e il confronto comincia"*, e non comincia.**
+   Misurato: dopo aver fatto esattamente quello che il messaggio dice, a schermo
+   ci sono **zero barre** — una riga sola sta sotto entrambe le soglie. La
+   giustificazione scritta accanto argomenta su uno stato interno (`ready`)
+   invece che sul fatto promesso all'utente.
+3. **Il ramo `outside` ha due inquilini e una frase sola.** Da quando B sparisce
+   se ogni riga vale zero, ci atterra anche *"sei tornato dopo mesi"* — dove
+   *"segnane una quando paghi"* dice di fare una cosa gia' fatta. Serve una frase
+   vera in entrambi i casi, o l'argomento che spieghi perche' non esiste.
+
+### Tre MEDIO
+
+4. **A 320 punti la colonna del nome tronca stringhe nostre** (`Categoria
+   rimossa`), e `--name-max` e' tarato sui 128,97 px dell'italiano mentre
+   l'inglese ne chiede 131,67: margine reale 4 px, non 7.
+5. **La scheda `Quotidiane` ripete il proprio numero tre volte** sulla stessa
+   schermata (scheda, totale di parte, riga corrente di B), ed entrambi gli
+   argomenti che la reggevano sono scaduti — l'esclusione la dichiara ora il nome
+   di parte, e ADR 016 §3 dice *"accanto al budget"*, che questa schermata non
+   mostra. **Decisione del proprietario in sospeso.** Se cade, il sottotitolo
+   `17–23 ago` va spostato e non buttato: e' l'unico posto in cui la schermata
+   nomina il periodo quando B non c'e'.
+6. **`dead-surface.mjs` non guarda i campi dei tipi di `src/ui`.** Tre superfici
+   morte sono passate di li' in una sessione (`accruedCents`, `breakdownTotal`,
+   `fixedInPeriodCents`). Un controllo D misurato a mano da' **1 flag su 52 campi
+   e zero falsi positivi**. **Decisione in sospeso**: entra prima del push o in
+   fase 7.
+
+### Due BASSO
+
+7. **`Storico` nel testo di `outside` e' una stringa cablata**, e il commento
+   accanto dichiara che sia `nav.history`. Rinominando quella chiave, il
+   messaggio manda in un posto che non si chiama piu' cosi' e nessuna verifica se
+   ne accorge.
+8. **Il caso dei dati piu' vecchi della finestra** con `period: 'monthly'` non e'
+   misurato: la logica non dipende dal periodo, ma e' un argomento e non una
+   misura.
 
 ## In sospeso sul telefono — nessuna di queste e' automatizzabile
 
@@ -81,6 +110,7 @@ Sono ferme dal **24 agosto** e vanno fatte **in quest'ordine**, che non e' una
 preferenza: ogni passo distrugge la possibilita' di fare il precedente.
 
 <!-- JUDGMENT rivisto=888699a -->
+> Rivisto a `888699a`, 4 commit fa.
 
 1. **Esportare un backup dall'app installata SENZA toccare la banda di
    aggiornamento.** Per ADR 005 l'app aggiorna solo quando l'utente tocca, quindi
@@ -186,27 +216,83 @@ spazio da un Terminale vero, non da qui.
 
 ## Decisioni prese e non ancora applicate
 
-<!-- JUDGMENT rivisto=888699a -->
+<!-- JUDGMENT rivisto=758af03 -->
 
-**Nessuna.** Le conclusioni dei due gate della fase 5 sono tutte nel codice, in
-`406f417` e `888699a`.
+Sono **sei**, tutte concordate e nessuna nel codice. Questa sezione esiste perche'
+e' gia' successo due volte che una decisione restasse scritta e non applicata per
+due commit, ed entrambe le volte l'ha trovata un gate e non una grep.
 
-Quello che invece **e' aperto e non e' una decisione ma un debito**, sta in
-[DEBITO.md](DEBITO.md) — che esiste perche' questa riga, da sola, non bastava: i
-dieci difetti di copy trovati al gate erano stati dichiarati *"elencati come
-debito"* **nel messaggio di un commit**, cioe' in un posto scritto una volta e
-riletto mai. E' la stessa curva di lettura di un campo senza produttore.
+### 1. A si divide in due sezioni — Fisse e Variabili
 
-**La regola che ne esce, e vale da adesso:**
+Ognuna con la **sua scala**, e in ognuna **la barra piu' lunga arriva a fondo
+colonna**: due barre piene con due importi diversi dicono da sole che le scale
+sono due, senza leggere niente. Piu' l'intestazione di sezione, il totale del
+periodo per ognuna, e una separazione vera.
 
-- **Il debito si dichiara in un file.** Un messaggio di commit puo' rimandarci,
-  mai contenerlo.
-- **Ogni lista di chiusura di un gate entra qui quando viene concordata**, non
-  quando viene completata. La lista di chiusura della fase 5 e' stata consegnata a
-  voce, eseguita, e non e' mai esistita in nessun file: quando una sessione nuova
-  l'ha cercata per verificare cosa fosse fatto, non c'era niente da leggere.
-  Se una lista arriva in chat e non compare in un file, **dirlo e' responsabilita'
-  di chi la riceve tanto quanto di chi la manda.**
+Le quattro ragioni, perche' fra un mese qualcuno rivorra' "il grafico unico":
+
+- **ADR 016 §1 resta rispettato per intero**: non si nasconde niente, l'affitto
+  c'e' con la sua categoria e si vede che e' la voce piu' grossa.
+- **Le sei righe tornano confrontabili**, perche' la loro scala non e' piu'
+  schiacciata da una voce di un altro ordine di grandezza.
+- **E' il modello mentale del prodotto**, non un espediente grafico: e' la stessa
+  distinzione per cui esistono ADR 016 e la schermata Spese fisse.
+- **Il tratteggio dentro la barra sparisce invece di essere riparato**: esisteva
+  per distinguere la parte ricorrente, e con le sezioni la distinzione **e'** la
+  sezione. Un difetto la cui causa non c'e' piu' vale piu' di un difetto riparato
+  — e quel tratteggio aveva un contrasto di 2,51–2,82 su quattro tinte, inclusa
+  quella di default di Casa.
+
+La soglia minima di righe si applica **per sezione**. Una categoria con entrambe
+le nature (Trasporti: 23,00 fissi e 10,00 a mano) compare in tutte e due, ed e'
+informativo.
+
+### 2. Il pavimento della barra sta nel modello, non nel CSS
+
+Aveva **due proprietari**: il modello calcolava la frazione e il CSS la correggeva
+col bordo (`border-box`, quindi ogni larghezza sotto 2 px si dipinge 2 px). Da li'
+due difetti insieme: importi diversi con barre identiche, e un test unitario che
+dichiarava di sorvegliare il minimo **senza poter cadere**, perche' il minimo non
+era nel modello.
+
+### 3. La fixture "budget piu' giovane dei dati" entra nella suite adesso
+
+Tutti i test usavano `effectiveFrom: '2026-01-01'`, quindi `comparableToBudget`
+era **sempre vero**: il ramo della barra nuda — la geometria che dichiara
+l'assenza del confronto, la cosa su cui questa fase ha speso mezza giornata — **non
+e' mai stato disegnato in un browser.** Non e' una rifinitura da fare sul telefono
+dopo il push: e' l'unica copertura del meccanismo centrale.
+
+### 4. Le fisse hanno due nomi, perche' sono due quantita'
+
+`monthlyFixedCosts(rules)` e' una **proiezione** — quanto costera' al mese da qui
+in avanti — e ADR 016 §3 la usa per pareggiare il budget, che e' anch'esso in
+avanti. Il *"di cui X fisse"* di A e' **retrospettivo**: quanto e' uscito davvero
+in questo periodo. Entrambe legittime; il difetto era che si chiamavano uguale.
+La scheda dice *"Fisse al mese"*, A dice *"gia' uscite in questo periodo"*, e la
+scheda **non sparisce** quando si disattiva una regola: se in quel periodo sono
+uscite delle fisse, il fatto e' avvenuto e resta scritto.
+
+### 5. Massimo alla colonna del nome, minimo a quella del plot
+
+Senza quei due vincoli la geometria resta **una funzione della tipografia**, che e'
+esattamente cio' che la griglia unica per sezione doveva chiudere. Oggi un solo
+nome lungo porta il plot da 192,73 a 64,00 px per **ogni** riga della sezione: il
+difetto locale e' stato sostituito da uno globale e silenzioso.
+
+### 6. La regola sulle riparazioni
+
+**Quando una riparazione cita un argomento scritto altrove, deve riscriverne la
+condizione sul posto.** Non *"come da ADR X"*, ma *"vale perche' qui succede Y"*.
+Se la condizione non si riesce a scrivere, l'argomento non vale qui — e lo si
+scopre mentre si ripara, non due gate dopo.
+
+Non e' una regola di stile: la quarta, la quinta e la sesta ricorrenza di *"una
+decisione vale dove vale il suo argomento"* sono state trovate **dentro riparazioni
+della stessa sessione**. Non e' un caso — una riparazione si scrive col difetto in
+testa e l'argomento a portata di mano, che e' la condizione perfetta per
+trapiantarlo senza ri-derivarlo. Va scritta in CLAUDE.md, e non lo e' ancora.
+
 
 # Roadmap
 
