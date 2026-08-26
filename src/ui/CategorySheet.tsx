@@ -101,7 +101,16 @@ const EMOJI: readonly string[] = [
   '☕', '🍺', '🚲', '✈️', '💡', '👕', '🎧', '💊', '🎁', '📚',
 ]
 
-/** Il massimo che ci sta nel chip senza diventare tre puntini. */
+/**
+ * Il massimo che ci sta nel chip senza diventare tre puntini.
+ *
+ * **E' il limite dell'editor, non del dato.** `parseBackup` non tronca i nomi
+ * (`parseCategory` prende `str(raw.name)` e basta), quindi un import puo'
+ * portare un nome lungo quanto vuole e le Statistiche devono reggerlo lo stesso.
+ * Le due cose si esercitano separatamente in `statistiche.spec.ts`, che il
+ * numero non lo ricopia: lo legge dall'attributo `maxLength` di questo campo,
+ * cioe' dal prodotto che gira.
+ */
 const MAX_NAME = 18
 
 export interface CategoryDraft {

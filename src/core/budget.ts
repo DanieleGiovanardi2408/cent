@@ -281,20 +281,34 @@ export interface BudgetMetrics {
    * passato vale `daysTotal`; su uno futuro, 1.
    *
    * E' il divisore di `currentPaceCents` — l'arco su cui `spentCents` e' stato
-   * speso — ed era una costante locale finche' lo usava solo lui. Esce allo
-   * scoperto perche' le statistiche ne hanno bisogno per due cose, e averlo due
-   * volte scritto significherebbe due espressioni da tenere allineate:
+   * speso — ed era una costante locale finche' lo usava solo lui.
    *
-   * - **il budget maturato**, il segno contro cui si legge se il passo e' alto:
-   *   `budgetCents * daysLived / daysTotal`. **Non e' un pro-rata** e non tocca
-   *   ADR 010: non riduce `budgetCents` ne' `remainingCents`, e' un segnaposto di
-   *   passo. Va calcolato cosi' e **non** come `sustainablePaceCents * daysLived`,
-   *   che sembra la stessa cosa: 28,57 x 7 fa **199,99**, quindi a periodo chiuso
-   *   il segno cadrebbe un centesimo prima della fine della traccia, per sempre e
-   *   invisibile a occhio.
-   * - **la parte di periodo non ancora accaduta**, `daysTotal - daysLived`, che a
-   *   periodo chiuso vale zero. Cosi' l'incompletezza di un periodo in corso e'
-   *   un dato, non un ramo del disegno.
+   * Esce allo scoperto per **un secondo lettore**: le statistiche disegnano la
+   * parte di periodo **non ancora accaduta** come `daysTotal - daysLived`, che a
+   * periodo chiuso vale zero. Cosi' l'incompletezza di un periodo in corso e' un
+   * dato e non un ramo del disegno — la settimana finita e quella a meta' passano
+   * per la stessa espressione, e la differenza sta nei numeri.
+   *
+   * ## Questo elenco diceva due lettori, e uno e' durato meno di un giorno
+   *
+   * Il secondo era il **budget maturato** (`budgetCents * daysLived / daysTotal`),
+   * il segno contro cui leggere se il passo e' alto. E' stato calcolato,
+   * dichiarato in un campo, difeso in un paragrafo di commit — e **mai dipinto**:
+   * il componente posizionava il segno con una moltiplicazione di frazioni, e
+   * l'unico lettore del campo era il suo test. E' stato tagliato al primo gate
+   * come cucitura aperta solo per i test, terzo caso dopo `expensesInRange` e
+   * `planBudgetChange`.
+   *
+   * Resta qui la parte che vale ancora, perche' il giorno in cui il maturato
+   * tornera' come numero **da mostrare** qualcuno rifara' la domanda: si calcola
+   * dal budget e dai giorni, **mai** come `sustainablePaceCents * daysLived`.
+   * Sembrano la stessa cosa e non lo sono — 28,57 x 7 fa **199,99**, quindi a
+   * periodo chiuso il segno cadrebbe un centesimo prima della fine della traccia,
+   * per sempre e invisibile a occhio.
+   *
+   * E la lezione che il campo si porta dietro: **un argomento che elenca i propri
+   * lettori va riletto quando uno se ne va**, o motiva un'esistenza pubblica con
+   * qualcuno che non c'e' piu'.
    *
    * **Oggi conta come vissuto**, e la ragione e' gia' scritta sotto
    * `currentPaceCents`: `spentCents` somma tutto il periodo fino a oggi incluso,

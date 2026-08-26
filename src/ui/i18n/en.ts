@@ -469,11 +469,40 @@ export const en: Record<keyof typeof it, string> = {
   'stats.blank.text':
     'Once you have a few expenses, this is where you see what the money went on, and how this period compares with the ones before it.',
 
+  // Vedi it.ts per l'argomento: non e' `stats.blank` con altre parole, e' un
+  // altro fatto. Questa e' la stesura originale; l'italiano la segue.
+  //
+  // I due segnaposto sono **le due meta' verificabili** della frase, e nessuno
+  // dei due e' una parola scritta qui:
+  //
+  // - `{range}` e' `periodRangeLabel`, cioe' **la stessa etichetta** che ogni
+  //   altro stato di questa schermata stampa sotto la scheda `Day to day`;
+  // - `{history}` e' `nav.history`, cioe' **la parola che si legge sulla
+  //   barra**. Era scritta a mano, con un commento che dichiarava il contrario:
+  //   rinominando la voce di navigazione, questa frase avrebbe continuato a
+  //   mandare in un posto che non si chiama piu' cosi'.
+  //
+  // La frase finiva con *"and the comparison starts"*, e il confronto **non
+  // comincia**: chi fa esattamente quello che legge — segna una spesa — torna
+  // qui e trova una riga sola, sotto le due soglie, quindi nessuna barra e
+  // nessuna sezione `Week by week`. Il confronto arriva col periodo dopo. Cio'
+  // che si promette adesso e' cio' che si vede al tap successivo: la spesa
+  // appena segnata compare qui, con il suo importo, sotto `What it went on`.
+  //
+  // E l'ultima frase e' **una constatazione, non un ordine**, perche' questo
+  // ramo ha due inquilini: vedi it.ts, "La frase regge due storie".
+  'stats.outside.title': 'Nothing to compare yet',
+  'stats.outside.text':
+    'This period is {range}, and nothing you have logged falls inside it: it is all in {history}. The next expense you add today shows up here.',
+
   'stats.variable': 'Day to day',
   'stats.fixed': 'Fixed costs',
   'stats.perMonth': 'every month',
 
   'stats.byCategory': 'What it went on',
+  // Vedi it.ts: la scheda in testa e' una previsione al mese, questa e' quanto e'
+  // uscito nel periodo. Due numeri, due etichette.
+  'stats.fixedInPeriod': 'Fixed this period',
   'stats.byPeriod.weekly': 'Week by week',
   'stats.byPeriod.monthly': 'Month by month',
 

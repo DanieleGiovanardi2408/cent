@@ -3,7 +3,7 @@
 //
 //   node scripts/dead-surface.mjs        (npm run audit:source)
 //
-// Due domande, tutte e due nate da difetti veri della fase 5:
+// Tre domande, ognuna nata da un difetto vero:
 //
 //   A. Ogni campo dei tipi in `src/core/types.ts` ha una **scrittura** che non
 //      sia `parseBackup`, una migrazione o un test? `RecurringRule.note` aveva
@@ -13,6 +13,18 @@
 //   B. Ogni chiave dei due dizionari ha almeno un **lettore** in codice di
 //      produzione? `history.blank.install` e' rimasta viva nel codice e morta
 //      nei fatti dopo ADR 011.
+//
+//   C. Ogni **membro** di un'unione di letterali compare almeno una volta in
+//      produzione? E' la granularita' **sotto** quella di A, e A non la vede per
+//      costruzione: `Settings.theme` passa A perche' il seed scrive `'auto'`,
+//      mentre `'light'` e `'dark'` non li scrive nessuno. Un campo vivo con
+//      due valori morti.
+//
+//      C dice **presenza, non produzione**, e la scelta e' deliberata: la forma
+//      ovvia — cercare `campo: 'valore'` — dichiarerebbe morti `'it'` e `'en'`,
+//      perche' `updateSettings({ language: next })` passa una variabile e il
+//      letterale al punto di scrittura non c'e'. Precisione al posto della
+//      copertura: quel che segnala e' morto di sicuro, e sul resto tace.
 //
 // ## Perche' un file nuovo e non `scripts/audit.mjs`
 //
@@ -127,6 +139,29 @@ const NON_PRODUTTORI = new Map([
   ['src/core/schema.ts', 'migrazioni: riscrivono record esistenti, non ne inventano'],
   ['src/core/testing.ts', 'fabbriche di entita\' per i test, dichiarato nel file stesso'],
   ['src/core/memory-persistence.ts', 'doppio della persistenza, solo per i test'],
+])
+
+/**
+ * Membri di un'unione che **non compaiono in produzione e va bene cosi'**, con
+ * accanto la ragione e **la condizione che li rende di nuovo un difetto**.
+ *
+ * Non e' una lista di eccezioni: e' una lista di decisioni. La differenza sta
+ * nella seconda colonna — un'eccezione senza condizione e' una scusa che nessuno
+ * rilegge, ed e' esattamente la forma dei rinvii che questo progetto continua a
+ * riscoprire per caso.
+ */
+const MEMBRI_DICHIARATI = new Map([
+  [
+    "ThemePreference.'light'",
+    'preferenza di tema esplicita, rimandata a fase 7 (vedi ROADMAP). Il campo ' +
+      "resta perche' `'auto'` un produttore ce l'ha, e nessuna schermata finge di " +
+      'cambiare il tema. Torna a essere un difetto **il giorno in cui il selettore ' +
+      'esiste e non scrive**, o se la fase 7 si chiude senza costruirlo.',
+  ],
+  [
+    "ThemePreference.'dark'",
+    'stessa decisione di `light`: si spediscono insieme o non si spediscono.',
+  ],
 ])
 
 /* ------------------------------------------------------------------------ *
@@ -701,6 +736,92 @@ function puntiCiechi(tuttiIFile) {
 }
 
 /* ------------------------------------------------------------------------ *
+ * C. Membri di un'unione di letterali che non compaiono da nessuna parte.
+ * ------------------------------------------------------------------------ */
+
+/**
+ * Le unioni di soli letterali dichiarate in `types.ts`.
+ *
+ * Solo quelle di **soli** letterali: se il corpo contiene un identificatore, un
+ * generico o un altro tipo, non e' un'enumerazione e non si guarda.
+ */
+function unioniDiLetterali(testo) {
+  const trovate = []
+  const decl = /export type (\w+) =([^;]*?)(?=\n\s*\n|\nexport |\n\/\*|\n\/\/|$)/g
+  for (let m = decl.exec(testo); m !== null; m = decl.exec(testo)) {
+    const corpo = m[2].trim()
+    if (!/^'[^']*'(\s*\|\s*'[^']*')*$/.test(corpo)) continue
+    trovate.push({ nome: m[1], membri: [...corpo.matchAll(/'([^']*)'/g)].map((x) => x[1]) })
+  }
+  return trovate
+}
+
+/**
+ * **La granularita' sotto quella del controllo A**, e il difetto che l'ha
+ * chiesta: `Budget.period` e' vivo perche' `setBudget` lo scrive, quindi A lo
+ * dichiara prodotto — ma questo non dice niente su *quali* dei suoi valori
+ * qualcuno scriva davvero. `Settings.theme` e' stato spedito con `'auto'`
+ * scritto dal seed e con `'light'` e `'dark'` che nessuna schermata scrive: un
+ * campo che passa la lettera di A e non il suo spirito.
+ *
+ * ## Cosa questo controllo dice davvero, che e' meno di quel che sembra
+ *
+ * **Dice presenza, non produzione.** Segnala un membro che non compare
+ * **da nessuna parte** in produzione, fuori dalla propria dichiarazione. Non
+ * dice che i membri rimasti siano prodotti: dice solo che quelli segnalati non
+ * lo sono di sicuro.
+ *
+ * ## Il punto cieco, dichiarato invece che scoperto
+ *
+ * La forma ovvia — cercare assegnamenti `campo: 'valore'` — **non regge**, e la
+ * prova e' `Settings.language`: si scrive con `updateSettings({ language: next })`,
+ * dove `next` e' una variabile, quindi i letterali `'it'` e `'en'` **non
+ * compaiono mai al punto di scrittura**. Un controllo cosi' li dichiarerebbe
+ * morti tutti e due. Distinguere richiederebbe analisi di flusso, che su questo
+ * progetto e' sproporzionata.
+ *
+ * Da cui la scelta: **precisione al posto della copertura.** Un membro che non
+ * compare mai e' morto con certezza; uno che compare puo' essere vivo o solo
+ * nominato, e questo controllo tace. Misurato sull'albero al momento di
+ * scriverlo: quindici membri su sei unioni, **due segnalati e zero falsi
+ * positivi**.
+ *
+ * `NON_PRODUTTORI` vale anche qui, e per la stessa ragione di A: che
+ * `parseBackup` accetti un valore non dice che l'app lo produca — una porta che
+ * si apre non e' qualcuno che entra.
+ */
+function membriSenzaUso(tuttiIFile) {
+  const { text: dichiarazioni } = scan(leggi(TYPES_FILE))
+  const unioni = unioniDiLetterali(dichiarazioni)
+
+  const produzione = tuttiIFile.filter((p) => !eTest(p) && !NON_PRODUTTORI.has(p))
+  const testi = produzione.map((p) => ({ file: p, sorgente: leggi(p) }))
+
+  const morti = []
+  const dichiarati = []
+  let quanti = 0
+  for (const unione of unioni) {
+    for (const membro of unione.membri) {
+      quanti += 1
+      const ago = `'${membro}'`
+      let vivo = false
+      for (const { sorgente } of testi) {
+        if (scan(sorgente).text.includes(ago)) {
+          vivo = true
+          break
+        }
+      }
+      if (vivo) continue
+      const chiave = `${unione.nome}.'${membro}'`
+      const dichiarato = MEMBRI_DICHIARATI.get(chiave)
+      if (dichiarato === undefined) morti.push({ unione: unione.nome, membro })
+      else dichiarati.push({ chiave, perche: dichiarato })
+    }
+  }
+  return { unioni: unioni.length, quanti, morti, dichiarati }
+}
+
+/* ------------------------------------------------------------------------ *
  * B. Chiavi i18n senza lettore.
  * ------------------------------------------------------------------------ */
 
@@ -849,5 +970,26 @@ if (!b.applicabile) {
     )
   }
 }
+
+const c = membriSenzaUso(tuttiIFile)
+console.log(
+  `  C. Membri di un'unione senza nessun uso — ${c.quanti} membri in ${c.unioni} unioni di ${TYPES_FILE}`,
+)
+if (c.morti.length === 0) {
+  console.log('     nessuno senza dichiarazione.')
+} else {
+  rotto = true
+  for (const { unione, membro } of c.morti) {
+    console.log(`\n     ── ${unione}.'${membro}' — non compare in nessun file di produzione`)
+  }
+  console.log(
+    '\n     Un campo vivo con un valore morto passa il controllo A e non fa niente:\n' +
+      "     e' la granularita' sotto quella dei campi, e nessuno la guarda.\n",
+  )
+}
+for (const { chiave, perche } of c.dichiarati) {
+  console.log(`     ${chiave} — non compare, ed e' dichiarato: ${perche}`)
+}
+console.log('')
 
 process.exit(rotto ? 1 : 0)

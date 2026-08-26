@@ -707,10 +707,19 @@ export const it = {
    * Due domande, due grafici, e due cifre in testa che non sono un grafico.
    *
    * **Non c'e' una chiave che dichiara l'esclusione delle fisse**, e non e' una
-   * dimenticanza: le due cifre in testa **sono** la dichiarazione. ADR 016 §3
-   * chiede "due numeri, non uno", e mostrarli entrambi dice l'esclusione meglio
-   * di una frase — che sarebbe la terza copia dello stesso fatto, dopo
-   * `hero.fixed` e `fixed.text`. Vedi DEBITO.md, famiglia 1.3.
+   * dimenticanza: la dichiarazione e' fatta di **nomi di quantita'**, non di una
+   * frase in piu'. Le due cifre in testa sono ADR 016 §3 ("due numeri, non
+   * uno"), e `stats.variable` sta sopra ogni elenco che conta solo le
+   * quotidiane — la scheda, la parte variabile di A, le righe di B. La stessa
+   * parola sopra gli stessi soldi in tutti e tre i posti dice l'esclusione senza
+   * affermarla.
+   *
+   * Una frase che l'affermasse sarebbe **un'altra copia** di un fatto che ha
+   * gia' la sua casa: l'elenco dei membri sta in **DEBITO.md, famiglia 1.3**, e
+   * non si ricopia qui — un'enumerazione scritta al tempo t che nessuno rilegge
+   * e' esattamente il difetto che questo progetto conta da giorni. (Questo
+   * commento ne elencava due su tre, e mancava proprio quello che DEBITO.md
+   * marca come il piu' rischioso.)
    */
   'nav.stats': 'Statistiche',
   'title.stats': 'Dove sono finiti i soldi',
@@ -722,11 +731,111 @@ export const it = {
   'stats.blank.text':
     'Appena avrai qualche spesa, qui vedrai dove sono finiti i soldi e come va questo periodo rispetto ai precedenti.',
 
+  /* **Fuori dal periodo: un'altra coppia di chiavi, e la ragione e' che
+   * `stats.blank` qui direbbe il falso.**
+   *
+   * Il primo istinto e' riusare lo stato vuoto — due schermate senza righe si
+   * assomigliano. Ma `stats.blank.text` comincia con *"Appena avrai qualche
+   * spesa"*, e in questo stato **le spese ci sono**: chi ci atterra ha appena
+   * acceso la regola dell'affitto e nello Storico le vede tutte, con i loro
+   * importi. Sarebbe un messaggio che afferma un fatto che lo schermo smentisce
+   * a un tap di distanza — la forma peggiore, perche' chiude la domanda dando la
+   * risposta sbagliata.
+   *
+   * Anche il **titolo** e' suo, e non e' simmetria: `blank` dice *"niente da
+   * mostrare"*, che qui sarebbe di nuovo falso — c'e' cosa mostrare, non cade in
+   * questo periodo. Il fatto e' *"niente da **confrontare**"*, ed e' vero per
+   * tutte e due le domande della schermata: A non ha una ripartizione da fare
+   * (nel periodo non c'e' niente) e B non ha periodi da mettere in fila.
+   *
+   * ## Il testo dice qual e' il periodo, dove sono finite e cosa si vede dopo
+   *
+   * Tre fatti, e ognuno si controlla guardando lo schermo:
+   *
+   * 1. **Qual e' questo periodo** — `{range}` e' `periodRangeLabel`, la stessa
+   *    etichetta che ogni altro stato di questa schermata stampa sotto la
+   *    scheda. E' il confine di cui la frase parla, e per un giorno era l'unica
+   *    cosa che la frase nominava senza mostrarla.
+   * 2. **Dove sono le spese** — `{history}` e' `nav.history`, cioe' la parola
+   *    che si legge sulla barra. Era ricopiata a mano, con un commento che
+   *    dichiarava il contrario: rinominata la voce di navigazione, questa frase
+   *    avrebbe mandato in un posto che non si chiama piu' cosi'.
+   * 3. **Cosa succede segnando una spesa** — *"e compare qui"*.
+   *
+   * ## Il terzo diceva "e il confronto comincia", e il confronto non comincia
+   *
+   * Misurato: affitto da 900,00 € datato l'11 agosto, oggi il 19. L'utente fa
+   * **esattamente cio' che la frase dice** — FAB, `4 0 0 0`, categoria — torna
+   * qui, e la schermata intera e' `Quotidiane 40,00 € · 17–23 ago`, `DOVE SONO
+   * FINITI`, `Spesa 40,00 €`. **Zero barre**: una riga sola sta sotto
+   * `BREAKDOWN_MIN_ROWS`, e con un periodo solo B non esiste
+   * (`TREND_MIN_ROWS`). Il confronto arriva col periodo **dopo**, cioe' fra
+   * giorni.
+   *
+   * La giustificazione scritta qui — *"e' vero subito, perche' la schermata
+   * diventa `ready` allo stesso istante"* — argomentava su **uno stato interno
+   * del nostro tipo** al posto del fatto promesso: `ready` non e' una cosa che
+   * si guarda, il confronto si'. E' la regola con cui `stats.blank.text` era
+   * stata scartata due paragrafi piu' su, applicata alla frase scartata e non a
+   * quella scritta.
+   *
+   * Adesso si promette cio' che si vede **al tap successivo**: la spesa appena
+   * segnata compare qui, col suo importo, sotto `stats.byCategory`. Non dipende
+   * da nessuna soglia e da nessun periodo che deve ancora finire.
+   *
+   * ## La frase regge due storie, e per questo l'ultima riga non e' un ordine
+   *
+   * Questo ramo ha **due inquilini**, e non li distingue di proposito
+   * (`stats-view.ts`): a schermo la risposta e' la stessa, e le due cause non
+   * darebbero all'utente niente che possa verificare.
+   *
+   * 1. **"Ho appena configurato l'affitto"**: le spese ci sono, sono ricorrenti,
+   *    e cadono prima del periodo corrente.
+   * 2. **"Sono tornato dopo mesi"**: tre spese a mano di duecento giorni fa. Non
+   *    e' che non abbia segnato niente — e' che il tempo e' passato.
+   *
+   * Le prime due parti valgono identiche nei due casi: il confine del periodo e'
+   * un fatto, e lo Storico non ha finestra. La terza era *"segnane una quando
+   * paghi"*, cioe' **un ordine di fare cio' che il secondo ha gia' fatto per
+   * mesi**, e con esso l'insinuazione che la schermata sia vuota per colpa sua.
+   *
+   * Adesso e' una constatazione — *"la prossima spesa che segni oggi compare
+   * qui"* — che dice la stessa cosa utile senza diagnosticare l'utente, ed e'
+   * vera in tutti e due i casi. **"Oggi" non e' un riempitivo**: e' cio' che la
+   * rende esatta invece che quasi vera. Il selettore della data arriva fino a
+   * oggi, quindi una spesa segnata adesso ma datata a marzo cadrebbe fuori da
+   * questo periodo esattamente come le altre — e la frase prometterebbe una
+   * comparsa che non avviene.
+   *
+   * ## Nessun importo, e un confine
+   *
+   * Qui c'era scritto *"nessun numero"*, ed era una difesa circolare: il ramo
+   * non portava un intervallo perche' qualcuno aveva scelto di non mettercelo.
+   * Cio' che non si scrive e' un **importo** — le cifre del periodo sono zero
+   * per costruzione e il tasso mensile delle regole risponderebbe a un'altra
+   * domanda — mentre il **confine del periodo** e' cio' che rende verificabile
+   * l'unica affermazione che questo ramo fa. */
+  'stats.outside.title': 'Ancora niente da confrontare',
+  'stats.outside.text':
+    'Questo periodo è {range}, e nessuna delle tue spese ci cade dentro: le trovi tutte nello {history}. La prossima spesa che segni oggi compare qui.',
+
   'stats.variable': 'Quotidiane',
   'stats.fixed': 'Spese fisse',
   'stats.perMonth': 'ogni mese',
 
   'stats.byCategory': 'Dove sono finiti',
+  // **Non e' `stats.fixed`, e la differenza non e' di stile.** La scheda in testa
+  // dice quanto costeranno al mese le regole in vigore (una previsione); questa
+  // parte di A dice quanto di fisso e' uscito **in questo periodo** (un fatto).
+  // Sono due numeri diversi e possono discordare in modo vistoso: disattivando la
+  // regola dell'affitto dopo che ha generato la spesa, la scheda legge 0,00 € al
+  // mese e questa riga 620,00 €. Con la stessa etichetta, due parti della stessa
+  // schermata si contraddicono; con due etichette, dicono due cose.
+  //
+  // La parte delle variabili invece **riusa** `stats.variable`: li' la scheda e
+  // l'intestazione sono la stessa quantita', e due parole per lo stesso numero
+  // sarebbero una parafrasi in piu'.
+  'stats.fixedInPeriod': 'Fisse in questo periodo',
   'stats.byPeriod.weekly': 'Settimana per settimana',
   'stats.byPeriod.monthly': 'Mese per mese',
 

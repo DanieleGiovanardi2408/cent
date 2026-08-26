@@ -1295,17 +1295,34 @@ export function App() {
           <button
             type="button"
             class="app__action"
-            // Il nome accessibile non dipende dal viewport: sotto i 360 punti
-            // l'etichetta visibile e' nascosta (vedi App.css) e senza questa
-            // riga il bottone resterebbe un rettangolo senza nome.
+            // Il nome accessibile non dipende dal viewport, ed e' l'unico che
+            // non dipende: **sotto i 440 punti l'etichetta visibile e' nascosta**
+            // (App.css), cioe' su ogni iPhone in verticale. Senza questa riga il
+            // bottone sarebbe un rettangolo senza nome per chi legge con lo
+            // schermo letto, e un'icona sola per tutti gli altri.
+            //
+            // La soglia diceva 360 fino alla fase 6, ed era vera con due schede.
+            // Con la terza, marchio ed etichetta insieme chiedono 460 punti
+            // misurati: nessun telefono in verticale li tiene.
             aria-label={t('settings.open')}
             aria-current={view === 'settings' ? 'page' : undefined}
             onClick={() => setView('settings')}
           >
             {/* Cursori, non un ingranaggio: a 20px un ingranaggio e' una
-                macchia tonda, e la sua unica lettura sicura viene comunque
-                dall'etichetta accanto. Due righe con due manopole si leggono
-                anche a quella dimensione. */}
+                macchia tonda, mentre due righe con due manopole si leggono anche
+                a quella dimensione.
+
+                **Questo argomento si e' rovesciato nella fase 6, e la scelta
+                regge lo stesso.** Diceva che l'icona poteva permettersi di essere
+                approssimativa *perche' la sua unica lettura sicura veniva
+                dall'etichetta accanto*. Da quando le schede sono tre l'etichetta
+                e' nascosta su ogni iPhone in verticale, quindi l'icona **e'** la
+                sola lettura visiva: la richiesta di leggibilita' e' salita, e i
+                cursori la reggono meglio dell'ingranaggio che l'argomento vecchio
+                giudicava accettabile.
+
+                Chi la ridisegna sappia che sta scegliendo l'unica cosa che si
+                vede, non un accompagnamento. */}
             <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
               <path d="M4 8h9M17 8h3M4 16h3M11 16h9" />
               <circle cx="15" cy="8" r="2.2" />
@@ -1324,10 +1341,21 @@ export function App() {
               Erano due schede e questo commento diceva "due schermate non hanno
               bisogno di piu' di due parole". Dalla fase 6 sono tre, e la frase
               e' stata riscritta invece che lasciata li' a dichiarare un numero
-              che non e' piu' vero. La larghezza a tre schede e' **misurata**
-              dalla sonda dell'overflow, non stimata: il breakpoint a 359px
-              nasconde gia' l'etichetta di Impostazioni, ed e' li' che il conto
-              si stringe. */}
+              che non e' piu' vero.
+
+              **E la prima riscrittura sbagliava lo stesso.** Diceva che la
+              larghezza era "misurata dalla sonda dell'overflow": quella sonda
+              guardava `header.scrollWidth - header.clientWidth`, che vale **zero
+              a ogni larghezza** perche' il testo tracimava da un *figlio* dentro
+              il box del padre. Non era una misura debole — era una misura che non
+              poteva fallire, e sotto di essa l'etichetta di Impostazioni si
+              stampava sopra "Home" per 27,8 px a 375 punti.
+
+              Adesso il predicato e' la **collisione fra i rettangoli dipinti**
+              dei bersagli in barra (vedi `tests/e2e/probe.ts` e
+              `schermate.spec.ts`), che e' cio' che l'affermazione "ci stanno"
+              vuol dire davvero. E le tre soglie di App.css vengono da tre misure,
+              non da una stima: schede 360, etichetta 440, marchio 470. */}
           <nav class="nav" aria-label={t('nav.label')}>
             <button
               type="button"

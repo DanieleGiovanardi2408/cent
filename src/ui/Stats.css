@@ -5,17 +5,42 @@
  * assente. Qui la griglia non serve proprio: l'importo e' scritto su ogni riga,
  * quindi non c'e' nessun valore che un asse debba portare. */
 
+/* Il contenitore che scorre.
+ *
+ * Le cinque dichiarazioni qui sotto sono le stesse di `.home` (Home.css) e di
+ * `.list` (History.css), e **non sono una convenzione da ricordare**: senza,
+ * `.stats` cresceva oltre `.app` e a scorrere era la pagina — misurato a 375
+ * punti con otto categorie e sei periodi, `.stats` alto 949 dentro un `.app`
+ * alto 667. In fondo alla schermata `header.getBoundingClientRect().top` valeva
+ * -327: le tre schede e Impostazioni **uscivano dallo schermo**, e in standalone
+ * non c'e' il tasto Indietro. Il FAB, che e' `fixed`, copriva l'ultima cifra:
+ * --fab-lane e' riservata dal `padding-block-end` di `.app`, e chi esce da
+ * `.app` invece di scorrere dentro non la vede.
+ *
+ * Il `padding-inline` non e' qui ma in App.css, nell'elenco che porta le
+ * safe-area: il contenitore che scorre deve arrivare fino al bordo.
+ *
+ * Il controllo che le tiene oneste per **tutte** le schermate, comprese quelle
+ * che non esistono ancora, sta in `tests/e2e/schermate.spec.ts`. */
 .stats {
+  flex: 1;
+  min-block-size: 0;
+  overflow-y: auto;
+  /* Come nella lista e nella Home: lo slancio non si propaga al documento, o
+   * iOS fa rimbalzare tutta la pagina. */
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
   display: flex;
   flex-direction: column;
   gap: var(--sp-5);
-  padding-block-end: var(--sp-6);
+  padding-block-end: var(--sp-3);
 }
 
-/* Il guscio senza dati ha la stessa altezza minima del contenuto piu' corto,
- * cosi' l'arrivo dei dati non sposta la barra di navigazione sopra. */
-.stats--shell {
-  min-block-size: 12rem;
+/* Dentro un contenitore che scorre i blocchi non si comprimono per far entrare
+ * il contenuto: si scorre. Senza, le sezioni si schiaccerebbero invece di
+ * mandare la colonna oltre il fondo, e lo scroll non comparirebbe mai. */
+.stats > * {
+  flex: none;
 }
 
 /* --- le due cifre in testa (ADR 016 §3) --------------------------------- */
@@ -57,13 +82,54 @@
 
 /* --- le sezioni --------------------------------------------------------- */
 
+/* **Le colonne sono della sezione, non della parte.**
+ *
+ * A ha due parti — fisse e variabili — e ciascuna ha la propria scala: la riga
+ * piu' grande di ognuna riempie la colonna. Perche' quella saturazione si legga
+ * come "questa e' la piu' grande **qui**" e non come un importo, le due colonne
+ * devono finire **nello stesso punto**.
+ *
+ * Non ci finivano. Con una griglia per parte, la colonna del nome si dimensiona
+ * sul nome piu' lungo *di quella parte* e quella dell'importo sull'importo piu'
+ * largo *di quella parte* — e le fisse hanno sistematicamente gli importi piu'
+ * larghi, quindi il loro grafico e' sistematicamente **piu' stretto**. Due barre
+ * entrambe piene, quella da 877,00 € dipinta piu' corta di quella da 212,00 €:
+ * la stessa famiglia di difetto per cui questa griglia esiste, un piano piu' su.
+ * Misurato: 211,80 px contro 211,81 con i nomi di prova, e la differenza cresce
+ * con la differenza fra i nomi e fra gli importi.
+ *
+ * Quindi le tre colonne stanno qui e scendono per due livelli di `subgrid`:
+ * sezione -> elenco -> riga. Ogni `.stat__plot` della schermata e' largo uguale,
+ * comprese le due parti di A. */
 .stats__section {
-  display: flex;
-  flex-direction: column;
+  --plot-min: 7rem;
+  --name-max: 8.5rem;
+
+  display: grid;
+  /* La barra prende quello che avanza, e mai meno di --plot-min. Il nome si
+   * dimensiona sul contenuto fino a --name-max, e quando lo spazio non basta
+   * **va a capo** invece di perdere lettere (`.stat__label`, piu' sotto).
+   * L'importo non tronca mai: e' il valore esatto, ed e' quello che rende il
+   * grafico una tabella. */
+  grid-template-columns:
+    fit-content(var(--name-max))
+    minmax(var(--plot-min), 1fr)
+    max-content;
   gap: var(--sp-2);
 }
 
+/* Senza barre la sezione e' due colonne: nome e importo, con lo spazio in mezzo.
+ * L'attributo sta sulla **sezione** perche' le colonne sono sue: una parte sotto
+ * soglia dentro una sezione che ha barre tiene la colonna vuota, che e' il modo
+ * onesto di dire "qui le barre non ci sono" senza spostare le altre. */
+.stats__section:not([data-chart]) {
+  grid-template-columns: minmax(0, 1fr) max-content;
+}
+
+/* Un titolo attraversa tutte le colonne: e' un'intestazione, non una cella. Vale
+ * anche per i titoli di parte, piu' sotto. */
 .stats__title {
+  grid-column: 1 / -1;
   color: var(--text-muted);
   font-size: var(--fs-100);
   font-weight: var(--fw-semibold);
@@ -71,41 +137,311 @@
   letter-spacing: 0.06em;
 }
 
-.stats__rows {
+/* --- i titoli di parte: le due parti di A, e la sola parte di B ----------- *
+ *
+ * **Due scale, quindi due grafici, quindi una separazione vera.**
+ *
+ * Le barre di una parte sono in proporzione fra loro e con nient'altro: la piu'
+ * lunga di ciascuna arriva a fondo colonna, perche' `stats-view.ts` garantisce
+ * che la frazione massima di una sezione valga esattamente 1. Due barre piene
+ * con due importi diversi **dicono da sole** che le scale sono due — ed e' il
+ * motivo per cui qui non c'e' piu' la frase che lo diceva a parole.
+ *
+ * Perche' pero' lo dicano, i due grafici devono leggersi come due: fra loro c'e'
+ * un filo, non una spaziatura piu' larga. Uno spazio si legge come respiro e non
+ * come confine, e due scale separate solo da un respiro sono due scale che
+ * qualcuno confrontera'.
+ *
+ * Il selettore e' `.stats__rows + …`, cioe' **un filo fra due elenchi**: prende
+ * la seconda parte di A e nient'altro. Il titolo di parte di B segue il titolo
+ * di sezione e non ha niente sopra da cui separarsi — la condizione e' scritta
+ * nel selettore, non lasciata a una classe in piu'. */
+.stats__rows + .stats__partTitle {
+  margin-block-start: var(--sp-2);
+  padding-block-start: var(--sp-3);
+  border-block-start: 1px solid var(--line);
+}
+
+/* L'intestazione di parte: **quale dei due tipi di soldi conta l'elenco qui
+ * sotto**, e — dove ne esiste uno — il suo totale.
+ *
+ * In A sono due, e portano il totale **quando le righe sono piu' di una**. Le
+ * schede in testa alla schermata sono in **unita' diverse** — quello che si e'
+ * speso di variabile *nel periodo* e quanto costano le fisse *al mese*
+ * (ADR 016 §3) — quindi affiancate non rispondono a "507 contro 73,50 questa
+ * settimana". I due totali di parte si', perche' sono tutti e due del periodo, e
+ * senza di loro quel confronto non lo farebbe nessuno.
+ *
+ * ## Il caso a un figlio e' **tre**, non uno, e prima ne era dichiarato uno solo
+ *
+ * Qui c'era scritto *"in B ce n'e' una sola e senza totale … il `flex` regge il
+ * caso da solo"*: l'argomento era giusto e **la sua condizione era scritta
+ * troppo stretta**, perche' nominava B. Non dipende da B: dipende dall'avere un
+ * figlio. E i figli soli oggi sono tre — il nome di parte di B (un totale li'
+ * sarebbe la somma di otto periodi, che non chiede nessuno) e **le due parti di
+ * A quando hanno una riga sola**, dove il totale sarebbe la stessa cifra della
+ * riga sotto (Stats.tsx, sul `part.single`). Il caso di A e' arrivato dopo, e la
+ * regola lo copriva gia': `space-between` con un figlio lo lascia dov'e'.
+ *
+ * `space-between` e non una griglia: sono due cose, e la seconda sta a destra
+ * come tutti gli importi di questa schermata. */
+.stats__partTitle {
+  grid-column: 1 / -1;
   display: flex;
-  flex-direction: column;
+  align-items: baseline;
+  justify-content: space-between;
   gap: var(--sp-2);
+  color: var(--text);
+  font-size: var(--fs-200);
+  font-weight: var(--fw-semibold);
+}
+
+/* Il nome della parte cede per primo: se lo spazio non basta si accorcia lui e
+ * non il totale, che e' una cifra e mezza cifra non vuol dire niente. */
+.stats__partName {
+  overflow: hidden;
+  min-inline-size: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Il totale della parte. Tabulari come gli importi delle righe che somma: e'
+ * incolonnato con loro, e le proporzionali lo farebbero ballare. */
+.stats__partTotal {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- gli elenchi e le righe --------------------------------------------- */
+/* **Una griglia sola per schermata-sezione, non una per riga.**
+ *
+ * Era `display: grid` su `.stat`, cioe' una griglia per ogni riga: la colonna
+ * `1fr` che ospita il grafico si dimensionava allora sull'etichetta e sulla
+ * cifra **di quella riga**, quindi la lunghezza di una barra dipendeva da
+ * quanto era lungo il nome della categoria. Misurato a 375 punti: `24,00 €`
+ * disegnato 228,84 px e `28,00 €` disegnato 222,44 px — la barra piu' corta col
+ * numero piu' grande, sotto un titolo che chiede dove sono finiti i soldi. In B
+ * era sistematico: le settimane a cavallo di un mese hanno l'etichetta piu'
+ * larga e venivano **sempre** disegnate piu' corte.
+ *
+ * Adesso le tre colonne sono della **sezione** (vedi sopra) e scendono per due
+ * livelli di `subgrid`: l'elenco le eredita dalla sezione, la riga dall'elenco.
+ * Cosi' ogni `.stat__plot` e' largo uguale — dentro una parte, fra le due parti
+ * di A, e in B — e le frazioni che `stats-view.ts` calcola cadono tutte sulla
+ * stessa scala in pixel.
+ *
+ * ## Due vincoli sulle colonne, non uno: un massimo al nome e un pavimento al grafico
+ *
+ * La griglia condivisa ha chiuso il difetto **locale** (una barra dipendeva dal
+ * proprio nome) e ne ha aperto uno **globale**: la colonna del nome si
+ * dimensionava sul nome piu' lungo *della sezione*, quindi un nome solo
+ * accorciava il grafico di **tutte** le righe. Misurato a 390 punti, un nome da
+ * 34 caratteri portava il plot da **192,73 px a 64,00 px** — meno 67% — su ogni
+ * riga. E non serve un nome inventato: `Categoria rimossa`, che l'app scrive da
+ * sola per le spese orfane, a 320 punti lo portava da 122,73 a **76,27**.
+ *
+ * Quindi la geometria dichiara due cose invece di ereditarle dalla tipografia:
+ *
+ * - **`--name-max` (8,5rem = 136 px)**, con `fit-content()`: la colonna del nome
+ *   si dimensiona sul contenuto **fino a quel limite**. 136 e non meno perche'
+ *   l'etichetta piu' larga che l'app produce da se' — l'orfana — deve starci
+ *   intera **nelle due lingue**: `Categoria rimossa` 128,97 px, `Category
+ *   removed` **131,67**. Il margine vero e' 4,33 px, non i 7 che si leggevano
+ *   misurando l'italiano da solo, e l'inglese e' dove leggeranno quasi tutti. I
+ *   nomi di default piu' larghi (`Coffeeshop`, 82,50 in entrambe) stanno larghi
+ *   ovunque.
+ * - **`--plot-min` (7rem = 112 px)**, il pavimento del grafico.
+ *
+ * ## A 320 punti i due vincoli non ci stanno insieme, e cede il nome — in altezza
+ *
+ * `fit-content()` e' un **massimo**, non un pavimento: la colonna del nome
+ * prende quello che avanza, e a 320 punti (288 px di spazio) non avanza abbastanza
+ * perche' il massimo sia raggiungibile. Misurato, con dati banali — Casa 507,00
+ * fissa, Trasporti 33,00, Spesa 26,00, un'orfana da 14,50, Coffeeshop 9,00:
+ *
+ *     viewport  lingua   importo      colonna nome   glifi su una riga
+ *     320       it-IT    66,77 px      93,23 px       128,97 px
+ *     320       en-US    62,75 px      97,25 px       131,67 px
+ *     320       *        76,48 px      83,52 px       (importo a quattro cifre)
+ *     360+      entrambe               128,97 / 131,67 — intera
+ *
+ * Qui c'era scritto che `Categoria rimossa` *"deve starci intera: e' una stringa
+ * nostra, e troncarla non insegnerebbe niente a nessuno"*. La frase e' giusta e
+ * **il foglio la smentiva a 320 punti**, in tutte e due le lingue: si leggeva
+ * `Categoria ri…` e `Category rem…`. Un commento che dichiara chiuso un caso
+ * aperto e' peggio del caso.
+ *
+ * Le tre richieste a 320 sono 131,67 + 112 + 62,75 + 16 di gap = **322,42 px
+ * contro 288**: una delle tre deve cedere, e la scelta va dichiarata invece di
+ * lasciarla all'aritmetica della griglia. Cede il **nome**, e cede sull'asse in
+ * cui non perde niente: `-webkit-line-clamp: 2` (piu' sotto), cioe' **due righe
+ * invece di una**. Misurato, la riga piu' lunga dell'orfana andata a capo vale
+ * 68,94 px in italiano e 65,39 in inglese: sta dentro 83,52, cioe' anche con un
+ * affitto a quattro cifre. E l'altezza non la paga nessuno: due righe a
+ * `--lh-snug` sono 37,5 px, sotto i 44 di `--tap-min` che la riga dichiara gia'.
+ *
+ * **Dove finisce la garanzia, misurato invece che sperato**: la colonna del nome
+ * si stringe quando l'importo si allarga, e l'orfana entra intera fino a
+ * `12.000,00 €` (nome 69,80 px in italiano, 73,81 in inglese). Da `123.456,00 €`
+ * in su — 99,92 px di sole cifre a 320 punti — la colonna scende a 60,08 e i
+ * puntini tornano. E' un confine dichiarato, non un caso non pensato: un
+ * centoventitremila in centesimi su una riga di categoria non e' la spesa di
+ * nessuno che stia leggendo questa schermata da un telefono.
+ *
+ * **La colonna del grafico non si muove di un pixel**: 112 a 320 punti, 116,27 a
+ * 360, 146,27 a 390, prima e dopo. Cambia la forma dell'etichetta, non la
+ * geometria del grafico — `fit-content()` si risolve sul `max-content`, che una
+ * riga o due non cambia.
+ *
+ * ### Le due alternative, scartate con un numero
+ *
+ * - **`--plot-min` piu' basso sotto i 360.** Per far stare 131,67 su una riga il
+ *   grafico dovrebbe scendere a **77,58 px**. Costa due cose: `BAR_MIN_FRACTION`
+ *   in `stats-view.ts` **e'** `2 / 112` — cioe' il pavimento del modello
+ *   diventerebbe dipendente dal viewport, dentro un modulo di sola aritmetica
+ *   che un viewport non ce l'ha — e la risoluzione tornerebbe indietro: a 77,58
+ *   px resta informativo solo cio' che sta sopra il **6,45%** della scala contro
+ *   il 4,46% di adesso, e il caso di prova qui sotto (20% alla frazione 5%)
+ *   ricadrebbe a **0,78 px**, sotto il pixel che 112 e' stato scelto per battere.
+ * - **Un pavimento alla colonna del nome** (`min-inline-size`, o `minmax()` col
+ *   nome al posto di `fit-content()`). Provato davvero, non dedotto: a 320 punti
+ *   `.stats` **scorre di lato** di 20 px in italiano e 18 in inglese. Un
+ *   `minmax()` e' una richiesta che la griglia soddisfa anche traboccando, ed e'
+ *   la stessa famiglia di difetto che il test sui dati ostili esiste per
+ *   prendere.
+ *
+ * ## Da dove viene 112, che non e' un numero tondo scelto a occhio
+ *
+ * Il pavimento decide **quanta parte della scala porta ancora informazione**: su
+ * un grafico largo P, due importi che differiscono del 20% alla frazione f
+ * distano `0,2 · f · P` pixel, quindi restano distinti a un pixel CSS solo da
+ * `f >= 5/P` in su.
+ *
+ * Il caso di prova e' quello che `Stats.tsx` gia' nomina: 507,00 € di affitto e
+ * una categoria da 26,00 €, cioe' il **5%** della scala. Misurato, la coppia
+ * 26,00 / 20,80 (-20%) e' dipinta a:
+ *
+ *     plot   26,00 €   20,80 €   distanza
+ *      64      3,281     2,625     0,656 px   <- il pavimento di prima
+ *      96      4,922     3,938     0,984 px
+ *     100      5,125     4,094     1,031 px   <- qui passa il pixel
+ *     112      5,734     4,594     1,141 px   <- scelto
+ *     192      9,844     7,875     1,969 px   <- larghezza naturale a 390
+ *
+ * A 64 px quel 20% vale **meno di un pixel**: su uno schermo a dpr 1 le due
+ * barre sono lunghe uguali. La soglia cade fra 96 e 100; 112 la supera del 12%,
+ * e il margine serve perche' il 5% e' un esempio, non un confine — a 112 px
+ * resta informativo tutto cio' che sta sopra il **4,46%** della scala, contro il
+ * **7,81%** di prima.
+ *
+ * ## `--plot-min` non e' solo nostro: lo legge anche il modello
+ *
+ * `BAR_MIN_FRACTION` in `stats-view.ts` vale `2 / --plot-min`, dove il 2 sono i
+ * due bordi da 1 px di `.stat__bar` con `box-sizing: border-box`. **Sono i due
+ * numeri di questo file, ricopiati in un file che questo file non vede.**
+ * Cambiare `--plot-min` senza cambiare quella costante rimetterebbe in silenzio
+ * il difetto che il pavimento del modello e' li' per togliere.
+ *
+ * Quindi il legame non e' affidato a un commento su ciascuno dei due: c'e' una
+ * misura che li confronta davvero. `statistiche.spec.ts`, "il pavimento della
+ * barra nel modello e' il contorno che il CSS dipinge", risolve `--plot-min` in
+ * pixel dalla pagina, legge il bordo dipinto di una barra vera e li moltiplica
+ * contro la costante importata. Se uno dei due si muove, quella cade e dice
+ * quale.
+ *
+ * ## `subgrid`, e cosa dipinge il ripiego (misurato, non dedotto)
+ *
+ * `subgrid` alza il minimo a Safari 16 / iOS 16. Sotto, la dichiarazione e'
+ * invalida e il valore usato torna a `none`: le tre celle si impilano in una
+ * colonna sola. **Non e' rotto** — misurato a 390 punti, sezione da tre righe:
+ * riga 44 -> 57 px, elenco 148 -> 187 px (+26%), le barre passano da 192,73 a
+ * 358 px (larghe **tutte uguali** lo stesso, perche' e' la colonna a essere una
+ * sola), nessuna sovrapposizione e nessuno scorrimento orizzontale. Su iOS 15 si
+ * legge una lista di etichetta / barra / importo, non una schermata guasta.
+ *
+ * `display: contents` sulla riga darebbe le stesse colonne fin da Safari 11.1, e
+ * misurato da' **la stessa identica geometria** (plot 192,73 su tutte le righe).
+ * Resta scartato, e adesso con un numero: con `contents` la riga misura **0 px**
+ * — perde il box, e con lui il proprio `min-block-size: var(--tap-min)`. Quella
+ * misura si puo' spostare sulle celle, ma **solo su due delle tre**: `.stat__plot`
+ * e' alto 0,75rem per disegno e la barra ci sta dentro con `inset-block: 0`, e
+ * dargli 44 px la stirerebbe. L'altezza della riga diventerebbe una conseguenza
+ * di quali celle ci sono dentro invece di una cosa che la riga dichiara. E il
+ * suo ripiego e' peggio di quello di `subgrid`: riga 63 px, elenco 205 px. */
+.stats__rows {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  row-gap: var(--sp-2);
 }
 
 /* --- la riga: etichetta, barra, importo --------------------------------- */
 
 .stat {
   display: grid;
-  /* La barra prende quello che avanza. Etichetta e importo si dimensionano sul
-   * contenuto, quindi **non troncano mai** — che e' la ragione per cui questa
-   * schermata non ha bisogno di una vista tabellare gemella: le due colonne di
-   * testo ci sono sempre, a qualunque larghezza e in tutte e due le lingue. */
-  grid-template-columns: minmax(0, auto) 1fr max-content;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
   align-items: center;
-  gap: var(--sp-2);
   min-block-size: var(--tap-min);
 }
 
-/* Senza barra la riga e' due colonne: nome e importo, con lo spazio in mezzo. */
-.stats__rows:not([data-chart]) .stat {
-  grid-template-columns: minmax(0, 1fr) max-content;
-}
-
+/* L'etichetta: **due righe, poi i puntini**.
+ *
+ * Era una riga sola con `text-overflow: ellipsis`, ed e' il punto in cui le tre
+ * richieste di colonna si contendono lo spazio a 320 punti (l'argomento e i
+ * numeri stanno sopra, "A 320 punti i due vincoli non ci stanno insieme"). Su
+ * una riga sola l'unico modo di cedere e' **perdere delle lettere**; su due,
+ * l'etichetta cede in larghezza e non perde niente — e l'altezza c'era gia',
+ * perche' la riga dichiara `min-block-size: var(--tap-min)` e due righe a
+ * `--lh-snug` ne occupano 37,5.
+ *
+ * Il `line-height` e' dichiarato qui e non ereditato: `--lh-body` (1,5) darebbe
+ * 45 px, cioe' **un pixel sopra** i 44 della riga, e le righe con un nome lungo
+ * diventerebbero piu' alte delle altre. E' la stessa mossa del pavimento sui
+ * bersagli: rendere esatta la cosa misurata invece di tollerare che dipenda
+ * dalla tipografia.
+ *
+ * Due e non tre: il tetto tiene la riga dentro `--tap-min` e quindi il ritmo
+ * dell'elenco uguale a se stesso. Oltre le due righe si tronca ancora — ma li'
+ * dentro c'e' un nome che l'utente ha scritto o importato, non una stringa
+ * nostra, e vederne l'inizio e' cio' che serve per riconoscerlo.
+ *
+ * `overflow-wrap: anywhere` **e' parte della riparazione, non una rifinitura**:
+ * senza, un nome di una parola sola piu' larga della colonna non ha nessun punto
+ * dove andare a capo, resta su una riga e `-webkit-box` la **taglia a meta'
+ * glifo, senza puntini** — misurato a 390 punti, `Abbonamentiecosecherinnovano`
+ * si leggeva `Abbonamentiecose` e niente diceva che mancasse qualcosa. E' un
+ * peggioramento rispetto ai puntini di prima, cioe' un difetto **dentro la
+ * correzione**: con `anywhere` la parola si spezza, riempie le due righe e, se
+ * ancora non basta, prende i puntini del clamp. Le colonne non si muovono — il
+ * dimensionamento passa dal `max-content`, che una riga o due non cambia:
+ * misurato 93,23 / 112 a 320 punti e 128,97 / 146,27 a 390, prima e dopo.
+ *
+ * `-webkit-box` e' l'unico modo con cui Safari fa il clamp da sempre;
+ * `line-clamp` standard e' scritta accanto per il giorno in cui bastera' lei.
+ * Il ripiego, se un motore non conoscesse nessuna delle due, e' un'etichetta
+ * che va a capo senza tetto: piu' righe, mai lettere perse. */
 .stat__label {
+  display: -webkit-box;
   overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
   color: var(--text);
   font-size: var(--fs-200);
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: var(--lh-snug);
+  overflow-wrap: anywhere;
 }
 
-/* Le cifre si incolonnano davvero, qui: tabulari. */
+/* Le cifre si incolonnano davvero, qui: tabulari.
+ *
+ * `grid-column: -2` — l'**ultima** colonna, qualunque sia il loro numero. Serve
+ * al caso misto: una parte sotto soglia dentro una sezione che ha barre porta
+ * righe da due celle, e senza questa riga l'importo cadrebbe nella colonna del
+ * grafico, cioe' in mezzo. Con `-2` va all'ultima sia dove le colonne sono tre
+ * sia dove sono due. */
 .stat__value {
+  grid-column: -2;
   color: var(--text);
   font-size: var(--fs-200);
   font-weight: var(--fw-semibold);
@@ -120,7 +456,36 @@
 }
 
 /* La traccia del budget: una rotaia incassata, presente solo dove il periodo e'
- * confrontabile. Dove manca, la barra e' nuda e non c'e' nessun verdetto. */
+ * confrontabile. Dove manca, la barra e' nuda e non c'e' nessun verdetto.
+ *
+ * ## La rotaia e' **tutto** il budget del periodo, e niente la accorcia
+ *
+ * Qui sotto c'era `.stat__unlived`, che ridipingeva col fondo il tratto fra il
+ * maturato e la fine della traccia. Sembrava un dettaglio di disegno — "si vede
+ * che il periodo non e' finito" — ed era **l'unico pro-rata dipinto nell'app**:
+ * la lunghezza tolta valeva esattamente `budget × giorni vissuti / giorni
+ * totali`.
+ *
+ * La ragione per cui e' un difetto sta **qui**, non solo in ADR 010. La
+ * lunghezza di questa rotaia e' l'unica cosa su questa schermata che dica quanto
+ * vale il tetto del periodo: le barre si leggono contro di lei, non contro un
+ * asse (una griglia qui non c'e', vedi in testa al file). Accorciarla riduce
+ * quindi il tetto **nell'unico posto in cui il tetto e' scritto**. Mercoledi' di
+ * una settimana da 200,00 €, la rotaia ne mostrava tre settimi: 85,71 € letti
+ * dove la Home ne dice 200,00. ADR 010 difende il numero intero; il numero non e'
+ * mai stato ridotto, la forma si', ed e' la forma che si legge per prima.
+ *
+ * **Il segno del maturato (`.stat__accrued`) resta, e non e' la stessa cosa**:
+ * non toglie superficie alla rotaia, marca un istante sopra la rotaia intera. E'
+ * la differenza fra "dove sarebbe il passo" e "quanto puoi spendere". Stessa
+ * area di schermo, due statuti — ed e' la confusione che aveva prodotto la
+ * banda.
+ *
+ * Il guardiano e' `statistiche.spec.ts`, "la rotaia del budget e' lunga tutto il
+ * periodo, anche a periodo in corso": campiona i pixel dipinti prima e dopo il
+ * segno e li vuole **dello stesso colore**. Un'asserzione sull'assenza della
+ * classe sarebbe passata a qualunque altro modo di ridipingere lo stesso
+ * tratto. */
 .stat__track {
   position: absolute;
   inset-block: 0;
@@ -129,37 +494,106 @@
   background-color: var(--surface-sunken);
 }
 
-/* I giorni non ancora accaduti: si vede che il periodo non e' finito. Non e' un
- * riempimento piu' chiaro — e' l'assenza della rotaia, ridipinta col fondo. */
-.stat__unlived {
-  position: absolute;
-  inset-block: 0;
-  border-radius: var(--radius-1);
-  background-color: var(--bg);
-}
-
-/* Il maturato. Un tratto pieno da 2px, mai tratteggiato: il tratteggio aggiunge
- * rumore e si legge come "proiezione" dove qui c'e' un fatto. */
-.stat__accrued {
-  position: absolute;
-  inset-block: -2px;
-  inline-size: 2px;
-  margin-inline-start: -1px;
-  border-radius: 1px;
-  background-color: var(--line-strong);
-}
-
-/* La barra. Il contorno non e' decorazione: tre degli otto colori delle
- * categorie stanno sotto 3:1 sul fondo (misurato col validatore, in entrambi i
- * temi), quindi senza contorno la **forma** non si vedrebbe dove il riempimento
- * non si stacca. Il valore si legge comunque — e' scritto a destra — ma una
- * barra invisibile non e' un grafico. */
+/* La barra. Il contorno non e' decorazione: **quattro** degli otto colori delle
+ * categorie stanno sotto 3:1 sul fondo in tema chiaro (Spesa 2,63 · Fuori 2,82 ·
+ * Coffeeshop 2,51 · Casa 2,52) e **uno** in tema scuro (Svago 2,90). Qui c'era
+ * scritto "tre in entrambi i temi", che era falso in tutti e due — e un numero
+ * sbagliato in un commento e' un numero che qualcuno usera'.
+ *
+ * Il contorno e' `--line-strong` (3,19:1 su --bg) e non `--line` (1,19:1 in
+ * chiaro, 1,30:1 in scuro): un contorno meno visibile del riempimento che deve
+ * soccorrere non soccorre niente. `tokens.css` lo dice gia' — `--line` sono i
+ * "divisori decorativi", `--line-strong` i "bordi che contano" — e questo e' un
+ * bordo che conta. */
 .stat__bar {
   position: absolute;
   inset-block: 0;
   inset-inline-start: 0;
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-strong);
   border-radius: var(--radius-1);
+}
+
+/* Zero e' zero.
+ *
+ * Con `box-sizing: border-box` e un bordo da 1px, una barra a `inline-size: 0%`
+ * restava larga 2 px: un periodo davvero a zero si leggeva "un pochino". E i
+ * periodi a zero adesso esistono davvero in B, che non li taglia piu' — per un
+ * Erasmus col conto corto sono la riga piu' interessante della schermata. */
+.stat__bar[data-zero] {
+  border: none;
+}
+
+/* Il maturato. Un tratto pieno, mai tratteggiato: il tratteggio aggiunge rumore
+ * e si legge come "proiezione" dove qui c'e' un fatto.
+ *
+ * ## Il colore, ri-derivato qui perche' qui la superficie e' un'altra
+ *
+ * Il segno era `--line-strong`, portato qui dall'argomento del contorno della
+ * barra — *"un contorno meno visibile del riempimento che deve soccorrere non
+ * soccorre niente"*. Quell'argomento poggia su **3,19:1 misurati contro `--bg`**,
+ * ed e' vero per il contorno, che sul fondo ci cade davvero. Il segno no: sta
+ * **sopra la barra**. Misurato campionando i pixel a scale 3, `--line-strong`
+ * sopra `--brand` vale **1,88:1** in chiaro e **2,63:1** in scuro; sopra la
+ * traccia vale **2,97:1**, cioe' sotto 3 anche li'. L'argomento era giusto, la
+ * superficie era un'altra.
+ *
+ * ## Tre superfici, e perche' un colore solo non basta
+ *
+ * Il segno attraversa **tre** riempimenti: la barra (`--brand`), la traccia
+ * (`--surface-sunken`) e il fondo (`--bg` — sia la parte di periodo non vissuta,
+ * sia i 2 px che sporgono sopra e sotto il plot).
+ *
+ * In tema chiaro `--bg` ha luminanza relativa 0,906 e `--brand` 0,109. Un colore
+ * a 3:1 da tutti e due dovrebbe avere luminanza **≤ 0,269** (per staccarsi dal
+ * fondo) e **≥ 0,428** (per staccarsi dalla barra) nello stesso momento: non
+ * esiste. In scuro le due luminanze si scambiano e il vincolo resta impossibile
+ * identico. **Nessun colore piatto puo' soddisfare 3:1 qui**, ed e' per questo
+ * che la riparazione non e' un token diverso.
+ *
+ * ## Quindi: un nucleo con una guaina
+ *
+ * 1 px di `--bg` per lato, 2 px di `--text-muted` al centro. Sopra la barra e'
+ * la **guaina** a staccare (`--bg` su `--brand`: 6,00:1 in chiaro, 8,62:1 in
+ * scuro); sopra la traccia e sopra il fondo la guaina sparisce nel fondo e a
+ * staccare e' il **nucleo** (5,03:1 e 5,40:1 in chiaro, 7,68:1 e 7,30:1 in
+ * scuro). Il minimo fra i sei numeri e' **5,03:1**, contro i 3:1 richiesti.
+ *
+ * La posizione non si sposta di un pixel: il nucleo resta 2 px e il
+ * `margin-inline-start: -2px` lo rimette centrato sull'istante che rappresenta.
+ *
+ * Il guardiano e' `statistiche.spec.ts`, "il segno del maturato si stacca dal
+ * riempimento su cui cade": campiona i pixel dipinti e cade sotto 3:1. La sonda
+ * che c'era prima — `elementFromPoint` sul centro del segno — sarebbe passata a
+ * qualunque contrasto, `opacity: 0.02` compresa.
+ *
+ * **La riparazione sta nell'ordine del DOM, e qui non c'e' nessun `z-index`.**
+ * Il segno stava prima della barra, e fra due assoluti senza livello dichiarato
+ * vince chi viene dopo: sulle righe di periodo chiuso il segno cade a fine
+ * traccia — dove e' ridondante — ed era ben visibile; sulla riga corrente, dove
+ * la barra lo ha superato e cioe' **nell'unico caso in cui dice qualcosa**, era
+ * coperto proprio da lei. Segnale invertito.
+ *
+ * Un `z-index: 1` qui sarebbe stato **una seconda riparazione dello stesso
+ * difetto**, e la prova l'ha fatta la mutazione: togliendolo la suite restava
+ * verde, perche' l'ordine del DOM bastava gia'. Una difesa che nessun test puo'
+ * vedere cadere non e' una difesa: e' una riga che il prossimo lettore credera'
+ * necessaria. Lo stesso guardiano copre anche questo: se `.stat__accrued`
+ * tornasse prima di `.stat__bar` in `Stats.tsx`, sotto il segno si
+ * campionerebbe `--brand` puro, cioe' 1,00:1. */
+.stat__accrued {
+  position: absolute;
+  inset-block: -2px;
+  inline-size: 4px;
+  margin-inline-start: -2px;
+  /* Guaina, nucleo, guaina. `to right` e non un asse logico perche' la figura e'
+   * simmetrica: in RTL disegna gli stessi quattro pixel, e il `margin` logico
+   * qui sopra e' l'unica cosa che deve saperlo. */
+  background-image: linear-gradient(
+    to right,
+    var(--bg) 0 1px,
+    var(--text-muted) 1px 3px,
+    var(--bg) 3px 4px
+  );
 }
 
 @media (prefers-reduced-motion: no-preference) {

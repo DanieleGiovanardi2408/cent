@@ -38,7 +38,8 @@
 .app__bar,
 .alert,
 .list,
-.home {
+.home,
+.stats {
   padding-inline: max(var(--sp-4), var(--safe-left)) max(var(--sp-4), var(--safe-right));
 }
 
@@ -95,26 +96,86 @@
   color: var(--brand);
 }
 
-/* Schermi stretti (320 punti: il vecchio SE, o lo Zoom schermo di iOS su un
- * telefono normale). Barra, due schede e il bottone di sinistra insieme sfondano
- * di un pelo, e "Impostazioni" e' cinque caratteri piu' lungo di "Esporta" che
- * c'era prima. Si tolgono due cose, in ordine di inutilita':
+/* --- quando la barra non ci sta, e in che ordine si perde qualcosa -------- */
+/* Dalla fase 6 le schede sono **tre**. Il conto, misurato con il font della
+ * suite (Inter, `tests/e2e/font.ts`) a 15px semibold:
  *
- * 1. il marchio — in standalone l'icona dell'app e' gia' sulla schermata Home,
- *    quindi qui non identifica niente che l'utente non sappia gia';
- * 2. l'etichetta del bottone di sinistra, che resta solo icona. Il nome
- *    accessibile non se ne va con lei: sta in `aria-label`, sempre. */
-@media (max-width: 359px) {
+ *     marchio                                  26,00
+ *     gap                                       8,00
+ *     Impostazioni: 12 + icona 20 + 8 + 93,03 + 12  =  145,03
+ *     gap minimo verso le schede                8,00
+ *     schede  (67,03 + 4 + 77,03 + 4 + 101,22) = 253,28  -12 di rientro = 241,28
+ *     padding orizzontale della barra           32,00
+ *     ————————————————————————————————————————————————
+ *     tutto insieme                           460,31
+ *     senza il marchio                        426,31
+ *     senza marchio ne' etichetta             325,28
+ *
+ * Cioe': **nessun iPhone in verticale tiene il marchio e l'etichetta insieme.**
+ * A 375, 390 e 393 punti l'etichetta traboccava dal proprio bottone e finiva
+ * **sopra le schede** — 29,6 px di sovrapposizione a 375, 17,3 a 390, 13,0 a
+ * 393 — cioe' "Impostazioni" stampato sopra "Home". Non lo vedeva nessun test
+ * perche' il testo esce da un **figlio**: lo `scrollWidth` del padre non cambia,
+ * e `elementFromPoint` al centro di "Home" risponde ancora "Home" perche' il
+ * testo di troppo copre la parte sinistra della scheda.
+ *
+ * ## Perche' si nasconde l'etichetta invece di troncarla
+ *
+ * Perche' `Fit` riserva a quell'etichetta **la larghezza massima fra le due
+ * lingue** (93,03 px, che e' "Impostazioni"): con `text-overflow: ellipsis` un
+ * telefono in inglese vedrebbe troncato "Settings", che sono 59,86 px e ci
+ * starebbe. Si taglierebbe una parola che entra, per fare spazio a una parola
+ * che non c'e'.
+ *
+ * E la seconda ragione vale in tutte e due le lingue: la lunghezza del troncato
+ * dipenderebbe dallo **spazio che avanza** — "Impostazio…" a 410, "Imposta…" a
+ * 390, "Impos…" a 375 — cioe' un'etichetta derivata dal contenitore invece che
+ * dichiarata, che e' esattamente il difetto contro cui e' scritta la regola
+ * "Ogni bersaglio dichiara le proprie misure minime". Il bottone senza etichetta
+ * e' invece **un solo comportamento**, gia' quello sotto i 360 punti, e il nome
+ * accessibile non se ne va con l'etichetta: sta in `aria-label`, sempre.
+ *
+ * ## L'ordine in cui si perde qualcosa
+ *
+ * 1. **il marchio**, sotto i 470 punti — in standalone l'icona dell'app e' gia'
+ *    sulla schermata Home, quindi qui non identifica niente che l'utente non
+ *    sappia gia'. E oggi non identificava comunque niente: senza `flex: none`
+ *    veniva **schiacciato** dal flex a 8,4 px a 360 punti e a 13,7 a 390 — un
+ *    logo da 26 px disegnato largo un terzo;
+ * 2. **l'etichetta del bottone**, sotto i 440;
+ * 3. **il respiro delle schede**, sotto i 360.
+ *
+ * I tre numeri stanno sopra i requisiti misurati (460,31 · 426,31 · 325,28) e
+ * lasciano circa 10 px di margine ciascuno. Il margine serve perche' il font
+ * vero e' SF Pro Text, non Inter: misurate qui, le quattro parole della barra
+ * valgono in SF Pro 2,1 px **in meno** in tutto, quindi la suite e' un filo piu'
+ * severa del telefono — la direzione giusta. Il guardiano non e' comunque
+ * questo commento: e' `tests/e2e/schermate.spec.ts`, che a sei larghezze e in
+ * tutte e due le lingue verifica che nessun bersaglio della barra sia dipinto
+ * sopra un altro, e che nessuno sfori il proprio bottone. */
+
+/* Il marchio non si lascia schiacciare dal flex: la sua misura e' dichiarata,
+ * non ricavata da quanto spazio avanza. (Stessa riga per l'icona dentro il
+ * bottone, piu' sotto, insieme al resto del suo disegno.) */
+.app__bar .mark {
+  flex: none;
+}
+
+@media (max-width: 469px) {
   /* Solo quello in barra: sulla pagina di installazione (ADR 011) il marchio e'
    * il nome dell'app e li' lo spazio non manca. */
   .app__bar .mark {
     display: none;
   }
+}
 
+@media (max-width: 439px) {
   .app__label {
     display: none;
   }
+}
 
+@media (max-width: 359px) {
   .nav__tab {
     padding-inline: var(--sp-2);
   }
@@ -134,6 +195,7 @@
 }
 
 .app__action svg {
+  flex: none;
   fill: none;
   stroke: currentColor;
   stroke-width: 2;
