@@ -496,6 +496,21 @@ test('a schermo vuoto le Statistiche dicono cosa comparira, non "nessun dato"', 
  *    compare qui, col suo importo. Il metro e' lo stesso con cui era stata
  *    scartata `stats.blank.text` — un fatto smentito dallo schermo a un tap di
  *    distanza — applicato stavolta alla frase che restava.
+ *
+ * ## Il punto 5 misurava, e non concludeva
+ *
+ * Le zero barre erano misurate e la frase era confrontata con la copy, ma le due
+ * asserzioni stavano una accanto all'altra **senza parlarsi**: quella sul testo
+ * deriva l'atteso dal dizionario — e' cio' che la rende giusta per il suo scopo,
+ * ed e' anche cio' che la rende cieca a questo — e quella sulle barre non nomina
+ * nessuna parola. Rimettendo nei due dizionari la promessa che era stata tolta
+ * (*"Segnane una quando paghi, e il confronto comincia"*), la suite restava
+ * **verde per intero**: la riparazione esisteva nell'albero e niente la
+ * difendeva.
+ *
+ * Adesso le due misure sono legate in fondo al test, e la forma e' minima:
+ * **finche' il confronto a schermo e' zero, la copy non nomina il confronto** —
+ * con la radice della parola presa dal titolo, non scritta qui.
  */
 test('fuori dal periodo: la schermata dice cosa manca, dove sono le spese e cosa fare', async ({
   page,
@@ -630,13 +645,65 @@ test('fuori dal periodo: la schermata dice cosa manca, dove sono le spese e cosa
   await expect(riga.locator('.stat__value')).toHaveText('40,00 €')
 
   // E cio' che la frase **non** prometteva piu': nessuna barra e nessun
-  // confronto. Se un giorno le due soglie cambiassero, questa asserzione cade —
-  // e allora la frase potra' tornare a parlare di confronto, non prima.
+  // confronto fra periodi.
   await expect(
     page.locator('.stat__bar'),
     'con una riga sola compaiono delle barre: le soglie sono cambiate, e la copy va riletta',
   ).toHaveCount(0)
   await expect(page.locator('.stats')).not.toContainText(dizionario['stats.byPeriod.weekly'])
+
+  // **E qui le due misure si parlano**, che e' la parte che mancava.
+  //
+  // Le due asserzioni qui sopra dicono *cosa si vede*; l'asserzione sul testo,
+  // duecento righe sopra, dice *che l'interpolazione e' avvenuta* — e il suo
+  // atteso e' **derivato dalla copy**, quindi si aggiorna insieme alla copy.
+  // Nessuna delle due lega la frase a cio' che compare, e finche' non erano
+  // legate rimettere nei due dizionari la promessa vecchia — *"Segnane una
+  // quando paghi, e il confronto comincia"* — lasciava la suite **interamente
+  // verde**. Provato, non dedotto.
+  //
+  // Il fatto da sorvegliare e' uno: **la frase non nomina cose che al tap
+  // successivo non compaiono.** Quindi finche' il confronto a schermo e' zero,
+  // la copy non puo' nominarlo; e se un giorno le soglie cambiassero e il
+  // confronto comparisse davvero, la guardia si apre da se'. E' il commento che
+  // stava qui — *"allora la frase potra' tornare a parlare di confronto"* — che
+  // smette di essere **un permesso scritto** e diventa una condizione eseguita.
+  const confrontoAschermo =
+    (await page.locator('.stat__bar').count()) +
+    (await page.locator('.stats', { hasText: dizionario['stats.byPeriod.weekly'] }).count())
+
+  // La parola del confronto in ciascuna lingua e' **quella del titolo**, non una
+  // che decide questo test: `stats.outside.title` e' la frase che dice che il
+  // confronto non c'e' ancora, quindi la sua radice e' esattamente cio' che il
+  // testo sotto non deve promettere. E si controlla che la radice sia ancora
+  // quella del titolo, o una riscrittura del titolo lascerebbe qui una guardia
+  // che non sorveglia piu' niente — la stessa ragione per cui `conSegnaposti`
+  // conta i buchi prima di usarli.
+  //
+  // Due radici e non una, e non e' pignoleria: in italiano *"compare"* e' un
+  // verbo della frase buona (*"la prossima spesa che segni oggi compare qui"*),
+  // quindi la radice inglese, applicata all'italiano, sarebbe rossa sulla copy
+  // giusta.
+  const radiceDelConfronto = { it: /confront/i, en: /compar/i } as const
+  const promettonoIlConfronto = ([
+    ['it', dizionario],
+    ['en', inglese],
+  ] as const)
+    .filter(([lingua, vocabolario]) => {
+      const radice = radiceDelConfronto[lingua]
+      expect(
+        vocabolario['stats.outside.title'],
+        `in ${lingua} il titolo non usa piu' ${radice}: la guardia qui sotto cerca una ` +
+          'parola che la schermata non dice piu\', cioe\' non sorveglia niente',
+      ).toMatch(radice)
+      return radice.test(vocabolario['stats.outside.text'])
+    })
+    .map(([lingua]) => lingua)
+  expect(
+    confrontoAschermo > 0 ? [] : promettonoIlConfronto,
+    `dopo il gesto che la frase chiede si vedono ${confrontoAschermo} confronti, e la ` +
+      `frase ne promette uno in: ${promettonoIlConfronto.join(', ')}`,
+  ).toEqual([])
 
   // Il confine che la frase nominava e' **lo stesso** che la scheda stampa
   // adesso che le righe ci sono. E' l'invariante vero dietro `{range}`: non una
@@ -822,6 +889,36 @@ test('un nome che nessun editor accetta non accorcia le barre, e il grafico ha u
   expect(righe[3]!.barra).toBeGreaterThan(0)
   expect(righe[3]!.barra).toBeLessThan(righe[2]!.barra)
   await expect(page.locator('.stat').nth(3).locator('.stat__value')).toHaveText(/3,00/)
+
+  // **E la lunghezza dipinta e' la frazione del modello anche qui**, che e' la
+  // meta' della frase che le due asserzioni qui sopra non dicevano: `> 0` e
+  // `< quella sopra` restano vere identiche se il CSS rimette un minimo
+  // dipinto, perche' un pavimento che morde una riga sola non tocca ne' il
+  // segno ne' l'ordine.
+  //
+  // E' **l'unico posto della suite in cui un pavimento del CSS ha da mordere**,
+  // e il conto dice perche'. Ogni altra frazione confrontata con il modello — le
+  // tre qui sopra, le tre del rapporto sulla propria riga (1 / 0,5 / 0,25) e le
+  // due di `A si divide in fisse e variabili` — sta sopra `atteso(0,1) = 0,116`:
+  // su una colonna che non scende mai sotto `--plot-min` (112 px) sono **almeno
+  // 13,0 px**, quindi un minimo dipinto dovrebbe essere piu' largo di cosi' per
+  // sfiorarle. Questa vale lo 0,59% della scala, cioe' `atteso = 0,0237`: **2,94
+  // px** a 375 punti, 3,30 a 390, 6,18 a 800. Sotto qualunque `min-inline-size`
+  // che qualcuno possa rimettere.
+  //
+  // Provato con la mutazione, non dedotto: rimettendo
+  // `.stat__bar:not([data-zero]) { min-inline-size: 10px }` in `Stats.css` la
+  // suite di questo file cade **solo qui**, in tutti e tre i progetti — 0,0805 /
+  // 0,0718 / 0,0383 al posto di 0,0237, sulle colonne da 124,23 / 139,23 /
+  // 261,23 px — e le altre 63 restano verdi. E' il difetto per cui
+  // `BAR_MIN_FRACTION` e' stato spostato nel modello: rimesso tale e quale,
+  // prima di questa riga nessuna verifica lo vedeva.
+  const minimo = atteso(300 / 50700)
+  expect(
+    righe[3]!.rapporto,
+    `la barra piu' corta e' ${righe[3]!.barra}px su ${righe[3]!.plot} (${righe[3]!.rapporto}), ` +
+      `e il modello ne chiede ${minimo}: il CSS sta correggendo una lunghezza`,
+  ).toBeCloseTo(minimo, 2)
 
   // **Il massimo della colonna del nome**, e questa e' la forma che discrimina.
   //
@@ -1567,10 +1664,10 @@ test('la rotaia del budget e lunga tutto il periodo, anche a periodo in corso', 
 /**
  * **Il pavimento del modello e' quello che il CSS dipinge.**
  *
- * `BAR_MIN_FRACTION` vale `2 / 64` in `stats-view.ts`, dove il 2 sono i due
- * bordi da 1 px di `.stat__bar` e il 64 e' `--plot-min`. **Sono due numeri di
- * `Stats.css`, ricopiati a mano in un file che il CSS non vede**, e finora
- * l'unica cosa che li teneva d'accordo era un commento su ciascuno dei due.
+ * `BAR_MIN_FRACTION` in `stats-view.ts` e' **il contorno di `.stat__bar` diviso
+ * `--plot-min`**: due numeri che vivono in `Stats.css`, ricopiati a mano in un
+ * file che il CSS non vede, e finora l'unica cosa che li teneva d'accordo era un
+ * commento su ciascuno dei due.
  *
  * Il modo di fallire e' silenzioso in tutti e due i versi. Con `--plot-min` piu'
  * grande della costante, il pavimento e' piu' alto del necessario e schiaccia
@@ -1581,6 +1678,29 @@ test('la rotaia del budget e lunga tutto il periodo, anche a periodo in corso', 
  *
  * Qui i due numeri si guardano davvero: `--plot-min` risolto in pixel dalla
  * pagina, il bordo letto da una barra vera, e la costante importata.
+ *
+ * ## Questa intestazione ha portato per un po' i due numeri di ieri
+ *
+ * Diceva *"`BAR_MIN_FRACTION` vale `2 / 64`, dove il 64 e' `--plot-min`"*.
+ * Nel frattempo la costante era passata a `2 / 112` e il token a `7rem`: cioe'
+ * **il file che esiste perche' quei due numeri non divergano portava in testa la
+ * coppia divergente**, e chi ci fosse arrivato dopo un fallimento avrebbe letto
+ * il valore sbagliato nel posto dove andava a cercare quello giusto.
+ *
+ * Adesso non ce ne sono piu'. I valori veri li **deriva il test** — la costante
+ * importata, il contorno letto da una barra vera, `--plot-min` risolto dalla
+ * pagina — e li stampa nel messaggio di fallimento qui sotto: e' li' che si
+ * leggono, e li' non possono invecchiare.
+ *
+ * ## Cosa questo test **non** guarda
+ *
+ * Il legame fra i due numeri, non la proprieta' *"la lunghezza dipinta e' la
+ * frazione del modello"*. Sono cose diverse: un `min-inline-size` rimesso su
+ * `.stat__bar` lascia la costante d'accordo col contorno e riporta il pavimento
+ * nel CSS, cioe' proprio il difetto per cui la costante e' stata spostata nel
+ * modello. Quella meta' sta nel test sui nomi ostili — e' l'unica scena con una
+ * barra abbastanza corta perche' un minimo dipinto la tocchi (0,59% della
+ * scala): li' c'e' la misura, e li' c'e' la mutazione che la fa cadere.
  */
 test('il pavimento della barra nel modello e\' il contorno che il CSS dipinge', async ({ page }) => {
   await page.goto('/')

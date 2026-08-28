@@ -283,11 +283,29 @@ export interface BudgetMetrics {
    * E' il divisore di `currentPaceCents` — l'arco su cui `spentCents` e' stato
    * speso — ed era una costante locale finche' lo usava solo lui.
    *
-   * Esce allo scoperto per **un secondo lettore**: le statistiche disegnano la
-   * parte di periodo **non ancora accaduta** come `daysTotal - daysLived`, che a
-   * periodo chiuso vale zero. Cosi' l'incompletezza di un periodo in corso e' un
-   * dato e non un ramo del disegno — la settimana finita e quella a meta' passano
-   * per la stessa espressione, e la differenza sta nei numeri.
+   * Esce allo scoperto per **un secondo lettore**: `BudgetTrack.accruedFraction`,
+   * il segno contro cui si legge se il passo e' alto. Passa per **la stessa mappa**
+   * che produce la barra e la traccia, quindi `barra >= maturato` se e solo se
+   * `speso >= budget * vissuto` — un'identita', non due aritmetiche da tenere
+   * allineate.
+   *
+   * ## Questo paragrafo ha nominato per due commit un lettore cancellato
+   *
+   * Diceva che le statistiche disegnano *"la parte di periodo non ancora accaduta
+   * come `daysTotal - daysLived`"*, e che cosi' l'incompletezza e' "un dato e non
+   * un ramo del disegno". Quel lettore era `.stat__unlived`, **entrato il 26
+   * agosto e tolto il 27**: accorciava la rotaia di esattamente
+   * `budget x vissuto / totale`, cioe' **il pro-rata che ADR 010 rifiuta**, nel
+   * solo posto della schermata in cui il tetto del periodo e' scritto.
+   *
+   * Il paragrafo e' sopravvissuto a due commit e descriveva quel disegno **in un
+   * tono che lo raccomandava**: l'artefatto che domani ne giustifica la
+   * reintroduzione, come il test che asseriva il difetto in `ricorrenze.spec.ts`.
+   * Su questa classe nessuna verifica puo' cadere — un commento non ha lettori che
+   * un audit possa contare — e infatti l'ha trovata un critico, non la suite.
+   *
+   * E la riga che lo condanna era **dieci righe sotto**, scritta insieme a lui:
+   * *"un argomento che elenca i propri lettori va riletto quando uno se ne va"*.
    *
    * ## Questo elenco diceva due lettori, e uno e' durato meno di un giorno
    *

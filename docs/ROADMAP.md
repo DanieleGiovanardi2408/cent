@@ -25,15 +25,15 @@ sa gia', e per questo non puo' invecchiare. I giudizi — cosa e' in volo, cosa
 aspetta una persona — stanno sotto, scritti a mano e timbrati con lo SHA a cui
 sono stati rivisti.
 
-- **Ultimo commit**: `a8fee93` — docs: lo stato della fase 6 a meta', con i difetti aperti e le sei decisioni prese
-- **Data**: 27/08/2026 00:51
-- **Pushato**: **no: 3 commit non pushati**
+- **Ultimo commit**: `0cbc6ac` — test: l'helper interrotto, e il matcher che passava senza interpolazione
+- **Data**: 28/08/2026 21:32
+- **Pushato**: **no: 5 commit non pushati**
 - **Albero di lavoro**: **non pulito**, ci sono modifiche non committate
 
 - **Test unitari**: 676 in 23 file, tutti verdi
 - **Test e2e dichiarati**: 303 in 14 file, su 4 progetti (iphone-se, iphone-14, landscape, dark)
-- **Test e2e eseguiti**: non misurato — l'ultima esecuzione e' piu' vecchia dei sorgenti — va rilanciata
-- **Bundle iniziale**: non misurato — `dist/` e' piu' vecchio dei sorgenti — va ricostruito
+- **Test e2e eseguiti**: 287 passati, 16 saltati, in 2.4 minuti. I saltati sono condizionali (ADR 013): solo un'esecuzione li vede.
+- **Bundle iniziale**: 54.2 KB gzip su 60.0 KB (5.8 KB di margine)
 
 - **Schema del database**: 4. La scala delle migrazioni:
   - **1** — Schema iniziale: expenses, categories, recurringRules, budgets, settings
@@ -50,7 +50,7 @@ sono stati rivisti.
 ## In volo adesso
 
 <!-- JUDGMENT rivisto=a8fee93 -->
-> Rivisto a `a8fee93`, cioe' a questo commit.
+> Rivisto a `a8fee93`, 2 commit fa.
 
 **Fase 6 sul ramo `fase-6-wip`.** Main resta a `origin/main` e pubblica su Pages:
 non ci si spinge finche' la schermata non e' stata riletta.
@@ -72,16 +72,32 @@ mano produce da sola.
 
 ### Aperto (verificato nell'albero il 28 agosto)
 
-1. **`tsc` e' rosso.** `tests/e2e/statistiche.spec.ts:457` chiama `conSegnaposti`,
-   un helper che `ui-craft` stava scrivendo quando l'agente e' stato fermato per
-   fine crediti. E' l'unico blocco al build, quindi e2e e bundle non si misurano.
-   *Derivato da:* `npx tsc --noEmit`.
-2. **`dead-surface.mjs` non guarda i campi dei tipi di `src/ui`.** Tre superfici
+1. ~~**`tsc` e' rosso.**~~ **Chiuso il 28 agosto** con `0cbc6ac`. L'helper e' stato
+   finito derivando l'atteso dalla copy invece di ricopiarla — e nel farlo si e'
+   scoperto che il matcher, scritto `.+`, **passava anche quando l'interpolazione
+   non avveniva**: `{range}` a schermo sarebbe stato verde. Corretto in `[^{}]+`,
+   con una sonda a sette casi. Una seconda asserzione nello stesso file aveva lo
+   stesso difetto e misurava altezze contro la copy sbagliata.
+   *Derivato da:* `npx tsc --noEmit` verde, suite e2e 287 passati.
+
+2. **`home.spec.ts:528` e' instabile sotto contesa.** Il gate anti-CLS cade con
+   *"al primo frame i dati erano gia' arrivati"* alla prima corsa della suite
+   intera; isolato con `--repeat-each=5` fa 30/30. Nella corsa rossa
+   `firstGeometry` e `finalGeometry` sono **identiche** e CLS resta 0: non cade il
+   gate sulla deriva, cade la sua **premessa**. E' il primissimo test della corsa e
+   paga l'avvio a freddo con quattro worker insieme — FCP 287 ms contro 44 ms da
+   solo. Il commento di quel test lo aveva previsto alla lettera.
+   La cura **non** e' renderlo piu' permissivo — accetterebbe la tautologia che
+   quella riga esiste per impedire — ma togliere la contesa a quella scena o
+   ritardare il repository di proposito.
+   *Derivato da:* due corse della suite intera, una rossa e una verde, piu' trenta
+   esecuzioni isolate.
+3. **`dead-surface.mjs` non guarda i campi dei tipi di `src/ui`.** Tre superfici
    morte sono passate di li' in una sessione (`accruedCents`, `breakdownTotal`,
    `fixedInPeriodCents`). Un controllo D provato a mano da' **1 flag su 52 campi,
    zero falsi positivi**. *Derivato da:* `grep` dei controlli in
    `scripts/dead-surface.mjs` — ce ne sono tre, A/B/C.
-3. **La scheda `Quotidiane` ripete il proprio numero tre volte** sulla stessa
+4. **La scheda `Quotidiane` ripete il proprio numero tre volte** sulla stessa
    schermata: scheda, totale di parte, riga corrente di B. **Decisione presa il 28
    agosto: cade** — vedi sotto. *Derivato da:* `t('stats.variable')` in
    `Stats.tsx` compare in tre punti (righe 283, 387, 488).
@@ -112,7 +128,7 @@ Sono ferme dal **24 agosto** e vanno fatte **in quest'ordine**, che non e' una
 preferenza: ogni passo distrugge la possibilita' di fare il precedente.
 
 <!-- JUDGMENT rivisto=888699a -->
-> Rivisto a `888699a`, 5 commit fa.
+> Rivisto a `888699a`, 7 commit fa. **Da riguardare.**
 
 1. **Esportare un backup dall'app installata SENZA toccare la banda di
    aggiornamento.** Per ADR 005 l'app aggiorna solo quando l'utente tocca, quindi

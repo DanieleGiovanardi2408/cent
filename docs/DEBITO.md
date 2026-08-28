@@ -275,7 +275,13 @@ in X"*, X e' parte della correzione, non una nota.
 
 ## 4. `a8fee93` usa `--no-verify` e non lo dichiara nel messaggio
 
-**Stato: aperto.** Si chiude **il giorno in cui `tsc` torna verde**, non prima.
+**Stato: CHIUSA il 28 agosto 2026**, con `0cbc6ac` — il commit che ha rimesso
+`tsc` verde. Era la condizione dichiarata, e si e' chiusa quel giorno e non prima:
+una voce di debito che si chiude quando fa comodo invece che alla propria
+condizione e' una voce che non era un debito.
+
+Resta scritta perche' **la regola che l'ha prodotta vale da adesso**, e perche' il
+prossimo caso vada contato contro questo e non contro zero.
 
 La regola, decisa il 28 agosto: **`--no-verify` e' ammesso quando si salva un
 albero, mai quando se ne spedisce uno — e va scritto nel messaggio del commit, non
