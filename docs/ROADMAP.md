@@ -25,9 +25,9 @@ sa gia', e per questo non puo' invecchiare. I giudizi — cosa e' in volo, cosa
 aspetta una persona — stanno sotto, scritti a mano e timbrati con lo SHA a cui
 sono stati rivisti.
 
-- **Ultimo commit**: `758af03` — wip: fase 6 a meta' — NON pubblicabile, tsc rosso e tre ALTO aperti
-- **Data**: 27/08/2026 00:49
-- **Pushato**: **no: 2 commit non pushati**
+- **Ultimo commit**: `a8fee93` — docs: lo stato della fase 6 a meta', con i difetti aperti e le sei decisioni prese
+- **Data**: 27/08/2026 00:51
+- **Pushato**: **no: 3 commit non pushati**
 - **Albero di lavoro**: **non pulito**, ci sono modifiche non committate
 
 - **Test unitari**: 676 in 23 file, tutti verdi
@@ -49,60 +49,62 @@ sono stati rivisti.
 
 ## In volo adesso
 
-<!-- JUDGMENT rivisto=758af03 -->
-> Rivisto a `758af03`, cioe' a questo commit.
+<!-- JUDGMENT rivisto=a8fee93 -->
+> Rivisto a `a8fee93`, cioe' a questo commit.
 
-**Fase 6, secondo gate fatto.** Il lavoro sta su **`fase-6-wip`**, non su main: la
-schermata ha difetti aperti e main pubblica su GitHub Pages.
+**Fase 6 sul ramo `fase-6-wip`.** Main resta a `origin/main` e pubblica su Pages:
+non ci si spinge finche' la schermata non e' stata riletta.
 
-**`tsc` e' rosso.** `tests/e2e/statistiche.spec.ts:457` chiama `conSegnaposti`, un
-helper che un agente stava scrivendo quando la sessione si e' chiusa per crediti
-esauriti. E' la prima cosa da riparare: senza, il build non gira e le e2e non si
-possono misurare. 676 unitari sono verdi, `audit:source` pure.
+### Come e' stata derivata questa lista, e perche' la riga lo dice
 
-### Tre ALTO
+**Ogni voce dichiara da dove viene.** La versione precedente di questa sezione era
+sbagliata su **sei affermazioni su otto** — dichiarava aperto cio' che era chiuso —
+perche' era stata **dettata a memoria** invece che derivata dall'albero. Chi la
+riscrive la prossima volta deve poter fare una **ri-derivazione**, non un giudizio
+nuovo: senza sapere come e' stata ottenuta una riga, l'unico modo di aggiornarla e'
+riscriverla a occhio, che e' esattamente come si e' rotta.
 
-1. **A e' una sezione sola con una scala sola.** Con l'affitto dentro, su una
-   settimana vera sei righe su sette stanno dentro dieci pixel (misurato a 390:
-   Casa 192,73 · Trasporti 12,53 · Spesa 9,88 · Fuori 5,50 · Coffeeshop 3,41 ·
-   Sigarette 2,84). La decisione e' presa e non applicata: vedi sotto.
-2. **`stats.outside.text` promette *"e il confronto comincia"*, e non comincia.**
-   Misurato: dopo aver fatto esattamente quello che il messaggio dice, a schermo
-   ci sono **zero barre** — una riga sola sta sotto entrambe le soglie. La
-   giustificazione scritta accanto argomenta su uno stato interno (`ready`)
-   invece che sul fatto promesso all'utente.
-3. **Il ramo `outside` ha due inquilini e una frase sola.** Da quando B sparisce
-   se ogni riga vale zero, ci atterra anche *"sei tornato dopo mesi"* — dove
-   *"segnane una quando paghi"* dice di fare una cosa gia' fatta. Serve una frase
-   vera in entrambi i casi, o l'argomento che spieghi perche' non esiste.
+**E il rischio di questa meta' del documento ha un verso.** I *fatti* rigenerati
+qui sopra rischiano di **tacere un difetto**, e si spedisce. I *giudizi* di questa
+meta' rischiano di **dichiarare aperto cio' che e' chiuso**, e si rifa' lavoro che
+esiste. Sono due guasti diversi, e il secondo e' quello che una lista scritta a
+mano produce da sola.
 
-### Tre MEDIO
+### Aperto (verificato nell'albero il 28 agosto)
 
-4. **A 320 punti la colonna del nome tronca stringhe nostre** (`Categoria
-   rimossa`), e `--name-max` e' tarato sui 128,97 px dell'italiano mentre
-   l'inglese ne chiede 131,67: margine reale 4 px, non 7.
-5. **La scheda `Quotidiane` ripete il proprio numero tre volte** sulla stessa
-   schermata (scheda, totale di parte, riga corrente di B), ed entrambi gli
-   argomenti che la reggevano sono scaduti — l'esclusione la dichiara ora il nome
-   di parte, e ADR 016 §3 dice *"accanto al budget"*, che questa schermata non
-   mostra. **Decisione del proprietario in sospeso.** Se cade, il sottotitolo
-   `17–23 ago` va spostato e non buttato: e' l'unico posto in cui la schermata
-   nomina il periodo quando B non c'e'.
-6. **`dead-surface.mjs` non guarda i campi dei tipi di `src/ui`.** Tre superfici
+1. **`tsc` e' rosso.** `tests/e2e/statistiche.spec.ts:457` chiama `conSegnaposti`,
+   un helper che `ui-craft` stava scrivendo quando l'agente e' stato fermato per
+   fine crediti. E' l'unico blocco al build, quindi e2e e bundle non si misurano.
+   *Derivato da:* `npx tsc --noEmit`.
+2. **`dead-surface.mjs` non guarda i campi dei tipi di `src/ui`.** Tre superfici
    morte sono passate di li' in una sessione (`accruedCents`, `breakdownTotal`,
-   `fixedInPeriodCents`). Un controllo D misurato a mano da' **1 flag su 52 campi
-   e zero falsi positivi**. **Decisione in sospeso**: entra prima del push o in
-   fase 7.
+   `fixedInPeriodCents`). Un controllo D provato a mano da' **1 flag su 52 campi,
+   zero falsi positivi**. *Derivato da:* `grep` dei controlli in
+   `scripts/dead-surface.mjs` — ce ne sono tre, A/B/C.
+3. **La scheda `Quotidiane` ripete il proprio numero tre volte** sulla stessa
+   schermata: scheda, totale di parte, riga corrente di B. **Decisione presa il 28
+   agosto: cade** — vedi sotto. *Derivato da:* `t('stats.variable')` in
+   `Stats.tsx` compare in tre punti (righe 283, 387, 488).
 
-### Due BASSO
+### Chiuso, e nessuna delle chiusure e' stata riletta da un critico
 
-7. **`Storico` nel testo di `outside` e' una stringa cablata**, e il commento
-   accanto dichiara che sia `nav.history`. Rinominando quella chiave, il
-   messaggio manda in un posto che non si chiama piu' cosi' e nessuna verifica se
-   ne accorge.
-8. **Il caso dei dati piu' vecchi della finestra** con `period: 'monthly'` non e'
-   misurato: la logica non dipende dal periodo, ma e' un argomento e non una
-   misura.
+Sei rilievi dei gate precedenti risultano **gia' riparati nell'albero**: A divisa
+in due sezioni, il testo di `outside` che non promette piu' un confronto che non
+comincia, la stessa frase resa vera per i suoi due inquilini, il nome che non
+tronca piu' a 320, `Storico` interpolato da `nav.history`, il pavimento della barra
+nel modello.
+
+**Questa e' la cosa che conta piu' delle sei righe**: le riparazioni esistono e
+**nessuno le ha lette**. L'ultimo rapporto del critico descrive un albero
+precedente ed e' scaduto in tutte e due le direzioni — sei voci non valgono piu', e
+cio' che le ha chiuse non e' mai passato sotto un secondo lettore.
+
+Quindi la lista vecchia **non si aggiorna: si butta.** Appena `tsc` e' verde,
+`product-critic` riparte da zero sull'albero di adesso. E con una domanda in piu',
+che stavolta ha una risposta misurabile: **quali di quelle chiusure hanno un test
+che cadrebbe se venissero disfatte?** Una riparazione senza quel test e' una
+riparazione che il prossimo refactor annulla in silenzio — e i tre ALTO di questa
+fase stavano tutti dentro le riparazioni del giro prima.
 
 ## In sospeso sul telefono — nessuna di queste e' automatizzabile
 
@@ -110,7 +112,7 @@ Sono ferme dal **24 agosto** e vanno fatte **in quest'ordine**, che non e' una
 preferenza: ogni passo distrugge la possibilita' di fare il precedente.
 
 <!-- JUDGMENT rivisto=888699a -->
-> Rivisto a `888699a`, 4 commit fa.
+> Rivisto a `888699a`, 5 commit fa.
 
 1. **Esportare un backup dall'app installata SENZA toccare la banda di
    aggiornamento.** Per ADR 005 l'app aggiorna solo quando l'utente tocca, quindi
@@ -216,83 +218,153 @@ spazio da un Terminale vero, non da qui.
 
 ## Decisioni prese e non ancora applicate
 
-<!-- JUDGMENT rivisto=758af03 -->
+<!-- JUDGMENT rivisto=a8fee93 -->
 
-Sono **sei**, tutte concordate e nessuna nel codice. Questa sezione esiste perche'
-e' gia' successo due volte che una decisione restasse scritta e non applicata per
-due commit, ed entrambe le volte l'ha trovata un gate e non una grep.
+**L'esistenza di una decisione e' un giudizio; la sua applicazione e' un fatto
+derivabile.** Erano due cose diverse nella stessa sezione, ed e' per questo che
+l'intera sezione e' finita nella meta' del documento che nessuno controlla: il 27
+agosto dichiarava sei decisioni e **nessuna nel codice**, mentre cinque su sei
+erano gia' implementate.
+
+Adesso ogni voce porta il proprio **controllo di applicazione** in un commento, e
+`npm run state` lo esegue e ci scrive sotto **applicata / non applicata**. Il
+giudizio resta umano — *cosa* si e' deciso e *perche'*. Il fatto e' derivato.
+
+E c'e' un guadagno che vale da solo: **una decisione la cui applicazione non si
+riesce a esprimere come controllo e' una decisione troppo vaga per essere
+implementata.** Scrivere il controllo la filtra mentre la si prende.
 
 ### 1. A si divide in due sezioni — Fisse e Variabili
 
+<!-- DECISION
+     present: src/ui/stats-view.ts :: BreakdownKind
+     present: src/ui/Stats.tsx :: stats.fixedInPeriod
+-->
+> **Applicata**, verificato da: `BreakdownKind`, `stats.fixedInPeriod`.
+
 Ognuna con la **sua scala**, e in ognuna **la barra piu' lunga arriva a fondo
-colonna**: due barre piene con due importi diversi dicono da sole che le scale
-sono due, senza leggere niente. Piu' l'intestazione di sezione, il totale del
-periodo per ognuna, e una separazione vera.
+colonna**: due barre piene con due importi diversi dicono da sole che le scale sono
+due, senza leggere niente. Piu' l'intestazione di sezione, il totale del periodo
+per ognuna, e una separazione vera.
 
 Le quattro ragioni, perche' fra un mese qualcuno rivorra' "il grafico unico":
 
-- **ADR 016 §1 resta rispettato per intero**: non si nasconde niente, l'affitto
-  c'e' con la sua categoria e si vede che e' la voce piu' grossa.
+- **ADR 016 §1 resta rispettato per intero**: non si nasconde niente, l'affitto c'e'
+  con la sua categoria e si vede che e' la voce piu' grossa.
 - **Le sei righe tornano confrontabili**, perche' la loro scala non e' piu'
   schiacciata da una voce di un altro ordine di grandezza.
 - **E' il modello mentale del prodotto**, non un espediente grafico: e' la stessa
   distinzione per cui esistono ADR 016 e la schermata Spese fisse.
 - **Il tratteggio dentro la barra sparisce invece di essere riparato**: esisteva
   per distinguere la parte ricorrente, e con le sezioni la distinzione **e'** la
-  sezione. Un difetto la cui causa non c'e' piu' vale piu' di un difetto riparato
-  — e quel tratteggio aveva un contrasto di 2,51–2,82 su quattro tinte, inclusa
-  quella di default di Casa.
-
-La soglia minima di righe si applica **per sezione**. Una categoria con entrambe
-le nature (Trasporti: 23,00 fissi e 10,00 a mano) compare in tutte e due, ed e'
-informativo.
+  sezione. Quel tratteggio aveva un contrasto di 2,51–2,82 su quattro tinte,
+  inclusa quella di default di Casa.
 
 ### 2. Il pavimento della barra sta nel modello, non nel CSS
 
+<!-- DECISION
+     present: src/ui/stats-view.ts :: BAR_MIN_FRACTION
+     present: tests/e2e/statistiche.spec.ts :: il pavimento della barra nel modello
+-->
+> **Applicata**, verificato da: `BAR_MIN_FRACTION`, `il pavimento della barra nel modello`.
+
 Aveva **due proprietari**: il modello calcolava la frazione e il CSS la correggeva
-col bordo (`border-box`, quindi ogni larghezza sotto 2 px si dipinge 2 px). Da li'
-due difetti insieme: importi diversi con barre identiche, e un test unitario che
-dichiarava di sorvegliare il minimo **senza poter cadere**, perche' il minimo non
-era nel modello.
+col bordo. Da li' due difetti insieme — importi diversi con barre identiche, e un
+test che dichiarava di sorvegliare il minimo **senza poter cadere**, perche' il
+minimo non era nel modello.
 
-### 3. La fixture "budget piu' giovane dei dati" entra nella suite adesso
+**Il controllo di questa voce e' stato riscritto, e la ragione vale per i
+prossimi.** Diceva *"`BAR_MIN_FRACTION` non compare in `Stats.css`"*, e falliva —
+ma non perche' il CSS correggesse ancora qualcosa: perche' due **commenti** lo
+nominano, che e' il legame dichiarato fra i due file, cioe' la cosa buona.
 
-Tutti i test usavano `effectiveFrom: '2026-01-01'`, quindi `comparableToBudget`
-era **sempre vero**: il ramo della barra nuda — la geometria che dichiara
-l'assenza del confronto, la cosa su cui questa fase ha speso mezza giornata — **non
-e' mai stato disegnato in un browser.** Non e' una rifinitura da fare sul telefono
-dopo il push: e' l'unica copertura del meccanismo centrale.
+La condizione chiedeva **l'assenza di una parola** dove la decisione riguarda
+**l'assenza di un comportamento**, e sarebbe tornata verde cancellando un commento
+utile. Adesso chiede la presenza della **guardia che confronta i due numeri** — il
+pavimento del modello contro il contorno che il CSS dipinge — che e' la sola cosa
+che possa dire davvero se i due proprietari sono tornati due.
+
+### 3. La fixture "budget piu' giovane dei dati" entra nella suite
+
+<!-- DECISION
+     present: src/ui/stats-view.test.ts :: budget nato dentro il periodo
+-->
+> **Applicata**, verificato da: `budget nato dentro il periodo`.
+
+Tutti i test usavano `effectiveFrom: '2026-01-01'`, quindi `comparableToBudget` era
+**sempre vero**: il ramo della barra nuda non e' mai stato disegnato in un browser.
 
 ### 4. Le fisse hanno due nomi, perche' sono due quantita'
 
-`monthlyFixedCosts(rules)` e' una **proiezione** — quanto costera' al mese da qui
-in avanti — e ADR 016 §3 la usa per pareggiare il budget, che e' anch'esso in
-avanti. Il *"di cui X fisse"* di A e' **retrospettivo**: quanto e' uscito davvero
-in questo periodo. Entrambe legittime; il difetto era che si chiamavano uguale.
-La scheda dice *"Fisse al mese"*, A dice *"gia' uscite in questo periodo"*, e la
-scheda **non sparisce** quando si disattiva una regola: se in quel periodo sono
-uscite delle fisse, il fatto e' avvenuto e resta scritto.
+<!-- DECISION
+     present: src/ui/i18n/it.ts :: 'stats.fixedInPeriod'
+     present: src/ui/i18n/en.ts :: 'stats.fixedInPeriod'
+-->
+> **Applicata**, verificato da: `'stats.fixedInPeriod'`, `'stats.fixedInPeriod'`.
+
+`monthlyFixedCosts(rules)` e' una **proiezione**; il *"gia' uscite in questo
+periodo"* e' **retrospettivo**. Entrambe legittime: il difetto era che si
+chiamavano uguale.
 
 ### 5. Massimo alla colonna del nome, minimo a quella del plot
 
-Senza quei due vincoli la geometria resta **una funzione della tipografia**, che e'
-esattamente cio' che la griglia unica per sezione doveva chiudere. Oggi un solo
-nome lungo porta il plot da 192,73 a 64,00 px per **ogni** riga della sezione: il
-difetto locale e' stato sostituito da uno globale e silenzioso.
+<!-- DECISION
+     present: src/ui/Stats.css :: --name-max
+     present: src/ui/Stats.css :: --plot-min
+-->
+> **Applicata**, verificato da: `--name-max`, `--plot-min`.
 
-### 6. La regola sulle riparazioni
+Senza quei due vincoli la geometria resta **una funzione della tipografia**, che e'
+cio' che la griglia unica per sezione doveva chiudere.
+
+### 6. La regola sulle riparazioni, in CLAUDE.md
+
+<!-- DECISION
+     present: CLAUDE.md :: riscriverne la condizione sul posto
+-->
+> **Non applicata**: manca `riscriverne la condizione sul posto` in `CLAUDE.md`.
 
 **Quando una riparazione cita un argomento scritto altrove, deve riscriverne la
 condizione sul posto.** Non *"come da ADR X"*, ma *"vale perche' qui succede Y"*.
-Se la condizione non si riesce a scrivere, l'argomento non vale qui — e lo si
-scopre mentre si ripara, non due gate dopo.
+Se la condizione non si riesce a scrivere, l'argomento non vale qui.
 
-Non e' una regola di stile: la quarta, la quinta e la sesta ricorrenza di *"una
-decisione vale dove vale il suo argomento"* sono state trovate **dentro riparazioni
-della stessa sessione**. Non e' un caso — una riparazione si scrive col difetto in
-testa e l'argomento a portata di mano, che e' la condizione perfetta per
-trapiantarlo senza ri-derivarlo. Va scritta in CLAUDE.md, e non lo e' ancora.
+Non e' stile: la quarta, la quinta e la sesta ricorrenza di *"una decisione vale
+dove vale il suo argomento"* sono state trovate **dentro riparazioni della stessa
+sessione** — una riparazione si scrive col difetto in testa e l'argomento a portata
+di mano, che e' la condizione perfetta per trapiantarlo senza ri-derivarlo.
 
+### 7. La scheda "Quotidiane" cade
+
+<!-- DECISION
+     absent: src/ui/Stats.tsx :: tile__label
+-->
+> **Non applicata**: c’e’ ancora `tile__label` in `src/ui/Stats.tsx`.
+
+Decisa il 28 agosto. ADR 016 §2 vuole l'esclusione dichiarata **accanto al numero**:
+con A divisa in Fisse e Variabili quella dichiarazione e' ora nella schermata
+stessa, come intestazione di sezione, e la scheda delle variabili ripeterebbe il
+totale di una sezione che sta trenta pixel piu' sotto.
+
+**Resta la scheda "Fisse al mese"**, perche' e' la **proiezione** — un numero che A
+non puo' mostrare, essendo retrospettiva e per periodo. Le due cifre hanno nomi
+diversi proprio perche' sono due quantita' diverse, e quella che sopravvive e'
+quella che nessun'altra parte della schermata dice.
+
+**Da verificare prima di applicare**: che ADR 016 §2 non resti scoperta nello stato
+*"regole attive, nessuna fissa materializzata nel periodo"*. Se resta scoperta, la
+decisione torna aperta invece di essere forzata.
+
+### 8. Il controllo D entra adesso
+
+<!-- DECISION
+     present: scripts/dead-surface.mjs :: D. Campi di `src/ui`
+-->
+> **Non applicata**: manca `D. Campi di `src/ui`` in `scripts/dead-surface.mjs`.
+
+Non in fase 7. Cio' che trova e non si ripara oggi va nell'**elenco dichiarato**,
+con la ragione e **la condizione che lo rende di nuovo un difetto** — l'idioma di
+`MEMBRI_DICHIARATI`. Rimandarlo dopo il push significherebbe avere una guardia
+scritta e spenta, che e' la cosa che questo progetto ha smesso di fare.
 
 # Roadmap
 

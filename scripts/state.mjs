@@ -367,6 +367,119 @@ function restampJudgments(text, judgments) {
   return out
 }
 
+/* ------------------------------------------------------------------------ *
+ * Decisioni prese: l'esistenza e' un giudizio, l'applicazione e' un fatto.
+ * ------------------------------------------------------------------------ */
+
+/**
+ * **La frase che ha prodotto questo codice**: *l'esistenza di una decisione e' un
+ * giudizio, la sua applicazione e' un fatto derivabile.* Sono due cose diverse
+ * finite nella stessa sezione, e per questo l'intera sezione e' finita nella
+ * meta' del documento che nessuno puo' controllare.
+ *
+ * ## Il difetto che l'ha chiesta
+ *
+ * Il 27 agosto "Decisioni prese e non ancora applicate" dichiarava **sei
+ * decisioni, nessuna nel codice**. Cinque su sei erano gia' implementate, e
+ * quattro degli otto difetti elencati sopra erano gia' chiusi. Il documento
+ * mandava a rifare lavoro che esisteva.
+ *
+ * **L'asimmetria del costo, che decide dove serve la macchina**: un difetto
+ * taciuto fa spedire un difetto; un difetto **dichiarato aperto e in realta'
+ * chiuso** fa rifare lavoro. Sono entrambi guasti e non lo stesso guasto — e la
+ * meta' "giudizi" di questo documento porta il secondo rischio per costruzione,
+ * perche' nessuno la controlla.
+ *
+ * ## La forma
+ *
+ * Ogni voce porta il proprio controllo di applicazione, in un commento:
+ *
+ *     <!-- DECISION
+ *          present: src/ui/stats-view.ts :: BreakdownKind
+ *          absent:  src/ui/Stats.css :: BAR_MIN
+ *     -->
+ *
+ * Tutte le condizioni devono valere perche' la voce sia **applicata**. Il
+ * giudizio resta umano — *cosa* si e' deciso e *perche'*; il fatto diventa
+ * derivato — se e' nel codice o no.
+ *
+ * ## Il guadagno secondario, che vale da solo
+ *
+ * **Una decisione la cui applicazione non si riesce a esprimere come controllo e'
+ * una decisione troppo vaga per essere implementata.** Scrivere il controllo
+ * filtra la decisione mentre la si prende, non mentre la si verifica.
+ *
+ * ## Perche' questi timbri entrano nel confronto e quelli dei giudizi no
+ *
+ * Il timbro di un giudizio cambia a ogni commit (la distanza cresce), quindi
+ * segnalarlo sarebbe rumore. Questo cambia **solo quando cambia il codice** — che
+ * e' esattamente il momento in cui va riletto. Sta nel diff, e `--check`
+ * fallisce se qualcuno implementa una decisione e non rigenera.
+ */
+function decisionChecks(text) {
+  const found = []
+  const block = /<!-- DECISION\s+([\s\S]*?)-->/g
+  for (let m = block.exec(text); m !== null; m = block.exec(text)) {
+    const conditions = []
+    for (const line of m[1].split('\n')) {
+      const c = /^\s*(present|absent):\s*(\S+)\s*::\s*(.+?)\s*$/.exec(line)
+      if (c !== null) conditions.push({ kind: c[1], file: c[2], needle: c[3] })
+    }
+    found.push({ raw: m[0], conditions })
+  }
+  return found
+}
+
+/**
+ * Vero se la condizione regge.
+ *
+ * **Un file illeggibile lancia**, e non si traduce in "non lo contiene". La prima
+ * versione lo faceva — `catch { return kind === 'absent' }` — e con un `ROOT` che
+ * in questo file non esiste **tutti** i controlli uscivano invertiti: otto voci
+ * lette al contrario, e la sezione avrebbe dichiarato non applicato cio' che c'e'.
+ * Cioe' **lo stesso difetto che questa sezione esiste per chiudere**, prodotto dal
+ * codice che la chiude.
+ *
+ * Confondere *non so* con *non c'e'* e' la scorciatoia che questo progetto ha gia'
+ * tolto due volte — dal promemoria di backup e dai giudizi non databili. Qui non
+ * si tace e non si indovina: si lancia, perche' un percorso sbagliato e' un
+ * difetto del controllo e va visto subito.
+ */
+function holds(condition) {
+  const source = readFileSync(condition.file, 'utf8')
+  const there = source.includes(condition.needle)
+  return condition.kind === 'present' ? there : !there
+}
+
+function decisionStamp(decision) {
+  if (decision.conditions.length === 0) {
+    return '> **Senza controllo.** Una decisione che non sa dire come si verifica non si sa nemmeno quando e` finita.'
+  }
+  const failing = decision.conditions.filter((c) => !holds(c))
+  if (failing.length === 0) {
+    const how = decision.conditions.map((c) => `\`${c.kind === 'present' ? '' : '!'}${c.needle}\``).join(', ')
+    return `> **Applicata**, verificato da: ${how}.`
+  }
+  const missing = failing
+    .map((c) => `${c.kind === 'present' ? 'manca' : 'c’e’ ancora'} \`${c.needle}\` in \`${c.file}\``)
+    .join('; ')
+  return `> **Non applicata**: ${missing}.`
+}
+
+/** Riscrive la riga di timbro subito dopo ogni blocco `<!-- DECISION ... -->`. */
+function restampDecisions(text) {
+  let out = text
+  for (const d of decisionChecks(text)) {
+    const at = out.indexOf(d.raw)
+    if (at === -1) continue
+    const after = at + d.raw.length
+    const rest = out.slice(after)
+    const replaced = rest.replace(/^\n+(> \*\*(?:Applicata|Non applicata|Senza controllo)[^\n]*\n\n?)?/, `\n${decisionStamp(d)}\n\n`)
+    out = out.slice(0, after) + replaced
+  }
+  return out
+}
+
 /* ------------------------------------------------------------------ blocco */
 
 const kb = (n) => `${(n / 1024).toFixed(1)} KB`
@@ -469,6 +582,7 @@ if (start === -1 || stop === -1) {
 
 let next = text.slice(0, start) + block + text.slice(stop + END.length)
 next = restampJudgments(next, judgments)
+next = restampDecisions(next)
 
 const stale = judgments.filter((j) => j.distance !== null && j.distance > JUDGMENT_MAX_AGE)
 
@@ -521,6 +635,14 @@ const withoutIdentity = (s) =>
 
 const unknown = judgments.filter((j) => j.distance === null)
 
+const decisions = decisionChecks(text).map((d) => ({
+  ...d,
+  applied: d.conditions.length > 0 && d.conditions.every(holds),
+  unchecked: d.conditions.length === 0,
+}))
+const applied = decisions.filter((d) => d.applied).length
+const unchecked = decisions.filter((d) => d.unchecked).length
+
 if (check) {
   const drifted = withoutIdentity(next) !== withoutIdentity(text)
 
@@ -542,6 +664,12 @@ if (check) {
     )
   }
   if (!stale.length && !unknown.length) console.log('  Giudizi: nessuno oltre la soglia.')
+  if (decisions.length > 0) {
+    console.log(
+      `  Decisioni: ${applied}/${decisions.length} applicate` +
+        (unchecked > 0 ? `, ${unchecked} senza controllo` : ''),
+    )
+  }
   console.log('')
 
   /*
@@ -564,6 +692,12 @@ if (check) {
 
 writeFileSync(ROADMAP, next)
 console.log(`\n  ${ROADMAP}: blocco rigenerato a \`${facts.commit.sha}\`.`)
+if (decisions.length > 0) {
+  console.log(
+    `  Decisioni: ${applied}/${decisions.length} applicate` +
+      (unchecked > 0 ? `, ${unchecked} senza controllo` : ''),
+  )
+}
 for (const j of judgments) console.log(`  Giudizio ${j.sha}: ${j.distance} commit fa.`)
 for (const j of stale) console.log(`  ^ oltre la soglia di ${JUDGMENT_MAX_AGE}: da riguardare.`)
 console.log('')

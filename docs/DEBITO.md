@@ -273,6 +273,33 @@ in X"*, X e' parte della correzione, non una nota.
 
 ---
 
+## 4. `a8fee93` usa `--no-verify` e non lo dichiara nel messaggio
+
+**Stato: aperto.** Si chiude **il giorno in cui `tsc` torna verde**, non prima.
+
+La regola, decisa il 28 agosto: **`--no-verify` e' ammesso quando si salva un
+albero, mai quando se ne spedisce uno — e va scritto nel messaggio del commit, non
+solo nel resoconto.** Un resoconto vive in una conversazione; il messaggio resta
+nel repository, ed e' l'unico posto dove chi fa `git log` fra sei mesi puo'
+scoprire che quel commit non e' passato dalla guardia.
+
+Due commit del 27 agosto l'hanno usato per salvare l'albero prima della fine dei
+crediti, con `tsc` rosso su un helper lasciato a meta':
+
+- **`758af03`** — lo **dichiara** nel messaggio, con la ragione (l'hook esiste per
+  impedire che un albero a meta' finisca su main, e quel commit andava su un ramo
+  che a main non arriva). A posto.
+- **`a8fee93`** — **non lo dichiara**. E' il difetto.
+
+**Non si riscrive la storia**: il commit e' gia' sul ramo remoto, e riscriverlo
+per una riga di messaggio costerebbe piu' di quanto valga. La voce resta qui
+finche' la riparazione non atterra, e allora si chiude nominandola.
+
+**La condizione che la riapre**: un terzo `--no-verify` senza dichiarazione. A quel
+punto non e' piu' un caso, e la guardia va resa strutturale invece che ricordata —
+per esempio un controllo che cerchi i commit senza la parola nel messaggio quando
+l'hook e' stato saltato.
+
 ## 3. Rischi noti gia' scritti altrove
 
 Non si duplicano qui, per non creare la diciannovesima copia che parafrasa:
