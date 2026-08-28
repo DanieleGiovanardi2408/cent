@@ -247,6 +247,67 @@ async function apriStatistiche(page: Page): Promise<void> {
 }
 
 /**
+ * Da una copy con i `{segnaposto}` all'espressione che sa confrontarla con il
+ * testo **interpolato** che finisce a schermo.
+ *
+ * ## Perche' non basta `toHaveText(dizionario[...])`
+ *
+ * Perche' nel dizionario `stats.outside.text` e' una stringa **grezza**:
+ * `Questo periodo è {range}, …`. A schermo `t()` ha gia' sostituito i due buchi
+ * con `17–23 ago` e con la parola della barra. Confrontare le due direbbe
+ * soltanto che l'interpolazione e' avvenuta — cioe' fallirebbe **sempre**,
+ * anche a copy perfetta.
+ *
+ * ## Perche' non si ricopia la frase interpolata a mano
+ *
+ * Perche' e' esattamente il difetto che l'interpolazione ha appena chiuso.
+ * `{history}` **non e' una parola**: e' il valore di `nav.history`, la stessa
+ * chiave che dipinge la scheda. Un atteso che scrivesse "Storico" fra le
+ * virgolette sarebbe una terza copia di quella parola — invisibile al
+ * compilatore, invisibile a `dead-surface.mjs`, e verde anche dopo una rinomina
+ * che lascerebbe la frase a mandare in un posto che non si chiama piu' cosi'.
+ * La stessa ragione per cui `guide.spec.ts` importa `STEPS`.
+ *
+ * ## Cosa tiene fermo, e cosa lascia libero
+ *
+ * **I pezzi letterali restano letterali** — un refuso corretto nel dizionario
+ * aggiorna l'atteso, un refuso *introdotto* a schermo lo fa cadere — e i due
+ * buchi restano liberi, perche' cosa ci finisca dentro non e' una domanda sulla
+ * copy: la chiedono i punti 2 e 3 del test, ognuno contro la propria fonte (il
+ * confine che la scheda stampa, la parola che la barra dipinge).
+ *
+ * ## Il buco e' `[^{}]+`, e la prima versione diceva `.+`
+ *
+ * Sembrava lo stesso e non lo era. `.+` accetta anche **la graffa**, quindi
+ * questo confronto sarebbe stato verde davanti a *"Questo periodo è {range}"*
+ * dipinto a schermo — cioe' proprio davanti a `t()` chiamata senza le sue
+ * variabili, che e' l'unico modo realistico in cui questa frase si rompe. Un
+ * matcher costruito per non ricopiare la copy che passa quando la copy non e'
+ * stata interpolata sarebbe stato un test verde per il motivo sbagliato, della
+ * stessa famiglia dei sei che questa fase ha gia' trovato. Verificato con una
+ * sonda sui casi, non dedotto: il `.+` passava.
+ *
+ * E `+` invece di `*` per la ragione gemella: un segnaposto risolto in stringa
+ * vuota — `periodRangeLabel` senza periodo, `t('nav.history')` vuota —
+ * dipingerebbe *"le trovi tutte nello ."*, e un atteso che lo accettasse non
+ * sorveglierebbe niente proprio nel caso in cui serve.
+ *
+ * La guardia sul numero di buchi non e' cerimonia: se un domani qualcuno
+ * togliesse i segnaposto dalla copy, senza di essa questa funzione degraderebbe
+ * in silenzio in un confronto esatto — continuerebbe a passare, e la ragione per
+ * cui esiste sarebbe sparita senza che niente diventasse rosso.
+ */
+function conSegnaposti(copy: string): RegExp {
+  const letterali = copy.split(/\{\w+\}/)
+  expect(
+    letterali.length - 1,
+    `"${copy}" non porta segnaposti: qui basta la stringa del dizionario`,
+  ).toBeGreaterThan(0)
+  const letterale = (pezzo: string): string => pezzo.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return new RegExp(`^${letterali.map(letterale).join('[^{}]+')}$`)
+}
+
+/**
  * Le otto categorie di default **lette dal disco**, in ordine di griglia.
  *
  * Serve ai test che girano in tutte e due le lingue: il seme le scrive nella
@@ -1809,8 +1870,10 @@ for (const lingua of [
      * Sta dentro questo `describe` e non da solo perche' condivide la premessa
      * che lo rende una prova: 320 punti — lo Zoom schermo, 288 px di contenuto —
      * e **due lingue**. Il testo qui e' due frasi intere, non un'etichetta, e la
-     * lunghezza cambia con la lingua: l'italiano e' il piu' lungo dei due (132
-     * caratteri contro 123), quindi va a capo un numero diverso di volte.
+     * lunghezza cambia con la lingua: l'italiano e' il piu' lungo dei due — 145
+     * caratteri contro 140, contati **interpolati**, che e' la forma che va a
+     * schermo e quella che l'asserzione qui sotto confronta — quindi va a capo un
+     * numero diverso di volte.
      *
      * Quello che non deve succedere e' tre cose, e sono le stesse per cui esiste
      * questo blocco: niente lettere perse, niente scorrimento di lato, e niente
@@ -1833,8 +1896,15 @@ for (const lingua of [
       await expect(page.locator('.blank__title')).toHaveText(
         lingua.dizionario['stats.outside.title'],
       )
+      // Derivata, come nel test che apre il ramo: qui la copy e' la stringa
+      // grezza, a schermo i due buchi sono gia' pieni. E qui la premessa conta
+      // il doppio, perche' e' cio' che rende una misura di **altezza** una
+      // misura di questa copy: il testo interpolato non e' lungo come quello del
+      // dizionario — `{range}` sono 7 caratteri e `17 – 23 Aug` ne sono 11 —
+      // quindi va a capo un numero di volte diverso, ed e' proprio il numero di
+      // capoversi che questo test sorveglia a 320 punti.
       await expect(page.locator('.blank__text')).toHaveText(
-        lingua.dizionario['stats.outside.text'],
+        conSegnaposti(lingua.dizionario['stats.outside.text']),
       )
 
       const misura = await page.evaluate(() => {
