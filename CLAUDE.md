@@ -720,6 +720,26 @@ quindi nessuno rimisura leggendo: conteggi dei test, peso del bundle, scala dell
 migrazioni, eta' dei giudizi. **E' la differenza fra una guardia e un rumore**, ed
 e' la stessa scelta della calibrazione dell'hook.
 
+## Una derivazione vale dove ha guardato, e deve dire dove
+
+Derivare da un **corpus incompleto** sbaglia quanto dettare — **anzi peggio**,
+perche' il dettato si annuncia come memoria mentre la derivazione si presenta come
+misura.
+
+Il caso: *"il backup piu' recente in `~/Downloads` e' del 23 agosto, **quindi** il
+passo 1 sul telefono non e' stato fatto"*. Il fatto era vero, l'inferenza falsa —
+l'export gira **sul telefono** e il file resta li' se non lo si manda altrove. La
+ricerca aveva guardato **un posto solo** e concluso su tutti, con *"derivando invece
+che ricordando"* scritto sopra: ed e' proprio quella frase a renderla credibile.
+
+E' la stessa forma di una verifica che non puo' fallire — **la sicurezza viene dal
+metodo, non da cio' che il metodo ha guardato.**
+
+Quindi: **si scrive il fatto, non la conclusione**, finche' non si sono guardati
+tutti i posti in cui il fatto potrebbe stare. E per una PWA local-first **un posto
+e' sempre il telefono**, che e' l'unico che la macchina di sviluppo non puo'
+leggere: li' la derivazione si ferma e serve una persona.
+
 ## "Deriva, non dettare" vale per i brief agli agenti, non solo per i documenti
 
 Un brief che **descrive lo stato attuale** e' un dettato, e invecchia fra il momento

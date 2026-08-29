@@ -25,9 +25,9 @@ sa gia', e per questo non puo' invecchiare. I giudizi — cosa e' in volo, cosa
 aspetta una persona — stanno sotto, scritti a mano e timbrati con lo SHA a cui
 sono stati rivisti.
 
-- **Ultimo commit**: `58e0880` — feat: il periodo in corso si dichiara anche senza budget, e otto decisioni su otto
-- **Data**: 29/08/2026 02:50
-- **Pushato**: **no: 7 commit non pushati**
+- **Ultimo commit**: `db90646` — docs: la fase 6 ha un criterio di chiusura, e si misura
+- **Data**: 29/08/2026 03:07
+- **Pushato**: **no: 8 commit non pushati**
 - **Albero di lavoro**: **non pulito**, ci sono modifiche non committate
 
 - **Test unitari**: 683 in 23 file, tutti verdi
@@ -50,7 +50,7 @@ sono stati rivisti.
 ## In volo adesso
 
 <!-- JUDGMENT rivisto=a8fee93 -->
-> Rivisto a `a8fee93`, 4 commit fa.
+> Rivisto a `a8fee93`, 5 commit fa.
 
 **Fase 6 sul ramo `fase-6-wip`.** Main resta a `origin/main` e pubblica su Pages:
 non ci si spinge finche' la schermata non e' stata riletta.
@@ -128,12 +128,39 @@ Sono ferme dal **24 agosto** e vanno fatte **in quest'ordine**, che non e' una
 preferenza: ogni passo distrugge la possibilita' di fare il precedente.
 
 <!-- JUDGMENT rivisto=58e0880 -->
-> Rivisto a `58e0880`, cioe' a questo commit.
+> Rivisto a `58e0880`, un commit fa.
 
-**Rivisto il 29 agosto, derivando invece che ricordando**: il backup piu' recente
-in `~/Downloads` e' ancora `cent20260823.json`, quindi **il passo 1 non e' stato
-fatto** — e nemmeno i tre che lo seguono, che da lui dipendono. La finestra e'
-ancora aperta, e ancora unica.
+### Stato al 29 agosto: **i passi 1 e 2 sono FATTI**
+
+Il backup pre-migrazione **esiste**, ed e' del 26 agosto: schema 4, esportato
+**dopo** aver toccato la banda. Sta **sul telefono**, non su questa macchina.
+Quindi la finestra unica del passo 1 e' stata usata, e la migrazione del passo 2 e'
+girata sul database reale.
+
+**Restano il 3 e il 4.**
+
+### La correzione che ha prodotto questa riga, e vale piu' del fatto
+
+Qui c'era scritto: *"il backup piu' recente in `~/Downloads` e' ancora
+`cent20260823.json`, quindi il passo 1 non e' stato fatto"*.
+
+**Il fatto era vero e l'inferenza era falsa.** In `~/Downloads` non c'e' nessun
+backup del 26 — e non poteva esserci: l'export gira **sul telefono**, e il file
+resta li' se non lo si manda altrove. La ricerca ha guardato **un posto solo** e ha
+concluso su tutti.
+
+**Derivare da un corpus incompleto sbaglia quanto dettare.** Anzi peggio, perche'
+il dettato si annuncia come memoria mentre la derivazione si presenta come misura:
+la riga sbagliata portava *"derivando invece che ricordando"* scritto sopra, ed e'
+proprio quella frase a renderla credibile. E' la stessa forma di una verifica che
+non puo' fallire — la sicurezza viene dal metodo, non da cio' che il metodo ha
+guardato.
+
+**La regola: una derivazione vale dove ha guardato, e deve dire dove.** Si scrive
+il **fatto** — *"nessun backup del 26 in `~/Downloads`"* — e non la conclusione,
+finche' non si sono guardati tutti i posti in cui il fatto potrebbe stare. Per una
+PWA senza account, **un posto e' sempre il telefono**, ed e' l'unico che questa
+macchina non puo' leggere.
 
 1. **Esportare un backup dall'app installata SENZA toccare la banda di
    aggiornamento.** Per ADR 005 l'app aggiorna solo quando l'utente tocca, quindi
