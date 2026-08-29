@@ -25,14 +25,14 @@ sa gia', e per questo non puo' invecchiare. I giudizi — cosa e' in volo, cosa
 aspetta una persona — stanno sotto, scritti a mano e timbrati con lo SHA a cui
 sono stati rivisti.
 
-- **Ultimo commit**: `db90646` — docs: la fase 6 ha un criterio di chiusura, e si misura
-- **Data**: 29/08/2026 03:07
-- **Pushato**: **no: 8 commit non pushati**
+- **Ultimo commit**: `b289fff` — docs: i passi 1 e 2 sul telefono sono fatti, e una derivazione vale dove ha guardato
+- **Data**: 29/08/2026 03:13
+- **Pushato**: **no: 9 commit non pushati**
 - **Albero di lavoro**: **non pulito**, ci sono modifiche non committate
 
 - **Test unitari**: 683 in 23 file, tutti verdi
 - **Test e2e dichiarati**: 321 in 14 file, su 4 progetti (iphone-se, iphone-14, landscape, dark)
-- **Test e2e eseguiti**: 305 passati, 16 saltati, in 2.5 minuti. I saltati sono condizionali (ADR 013): solo un'esecuzione li vede.
+- **Test e2e eseguiti**: 305 passati, 16 saltati, in 2.4 minuti. I saltati sono condizionali (ADR 013): solo un'esecuzione li vede.
 - **Bundle iniziale**: 54.4 KB gzip su 60.0 KB (5.6 KB di margine)
 
 - **Schema del database**: 4. La scala delle migrazioni:
@@ -49,8 +49,8 @@ sono stati rivisti.
 
 ## In volo adesso
 
-<!-- JUDGMENT rivisto=a8fee93 -->
-> Rivisto a `a8fee93`, 5 commit fa.
+<!-- JUDGMENT rivisto=b289fff -->
+> Rivisto a `b289fff`, cioe' a questo commit.
 
 **Fase 6 sul ramo `fase-6-wip`.** Main resta a `origin/main` e pubblica su Pages:
 non ci si spinge finche' la schermata non e' stata riletta.
@@ -70,7 +70,10 @@ meta' rischiano di **dichiarare aperto cio' che e' chiuso**, e si rifa' lavoro c
 esiste. Sono due guasti diversi, e il secondo e' quello che una lista scritta a
 mano produce da sola.
 
-### Aperto (verificato nell'albero il 28 agosto)
+### Aperto (riverificato nell'albero il 29 agosto, prima del push su main)
+
+**Uno solo, e non riguarda il prodotto.** Le due voci che erano qui — `tsc` rosso e
+il controllo D mancante — sono chiuse, e la scheda `Quotidiane` e' uscita.
 
 1. ~~**`tsc` e' rosso.**~~ **Chiuso il 28 agosto** con `0cbc6ac`. L'helper e' stato
    finito derivando l'atteso dalla copy invece di ricopiarla — e nel farlo si e'
@@ -80,7 +83,11 @@ mano produce da sola.
    stesso difetto e misurava altezze contro la copy sbagliata.
    *Derivato da:* `npx tsc --noEmit` verde, suite e2e 287 passati.
 
-2. **`home.spec.ts:528` e' instabile sotto contesa.** Il gate anti-CLS cade con
+1. **`home.spec.ts:528` e' instabile sotto contesa — e NON riguarda il prodotto.**
+   E' un test che **si dichiara verde senza aver misurato niente**: con i dati gia'
+   arrivati al primo frame non c'e' nessun guscio da confrontare, quindi il gate non
+   cade — non trova. La confusione fra *non so* e *non c'e'*, sopravvissuta in un
+   test invece che in un campo. Nessun utente ne vede niente. Il gate anti-CLS cade con
    *"al primo frame i dati erano gia' arrivati"* alla prima corsa della suite
    intera; isolato con `--repeat-each=5` fa 30/30. Nella corsa rossa
    `firstGeometry` e `finalGeometry` sono **identiche** e CLS resta 0: non cade il
@@ -92,15 +99,19 @@ mano produce da sola.
    ritardare il repository di proposito.
    *Derivato da:* due corse della suite intera, una rossa e una verde, piu' trenta
    esecuzioni isolate.
-3. **`dead-surface.mjs` non guarda i campi dei tipi di `src/ui`.** Tre superfici
-   morte sono passate di li' in una sessione (`accruedCents`, `breakdownTotal`,
-   `fixedInPeriodCents`). Un controllo D provato a mano da' **1 flag su 52 campi,
-   zero falsi positivi**. *Derivato da:* `grep` dei controlli in
-   `scripts/dead-surface.mjs` — ce ne sono tre, A/B/C.
-4. **La scheda `Quotidiane` ripete il proprio numero tre volte** sulla stessa
-   schermata: scheda, totale di parte, riga corrente di B. **Decisione presa il 28
-   agosto: cade** — vedi sotto. *Derivato da:* `t('stats.variable')` in
-   `Stats.tsx` compare in tre punti (righe 283, 387, 488).
+~~3. `dead-surface.mjs` non guarda `src/ui`.~~ **Chiuso il 28 agosto**: il
+   controllo D e' in CI, e ha preso `StatsTiles.variableCents` nel giro stesso in
+   cui la rimozione della scheda l'ha lasciato orfano. Il suo falso negativo e'
+   misurato e scritto dentro la funzione.
+   *Derivato da:* `npm run audit:source`, quattro controlli.
+
+~~4. La scheda `Quotidiane` ripete il proprio numero tre volte.~~ **Chiusa il 29
+   agosto** con `58e0880`, dopo aver spostato `periodRangeLabel` sul titolo di A —
+   perche' a cadere non era ADR 016 §2 ma il **confine del periodo**, in due stati
+   dove B non c'e'.
+   *Derivato da:* `stats__titleRange` in `Stats.tsx`, e `variableCents` che non
+   esiste piu' nel modello.
+
 
 ### Chiuso, e nessuna delle chiusure e' stata riletta da un critico
 
@@ -128,7 +139,7 @@ Sono ferme dal **24 agosto** e vanno fatte **in quest'ordine**, che non e' una
 preferenza: ogni passo distrugge la possibilita' di fare il precedente.
 
 <!-- JUDGMENT rivisto=58e0880 -->
-> Rivisto a `58e0880`, un commit fa.
+> Rivisto a `58e0880`, 2 commit fa.
 
 ### Stato al 29 agosto: **i passi 1 e 2 sono FATTI**
 
@@ -357,6 +368,20 @@ E' la stessa distinzione del criterio di chiusura di ogni fase — *"l'app insta
 su un telefono vero"* — applicata dentro la fase: la suite dice che le proporzioni
 sono giuste, **non** che il risultato si legga.
 
+**Come si esegue**: con il push su main, che pubblica su Pages. Non e' un passo
+successivo (vedi la voce 7): e' il gesto che rende la schermata guardabile.
+
+**Il backup da usare come fixture**: `~/Downloads/cent-2026-08-26.json`,
+**schemaVersion 4**, post-migrazione. In quella cartella ce ne sono **tre**, e gli
+altri due sono a schema 2 (`cent-2026-08-22.json`, `cent20260823.json`): usare
+quelli significherebbe provare la schermata contro dati che il codice di oggi non
+scrive piu'.
+
+**E la regola su quel file, che non e' una formalita'**: contiene spese vere. Si usa
+come fixture **a runtime**, **non si committa mai**, e **non si scrive il suo
+percorso assoluto dentro un test**. E' gia' successo in fase 3, e quei test furono
+cancellati per questo.
+
 #### 6. Le verifiche verdi e i numeri scritti
 
 <!-- USCITA
@@ -368,13 +393,28 @@ sono giuste, **non** che il risultato si legga.
 suo numero**, non "verde". Stanno tutti nel blocco rigenerato in cima, quindi
 questa voce chiede solo che quel blocco esista e sia fresco.
 
-#### 7. Push su main
+#### 7. Il link agli amici
 
 <!-- USCITA -->
 > **Giudizio**, senza controllo per costruzione: nessuna macchina puo' dirlo.
 
-**Giudizio del proprietario**, non un controllo: main pubblica su Pages, e finche'
-la voce 5 non e' fatta la schermata non l'ha vista nessuno.
+**Giudizio del proprietario.** Qui c'era scritto *"push su main"*, ed era il
+criterio sbagliato — **emendato il 29 agosto invece che scavalcato**, perche' la
+differenza fra emendare e violare e' tutto il metodo.
+
+**`main` non e' "shippare": e' il ramo da cui Pages costruisce.** Non esistono altri
+utenti e il link non e' stato dato a nessuno (vedi "Regola: il link non si condivide
+ancora"). Cio' che questo criterio protegge e' **"nessuno riceve una schermata che
+nessun essere umano ha guardato"** — e il proprietario che la apre sul proprio
+telefono **e'** quell'essere umano.
+
+Quindi il push su main **non e' un passo a se'**: e' **il modo in cui si esegue la
+voce 5**. Statistiche non e' guardabile sul telefono se non passando da Pages,
+quindi pubblicare e' il gesto che rende possibile guardarla, non quello che la
+dichiara finita.
+
+Il criterio vero e' **dare il link a qualcuno**, e resta chiuso finche' le voci 5 e
+8 non sono fatte.
 
 #### 8. Statistiche vista sul telefono coi dati veri
 
@@ -385,11 +425,21 @@ la voce 5 non e' fatta la schermata non l'ha vista nessuno.
 settimanale fa un salto una settimana su quattro. E' vero — e' quando i soldi sono
 usciti davvero — ma va guardato coi dati veri prima di dichiararlo accettabile.
 
+**Nessun export prima di toccare la banda, per questa consegna.** La regola dei
+passi 1–2 qui sopra vale quando una consegna **alza lo schema**: li' toccare la
+banda fa girare una migrazione sui dati veri, e la finestra pre-migrazione e'
+unica. Questa lascia `SCHEMA_VERSION` dov'era, quindi **non gira nessuna
+migrazione** e non c'e' nessuna finestra da proteggere.
+
+Va scritto perche' la prossima volta si distingua: **un rituale eseguito dove non
+serve insegna a eseguirlo senza guardare**, ed e' cosi' che smette di proteggere il
+giorno in cui serviva davvero.
+
 ---
 
 ## Decisioni prese e non ancora applicate
 
-<!-- JUDGMENT rivisto=a8fee93 -->
+<!-- JUDGMENT rivisto=b289fff -->
 
 **L'esistenza di una decisione e' un giudizio; la sua applicazione e' un fatto
 derivabile.** Erano due cose diverse nella stessa sezione, ed e' per questo che
