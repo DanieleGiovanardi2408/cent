@@ -791,26 +791,58 @@ const MODULI_DI_VISTA = [
  * Quindi: **cio' che passa non e' dichiarato vivo.** E' dichiarato "non
  * riconoscibile come morto da qui".
  *
- * ## Il falso negativo misurato al primo giro, sul campo che ha motivato D
+ * ## Il falso negativo misurato, sui due campi di `Trend`
  *
- * Non e' un'ipotesi: **`PeriodBar.current` passa**, ed era proprio la superficie
- * che un gate aveva trovato tenuta viva dai soli test. Il nome compare in
- * produzione **due volte, e nessuna delle due e' quel campo**:
+ * Non e' un'ipotesi, ed e' **provato disfacendo**: cancellando da `Stats.tsx` la
+ * riga che legge `trend.current`, e poi quella che legge `trend.closed`, questo
+ * controllo resta **verde tutte e due le volte**. Sono due campi vivi che il
+ * controllo non saprebbe dichiarare morti.
  *
- * - `App.tsx` ha `toastTimer.current` e `toastUntil.current` — **l'idioma dei ref
- *   di Preact**, che in questa base di codice esistera' sempre;
- * - `Stats.tsx` ha `view.current.range`, dove `view.current` e' un `BudgetMetrics`.
+ * Cosa li tiene su, letto strumentando il confronto invece che indovinandolo:
  *
- * **Un campo che si chiama `current` in un tipo di vista e' invisibile a questo
+ * - **`current`** matcha in **diciannove** file di produzione, e in nessuno di
+ *   loro e' quel campo. L'idioma dei ref di Preact — `dialog.current`,
+ *   `toastTimer.current`, `sentinel.current`, `holdTimer.current` — copre da solo
+ *   dieci componenti e in questa base di codice esistera' sempre. Poi
+ *   `{ ...current, ... }` in `idb.ts`, `repository.ts` e `recurrence.ts`, dove
+ *   `current` e' una variabile locale; `RuleSheet.tsx`, che dichiara un
+ *   **proprio** `readonly current: Category | null`; e `settings.budget.current`,
+ *   che e' una chiave del dizionario.
+ * - **`closed`** matcha in **quattro**: `[...closed, created]` in `budget.ts`
+ *   (variabile locale), `t('allowance.closed')` in `budget-view.ts`, e la stessa
+ *   chiave dichiarata nei due dizionari.
+ *
+ * **E `closed` nomina una classe di maschere che l'esempio precedente non
+ * nominava.** Non e' l'idioma dei ref: e' **la chiave i18n puntata**. Il
+ * confronto cerca `[.?]campo\b`, e `'allowance.closed'` e' una stringa che
+ * contiene un punto seguito dal nome — quindi **qualunque delle 340 chiavi il cui
+ * ultimo segmento coincida con un campo di vista lo tiene vivo**, e i dizionari
+ * sono file di produzione perche' il controllo B ha bisogno che lo siano. La
+ * maschera non richiede nemmeno un lettore: basta che la chiave sia dichiarata.
+ *
+ * **Un campo con un nome comune in un tipo di vista e' invisibile a questo
  * controllo per costruzione**, e non c'e' niente da riparare senza sapere i tipi:
  * distinguerli richiederebbe risolvere a quale dichiarazione appartiene ogni
  * accesso, cioe' un analizzatore invece di una ricerca.
  *
  * Vale la pena scriverlo perche' il controllo **e' verde su un campo morto** dal
- * giorno in cui e' nato: chi lo legge deve sapere che il silenzio su un nome comune
- * non significa niente. (`PeriodBar.current` sta per acquistare un lettore vero —
- * il bordo aperto della riga corrente — quindi il caso si chiude dai fatti, non
- * dal controllo.)
+ * giorno in cui e' nato: chi lo legge deve sapere che il silenzio su un nome
+ * comune non significa niente.
+ *
+ * ## Perche' l'esempio e' cambiato, che e' la parte da non ricopiare
+ *
+ * Qui c'era scritto **`PeriodBar.current`**, con la previsione che avrebbe
+ * "acquistato un lettore vero" e chiuso il caso dai fatti. Non e' andata cosi':
+ * quel campo e' stato **tolto** (DEBITO §6), perche' ripeteva la propria
+ * posizione nel tipo. Il commento e' quindi rimasto a documentare **un esempio
+ * inesistente** — cioe' un campo senza produttore applicato alla prosa, dentro il
+ * file che quel difetto esiste per prendere.
+ *
+ * L'esempio nuovo non e' lo stesso nome trasferito: e' stato **ri-misurato**, e
+ * la misura ha dato una causa diversa (la chiave i18n) e un campo in piu'
+ * (`closed`) che la prima derivazione non aveva. Chi lo ritocca rifaccia
+ * l'esperimento — togliere il lettore, rilanciare — invece di riscrivere la
+ * frase: e' l'unica differenza fra questo paragrafo e un'ipotesi.
  */
 function campiDiVistaSenzaLettore(tuttiIFile) {
   const produzione = tuttiIFile.filter((p) => !eTest(p) && !NON_PRODUTTORI.has(p))

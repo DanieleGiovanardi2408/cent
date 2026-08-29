@@ -678,13 +678,16 @@ function PartHead({
  * A quella riga dice *quale dei due tipi di soldi* si sta guardando, e qui dice
  * la stessa identica cosa. Manca solo il totale a destra, perche' B non ne ha
  * uno: la somma di otto periodi non e' una quantita' che qualcuno si stia
- * chiedendo, e quella del periodo corrente **e' l'ultima riga di B stessa**.
+ * chiedendo, e quella del periodo corrente **e' la prima riga di B stessa**.
  *
- * (Fino al taglio della scheda "Quotidiane" questa riga diceva "e' gia' la scheda
- * in testa", ed e' rimasta vera fino a quel commit e falsa dopo. Il totale del
- * periodo corrente non e' sparito insieme alla scheda: si legge dove si e' sempre
- * letto due volte, sull'ultima riga di questa sezione e sul totale della parte
- * variabile di A — che era poi la ragione per cui la scheda ripeteva.)
+ * (Questa riga ha gia' cambiato indirizzo due volte, e vale la pena dire perche'.
+ * Fino al taglio della scheda "Quotidiane" diceva "e' gia' la scheda in testa";
+ * poi ha detto "l'ultima riga di questa sezione", vero finche' B era in ordine
+ * cronologico. Il totale del periodo corrente non si e' mai spostato di
+ * significato: si legge dove si e' sempre letto due volte, sulla riga di oggi di
+ * questa sezione e sul totale della parte variabile di A — che era poi la ragione
+ * per cui la scheda ripeteva. E' **il posto** a essere cambiato, ed e' per questo
+ * che qui si nomina la riga per cio' che e', non per dove sta.)
  *
  * ## Sotto il titolo non c'e' una nota, ed era una riparazione
  *
@@ -704,11 +707,47 @@ function PartHead({
  * che dice il primo fatto e **non** il secondo, e non ripete nessun numero.
  */
 function Periods({ trend, period }: { readonly trend: Trend; readonly period: BudgetPeriod }) {
-  // Sotto `TREND_MIN_ROWS` la sezione non esiste: e' `stats-view.ts` a svuotare
-  // l'elenco, non un secondo confronto scritto qui. B non ha un `asChart` — la
-  // soglia decide **se la sezione c'e'**, non se ha le barre — quindi
-  // `data-chart` e' incondizionato: dove B esiste, e' un grafico.
-  if (trend.rows.length === 0) return null
+  /**
+   * Una riga di B. `current` **arriva da dove sta la barra nel `Trend`**, non da
+   * un campo: `trend.current` e' la riga di oggi e `trend.closed` sono i periodi
+   * finiti, quindi qui non c'e' niente da leggere e niente da confrontare.
+   *
+   * E' la ragione per cui questa funzione prende due argomenti invece di uno.
+   * Con `rows: readonly PeriodBar[]` e un `row.current` dentro, il chiamante
+   * aveva **due** modi di sapere la stessa cosa — il campo e la posizione — e
+   * nessun input del prodotto li separava. Adesso il secondo argomento e'
+   * scritto dal chiamante in due punti, e i due punti sono i due rami.
+   */
+  const riga = (bar: PeriodBar, current: boolean) => (
+    <Row
+      key={bar.key}
+      label={periodRangeLabel(period, bar.range)}
+      // I due numeri arrivano **dal modello**, non da una seconda aritmetica
+      // sulle date: `daysTotal` vale 28, 29, 30 o 31 sul mese, e un secondo
+      // conto qui sarebbe una copia da tenere allineata con `periodRange`
+      // (vedi `PeriodBar.daysLived`).
+      //
+      // **E la nota non e' `bar.daysLived < bar.daysTotal`.** Sembra la stessa
+      // domanda e non lo e': l'ultimo giorno del periodo — la domenica di ogni
+      // settimana, l'ultimo di ogni mese — i due sono uguali e il periodo e'
+      // **ancora in corso**, perche' la giornata non e' finita e ci si puo'
+      // ancora spendere. Chi disegnasse questa riga a partire dai giorni la
+      // perderebbe una volta a settimana, e proprio nel giorno in cui "quanto
+      // resta" e' la cosa piu' utile della schermata. C'e' un test su quel
+      // giorno, ed e' li' per questo.
+      note={
+        current
+          ? t('stats.daysSoFar', { days: daysLabel(bar.daysLived), total: bar.daysTotal })
+          : null
+      }
+      open={current}
+      amount={money(bar.cents)}
+      fraction={bar.fraction}
+      color={null}
+      track={bar.track}
+      bar
+    />
+  )
   return (
     <section class="stats__section" data-chart="">
       {/* **Il titolo e cio' che conta stanno sulla stessa riga**, e non e'
@@ -732,39 +771,66 @@ function Periods({ trend, period }: { readonly trend: Trend; readonly period: Bu
           <span class="stats__partName">{t('stats.variable')}</span>
         </h3>
       </div>
+      {/* **Dal piu' recente: la riga di oggi in cima, poi i chiusi all'indietro.**
+          Misurato a 390x844 sulla forma dell'export del 26 agosto — una parte
+          fissa, cinque quotidiane, otto settimane di storia — con l'ordine
+          cronologico la riga di oggi cadeva a `top: 924` in un viewport alto
+          844: **80 px sotto il bordo**, e con lei le due settimane piu'
+          recenti. Sopra la piega restavano le cinque piu' vecchie. B esiste per
+          rispondere a *"sto spendendo piu' o meno degli altri periodi"*, e in
+          quell'ordine **la risposta e' fuori campo per costruzione, non per
+          spazio**: sta in fondo a otto righe, quindi nessun pixel guadagnato
+          sopra la porta dentro. Invertito, le stesse misure danno oggi a
+          `top: 560` e la settimana scorsa a `612` — la domanda e il suo termine
+          di paragone nella stessa occhiata.
+
+          **I chiusi si rovesciano insieme a lei, e non e' un di piu'.** Con
+          `current` in cima e i chiusi dal piu' vecchio, la seconda riga sarebbe
+          il periodo piu' **lontano**: si confronterebbe questa settimana con
+          otto settimane fa, e il verso del tempo si girerebbe fra la prima riga
+          e la seconda. Un solo verso, e va da oggi all'indietro.
+
+          **Coerente con lo Storico**, che ordina dal piu' recente
+          (`groupByDay`, `compareIsoDates(b.date, a.date)`): le due schermate che
+          elencano periodi di tempo li elencano nello stesso verso, e "in cima
+          c'e' adesso" e' una convenzione sola invece di due.
+
+          **E non c'e' nessun asse da rovesciare.** B non e' una serie su un asse
+          temporale: e' un elenco di righe, ognuna con il proprio intervallo
+          scritto a sinistra. Cio' che si rovescia e' l'ordine di lettura, non
+          la direzione di una scala.
+
+          ## L'argomento contrario, verificato invece che accolto
+
+          Era: *"il periodo corrente e' incompleto — bordo aperto, «3 giorni su
+          7» — e metterlo per primo lo rende l'ancora della scala"*. Verificato
+          nel modello di adesso, **non regge**, e le tre ragioni sono separate.
+
+          1. **Non e' aritmetica.** L'ancora e' il **massimo**: `trendScale` in
+             `stats-view.ts` e' un `reduce` su `[...closed, current]` che prende
+             il maggiore fra gli speso e i budget confrontabili, cioe' e'
+             indifferente all'ordine per costruzione. Misurato disegnando le due
+             versioni: le otto larghezze, per etichetta, sono identiche al
+             centesimo di pixel (109,11 · 68,28 · 92,78 · 60,13 · 125,45 · 76,45
+             · 100,95 · 93,59).
+          2. **Non e' nemmeno geometria.** La barra che *fa* da riferimento e'
+             quella che arriva a fondo colonna, e quale sia lo decide il valore,
+             non il posto. Nella scena misurata — con un budget — non ci arriva
+             nessuna: la colonna e' 166,28 px e la piu' lunga ne vale 125,45,
+             perche' il riferimento e' **la traccia**, che e' disegnata uguale su
+             tutte e otto le righe.
+          3. **Resta la lettura, e li' l'argomento si rovescia.** Le due marche
+             che dichiarano l'incompletezza — il bordo aperto e la nota in giorni
+             — stanno **sulla riga stessa**. Nell'ordine vecchio erano a
+             `top: 924`, cioe' **la dichiarazione era sotto la piega insieme alla
+             cosa dichiarata**: chi non scorreva vedeva otto quattordicesimi di
+             sezione senza mai incontrare il fatto che uno di quei periodi non e'
+             finito. Mettere la riga in cima non porta sopra la piega una barra
+             incompleta muta: ci porta **la barra e la sua dichiarazione insieme**,
+             per la prima volta. */}
       <ul class="stats__rows">
-        {trend.rows.map((row: PeriodBar) => (
-          <Row
-            key={row.key}
-            label={periodRangeLabel(period, row.range)}
-            // I due numeri arrivano **dal modello**, non da una seconda
-            // aritmetica sulle date: `daysTotal` vale 28, 29, 30 o 31 sul mese,
-            // e un secondo conto qui sarebbe una copia da tenere allineata con
-            // `periodRange` (vedi `PeriodBar.daysLived`).
-            //
-            // La condizione e' `row.current`, e **non** `row.daysLived <
-            // row.daysTotal`: l'ultimo giorno del periodo i due sono uguali e il
-            // periodo e' ancora in corso — la domenica di ogni settimana e
-            // l'ultimo di ogni mese, cioe' il giorno in cui questa riga serve di
-            // piu'. E non e' `index === rows.length - 1`: oggi coincidono per
-            // come `trendRanges` costruisce la finestra, ma la posizione e' una
-            // conseguenza e `current` e' un fatto sulle date.
-            note={
-              row.current
-                ? t('stats.daysSoFar', {
-                    days: daysLabel(row.daysLived),
-                    total: row.daysTotal,
-                  })
-                : null
-            }
-            open={row.current}
-            amount={money(row.cents)}
-            fraction={row.fraction}
-            color={null}
-            track={row.track}
-            bar
-          />
-        ))}
+        {riga(trend.current, true)}
+        {[...trend.closed].reverse().map((bar) => riga(bar, false))}
       </ul>
     </section>
   )
@@ -898,7 +964,19 @@ export function Stats({ phase, expenses, categories, rules, budgets, period, day
         showFixed={showFixed}
         onToggleFixed={() => setShowFixed((on) => !on)}
       />
-      <Periods trend={view.byPeriod} period={view.period} />
+      {/* **L'assenza di B si legge qui, e non dentro `Periods`.**
+
+          Qui c'era `<Periods trend={view.byPeriod} …>` con dentro
+          `if (trend.rows.length === 0) return null`: la sezione decideva di non
+          esistere leggendo **un elenco vuoto**, cioe' interpretando un valore
+          come un fatto. Adesso il fatto ce l'ha il modello — `byPeriod` e' `Trend`
+          oppure `null` — e i tre modi di non esserci (troppe poche righe, niente
+          da confrontare, nessuna riga di oggi) sono tre condizioni scritte in
+          `statsView` invece di tre strade verso lo stesso elenco vuoto.
+
+          Ne segue che `Periods` non ha piu' nessun ramo vuoto da disegnare: dove
+          viene chiamata, la sezione c'e' e ha almeno `TREND_MIN_ROWS` righe. */}
+      {view.byPeriod === null ? null : <Periods trend={view.byPeriod} period={view.period} />}
     </div>
   )
 }

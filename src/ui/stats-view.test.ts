@@ -11,7 +11,14 @@ import {
   statsView,
   trendRanges,
 } from './stats-view'
-import type { BreakdownKind, BreakdownSection, CategorySlice, StatsInput } from './stats-view'
+import type {
+  BreakdownKind,
+  BreakdownSection,
+  CategorySlice,
+  PeriodBar,
+  StatsInput,
+  Trend,
+} from './stats-view'
 
 /*
  * ## Come si testa un grafico, in questo progetto
@@ -125,6 +132,38 @@ function totale(s: BreakdownSection | undefined): Cents | undefined {
 function unica(s: BreakdownSection | undefined): CategorySlice {
   if (s === undefined || !s.single) throw new Error('attesa una sezione con una riga sola')
   return s.rows[0]
+}
+
+/**
+ * B **quando c'e'**, e fallisce dove non c'e'.
+ *
+ * Non e' una comodita' per accorciare: `byPeriod` e' `Trend | null`, e un test
+ * che leggesse `v.byPeriod?.current` sarebbe verde anche sulla schermata in cui
+ * la sezione non esiste affatto — cioe' verde per il motivo sbagliato, che e'
+ * esattamente la malattia per cui questa forma e' nata. Dove il caso *e'*
+ * l'assenza, si asserisce `toBeNull()` e basta.
+ */
+function periodi(v: Ready): Trend {
+  const { byPeriod } = v
+  if (byPeriod === null) throw new Error('attesa la sezione dei periodi')
+  return byPeriod
+}
+
+/**
+ * Tutte le righe di B — le chiuse e quella di oggi — nell'ordine in cui vanno a
+ * schermo.
+ *
+ * **Si usa solo per le affermazioni universali**: *"nessuna riga ha una
+ * traccia"*, *"il passo e' lo stesso ovunque"*, *"la piu' alta non e' quella di
+ * oggi"*. L'identita' della riga corrente si legge da `Trend.current` e **mai**
+ * da una posizione qui dentro: rimettere le righe in un array per poi
+ * interrogarne l'ultima sarebbe ricostruire a mano la confusione che il tipo ha
+ * appena reso inesprimibile, ed e' gia' successo una volta: ventotto test del
+ * componente restavano verdi sostituendo `row.current` con
+ * `index === rows.length - 1` (la misura sta in `docs/DEBITO.md`).
+ */
+function tutteLeRighe(t: Trend): readonly PeriodBar[] {
+  return [...t.closed, t.current]
 }
 
 /**
@@ -256,12 +295,13 @@ describe('lo stato vuoto', () => {
     // "niente in cio' che questa schermata guarda" — il secondo e' `outside`,
     // qui sotto, e prima di distinguerli restava a schermo la sola scheda in
     // testa sopra 400 px di niente.
-    expect(v.byPeriod.rows.map((r) => r.range.start)).toEqual([
-      '2026-08-10',
-      '2026-08-17',
-      '2026-08-24',
-    ])
-    expect(v.byPeriod.rows[2]?.cents).toBe(0)
+    const b = periodi(v)
+    expect(b.closed.map((r) => r.range.start)).toEqual(['2026-08-10', '2026-08-17'])
+    expect(b.current.range.start).toBe('2026-08-24')
+    // **Zero speso nel periodo corrente**, letto dal campo che dice "corrente".
+    // Qui c'era `rows[2]`, cioe' la terza posizione: la stessa riga, nominata
+    // per dove capitava di stare invece che per cio' che e'.
+    expect(b.current.cents).toBe(0)
     invariantiDiA(v)
   })
 
@@ -642,7 +682,9 @@ describe('0c — spegnere le fisse ricalcola la scala', () => {
     // misurerebbero contro una traccia che le fisse non comprende — due unita' di
     // misura sullo stesso asse, che e' il difetto per cui ADR 016 esiste.
     expect(senza.byPeriod).toEqual(con.byPeriod)
-    expect(con.byPeriod.rows.length).toBeGreaterThan(0)
+    // E c'e' qualcosa da confrontare byte per byte: senza questa, due `null`
+    // uguali sarebbero un test verde su una sezione che non esiste.
+    expect(periodi(con).closed.length).toBeGreaterThan(0)
   })
 
   it('spegnendo le fisse in un periodo di sole fisse la schermata resta ready', () => {
@@ -981,12 +1023,12 @@ describe('A comprende le fisse, B no (ADR 016 §1)', () => {
     // un test che leggesse `undefined` passerebbe per il motivo sbagliato.
     const prima = makeExpense({ date: '2026-08-17', categoryId: 'c-cibo', amountCents: 500 })
     const v = ready({ expenses: [...spese, affitto, prima] })
-    const corrente = v.byPeriod.rows.find((r) => r.current)
+    const corrente = periodi(v).current
     // 7000 e non 97000: la barra si legge contro la traccia del budget, e il
     // budget le fisse le esclude. Se entrassero, la settimana del primo
     // sarebbe sempre la piu' lunga di tutte e otto — il difetto per cui ADR
     // 016 esiste.
-    expect(corrente?.cents).toBe(7000)
+    expect(corrente.cents).toBe(7000)
     expect(v.current.spentCents).toBe(7000)
     // E A conta l'altra cosa, in due sezioni che lo dichiarano.
     expect(totale(sezione(v, 'variable'))).toBe(7000)
@@ -1260,16 +1302,28 @@ describe('B — spese si, budget no', () => {
 
   it('senza budget nessuna riga ha una traccia', () => {
     const v = ready({ expenses: spese })
-    expect(v.byPeriod.rows.length).toBeGreaterThan(0)
+    // Qui c'era `expect(rows.length).toBeGreaterThan(0)`, che serviva a non
+    // asserire "nessuna traccia" su un elenco vuoto. Adesso lo garantiscono il
+    // tipo e `periodi`, che fallisce dove la sezione non c'e': cio' che resta
+    // utile e' **quante** sono, che e' un fatto sulla fixture.
+    const righe = tutteLeRighe(periodi(v))
+    expect(righe).toHaveLength(TREND_MIN_ROWS)
     // Una traccia senza budget sarebbe un tetto da zero euro, cioe' un numero
     // inventato. Se la traccia si disegnasse sempre, questa cade.
-    expect(v.byPeriod.rows.every((row) => row.track === null)).toBe(true)
+    //
+    // **Un'affermazione universale**, quindi le righe si guardano tutte insieme:
+    // la riga di oggi non e' un caso a parte, ed e' proprio quella su cui una
+    // traccia inventata si vedrebbe per prima.
+    expect(righe.every((row) => row.track === null)).toBe(true)
   })
 
   it('le lunghezze restano confrontabili anche senza traccia', () => {
     const v = ready({ expenses: spese })
-    const corrente = v.byPeriod.rows.find((r) => r.current)!
-    const precedente = v.byPeriod.rows.find((r) => !r.current && r.cents > 0)!
+    const { closed, current: corrente } = periodi(v)
+    // "Non corrente e con qualcosa dentro" era un filtro su un campo; adesso
+    // "non corrente" e' il posto in cui la riga sta, e resta da cercare solo il
+    // valore.
+    const precedente = closed.find((r) => r.cents > 0)!
     expect(corrente.cents).toBe(4000)
     expect(precedente.cents).toBe(8000)
     // La piu' grande arriva a fondo colonna, come in A.
@@ -1286,8 +1340,14 @@ describe('B — spese si, budget no', () => {
 
   it('due periodi sono gia una sezione: sono letteralmente la domanda', () => {
     const v = ready({ expenses: spese })
-    expect(v.byPeriod.rows).toHaveLength(TREND_MIN_ROWS)
-    expect(v.byPeriod.rows.map((r) => r.cents)).toEqual([8000, 4000])
+    const b = periodi(v)
+    // **La soglia conta la riga di oggi**, che nell'elenco non c'e': due
+    // periodi sono un chiuso piu' il corrente. Scritta come
+    // `closed.length === TREND_MIN_ROWS` sarebbe la stessa soglia spostata di
+    // uno, e nessun test lo direbbe: e' il punto in cui la forma nuova cambia la
+    // **premessa** dell'asserzione e non solo la sua scrittura.
+    expect(b.closed.length + 1).toBe(TREND_MIN_ROWS)
+    expect(tutteLeRighe(b).map((r) => r.cents)).toEqual([8000, 4000])
     // Questa settimana contro la scorsa. Con la soglia di A (tre) B non ci
     // sarebbe affatto, e la risposta sparirebbe proprio a chi ha appena finito
     // la seconda settimana.
@@ -1306,7 +1366,9 @@ describe('B — spese si, budget no', () => {
         makeExpense({ date: OGGI, categoryId: 'c-casa', amountCents: 1500 }),
       ],
     })
-    expect(v.byPeriod.rows).toHaveLength(0)
+    // **La sezione non c'e'**, e non e' un elenco vuoto: `null` e' il fatto,
+    // e un elenco vuoto era la sua deduzione.
+    expect(v.byPeriod).toBeNull()
     // Tre spese, un periodo solo: la soglia conta i **periodi**, e sono le
     // righe di B a mancare — non i dati. A infatti ha tre righe da mostrare.
     expect(sezione(v, 'variable')?.rows).toHaveLength(3)
@@ -1318,12 +1380,20 @@ describe('B — spese si, budget no', () => {
     invariantiDiA(v)
   })
 
-  it('la riga corrente e l ultima, ed e quella che contiene oggi', () => {
+  it('la riga di oggi e quella che contiene oggi, e non compare due volte', () => {
     const v = ready({ expenses: spese })
-    const rows = v.byPeriod.rows
-    expect(rows[rows.length - 1]?.current).toBe(true)
-    expect(rows[rows.length - 1]?.range).toEqual({ start: '2026-08-24', end: '2026-08-30' })
-    expect(rows.filter((r) => r.current)).toHaveLength(1)
+    const { closed, current } = periodi(v)
+    expect(current.range).toEqual({ start: '2026-08-24', end: '2026-08-30' })
+    // **Questo test aveva un altro soggetto**, e il soggetto non e' piu'
+    // scrivibile: diceva *"la riga corrente e' l'ultima dell'elenco"*, e un
+    // elenco che finisce con lei non c'e' piu'. Cio' che di
+    // `rows.filter((r) => r.current)).toHaveLength(1)` resta **falsificabile** e'
+    // l'altra meta', l'unicita': l'esistenza la garantisce il tipo, la
+    // non-duplicazione no. I chiusi si camminano da `current.start - 1`, e
+    // sbagliando quel giorno la settimana di oggi si disegnerebbe due volte —
+    // una in fondo ai chiusi e una come corrente.
+    expect(closed.map((r) => r.key)).not.toContain(current.key)
+    for (const riga of closed) expect(riga.range.end < current.range.start).toBe(true)
   })
 })
 
@@ -1364,16 +1434,21 @@ describe('B — un periodo in corso si dichiara tale anche senza budget', () => 
 
   it('la riga corrente porta i giorni vissuti, le altre no perche non ne hanno da portare', () => {
     const v = ready({ expenses: passoCostante })
-    const rows = v.byPeriod.rows
-    expect(rows.map((r) => r.cents)).toEqual([7000, 7000, 7000, 3000])
+    const b = periodi(v)
+    const { closed, current: corrente } = b
+    expect(tutteLeRighe(b).map((r) => r.cents)).toEqual([7000, 7000, 7000, 3000])
     // Le tre chiuse: vissute per intero. Se i giorni venissero dalle metriche
     // del periodo **corrente** invece che dalle proprie, qui sarebbero 3 su 7 e
     // tre settimane finite risulterebbero eternamente incomplete.
-    for (const riga of rows.slice(0, 3)) {
+    //
+    // Erano `rows.slice(0, 3)`, cioe' "tutte tranne l'ultima" scritto come un
+    // taglio: adesso sono **i chiusi**, e il taglio non serve piu' perche' il
+    // tipo l'ha gia' fatto.
+    expect(closed).toHaveLength(3)
+    for (const riga of closed) {
       expect(riga.daysLived).toBe(7)
       expect(riga.daysTotal).toBe(7)
     }
-    const corrente = rows[rows.length - 1]!
     expect(corrente.daysLived).toBe(3)
     expect(corrente.daysTotal).toBe(7)
     // Ed escono dalle metriche gia' calcolate, non da una seconda aritmetica.
@@ -1383,18 +1458,22 @@ describe('B — un periodo in corso si dichiara tale anche senza budget', () => 
 
   it('senza i due giorni la forma dice 44% dove il passo e identico', () => {
     const v = ready({ expenses: passoCostante })
-    const rows = v.byPeriod.rows
+    const b = periodi(v)
+    const rows = tutteLeRighe(b)
     // Nessuna traccia: e' lo stato senza budget, cioe' quello in cui la marca
     // dell'incompletezza non esisteva affatto.
     expect(rows.every((r) => r.track === null)).toBe(true)
     // Il fatto che la forma non dice e i due interi si': **lo stesso passo**.
+    // Vale su tutte le righe insieme, corrente compresa: e' proprio il confronto
+    // fra lei e le altre a essere il soggetto.
     expect(rows.map((r) => r.cents / r.daysLived)).toEqual([1000, 1000, 1000, 1000])
     // E la forma, che resta quella che era: la barra corrente vale il 44% della
     // piena. Non e' un difetto da correggere sull'asse — 3/7 dei soldi sono 3/7
     // dei soldi — e' un fatto che va **dichiarato** accanto, e la dichiarazione
     // sono i due numeri sopra.
-    const corrente = rows[rows.length - 1]!
-    expect(rows[0]?.fraction).toBe(1)
+    const corrente = b.current
+    const piena = b.closed[0]!
+    expect(piena.fraction).toBe(1)
     expect(corrente.fraction).toBeCloseTo(BAR_MIN_FRACTION + (1 - BAR_MIN_FRACTION) * (3 / 7), 10)
     // Il **rapporto** misurato dal gate — 77,20 px contro 175,98 — e' questo, e
     // non si scrive in pixel: la larghezza della colonna dipende dal viewport
@@ -1402,17 +1481,22 @@ describe('B — un periodo in corso si dichiara tale anche senza budget', () => 
     // difetto diceva era 44%, ed e' ancora 44%: e' giusto che lo dica, perche'
     // 3/7 dei soldi sono 3/7 dei soldi. Cio' che mancava era il resto della
     // frase.
-    expect(corrente.fraction / (rows[0]?.fraction ?? 1)).toBeCloseTo(77.2 / 175.98, 3)
+    expect(corrente.fraction / piena.fraction).toBeCloseTo(77.2 / 175.98, 3)
   })
 
   it('l ultimo giorno del periodo i giorni sono pari e il periodo e ancora in corso', () => {
     // Domenica 30 agosto, ultimo giorno della settimana 24–30. `daysLived`
     // vale 7 come `daysTotal`, e ci si puo' ancora spendere per tutto il giorno.
     //
-    // **E' la mutazione che questo test esiste per prendere**: `current` dedotto
-    // da `daysLived < daysTotal` qui vale `false`, la riga di oggi smette di
-    // esistere, e succede una volta a settimana — la domenica, cioe' il giorno
-    // in cui quanto resta e' la cosa piu' utile della schermata.
+    // **E' la mutazione che questo test esiste per prendere**, e la forma nuova
+    // l'ha spostata di un piano senza toglierla: prima era `current` dedotto da
+    // `daysLived < daysTotal`, che qui vale `false` e faceva sparire la riga di
+    // oggi. Adesso il campo non c'e' piu' e la stessa deduzione vive in
+    // `trendRanges`: una finestra che chiamasse "corrente" *il periodo non
+    // ancora finito* filerebbe oggi fra i **chiusi** e prenderebbe come corrente
+    // la settimana dopo. Succede una volta a settimana — la domenica, cioe' il
+    // giorno in cui quanto resta e' la cosa piu' utile della schermata — e
+    // l'ultimo di ogni mese sul periodo mensile.
     const v = ready({
       expenses: [
         makeExpense({ date: '2026-08-19', categoryId: 'c-cibo', amountCents: 4000 }),
@@ -1420,21 +1504,24 @@ describe('B — un periodo in corso si dichiara tale anche senza budget', () => 
       ],
       day: '2026-08-30',
     })
-    const corrente = v.byPeriod.rows.find((r) => r.current)
-    expect(corrente).toBeDefined()
-    expect(corrente?.range).toEqual({ start: '2026-08-24', end: '2026-08-30' })
-    expect(corrente?.daysLived).toBe(7)
-    expect(corrente?.daysTotal).toBe(7)
-    expect(corrente?.daysLived).toBe(corrente?.daysTotal)
+    const { closed, current: corrente } = periodi(v)
+    expect(corrente.range).toEqual({ start: '2026-08-24', end: '2026-08-30' })
+    expect(corrente.daysLived).toBe(7)
+    expect(corrente.daysTotal).toBe(7)
+    expect(corrente.daysLived).toBe(corrente.daysTotal)
     // Il periodo e' in corso, e non e' un'opinione: resta un giorno, che e'
     // oggi. `daysRemaining` conta oggi incluso.
     expect(v.current.daysRemaining).toBe(1)
-    // La riga corrente esiste **una** e non zero: sotto la mutazione questa
-    // vale 0.
-    expect(v.byPeriod.rows.filter((r) => r.current)).toHaveLength(1)
+    // **E la settimana di oggi non e' fra i chiusi.** Qui c'era
+    // `rows.filter((r) => r.current)).toHaveLength(1)`, che provava due cose:
+    // che la riga esiste — adesso lo dice il tipo, e un'asserzione su una cosa
+    // che il compilatore garantisce e' rumore — e che non e' archiviata come
+    // finita. La seconda e' quella che cade sotto la mutazione, ed e' rimasta.
+    expect(closed.map((r) => r.range.start)).not.toContain('2026-08-24')
+    for (const riga of closed) expect(riga.range.end < '2026-08-24').toBe(true)
   })
 
-  it('current e il periodo che contiene oggi, non l ultima riga ne la piu alta', () => {
+  it('la riga di oggi e quella che contiene oggi, non la piu alta ne l unica non nulla', () => {
     // Quattro settimane, la corrente e' la piu' **bassa** e in mezzo ce n'e' una
     // a zero: nessuna delle scorciatoie che somigliano a `current` — la barra
     // piu' alta, l'unica non nulla, quella con la traccia — la indovina.
@@ -1445,44 +1532,47 @@ describe('B — un periodo in corso si dichiara tale anche senza budget', () => 
         makeExpense({ date: OGGI, categoryId: 'c-cibo', amountCents: 1000 }),
       ],
     })
-    const rows = v.byPeriod.rows
-    expect(rows.map((r) => r.range.start)).toEqual([
-      '2026-08-03',
-      '2026-08-10',
-      '2026-08-17',
-      '2026-08-24',
-    ])
+    const b = periodi(v)
+    const { closed, current: corrente } = b
+    const rows = tutteLeRighe(b)
+    expect(closed.map((r) => r.range.start)).toEqual(['2026-08-03', '2026-08-10', '2026-08-17'])
+    expect(corrente.range.start).toBe('2026-08-24')
     expect(rows.map((r) => r.cents)).toEqual([5000, 0, 8000, 1000])
-    // **Il fatto**, ricalcolato dalle date invece che dalla posizione: `current`
-    // e' vero esattamente dove il periodo contiene oggi.
-    expect(rows.map((r) => r.current)).toEqual(rows.map((r) => contiene(r.range, OGGI)))
-    expect(rows.map((r) => r.current)).toEqual([false, false, false, true])
-    // E non e' nessuna delle tre coincidenze: la riga piu' alta non e' corrente,
-    // quella a zero non lo e', e la corrente e' la piu' corta delle non nulle.
+    // **Il fatto**, ricalcolato dalle date: la riga di oggi e' quella il cui
+    // intervallo contiene oggi, e nessuna delle chiuse lo contiene. Era
+    // `rows.map((r) => r.current)` confrontato con lo stesso conto: adesso non
+    // c'e' un campo da confrontare, c'e' un posto — e cio' che resta da provare
+    // e' che il posto sia quello giusto.
+    expect(contiene(corrente.range, OGGI)).toBe(true)
+    expect(closed.map((r) => contiene(r.range, OGGI))).toEqual([false, false, false])
+    // E non e' nessuna delle tre coincidenze: la riga piu' alta non e' quella di
+    // oggi, quella a zero nemmeno, e quella di oggi e' la piu' corta delle non
+    // nulle.
     const piuAlta = rows.reduce((max, r) => (r.cents > max.cents ? r : max), rows[0]!)
-    expect(piuAlta.current).toBe(false)
-    expect(rows.find((r) => r.cents === 0)?.current).toBe(false)
+    expect(piuAlta.key).not.toBe(corrente.key)
+    expect(rows.find((r) => r.cents === 0)?.key).not.toBe(corrente.key)
   })
 
-  it('coincide con l ultima riga, e il test dice **perche** invece di fotografarlo', () => {
-    // `current` e l'ultima riga coincidono, ed e' una **conseguenza**:
-    // `trendRanges` costruisce la finestra da `input.day`, e la finestra si
-    // taglia dalla testa e mai dal fondo. Asserire la sola coincidenza sarebbe
-    // la fotografia di un accidente, e domani giustificherebbe di leggere la
-    // posizione al posto del campo — che e' l'errore che il componente puo'
-    // fare, dove compilerebbe e passerebbe ogni fixture.
+  it('il fondo della finestra e il periodo di oggi, e i chiusi sono tutti finiti', () => {
+    // **Il soggetto di questo test e' cambiato, e vale la pena dire in cosa.**
+    // Diceva *"`current` coincide con l'ultima riga, ed ecco perche'"*: quella
+    // coincidenza non e' piu' scrivibile, perche' non c'e' nessun elenco che
+    // finisca con lei — ed e' il motivo per cui la forma e' cambiata. La ragione
+    // che allora andava dichiarata a mano adesso e' la costruzione:
+    // `trendRanges` calcola per primo il periodo di `input.day` e cammina
+    // all'indietro da li'.
+    //
+    // Cio' che resta da provare — e che nessun tipo garantisce — e' che quella
+    // costruzione produca due insiemi **disgiunti e nell'ordine giusto**: oggi
+    // di qua, il finito di la'. Se la finestra scorresse indietro fino a dove i
+    // dati ci sono — la tentazione rifiutata accanto alla soglia — questa
+    // cadrebbe qui invece che a schermo.
     const v = ready({ expenses: passoCostante })
-    const rows = v.byPeriod.rows
-    const ultima = rows[rows.length - 1]!
-    expect(ultima.current).toBe(true)
-    // La ragione: l'ultimo intervallo contiene oggi, e **tutti** quelli prima
-    // finiscono prima. Se la finestra scorresse indietro fino a dove i dati ci
-    // sono — la tentazione rifiutata su `inWindow` — questa cadrebbe qui,
-    // invece che a schermo.
-    expect(contiene(ultima.range, OGGI)).toBe(true)
-    for (const riga of rows.slice(0, -1)) expect(riga.range.end < OGGI).toBe(true)
-    // E la conseguenza sui giorni: solo l'ultima puo' averli diversi.
-    for (const riga of rows.slice(0, -1)) expect(riga.daysLived).toBe(riga.daysTotal)
+    const { closed, current: corrente } = periodi(v)
+    expect(contiene(corrente.range, OGGI)).toBe(true)
+    for (const riga of closed) expect(riga.range.end < OGGI).toBe(true)
+    // E la conseguenza sui giorni: un periodo chiuso e' vissuto per intero.
+    for (const riga of closed) expect(riga.daysLived).toBe(riga.daysTotal)
   })
 
   it('un dato futuro e un orologio spostato non spostano il fondo della finestra', () => {
@@ -1490,11 +1580,11 @@ describe('B — un periodo in corso si dichiara tale anche senza budget', () => 
     // potrebbero romperlo**: un backup con spese datate in avanti e l'orologio
     // del dispositivo tornato indietro (vedi `StatsView`, ramo `outside`, che li
     // enumera). Se uno dei due producesse una finestra che **non** finisce con
-    // oggi, l'ultima riga sarebbe un periodo chiuso e leggere la posizione
-    // invece del campo diventerebbe un difetto a schermo.
+    // oggi, la riga consegnata come corrente sarebbe un periodo chiuso, e il
+    // bordo aperto piu' i giorni vissuti finirebbero su una settimana finita.
     //
     // Oggi non succede, e non e' un caso: `trendRanges` costruisce la finestra
-    // da `input.day` e `inWindow` la taglia solo dalla testa. Questo test lo
+    // da `input.day` e il taglio sulla testa non tocca il fondo. Questo test lo
     // rende **osservabile** invece che dedotto — e cade il giorno in cui una
     // delle due cose cambia.
     const orologioIndietro = ready({
@@ -1505,20 +1595,22 @@ describe('B — un periodo in corso si dichiara tale anche senza budget', () => 
         makeExpense({ date: '2026-08-26', categoryId: 'c-spesa', amountCents: 9900 }),
       ],
     })
-    const righe = orologioIndietro.byPeriod.rows
-    const ultima = righe[righe.length - 1]!
-    expect(ultima.current).toBe(true)
-    expect(ultima.range).toEqual({ start: '2026-08-10', end: '2026-08-16' })
-    expect(contiene(ultima.range, '2026-08-10')).toBe(true)
+    const finestra = periodi(orologioIndietro)
+    const corrente = finestra.current
+    expect(corrente.range).toEqual({ start: '2026-08-10', end: '2026-08-16' })
+    expect(contiene(corrente.range, '2026-08-10')).toBe(true)
     // La spesa futura non e' in nessuna riga: cade oltre il fondo della
     // finestra, non lo sposta. E i giorni della riga corrente sono quelli
     // vissuti fino a **quel** giorno, lunedi', cioe' uno.
-    expect(righe.every((r) => r.cents !== 9900)).toBe(true)
-    expect(ultima.daysLived).toBe(1)
-    expect(ultima.daysTotal).toBe(7)
+    expect(tutteLeRighe(finestra).every((r) => r.cents !== 9900)).toBe(true)
+    expect(corrente.daysLived).toBe(1)
+    expect(corrente.daysTotal).toBe(7)
 
-    // E il caso in cui l'unica spesa che B conta e' futura: la finestra non ha
-    // righe affatto, quindi non esiste nessuna "ultima riga" da confondere.
+    // E il caso in cui l'unica spesa che B conta e' futura: **la riga di oggi
+    // cade insieme a tutte le altre**, perche' la sua fine e' il confine piu'
+    // lontano della finestra. E' l'unico stato in cui il modello non ha una riga
+    // corrente da consegnare, ed e' per questo che `byPeriod` e' annullabile
+    // mentre `Trend.current` non lo e'.
     const soloFuturo = view({
       expenses: [makeExpense({ date: '2026-12-01', categoryId: 'c-cibo', amountCents: 4000 })],
     })
@@ -1538,21 +1630,20 @@ describe('B — un periodo in corso si dichiara tale anche senza budget', () => 
         makeExpense({ date: OGGI, categoryId: 'c-cibo', amountCents: 3000 }),
       ],
     })
-    const rows = v.byPeriod.rows
-    expect(rows).toHaveLength(TREND_PERIODS)
-    expect(rows.map((r) => r.daysTotal)).toEqual([31, 28, 31, 30, 31, 30, 31, 31])
+    const b = periodi(v)
+    const { closed, current: corrente } = b
+    expect(closed.length + 1).toBe(TREND_PERIODS)
+    expect(tutteLeRighe(b).map((r) => r.daysTotal)).toEqual([31, 28, 31, 30, 31, 30, 31, 31])
     // I sette mesi chiusi sono vissuti per intero, ognuno per i **propri**
-    // giorni.
-    expect(rows.slice(0, -1).map((r) => r.daysLived)).toEqual([31, 28, 31, 30, 31, 30, 31])
+    // giorni. Era `rows.slice(0, -1)`: adesso i chiusi sono i chiusi.
+    expect(closed.map((r) => r.daysLived)).toEqual([31, 28, 31, 30, 31, 30, 31])
     // Agosto: 26 giorni vissuti su 31, oggi compreso.
-    const corrente = rows[rows.length - 1]!
-    expect(corrente.current).toBe(true)
     expect(corrente.range).toEqual({ start: '2026-08-01', end: '2026-08-31' })
     expect(corrente.daysLived).toBe(26)
     expect(corrente.daysTotal).toBe(31)
     // Febbraio 2026 non e' bisestile, e il numero viene da `periodRange` — non
     // da un'aritmetica scritta una seconda volta qui accanto.
-    expect(rows[1]?.range).toEqual({ start: '2026-02-01', end: '2026-02-28' })
+    expect(closed[1]?.range).toEqual({ start: '2026-02-01', end: '2026-02-28' })
   })
 })
 
@@ -1566,13 +1657,14 @@ describe('dove comincia la finestra di B', () => {
         makeExpense({ date: '2026-08-26', categoryId: 'c-cibo', amountCents: 4000 }),
       ],
     })
-    const rows = v.byPeriod.rows
+    const { closed, current: corrente } = periodi(v)
     // Tagliando su `cents > 0` questa finestra sarebbe una riga sola — cioe'
     // nessuna sezione — perche' il taglio leggerebbe un valore ("zero speso")
-    // come un fatto ("l'app non c'era"). Sono tre.
-    expect(rows.map((r) => r.range.start)).toEqual(['2026-08-10', '2026-08-17', '2026-08-24'])
-    expect(rows[0]?.cents).toBe(0)
-    expect(rows[0]?.fraction).toBe(0)
+    // come un fatto ("l'app non c'era"). Sono tre: due chiuse piu' oggi.
+    expect(closed.map((r) => r.range.start)).toEqual(['2026-08-10', '2026-08-17'])
+    expect(corrente.range.start).toBe('2026-08-24')
+    expect(closed[0]?.cents).toBe(0)
+    expect(closed[0]?.fraction).toBe(0)
   })
 
   /*
@@ -1605,7 +1697,7 @@ describe('dove comincia la finestra di B', () => {
       // zeri**: la finestra partiva dal 27 giugno e le barre contavano il solo
       // variabile, che prima di oggi non esiste. Il primo periodo con qualcosa
       // che B conta e' quello corrente, e uno solo non e' un confronto.
-      expect(v.byPeriod.rows).toHaveLength(0)
+      expect(v.byPeriod).toBeNull()
       // E i dati ci sono davvero: la schermata non e' vuota, e' A a portarli.
       expect(sezione(v, 'variable')?.rows).toHaveLength(1)
       expect(v.current.spentCents).toBe(4000)
@@ -1624,7 +1716,7 @@ describe('dove comincia la finestra di B', () => {
       // uscito niente. Sono due domande diverse, e una delle due ha una
       // risposta.
       expect(unica(sezione(v, 'fixed')).cents).toBe(90000)
-      expect(v.byPeriod.rows).toHaveLength(0)
+      expect(v.byPeriod).toBeNull()
       invariantiDiA(v)
     })
 
@@ -1653,17 +1745,17 @@ describe('dove comincia la finestra di B', () => {
         makeExpense({ date: '2026-08-26', categoryId: 'c-cibo', amountCents: 2500 }),
       ],
     })
-    const rows = v.byPeriod.rows
-    expect(rows).toHaveLength(3)
-    const vuota = rows[1]
+    const { closed, current: corrente } = periodi(v)
+    expect(closed).toHaveLength(2)
+    const vuota = closed[1]
     expect(vuota?.range.start).toBe('2026-08-17')
     expect(vuota?.cents).toBe(0)
     // Zero e' un dato, non un buco: e' la riga che dice "quella settimana non
     // hai speso niente", e per chi ha il conto corto e' quella che si cerca.
     // E vale **zero**, non il pavimento: l'assenza non prende inchiostro.
     expect(vuota?.fraction).toBe(0)
-    expect(rows[2]?.fraction).toBeGreaterThanOrEqual(BAR_MIN_FRACTION)
-    expect((rows[0]?.fraction ?? 0) - (rows[2]?.fraction ?? 0)).toBeCloseTo(
+    expect(corrente.fraction).toBeGreaterThanOrEqual(BAR_MIN_FRACTION)
+    expect((closed[0]?.fraction ?? 0) - corrente.fraction).toBeCloseTo(
       (1 - BAR_MIN_FRACTION) * (2500 / 5000),
       10,
     )
@@ -1688,7 +1780,7 @@ describe('dove comincia la finestra di B', () => {
     })
     // La spesa cancellata e' del primo periodo della finestra: se le lapidi
     // contassero come "l'app c'era", qui ci sarebbero otto righe.
-    expect(v.byPeriod.rows.map((r) => r.range.start)).toEqual(['2026-08-17', '2026-08-24'])
+    expect(tutteLeRighe(periodi(v)).map((r) => r.range.start)).toEqual(['2026-08-17', '2026-08-24'])
   })
 
   it('non si mostrano piu di TREND_PERIODS periodi anche con anni di storico', () => {
@@ -1698,8 +1790,12 @@ describe('dove comincia la finestra di B', () => {
         makeExpense({ date: '2026-08-26', categoryId: 'c-cibo', amountCents: 2500 }),
       ],
     })
-    expect(v.byPeriod.rows).toHaveLength(TREND_PERIODS)
-    expect(v.byPeriod.rows[0]?.range.start).toBe('2026-07-06')
+    // La finestra e' larga `TREND_PERIODS`, e la riga di oggi e' una di quelle:
+    // i chiusi sono sette. Contarli senza sommare la corrente farebbe passare
+    // una finestra da nove.
+    const { closed } = periodi(v)
+    expect(closed.length + 1).toBe(TREND_PERIODS)
+    expect(closed[0]?.range.start).toBe('2026-07-06')
   })
 
   it('una spesa datata oltre la fine del periodo non lascia ne righe ne sezioni', () => {
@@ -1778,15 +1874,19 @@ describe('quando la finestra ha righe e non ha niente da confrontare', () => {
         makeExpense({ date: OGGI, categoryId: 'c-cibo', amountCents: 3000 }),
       ],
     })
-    const rows = v.byPeriod.rows
-    expect(rows).toHaveLength(TREND_PERIODS)
-    expect(rows.filter((r) => r.cents === 0)).toHaveLength(TREND_PERIODS - 1)
-    expect(rows[TREND_PERIODS - 1]?.cents).toBe(3000)
+    const { closed, current: corrente } = periodi(v)
+    expect(closed.length + 1).toBe(TREND_PERIODS)
+    // **Le sette a zero sono tutte e sole le chiuse**, e la viva e' quella di
+    // oggi. Era `rows.filter(cents === 0)).toHaveLength(TREND_PERIODS - 1)`, che
+    // contava senza dire quali: contando solo, sette zeri fra i chiusi e una
+    // corrente a zero avrebbero dato lo stesso numero.
+    expect(closed.every((r) => r.cents === 0)).toBe(true)
+    expect(corrente.cents).toBe(3000)
     // La riga viva porta la scala, cioe' arriva a fondo colonna; le altre non
     // prendono inchiostro. E' la differenza fra "zero dentro la finestra" e
     // "finestra senza niente da confrontare": qui gli zeri si dipingono.
-    expect(rows[TREND_PERIODS - 1]?.fraction).toBe(1)
-    expect(rows[0]?.fraction).toBe(0)
+    expect(corrente.fraction).toBe(1)
+    expect(closed[0]?.fraction).toBe(0)
   })
 
   it('una traccia di budget non e qualcosa da confrontare: e il tetto, non una spesa', () => {
@@ -1824,7 +1924,7 @@ describe('quando la finestra ha righe e non ha niente da confrontare', () => {
     // guardato il solo B, qui la schermata direbbe "niente da confrontare" con
     // 900,00 € di canone uscito questa settimana.
     expect(unica(sezione(v, 'fixed')).cents).toBe(90000)
-    expect(v.byPeriod.rows).toHaveLength(0)
+    expect(v.byPeriod).toBeNull()
     invariantiDiA(v)
   })
 })
@@ -1889,24 +1989,35 @@ describe('outside dice di quale periodo sta parlando', () => {
 })
 
 describe('la finestra dei periodi', () => {
-  it('sono otto, contigui, e l ultimo contiene oggi', () => {
-    const ranges = trendRanges('weekly', OGGI)
-    expect(ranges).toHaveLength(TREND_PERIODS)
-    expect(ranges[TREND_PERIODS - 1]).toEqual({ start: '2026-08-24', end: '2026-08-30' })
-    for (let i = 1; i < ranges.length; i += 1) {
+  it('sono otto, contigui, e quello che contiene oggi non e fra i chiusi', () => {
+    const { closed, current } = trendRanges('weekly', OGGI)
+    // La finestra e' larga `TREND_PERIODS` **compreso** il periodo di oggi, che
+    // non sta nell'elenco: e' la stessa aritmetica della soglia, e per la stessa
+    // ragione va scritta e non dedotta.
+    expect(closed.length + 1).toBe(TREND_PERIODS)
+    expect(current).toEqual({ start: '2026-08-24', end: '2026-08-30' })
+    // **Che il fondo contenga oggi adesso e' vero per costruzione** — `current`
+    // e' `periodRange(period, day)` e non "l'ultimo elemento" — quindi cio' che
+    // resta da provare e' la **cucitura**: la finestra arriva in due pezzi, e un
+    // giorno di scarto o di sovrapposizione fra l'ultimo chiuso e oggi non si
+    // vedrebbe da nessun'altra parte. Prima il conto girava su una lista sola e
+    // quel punto non era un punto.
+    const tutti = [...closed, current]
+    for (let i = 1; i < tutti.length; i += 1) {
       // Contigui davvero: nessun giorno fra la fine di uno e l'inizio del dopo.
-      const prima = ranges[i - 1]!
-      const dopo = ranges[i]!
+      const prima = tutti[i - 1]!
+      const dopo = tutti[i]!
       expect(new Date(dopo.start).getTime() - new Date(prima.end).getTime()).toBe(86400000)
     }
   })
 
   it('i mesi non hanno tutti la stessa lunghezza, e i confini vengono da periodRange', () => {
-    const ranges = trendRanges('monthly', '2026-03-15')
-    expect(ranges[TREND_PERIODS - 1]).toEqual({ start: '2026-03-01', end: '2026-03-31' })
+    const { closed, current } = trendRanges('monthly', '2026-03-15')
+    expect(current).toEqual({ start: '2026-03-01', end: '2026-03-31' })
     // Febbraio 2026: 28 giorni. Se si camminasse a passi di 30 giorni, questo
-    // confine sarebbe sbagliato.
-    expect(ranges[TREND_PERIODS - 2]).toEqual({ start: '2026-02-01', end: '2026-02-28' })
+    // confine sarebbe sbagliato. E' l'ultimo dei chiusi, cioe' il periodo
+    // dall'altra parte della cucitura.
+    expect(closed[closed.length - 1]).toEqual({ start: '2026-02-01', end: '2026-02-28' })
   })
 })
 
@@ -2042,7 +2153,7 @@ describe('la traccia esiste solo dove il confronto ha una risposta', () => {
       expenses: [spesa, settimanaPrima],
       budgets: [makeBudget({ period: 'weekly', effectiveFrom: '2026-08-01', amountCents: 20000 })],
     })
-    const corrente = v.byPeriod.rows.find((r) => r.current)!
+    const corrente = periodi(v).current
     expect(corrente.track).not.toBeNull()
     // Il budget satura la scala (200,00 contro 40,00 spesi).
     expect(corrente.track?.fraction).toBe(1)
@@ -2075,7 +2186,7 @@ describe('la traccia esiste solo dove il confronto ha una risposta', () => {
       ],
       budgets: [makeBudget({ period: 'weekly', effectiveFrom: '2026-08-01', amountCents: 20000 })],
     })
-    const passato = v.byPeriod.rows.find((r) => !r.current)!
+    const passato = periodi(v).closed[0]!
     // Se `daysLived` contasse i giorni finiti invece dei vissuti, qui sarebbe
     // 6/7 e la settimana scorsa risulterebbe eternamente incompleta. La parte
     // non accaduta e' `[accruedFraction, fraction]`, e qui e' larga zero.
@@ -2087,14 +2198,16 @@ describe('la traccia esiste solo dove il confronto ha una risposta', () => {
       expenses: [spesa, settimanaPrima],
       budgets: [makeBudget({ period: 'weekly', effectiveFrom: '2026-08-26', amountCents: 20000 })],
     })
-    const corrente = v.byPeriod.rows.find((r) => r.current)
-    // La riga c'e' davvero: senza questa, `find` tornerebbe `undefined` e
-    // `toBeNull()` fallirebbe invece di passare — ma il verso opposto, cioe' un
-    // `?.` che rende verde una riga assente, e' l'errore che qui va escluso.
-    expect(corrente).toBeDefined()
+    // **Qui c'era un `expect(corrente).toBeDefined()`, e adesso e' rumore.**
+    // Difendeva da un `find` che torna `undefined` e da un `?.` che rende verde
+    // una riga assente: due modi di passare per il motivo sbagliato che il tipo
+    // ha appena chiusi — `periodi` fallisce dove la sezione non c'e', e
+    // `current` non e' annullabile. Un'asserzione su cio' che il compilatore
+    // garantisce non protegge, insegna solo a scriverne altre.
+    const corrente = periodi(v).current
     // Il budget si risolve (200) e la traccia comunque non si disegna: e' la
     // differenza fra "c'e' un budget" e "il confronto ha una risposta".
-    expect(corrente?.track).toBeNull()
+    expect(corrente.track).toBeNull()
   })
 })
 
@@ -2119,17 +2232,20 @@ describe('un budget piu giovane dei dati', () => {
 
   it('la settimana in cui e nato non ha traccia, quella dopo si — nella stessa vista', () => {
     const v = ready({ expenses: SPESE, budgets: [BUDGET] })
-    const rows = v.byPeriod.rows
-    expect(rows.map((r) => r.range.start)).toEqual(['2026-08-17', '2026-08-24'])
+    const { closed, current: corrente } = periodi(v)
+    expect(closed.map((r) => r.range.start)).toEqual(['2026-08-17'])
+    expect(corrente.range.start).toBe('2026-08-24')
     // 17–23: il budget copriva **un giorno su sette**. Una barra da 60,00 su una
     // traccia da 200,00 leggerebbe "sei stato bravo", e non e' una lettura
     // sbagliata del grafico: e' il grafico che afferma una cosa che i dati non
     // sostengono.
-    expect(rows[0]?.track).toBeNull()
-    expect(rows[0]?.cents).toBe(6000)
-    // 24–30: lo stesso identico record copre tutti e sette i giorni.
-    expect(rows[1]?.track).not.toBeNull()
-    expect(rows[1]?.track?.fraction).toBe(1)
+    expect(closed[0]?.track).toBeNull()
+    expect(closed[0]?.cents).toBe(6000)
+    // 24–30: lo stesso identico record copre tutti e sette i giorni. E' la riga
+    // di oggi, ed e' quella che il test deve nominare: "la seconda" era vero
+    // finche' erano due.
+    expect(corrente.track).not.toBeNull()
+    expect(corrente.track?.fraction).toBe(1)
   })
 
   it('e non e che il budget manchi: manca la risposta', () => {
@@ -2141,8 +2257,9 @@ describe('un budget piu giovane dei dati', () => {
     //
     // La spesa del 12 non e' del caso: e' li' perche' guardando la schermata di
     // **domenica 23** la settimana 24–30 non e' ancora cominciata, quindi senza
-    // di lei B avrebbe una riga sola e non ci sarebbe nessuna riga corrente da
-    // interrogare — il test passerebbe leggendo `undefined?.track`.
+    // di lei B avrebbe una riga sola, cadrebbe sotto `TREND_MIN_ROWS` e la
+    // sezione non ci sarebbe affatto — `periodi` fallirebbe, che e' cio' che
+    // deve fare: prima il test passava leggendo `undefined?.track`.
     const domenica = ready({
       expenses: [makeExpense({ date: '2026-08-12', categoryId: 'c-cibo', amountCents: 1000 }), ...SPESE],
       budgets: [BUDGET],
@@ -2150,23 +2267,23 @@ describe('un budget piu giovane dei dati', () => {
     })
     expect(domenica.current.budgetCents).toBe(20000)
     expect(domenica.current.comparableToBudget).toBe(false)
-    const corrente = domenica.byPeriod.rows.find((r) => r.current)
-    expect(corrente).toBeDefined()
-    expect(corrente?.track).toBeNull()
+    expect(periodi(domenica).current.track).toBeNull()
   })
 
   it('la barra nuda resta in scala con le altre: e l assenza del confronto, non del dato', () => {
     const v = ready({ expenses: SPESE, budgets: [BUDGET] })
-    const [prima, dopo] = v.byPeriod.rows
+    const { closed, current: dopo } = periodi(v)
+    const prima = closed[0]!
     // La scala di B e' una sola e comprende il budget delle righe confrontabili
     // (200,00), quindi 60,00 e 40,00 stanno sulla stessa scala e la loro
-    // differenza e' quella degli importi. Senza traccia si perde il verdetto,
-    // non la lunghezza.
-    expect((prima?.fraction ?? 0) - (dopo?.fraction ?? 0)).toBeCloseTo(
+    // differenza e' quella degli importi. **La scala e' una anche adesso che le
+    // righe arrivano in due campi**: se la riga di oggi avesse una scala sua,
+    // questa differenza non tornerebbe.
+    expect(prima.fraction - dopo.fraction).toBeCloseTo(
       (1 - BAR_MIN_FRACTION) * (2000 / 20000),
       10,
     )
-    expect(prima?.fraction).toBeGreaterThanOrEqual(BAR_MIN_FRACTION)
+    expect(prima.fraction).toBeGreaterThanOrEqual(BAR_MIN_FRACTION)
     invariantiDiA(v)
   })
 })

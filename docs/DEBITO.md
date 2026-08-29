@@ -306,10 +306,14 @@ punto non e' piu' un caso, e la guardia va resa strutturale invece che ricordata
 per esempio un controllo che cerchi i commit senza la parola nel messaggio quando
 l'hook e' stato saltato.
 
-## 5. Due unita' diverse, numericamente identiche una settimana su quattro
+## 5. Due unita' diverse, numericamente identiche una settimana su quattro — **CHIUSA**
 
-**Stato: aperto**, e resta aperto **anche dopo** la riparazione della scheda,
-perche' la coincidenza tornera' con altri importi.
+**Stato: CHIUSA il 29 agosto 2026.** La voce resta scritta per intero — con la
+condizione di riapertura in fondo — perche' un debito chiuso cancellato e' un
+argomento che il prossimo deve riderivare da zero.
+
+Restava aperta **anche dopo** la riparazione delle etichette, perche' la
+coincidenza tornava con altri importi. Quella sotto e' la misura di allora.
 
 Misurato sulla configurazione canonica di ADR 016 — una regola mensile da 900,00 €
 con ancora il 18, budget settimanale, il 19 agosto:
@@ -335,7 +339,32 @@ opposto: qui i nomi sono giusti e a coincidere sono i valori.
 
 **La condizione che la chiude**: una forma che renda le due unita' distinguibili
 **senza leggere l'etichetta** — perche' e' esattamente l'etichetta che la
-coincidenza fa saltare. Fino ad allora resta scritta.
+coincidenza fa saltare.
+
+### Chiusa il 29 agosto: **l'unita' e' entrata nel numero**
+
+La proiezione non si scrive piu' `530,00 €` con `ogni mese` sotto: si scrive
+**`530,00 €/mese`** (`stats.perMonthRate`, `{amount}/mese` · `{amount}/month`).
+Accanto, in A, l'altra quantita' resta `530,00 €`.
+
+**Perche' questa soddisfa la condizione e la riparazione delle etichette no.** La
+condizione chiedeva di distinguere **senza leggere l'etichetta**, e il suffisso non
+e' un'etichetta: e' **parte della stringa del numero**, nello stesso blocco di
+glifi, alla stessa dimensione. Le due cifre non sono piu' identiche — `530,00 €/mese`
+e `530,00 €` differiscono nei caratteri, non solo nel contesto. La metrica che in
+questa fase ha trovato tre difetti guarda la cifra, e adesso la cifra e' diversa.
+
+**Cosa la chiusura NON afferma.** Non che i due numeri non si somiglino piu': si
+somigliano, ed e' giusto, perche' una proiezione mensile e un mese di spese fisse
+maturate **sono** quasi lo stesso denaro. Afferma che un lettore che li vede non
+puo' piu' scambiarli per la stessa quantita' senza aver letto niente — che era il
+danno, non la somiglianza.
+
+**Come si riapre.** Il giorno in cui una delle due cifre perde il suffisso — un
+restringimento di colonna che lo taglia, una traduzione che lo sposta
+nell'etichetta, una terza schermata che ripete la proiezione senza — questa voce
+torna aperta con lo stesso argomento. **La cosa da sorvegliare e' il suffisso
+attaccato al numero**, non il testo che lo circonda.
 
 ## 6. "In corso" e "ultima riga" sono indistinguibili da qualunque test
 

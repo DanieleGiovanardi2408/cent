@@ -445,6 +445,37 @@ async function limiteDellEditor(page: Page): Promise<number> {
  * chiede al browser quanto e' venuto.
  */
 /**
+ * **La riga di B che misura il periodo in corso, identificata da cio' che e'.**
+ *
+ * Qui c'era `.stat` piu' `.last()`, in quattro test. Era vero per una
+ * coincidenza — B si leggeva dal piu' vecchio, quindi "l'ultima riga" e "il
+ * periodo che contiene oggi" cadevano sullo stesso elemento — cioe' **la stessa
+ * coincidenza che `DEBITO.md` §6 ha appena tolto dal modello**, sopravvissuta
+ * nei test. Da quando B si legge dal piu' recente, `.last()` e' la settimana
+ * **piu' vecchia** della finestra, e tutti e quattro sono diventati rossi.
+ *
+ * **Il rimedio non e' `.first()`.** Sarebbe la stessa posizione spostata di
+ * sette righe: verde oggi, e falsa il giorno in cui l'ordine cambia di nuovo o
+ * qualcuno mette una riga di intestazione dentro l'elenco. Sarebbe anche il
+ * difetto che il modello ha eliminato, reintrodotto nel posto che dovrebbe
+ * sorvegliarlo.
+ *
+ * Si chiede invece **il fatto**: la riga il cui bordo terminale e' aperto, cioe'
+ * `open={current}` in `Stats.tsx`, che il componente scrive **solo** sulla barra
+ * di `trend.current`. E che quel bordo cada davvero sul periodo di oggi e non su
+ * una posizione non lo assume questo selettore: lo prova il test *"il periodo in
+ * corso ha il bordo terminale aperto, e le chiuse no"*, che confronta
+ * l'etichetta della riga aperta con il confine che il titolo di A dichiara —
+ * due stringhe scritte dall'app in due posti diversi, mai una costante scritta
+ * qui.
+ *
+ * Ne segue che questi quattro test **restano verdi in qualunque ordine**, ed e'
+ * voluto: l'ordine ha un test suo, che parla di quello e non di contrasti e
+ * rotaie.
+ */
+const CORRENTE = '.stat:has(.stat__bar[data-open])'
+
+/**
  * Il confine del periodo **come lo scrive la schermata**, letto dal titolo di A.
  *
  * Non e' una stringa costruita qui: e' `periodRangeLabel` dipinta, presa dal
@@ -1642,12 +1673,19 @@ test('il segno del maturato si stacca dal riempimento su cui cade, in entrambi i
   // La traccia esiste: il budget copre per intero tutte e due le settimane.
   await expect(periodi.locator('.stat__track')).toHaveCount(2)
   await expect(periodi.locator('.stat__accrued')).toHaveCount(2)
+  // **La premessa del ciclo qui sotto**: una riga aperta e una sola. Senza, il
+  // controllo su `geo.corrente` non scatterebbe mai e il test passerebbe senza
+  // aver misurato il caso che gli da' il nome.
+  await expect(
+    periodi.locator(CORRENTE),
+    'B non ha esattamente una riga col bordo aperto: la premessa del ciclo non regge',
+  ).toHaveCount(1)
 
   // `scansiona` legge dal **viewport**: su uno schermo basso — il progetto
-  // `landscape` e' 800x327 — la riga corrente sta sotto il bordo e si
-  // campionerebbero i pixel di qualcos'altro. Si porta a schermo, che e' anche
-  // cio' che fa l'utente.
-  await periodi.locator('.stat').last().scrollIntoViewIfNeeded()
+  // `landscape` e' 800x327 — una riga puo' cadere sotto il bordo e si
+  // campionerebbero i pixel di qualcos'altro. Si porta a schermo la riga di
+  // oggi, che e' anche cio' che fa l'utente.
+  await periodi.locator(CORRENTE).scrollIntoViewIfNeeded()
 
   const guasti: string[] = []
   const misure: string[] = []
@@ -1673,6 +1711,13 @@ test('il segno del maturato si stacca dal riempimento su cui cade, in entrambi i
           // cade **dentro** la barra. Senza, non ci sarebbe niente da coprire e
           // niente su cui misurare un contrasto.
           dentroLaBarra: segno.left >= barra.left && segno.right <= barra.right,
+          // **Quale delle due righe e' quella di oggi si legge dal DOM**, non
+          // dall'indice del ciclo. Qui c'era `indice === 1`, vero finche' B era
+          // in ordine cronologico: adesso la riga di oggi e' la prima, e un
+          // indice scritto a mano avrebbe dichiarato la premessa sulla riga
+          // sbagliata — cioe' sarebbe passato per il motivo sbagliato invece di
+          // cadere. Vedi `CORRENTE`.
+          corrente: riga.querySelector('.stat__bar')!.hasAttribute('data-open'),
         }
       }, indice)
 
@@ -1702,7 +1747,7 @@ test('il segno del maturato si stacca dal riempimento su cui cade, in entrambi i
           `${massimo(fillSx).toFixed(2)}:1 su ${sopraSx.toFixed(2)}px | dx ${esadecimale(fillDx)} ` +
           `${massimo(fillDx).toFixed(2)}:1 su ${sopraDx.toFixed(2)}px |`,
       )
-      if (indice === 1 && !geo.dentroLaBarra) {
+      if (geo.corrente && !geo.dentroLaBarra) {
         guasti.push(`${tema}: il segno della riga corrente non cade dentro la barra`)
       }
       if (sopraSx < 1) {
@@ -1792,13 +1837,16 @@ test('la rotaia del budget e lunga tutto il periodo, anche a periodo in corso', 
   ).toHaveText(dizionario['stats.byPeriod.weekly'])
   await expect(periodi.locator('.stat')).toHaveCount(2)
 
-  // `scansiona` legge dal viewport: su `landscape` (800x327) la riga corrente sta
-  // sotto il bordo e si campionerebbero i pixel di qualcos'altro.
-  await periodi.locator('.stat').last().scrollIntoViewIfNeeded()
+  // `scansiona` legge dal viewport: su `landscape` (800x327) una riga puo' stare
+  // sotto il bordo e si campionerebbero i pixel di qualcos'altro. Si porta a
+  // schermo **la riga di oggi**, che e' quella che questo test misura.
+  await periodi.locator(CORRENTE).scrollIntoViewIfNeeded()
 
-  const geo = await page.evaluate(() => {
-    const righe = [...document.querySelectorAll('.stats__section')[1]!.querySelectorAll('.stat')]
-    const riga = righe[righe.length - 1]!
+  const geo = await page.evaluate((sel: string) => {
+    // La riga si chiede per il **fatto** — il bordo aperto — e non per la
+    // posizione: vedi `CORRENTE`.
+    const riga = document.querySelectorAll('.stats__section')[1]!.querySelector(sel)
+    if (riga === null) throw new Error('B non ha nessuna riga col bordo terminale aperto')
     const rect = (sel: string): DOMRect => {
       const el = riga.querySelector(sel)
       if (el === null) throw new Error(`la riga corrente non ha ${sel}`)
@@ -1819,7 +1867,7 @@ test('la rotaia del budget e lunga tutto il periodo, anche a periodo in corso', 
       plot: Math.round(plot.width * 100) / 100,
       traccia: Math.round(traccia.width * 100) / 100,
     }
-  })
+  }, CORRENTE)
 
   // Le tre premesse geometriche. Senza, i punti campionati non sarebbero quelli
   // che il test crede, e i colori tornerebbero per il motivo sbagliato.
@@ -2044,10 +2092,13 @@ test('B dichiara che conta le quotidiane, sopra la settimana in cui e\' uscito s
   ).toHaveText(dizionario['stats.variable'])
 
   // 2. Le due cifre, tutte e due a schermo: lo zero di questa settimana e i 900
-  // che lo spiegano. Tre settimane in B, e l'ultima e' quella corrente.
+  // che lo spiegano. Tre settimane in B, e quella di oggi si chiede per il
+  // **fatto** — il bordo aperto — non per la posizione (vedi `CORRENTE`): con
+  // `.last()` questo test misurava la settimana piu' vecchia dal giorno in cui
+  // B ha smesso di leggersi in ordine cronologico.
   const righe = periodi.locator('.stat')
   await expect(righe).toHaveCount(3)
-  await expect(righe.last().locator('.stat__value')).toHaveText(/0,00/)
+  await expect(periodi.locator(CORRENTE).locator('.stat__value')).toHaveText(/0,00/)
   // I 900,00 stanno sulla **riga**, non nell'intestazione di parte: le fisse qui
   // sono una regola sola, e con una riga sola il totale di parte non c'e' piu'
   // (sarebbe la stessa cifra due volte, incolonnata — vedi `BreakdownSection`).
@@ -2067,6 +2118,220 @@ test('B dichiara che conta le quotidiane, sopra la settimana in cui e\' uscito s
     intestazione,
     `l'intestazione di B porta una cifra: "${intestazione}"`,
   ).not.toMatch(/\d/)
+})
+
+/**
+ * **B si legge dal piu' recente: il periodo in corso e' la prima riga.**
+ *
+ * ## Cosa fa cadere, che e' la ragione per cui esiste
+ *
+ * I quattro test che identificavano la riga di oggi con `.last()` adesso la
+ * chiedono per il fatto (`CORRENTE`), quindi restano verdi **in qualunque
+ * ordine**: e' voluto — misurano contrasti e rotaie, non impaginazione — ma vuol
+ * dire che senza questo test **nessuno si accorgerebbe** se qualcuno rimettesse
+ * l'ordine cronologico. Qui si asserisce l'ordine, e solo quello.
+ *
+ * ## L'atteso e' derivato dal seme, non trascritto
+ *
+ * Le otto settimane si seminano con otto importi **deliberatamente non
+ * monotoni**, e l'atteso e' il seme riordinato per recenza. Cosi' cadono tre
+ * cose diverse con la stessa asserzione: l'ordine cronologico (la colonna esce
+ * rovesciata), un ordinamento per valore (gli importi non sono monotoni, quindi
+ * darebbe una terza sequenza), e la riga di oggi spostata dalla prima posizione.
+ *
+ * Un atteso ricopiato a mano avrebbe fatto cadere le stesse cose e sarebbe
+ * invecchiato al primo cambio di scena: la stessa ragione per cui questo file
+ * importa `dizionario` invece di riscrivere la copy.
+ *
+ * ## E la prima riga e' **quella di oggi**, detto due volte da due parti
+ *
+ * Con il bordo aperto — la marca che il componente scrive solo su
+ * `trend.current` — e con l'etichetta, confrontata col confine che il titolo di
+ * A dichiara essere il periodo corrente. Due fatti che l'app scrive in due posti
+ * indipendenti: se coincidono sulla prima riga, quella riga e' oggi.
+ */
+test('B si legge dal piu\' recente: oggi in cima, e le chiuse scendono all\'indietro', async ({
+  page,
+}) => {
+  await page.goto('/')
+  await chiudiGuida(page)
+
+  // Otto settimane. Gli importi **non** crescono ne' calano con l'eta': un
+  // ordinamento per valore darebbe `12000, 11000, 9000, …`, che non e' ne'
+  // questa sequenza ne' la sua rovesciata.
+  const settimane = [
+    { giorniFa: 1, cents: 4300 },
+    { giorniFa: 8, cents: 11000 },
+    { giorniFa: 15, cents: 6200 },
+    { giorniFa: 22, cents: 12000 },
+    { giorniFa: 29, cents: 5100 },
+    { giorniFa: 36, cents: 9000 },
+    { giorniFa: 43, cents: 7400 },
+    { giorniFa: 50, cents: 8800 },
+  ] as const
+  await semina(
+    page,
+    settimane.map((s) => ({ categoria: 'Spesa', cents: s.cents, giorniFa: s.giorniFa })),
+  )
+
+  const periodi = page.locator('.stats__section').nth(1)
+  await expect(
+    periodi.locator('.stats__title'),
+    'la seconda sezione non e\' B: il test starebbe misurando le categorie',
+  ).toHaveText(dizionario['stats.byPeriod.weekly'])
+  await expect(periodi.locator('.stat')).toHaveCount(settimane.length)
+
+  // L'atteso: il seme dal piu' recente. `giorniFa` crescente **e'** l'ordine di
+  // lettura che questa sezione dichiara.
+  //
+  // Gli spazi si tolgono da tutte e due le parti: fra la cifra e il simbolo c'e'
+  // uno spazio **non separabile** che `Intl` mette e che questo confronto non
+  // vuole giudicare — ha un canarino suo, in `home.spec.ts`.
+  const senzaSpazi = (v: string): string => v.replace(/\s/g, '')
+  const atteso = [...settimane]
+    .sort((a, b) => a.giorniFa - b.giorniFa)
+    .map((s) => senzaSpazi(`${(s.cents / 100).toFixed(2).replace('.', ',')} €`))
+
+  const letti = (await periodi.locator('.stat__value').allInnerTexts()).map(senzaSpazi)
+  expect(
+    letti,
+    'B non si legge dal piu\' recente: la colonna degli importi non e\' il seme ordinato per recenza',
+  ).toEqual(atteso)
+
+  // E la prima riga e' quella di oggi, detto da due parti.
+  const prima = periodi.locator('.stat').first()
+  await expect(
+    prima.locator('.stat__bar[data-open]'),
+    'la prima riga di B non porta il bordo aperto: non e\' il periodo in corso',
+  ).toHaveCount(1)
+  const confine = await confineDiA(page)
+  await expect(
+    prima.locator('.stat__name'),
+    `la prima riga di B non e' il periodo che il titolo di A chiama "${confine}"`,
+  ).toHaveText(confine)
+})
+
+/**
+ * **La risposta di B sta sopra la piega, e la domanda pure.**
+ *
+ * ## Il difetto, misurato prima di ripararlo
+ *
+ * Con B in ordine cronologico, a 390x844, sulla forma dell'export del 26 agosto
+ * — una parte fissa, cinque quotidiane, otto settimane di storia — la riga del
+ * periodo in corso cadeva a `top: 924` in un viewport alto **844**: ottanta
+ * pixel sotto il bordo, insieme alle due settimane piu' recenti. Sopra la piega
+ * restavano le cinque piu' **vecchie**.
+ *
+ * B esiste per rispondere a *"sto spendendo piu' o meno degli altri periodi"*, e
+ * in quell'ordine la risposta era **fuori campo per costruzione, non per
+ * spazio**: stava in fondo a otto righe, quindi nessun pixel guadagnato sopra
+ * l'avrebbe portata dentro. Invertito l'ordine, le stesse misure danno
+ * `top: 560` per oggi e `612` per la settimana scorsa.
+ *
+ * ## Perche' la soglia e' il bordo del viewport e non un numero scelto
+ *
+ * Perche' il fatto e' *"si vede senza scorrere"*, e quello ha un confine solo.
+ * Le due righe che devono starci sono **la risposta e il suo termine di
+ * paragone**: una barra sola non risponde a nessuna domanda comparativa.
+ *
+ * ## Perche' solo su `iphone-14`
+ *
+ * Perche' e' una misura contro un'altezza precisa, e le altre due geometrie ne
+ * hanno un'altra: su `landscape` (800x327) non ci sta nemmeno il titolo, e
+ * asserire la stessa cosa li' vorrebbe dire chiedere al prodotto una cosa
+ * impossibile e poi abbassare la soglia finche' passa.
+ *
+ * ## Cosa cade se qualcuno rimette l'ordine cronologico
+ *
+ * Questo test e quello dell'ordine qui sopra. Questo dice **perche'**
+ * l'inversione esiste, e cade con un numero: se un giorno la sezione scendesse
+ * per un'altra ragione — una riga in piu' in A, una scheda che torna in testa —
+ * cadrebbe lo stesso, e sarebbe la cosa giusta: il difetto sarebbe di nuovo
+ * quello, e l'ordine non basterebbe piu' a ripararlo.
+ */
+test('a 390x844 la riga di oggi e quella del periodo prima stanno sopra la piega', async ({
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== 'iphone-14', 'misura contro un\'altezza precisa')
+
+  await page.goto('/')
+  await chiudiGuida(page)
+  // La scena dell'export del 26 agosto: il canone come fissa, cinque quotidiane
+  // nel periodo corrente, e sette settimane chiuse dietro.
+  await semina(
+    page,
+    [
+      { categoria: 'Casa', cents: 50700, giorniFa: 1, fissa: true },
+      { categoria: 'Spesa', cents: 4200 },
+      { categoria: 'Svago', cents: 2600, giorniFa: 1 },
+      { categoria: 'Coffeeshop', cents: 2400, giorniFa: 2 },
+      { categoria: 'Fuori', cents: 1000, giorniFa: 1 },
+      { categoria: 'Trasporti', cents: 900, giorniFa: 2 },
+      ...[12000, 9000, 15000, 7000, 11000, 8000, 13000].map((cents, i) => ({
+        categoria: 'Spesa',
+        cents,
+        giorniFa: (i + 1) * 7 + 1,
+      })),
+    ],
+    { budgetCents: 20000 },
+  )
+
+  const periodi = page.locator('.stats__section').nth(1)
+  await expect(periodi.locator('.stat')).toHaveCount(8)
+
+  const misura = await page.evaluate(() => {
+    const sezione = document.querySelectorAll('.stats__section')[1]!
+    return {
+      altezza: window.innerHeight,
+      // Nessuno scorrimento: si misura cio' che si vede aprendo la schermata.
+      scorrimento: document.querySelector('.app')!.scrollTop,
+      righe: [...sezione.querySelectorAll('.stat')].map((riga) => ({
+        nome: (riga.querySelector('.stat__name')?.textContent ?? '').trim(),
+        aperta: riga.querySelector('.stat__bar')!.hasAttribute('data-open'),
+        top: Math.round(riga.getBoundingClientRect().top * 100) / 100,
+        fondo: Math.round(riga.getBoundingClientRect().bottom * 100) / 100,
+      })),
+    }
+  })
+
+  console.log(
+    `\n${misura.righe
+      .map(
+        (r) =>
+          `| ${r.nome.padEnd(16)} | ${r.aperta ? 'oggi   ' : 'chiusa '} | top ${r.top
+            .toFixed(2)
+            .padStart(7)} | fondo ${r.fondo.toFixed(2).padStart(7)} |`,
+      )
+      .join('\n')}\n`,
+  )
+
+  // La premessa: non si e' scorso niente. Un `scrollIntoViewIfNeeded` scappato
+  // dentro un helper renderebbe questa misura una tautologia.
+  expect(misura.scorrimento, 'la schermata e\' gia\' scorsa: la piega non e\' quella').toBe(0)
+
+  // **La riga di oggi si trova per il fatto, e la prima asserzione e' il numero.**
+  // Cercarla per posizione avrebbe fatto cadere questo test su una premessa
+  // (*"la prima riga non e' quella corrente"*) invece che sulla misura che gli
+  // da' il nome: chi lo vede rosso deve leggere **di quanto** si e' sfondata la
+  // piega, non che una premessa e' saltata.
+  const aperte = misura.righe.filter((r) => r.aperta)
+  expect(aperte, 'B non ha esattamente una riga per il periodo in corso').toHaveLength(1)
+  const oggi = aperte[0]!
+  expect(
+    oggi.fondo,
+    `la riga del periodo in corso cade sotto la piega: fondo ${oggi.fondo} su ${misura.altezza} ` +
+      'di viewport, senza scorrere',
+  ).toBeLessThanOrEqual(misura.altezza)
+
+  // E il suo termine di paragone: la riga che le sta subito sotto. Una barra
+  // sola non risponde a nessuna domanda comparativa.
+  const seconda = misura.righe[1]!
+  expect(misura.righe[0], 'la riga di oggi non e\' la prima di B').toBe(oggi)
+  expect(
+    seconda.fondo,
+    `il periodo precedente cade sotto la piega: fondo ${seconda.fondo} su ${misura.altezza}, ` +
+      'la risposta di B e\' a schermo senza il suo termine di paragone',
+  ).toBeLessThanOrEqual(misura.altezza)
 })
 
 /**
@@ -2769,9 +3034,15 @@ test('lo speso della riga corrente e lo stesso carattere di quello della Home', 
   // Due sezioni: se B non ci fosse, `nth(1)` non esisterebbe e il test scadrebbe
   // in attesa invece di dire cosa manca.
   await expect(sezioni, 'B non e\' in scena: manca il periodo precedente').toHaveCount(2)
-  const righePeriodo = sezioni.nth(1).locator('.stat')
-  const ultima = righePeriodo.last()
-  const daStatistiche = (await ultima.locator('.stat__value').innerText()).trim()
+  // La riga di oggi si chiede per il **fatto**, non per il posto: vedi
+  // `CORRENTE`. Con `.last()` questo test confrontava con la Home l'importo
+  // della settimana **scorsa** — che nella scena vale 55,00 € contro i 70,00 €
+  // di oggi, cioe' un numero vero, di un periodo sbagliato, contro il numero
+  // giusto: il modo esatto in cui un test di identita' passa per il motivo
+  // sbagliato.
+  const corrente = sezioni.nth(1).locator(CORRENTE)
+  await expect(corrente, 'B non ha una riga per il periodo in corso').toHaveCount(1)
+  const daStatistiche = (await corrente.locator('.stat__value').innerText()).trim()
 
   await page.getByRole('button', { name: /^Home$/ }).click()
   // Tutta la sezione, non un elemento preciso: la Home mette lo speso nel numero

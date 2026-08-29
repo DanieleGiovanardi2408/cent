@@ -856,7 +856,46 @@
   inset-block: 0;
   inset-inline-start: 0;
   border: 1px solid var(--line-strong);
-  border-radius: var(--radius-1);
+
+  /* **2 px, e non `--radius-1`: sotto una certa larghezza il raggio pieno
+   * cancella la forma della barra.**
+   *
+   * Un raggio si applica **fino a meta' del lato piu' corto**: su una barra alta
+   * 12 px il browser usa `min(radius, larghezza/2, 6)`. Con `--radius-1` (8 px)
+   * il tratto dritto e' quindi `larghezza - 12`, e sotto i 12 px non ne resta
+   * niente: la barra smette di essere un rettangolo e diventa una lente.
+   *
+   * Misurato in pagina, 390 punti, colonna del grafico 195,81 px, sull'export
+   * vero del 26 agosto:
+   *
+   *     Casa        507,00 €   larga 195,81   tratto dritto 183,81
+   *     Spesa        42,00 €   larga  19,42   tratto dritto   7,42
+   *     Svago        26,00 €   larga  13,34   tratto dritto   1,34
+   *     Coffeeshop   24,00 €   larga  12,59   tratto dritto   0,59
+   *     Fuori        10,00 €   larga   7,28   tratto dritto   0,00
+   *
+   * Cinque righe su sei senza tratto dritto: l'occhio smette di confrontare
+   * **lunghezze** e comincia a confrontare **macchie**, che e' un confronto molto
+   * peggiore. Ed e' il difetto della fase in miniatura — il peso visivo che
+   * smette di seguire l'importo — rientrato da una proprieta' grafica dopo essere
+   * stato tolto dal modello.
+   *
+   * **Cosa questo NON ripara, e va scritto perche' il numero e' piccolo e la
+   * tentazione di crederlo risolto e' grande.** Le larghezze restano quelle:
+   * Svago e Coffeeshop distano **0,75 px** e Coffeeshop e Trasporti **0,37**,
+   * cioe' sotto il pixel. A quella scala 26,00 € e 24,00 € non sono difficili da
+   * confrontare: sono **identici**. Il raggio restituisce la forma, non il
+   * confronto — quello lo restituisce l'interruttore delle fisse, che ricalcola
+   * la scala (0c). Chi legge questo commento cercando di capire perche' le
+   * quotidiane sono corte sta guardando il posto sbagliato: la ragione e' 0a, ed
+   * e' voluta.
+   *
+   * Perche' 2 e non 0: il contorno da 1 px esiste perche' quattro degli otto
+   * colori stanno sotto 3:1 sul fondo, e uno spigolo vivo su un rettangolo alto
+   * 12 con un bordo chiaro legge come un artefatto. 2 px e' il minimo che
+   * ammorbidisce senza mangiare il tratto — a 7,28 px di larghezza ne lascia
+   * comunque 3,28 dritti, dove `--radius-1` ne lasciava zero. */
+  border-radius: 2px;
 }
 
 /* Zero e' zero.

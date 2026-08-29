@@ -239,9 +239,14 @@ export const BREAKDOWN_MIN_ROWS = 3
  * stessa schermata, che e' esattamente la misura per cui la nota sotto B era
  * stata tolta, rientrata da un'altra porta.
  *
- * Quindi sotto soglia `Trend.rows` esce **vuota**. Non serve un ramo nuovo da
- * nessuna parte: il componente ha gia' "elenco vuoto -> nessuna sezione", che
- * era li' per il caso senza periodi.
+ * Quindi sotto soglia **B non c'e'**: `byPeriod` e' `null`. Qui c'era scritto
+ * *"`Trend.rows` esce vuota"*, e il componente aveva gia' "elenco vuoto ->
+ * nessuna sezione" — cioe' l'assenza era **dedotta da un valore**. Adesso e'
+ * dichiarata, e per la stessa ragione per cui e' dichiarato `outside`.
+ *
+ * **E la soglia conta la riga di oggi**, che nell'elenco dei chiusi non sta:
+ * `closed.length + 1 >= TREND_MIN_ROWS`. Due periodi sono un chiuso piu' oggi,
+ * non due chiusi.
  *
  * Ne segue che `Trend` **non ha un `asChart`**: sopra soglia B e' un grafico,
  * sotto soglia non esiste, e un campo sempre vero e' un ramo che nessuno
@@ -512,7 +517,21 @@ export interface BudgetTrack {
   readonly accruedFraction: number
 }
 
-/** Una riga di B: un periodo. */
+/**
+ * Una riga di B: un periodo.
+ *
+ * **Non porta piu' un `current: boolean`**, e non perche' quel fatto non serva
+ * — serve, ed e' quello su cui il componente apre il bordo della riga di oggi.
+ * Serve **da un'altra parte**: e' `Trend` a dire quale periodo contiene oggi,
+ * tenendolo **fuori dall'elenco** invece che marcato dentro. L'argomento per
+ * esteso, e cosa lo rendeva indistinguibile da `indice === ultimo`, stanno su
+ * `Trend.current`.
+ *
+ * Ne segue che una `PeriodBar` **non sa** se e' quella corrente, ed e' voluto:
+ * il fatto e' della finestra, non della riga. Chi lo volesse rimettere qui si
+ * riporterebbe in casa esattamente lo stato che due gesti diversi potevano
+ * scrivere in modo diverso.
+ */
 export interface PeriodBar {
   /** `range.start`: identita' stabile, non l'indice di riga. */
   readonly key: IsoDate
@@ -520,67 +539,6 @@ export interface PeriodBar {
   readonly cents: Cents
   readonly fraction: number
   readonly track: BudgetTrack | null
-  /**
-   * Il periodo che contiene oggi.
-   *
-   * ## Non si ricava da `daysLived < daysTotal`, e la differenza dura un giorno per periodo
-   *
-   * Sembrano la stessa domanda e non lo sono. **L'ultimo giorno del periodo** —
-   * la domenica, per una settimana — `daysLived === daysTotal` e il periodo e'
-   * **ancora in corso**: la giornata non e' finita e ci si puo' ancora spendere.
-   * Chi togliesse questo campo *"perche' si ricava dai giorni"* romperebbe
-   * esattamente quel giorno: **una volta a settimana** la domenica, e l'ultimo
-   * del mese sul periodo mensile — cioe' proprio quando quanto resta e' la cosa
-   * piu' utile della schermata. C'e' un test su quel giorno, ed e' li' per
-   * questo.
-   *
-   * ## E non e' "l'ultima riga dell'elenco"
-   *
-   * Oggi le due cose **coincidono**, e coincidono per un invariante scritto:
-   * `trendRanges` costruisce la finestra a partire da `input.day`, quindi
-   * l'ultimo periodo e' quello di oggi, e la finestra **si taglia dalla testa e
-   * mai dal fondo** (vedi `inWindow` in `statsView`). Coincidere non e' essere
-   * la stessa cosa: la posizione e' una **conseguenza** della costruzione della
-   * finestra, `current` e' un **fatto sulle date**.
-   *
-   * La distinzione conta in due posti. Nel **componente**, dove leggere
-   * `index === rows.length - 1` invece di questo campo compilerebbe, passerebbe
-   * ogni fixture e diventerebbe falso il giorno in cui la finestra smettesse di
-   * finire con oggi. E **qui**, se un giorno la finestra scorresse indietro fino
-   * a dove i dati ci sono — una tentazione vera, rifiutata con un argomento su
-   * `inWindow`: allora l'ultima riga sarebbe un periodo **chiuso**, e il campo
-   * direbbe la cosa giusta senza che nessuno lo tocchi.
-   *
-   * Il test che sorveglia la coincidenza la asserisce **insieme alla sua
-   * ragione** — l'ultima riga e' corrente *perche'* il suo intervallo contiene
-   * `input.day` — invece che da sola: da sola sarebbe la fotografia di un
-   * accidente, e domani giustificherebbe di leggere la posizione.
-   *
-   * **E va detto, perche' chi lo riprovera' lo scoprira' da solo**: sostituire
-   * qui `current` con `indice === ultimo` e' un **mutante equivalente**, e non
-   * per debolezza dei test. E' un teorema di tre righe: l'ultimo elemento di
-   * `bars` ha per costruzione `range === current.range`, e `inWindow` e' uno
-   * `slice` dalla sola testa, quindi ogni `rows` non vuota finisce con la riga
-   * corrente — nessun input puo' violarlo. Cio' che i test prendono e' la
-   * **premessa**: tagliando la finestra anche dal fondo cadono 24 asserzioni.
-   *
-   * ## Ha smesso di essere una cucitura diventando utile
-   *
-   * Fino a questa riparazione era dichiarato, prodotto dal modello e **letto da
-   * nessuno in produzione**: lo tenevano vivo i soli test. Le altre superfici di
-   * questa famiglia trovate finora — `expensesInRange`, `planBudgetChange`,
-   * `accruedCents`, `breakdownTotal`, `fixedInPeriodCents`, `livedFraction` —
-   * sono state **cancellate**. Questa e' la prima che si chiude in senso
-   * opposto: le mancava il
-   * **lettore**, non la funzione, e il lettore e' arrivato quando il periodo in
-   * corso ha smesso di essere disegnato come se fosse finito.
-   *
-   * Sta scritto accanto al campo perche' cambia la domanda che si fa davanti a
-   * una cucitura: non e' sempre *"si taglia?"*, e' **"manca il lettore o manca
-   * la funzione?"**. Le due hanno la stessa evidenza — zero chiamanti di
-   * produzione — e due rimedi opposti.
-   */
-  readonly current: boolean
   /**
    * I giorni del periodo **davvero vissuti, oggi compreso**
    * (`BudgetMetrics.daysLived`). Su una riga chiusa vale `daysTotal`; sulla riga
@@ -918,17 +876,84 @@ export interface Breakdown {
 
 /**
  * B, e **non ha un `asChart`**: `TREND_MIN_ROWS` decide se la sezione esiste,
- * quindi ogni `rows` non vuota e' un grafico e il campo varrebbe sempre `true`.
+ * quindi dove `Trend` c'e' e' un grafico e il campo varrebbe sempre `true`.
  *
- * `rows` vuota vuol dire **la sezione non c'e'**, e i modi sono tre: non ci sono
- * ancora due periodi da confrontare, non ce n'e' nessuno, oppure ce ne sono e
- * **non hanno niente da confrontare** — ogni riga della finestra vale zero,
- * perche' cio' che B conta e' tutto piu' vecchio della finestra. L'ultimo e' il
- * caso di chi torna dopo mesi, e l'argomento sta accanto alla condizione in
- * `statsView`.
+ * ## Non e' un elenco, ed e' l'unica cosa che rende il difetto inesprimibile
+ *
+ * Qui c'era `rows: readonly PeriodBar[]`, e ogni riga portava un
+ * `current: boolean`. Le due letture — *"il periodo che contiene oggi"* e
+ * *"l'ultima riga dell'elenco"* — davano lo stesso esito su **ogni scena
+ * costruibile dal prodotto**, e non per debolezza dei test: **e' il mondo a non
+ * contenere il controesempio**. Sostituendo `row.current` con
+ * `index === rows.length - 1` nel componente restavano verdi tutti e 28 i test
+ * che lo sorvegliavano — la misura sta in `docs/DEBITO.md`, voce *"«In corso» e
+ * «ultima riga» sono indistinguibili da qualunque test"* — ed erano due agenti
+ * diversi ad arrivarci per strade indipendenti.
+ *
+ * Un test in piu' non poteva chiudere quel buco, perche' non esisteva un input
+ * che lo facesse cadere. Lo chiude **la forma**: con la riga corrente **fuori
+ * dall'elenco**, `rows.length - 1` non esiste — non e' sconsigliato, e' che non
+ * c'e' niente su cui scriverlo. E' la mossa dell'id deterministico e di
+ * `ConfirmedPreview`, applicata a un tipo di lettura.
+ *
+ * Ne segue il taglio di `PeriodBar.current`: **la posizione nel tipo *e'* il
+ * fatto**, e un campo che ripete il proprio contenitore e' uno stato che si puo'
+ * scrivere in disaccordo con dove sta. Era anche il campo che nessun controllo
+ * automatico poteva sorvegliare — `.current` e' l'idioma dei ref di Preact,
+ * quindi l'audit della superficie morta non lo distingue da un `useRef`.
+ *
+ * ## Il fatto resta un fatto sulle date, e adesso lo garantisce la costruzione
+ *
+ * `current` **non** e' "l'ultimo periodo", ed e' `trendRanges` a renderlo vero
+ * invece che a farlo coincidere: la finestra si costruisce **da**
+ * `periodRange(period, input.day)`, e i chiusi si camminano all'indietro da li'.
+ * Il giorno in cui la finestra guardasse anche i periodi futuri, o tagliasse dal
+ * fondo, questo campo continuerebbe a dire la cosa giusta senza che nessuno lo
+ * tocchi — mentre una posizione sarebbe diventata falsa in silenzio.
+ *
+ * **E non si ricava da `daysLived < daysTotal`.** Sembrano la stessa domanda e
+ * non lo sono: **l'ultimo giorno del periodo** — la domenica, per una settimana
+ * — `daysLived === daysTotal` e il periodo e' **ancora in corso**, perche' la
+ * giornata non e' finita e ci si puo' ancora spendere. Chi disegnasse la riga di
+ * oggi a partire dai giorni la perderebbe **una volta a settimana**, e l'ultimo
+ * del mese sul periodo mensile — cioe' proprio quando quanto resta e' la cosa
+ * piu' utile della schermata. C'e' un test su quel giorno, ed e' li' per questo.
+ *
+ * ## Perche' `current` non e' annullabile, e dove e' finita l'assenza
+ *
+ * Perche' un `closed` pieno accanto a un `current` a `null` sarebbe uno stato
+ * che nessuno produce e che il componente dovrebbe comunque disegnare: una
+ * sezione con un buco al posto della riga di oggi. Quando B c'e', la riga
+ * corrente c'e' — e adesso lo dice il tipo.
+ *
+ * L'assenza della sezione **non si esprimeva gia' altrove**: la esprimeva
+ * `rows` vuota, cioe' un elenco vuoto letto come un fatto. Adesso e'
+ * `byPeriod: Trend | null`, che e' lo stesso fatto detto una volta sola e nel
+ * posto che lo possiede. I modi restano tre, e adesso sono **tre condizioni
+ * scritte** invece di tre strade verso lo stesso elenco vuoto (vedi
+ * `statsView`): non ci sono ancora `TREND_MIN_ROWS` periodi da confrontare;
+ * non c'e' nemmeno il periodo corrente, perche' cio' che B conta e' datato
+ * **oltre** la sua fine; oppure i periodi ci sono e **non hanno niente da
+ * confrontare** — ogni riga vale zero, che e' il caso di chi torna dopo mesi.
+ *
+ * Il secondo dei tre e' oggi **mascherato** dagli altri due, cioe' nessun input
+ * lo distingue: perche' resti scritto lo stesso c'e' una ragione, e sta accanto
+ * alla condizione in `statsView`.
  */
 export interface Trend {
-  readonly rows: readonly PeriodBar[]
+  /**
+   * I periodi **gia' finiti** della finestra, dal piu' vecchio al piu' recente.
+   *
+   * Puo' essere vuoto: e' il caso in cui la soglia lascia passare la sola riga
+   * di oggi, che con `TREND_MIN_ROWS` a 2 oggi non accade — la soglia conta
+   * `closed.length + 1`, quindi vuoto vuol dire una riga sola e la sezione non
+   * c'e'. **E' vuoto per il valore della soglia, non per costruzione**: chi
+   * abbassasse `TREND_MIN_ROWS` a 1 renderebbe questo caso vivo, e il tipo lo
+   * regge gia'.
+   */
+  readonly closed: readonly PeriodBar[]
+  /** Il periodo che contiene oggi. L'argomento e' sul tipo, qui sopra. */
+  readonly current: PeriodBar
 }
 
 export type StatsView =
@@ -1024,7 +1049,17 @@ export type StatsView =
       readonly current: BudgetMetrics
       readonly tiles: StatsTiles
       readonly byCategory: Breakdown
-      readonly byPeriod: Trend
+      /**
+       * B, oppure **`null` quando la sezione non c'e'** — e non un `Trend` con
+       * l'elenco vuoto, che era l'assenza *dedotta* da un valore. I tre modi in
+       * cui manca stanno su `Trend`.
+       *
+       * Non e' `outside`: quello vale solo quando **anche** A e' vuota. Un
+       * periodo con il solo affitto ha una sezione in A e nessuna riga in B —
+       * A conta tutto (ADR 016 §1), B solo il variabile — ed e' `ready` con
+       * questo campo a `null`.
+       */
+      readonly byPeriod: Trend | null
     }
 
 export interface StatsInput {
@@ -1076,23 +1111,38 @@ function alive(expenses: readonly Expense[]): readonly Expense[] {
 }
 
 /**
- * Gli `TREND_PERIODS` periodi che finiscono con quello di oggi, dal piu' vecchio
- * al piu' recente.
+ * La finestra di B: il periodo che contiene `day` e i `TREND_PERIODS - 1`
+ * chiusi che lo precedono, dal piu' vecchio al piu' recente.
  *
  * Si cammina all'indietro da `range.start - 1`, che appartiene per costruzione al
  * periodo precedente — vale per la settimana come per il mese, e per i mesi di
  * lunghezza diversa, perche' e' `periodRange` a decidere i confini e non
  * un'aritmetica sui giorni.
+ *
+ * **Torna due cose e non un elenco**, ed e' qui che l'invariante di tutta la
+ * sezione diventa vero *per costruzione* invece che per proprieta': la finestra
+ * finisce col periodo di oggi perche' quel periodo e' il **primo** a essere
+ * calcolato e non entra mai fra i chiusi. Finche' era un elenco, la stessa cosa
+ * era un teorema — vero, dimostrabile, e indistinguibile da `ultimo elemento`
+ * per qualunque test. Vedi `Trend`.
  */
-export function trendRanges(period: BudgetPeriod, day: IsoDate): readonly PeriodRange[] {
-  const ranges: PeriodRange[] = []
-  let cursor = day
-  for (let i = 0; i < TREND_PERIODS; i += 1) {
+export interface TrendWindow {
+  /** I periodi gia' finiti, in ordine. `TREND_PERIODS - 1`, sempre. */
+  readonly closed: readonly PeriodRange[]
+  /** Il periodo che contiene `day`. Non "l'ultimo": quello che lo contiene. */
+  readonly current: PeriodRange
+}
+
+export function trendRanges(period: BudgetPeriod, day: IsoDate): TrendWindow {
+  const current = periodRange(period, day)
+  const closed: PeriodRange[] = []
+  let cursor = addDays(current.start, -1)
+  for (let i = 1; i < TREND_PERIODS; i += 1) {
     const range = periodRange(period, cursor)
-    ranges.unshift(range)
+    closed.unshift(range)
     cursor = addDays(range.start, -1)
   }
-  return ranges
+  return { closed, current }
 }
 
 /** Quota grezza di `value` su `scale`, con `scale === 0` che non divide per zero. */
@@ -1314,27 +1364,35 @@ export function statsView(input: StatsInput): StatsView {
 
   /* --- B: i periodi ------------------------------------------------------- */
 
-  const ranges = trendRanges(input.period, input.day)
-  const perPeriod = ranges.map((range) => {
-    const m = metricsOf(range.start)
-    return { range, m }
-  })
+  // Destrutturata subito: la finestra arriva gia' divisa, e da qui in giu' non
+  // esiste nessun elenco che contenga la riga di oggi insieme alle altre —
+  // tranne dove le lunghezze devono stare sulla stessa scala, che e' l'unico
+  // posto in cui rimetterle insieme significa qualcosa.
+  const { closed: closedRanges, current: currentRange } = trendRanges(input.period, input.day)
+  const measured = (range: PeriodRange) => ({ range, m: metricsOf(range.start) })
+  const closedMeasured = closedRanges.map(measured)
+  const currentMeasured = measured(currentRange)
 
   // **Una scala sola per tutte le righe**, cosi' le lunghezze restano
   // confrontabili anche dove la traccia manca. Comprende i budget delle righe
   // confrontabili: altrimenti una barra sotto budget potrebbe risultare piu'
   // lunga della traccia che dovrebbe contenerla.
-  const trendScale = perPeriod.reduce(
+  //
+  // Comprende anche la riga corrente, che sta fuori dall'elenco ma **dentro la
+  // scala**: e' l'unica cosa per cui le due parti della finestra tornano a
+  // essere una lista sola, ed e' esattamente quella per cui devono esserlo —
+  // due scale renderebbero incomparabili proprio le barre che B esiste per
+  // confrontare.
+  const trendScale = [...closedMeasured, currentMeasured].reduce(
     (max, { m }) => Math.max(max, m.spentCents, m.comparableToBudget ? (m.budgetCents ?? 0) : 0),
     0,
   )
 
-  const bars: PeriodBar[] = perPeriod.map(({ range, m }) => ({
+  const barOf = ({ range, m }: { range: PeriodRange; m: BudgetMetrics }): PeriodBar => ({
     key: range.start,
     range,
     cents: m.spentCents,
     fraction: barLength(share(m.spentCents, trendScale)),
-    current: range.start === current.range.start,
     // I due giorni vengono dalle metriche **di questa riga**, non da `current`:
     // `metricsOf(range.start)` risolve il proprio `referenceDay` dentro il
     // proprio intervallo, quindi una riga chiusa ha `daysLived === daysTotal` e
@@ -1356,7 +1414,7 @@ export function statsView(input: StatsInput): StatsView {
             ),
           }
         : null,
-  }))
+  })
 
   // I periodi prima che l'app avesse dati non si mostrano — e "prima" e' un
   // **fatto** che questo modulo possiede, non una deduzione da uno zero:
@@ -1378,8 +1436,7 @@ export function statsView(input: StatsInput): StatsView {
   //
   // Cosi' un periodo davvero a zero **dentro** la finestra resta e vale zero,
   // che per un Erasmus col conto corto e' la riga piu' interessante della
-  // schermata. E si taglia dalla testa e mai dal fondo, perche' il periodo
-  // corrente e' sempre l'ultimo.
+  // schermata.
   const firstCounted = expenses.reduce<IsoDate | null>(
     (earliest, e) =>
       countsTowardBudget(e) && (earliest === null || isBefore(e.date, earliest))
@@ -1387,8 +1444,14 @@ export function statsView(input: StatsInput): StatsView {
         : earliest,
     null,
   )
-  const firstShown =
-    firstCounted === null ? -1 : bars.findIndex((bar) => !isBefore(bar.range.end, firstCounted))
+  // **Il taglio e' una condizione sulle date applicata a ogni riga**, e non piu'
+  // uno `slice` da un indice. L'esito e' lo stesso — i confini crescono, quindi
+  // la condizione e' monotona e cio' che resta e' comunque una coda — ma non
+  // c'e' nessuna posizione da leggere, e soprattutto **la riga di oggi passa per
+  // la stessa condizione delle altre** invece che per il posto in cui si trova.
+  const counted = (bar: PeriodBar): boolean =>
+    firstCounted !== null && !isBefore(bar.range.end, firstCounted)
+  const shownClosed = closedMeasured.map(barOf).filter(counted)
   // La finestra e' vuota in due casi, e sono due fatti diversi con lo stesso
   // esito: **non esiste nessuna spesa che B conti** (solo ricorrenti, che e' il
   // caso di chi ha appena acceso una regola), oppure ogni periodo della finestra
@@ -1396,11 +1459,31 @@ export function statsView(input: StatsInput): StatsView {
   // del periodo corrente. Chi scrive davvero quel secondo stato e' enumerato su
   // `StatsView`, ramo `outside`: non e' nessuna schermata.
   //
+  // **Il secondo caso e' l'unico in cui la riga di oggi non c'e'**, e il perche'
+  // e' geometrico: la sua fine e' il confine piu' lontano della finestra, quindi
+  // se non e' contata lei non e' contata nessuna. Il `null` qui sotto non e'
+  // quindi una precauzione di tipo — e' quello stato, e ha due scrittori
+  // dichiarati (`parseBackup` e l'orologio del dispositivo tornato indietro).
+  //
+  // **E va detto che oggi nessun test lo distingue, perche' nessun input puo'.**
+  // Provato togliendo il filtro alla sola riga corrente: **94 test su 94
+  // restano verdi**. Quando la riga di oggi non e' contata, i chiusi sono tutti
+  // caduti prima di lei — quindi si finisce sotto `TREND_MIN_ROWS` — e comunque
+  // il suo importo e' zero, quindi cade anche `comparable`: due condizioni
+  // diverse mascherano la stessa uscita. Resta scritto cosi' lo stesso perche'
+  // il taglio sulla testa e' **una regola sola applicata a tutte le righe**, e
+  // privilegiare la riga di oggi vorrebbe dire che il giorno in cui una delle
+  // due maschere cade — una soglia abbassata a 1, un `comparable` tolto perche'
+  // "una riga a zero e' un dato" — B mostrerebbe un periodo in cui l'app non
+  // aveva dati, e il difetto arriverebbe insieme alla modifica che lo rende
+  // possibile.
+  //
   // Qui c'era `bars.slice(-1)`, con accanto *"resta la riga di oggi"*: era vero
   // finche' una riga sola era una sezione. Da quando non lo e', quel ramo
   // produceva un valore che la soglia toglieva subito dopo — cioe' un output
   // non osservabile con accanto un argomento diventato falso.
-  const inWindow = firstShown === -1 ? [] : bars.slice(firstShown)
+  const currentBar = barOf(currentMeasured)
+  const shownCurrent = counted(currentBar) ? currentBar : null
 
   // **La finestra ha delle righe e non ha niente da confrontare.** Il taglio
   // sulla testa risponde a "da quando l'app aveva dati che B conta", che e' una
@@ -1408,9 +1491,9 @@ export function statsView(input: StatsInput): StatsView {
   // che e' una domanda sui **valori**. Sono due, e per un giorno c'e' stata solo
   // la prima: misurato a 390x844 con tre spese manuali datate 200, 210 e 220
   // giorni fa — l'Erasmus che riapre l'app dopo la pausa estiva — `firstCounted`
-  // non e' `null`, quindi `firstShown` vale 0, quindi **otto barre tutte a
-  // zero** e `0,00 €` nove volte sulla stessa schermata, con i 77,00 € a disco
-  // che non comparivano da nessuna parte.
+  // non e' `null`, quindi il taglio sulla testa non toglieva niente, quindi
+  // **otto barre tutte a zero** e `0,00 €` nove volte sulla stessa schermata,
+  // con i 77,00 € a disco che non comparivano da nessuna parte.
   //
   // La condizione non e' "B non ha righe" ma **"B non ha niente da
   // confrontare"**: se ogni riga della finestra vale zero, la finestra e' vuota
@@ -1436,12 +1519,27 @@ export function statsView(input: StatsInput): StatsView {
   // vorrebbero dire "gli ultimi due mesi" a chi apre l'app tutti i giorni e "gli
   // ultimi otto periodi in cui hai speso" a chi torna a settembre, senza che
   // niente sullo schermo dica quale delle due si sta leggendo.
-  const comparable = inWindow.some((bar) => bar.cents > 0)
+  const comparable =
+    shownClosed.some((bar) => bar.cents > 0) || (shownCurrent !== null && shownCurrent.cents > 0)
+
+  // **La soglia conta le righe a schermo, e quella di oggi e' una di quelle**
+  // anche se non sta nell'elenco: `closed.length + 1`. E' l'unico punto in cui
+  // la forma nuova costa attenzione — una soglia scritta sul solo `closed`
+  // sarebbe la stessa soglia spostata di uno, senza che niente lo dica.
+  //
   // Sotto `TREND_MIN_ROWS` la sezione **non c'e'**: la costante porta
   // l'argomento. Non e' un elenco svuotato per comodita' — e' l'unico modo di
   // non ristampare in fondo alla schermata, sotto un titolo che promette un
   // confronto, la stessa cifra che sta in testa.
-  const rows = comparable && inWindow.length >= TREND_MIN_ROWS ? inWindow : []
+  //
+  // I tre modi di non esserci sono tre condizioni, e si leggono qui invece di
+  // convergere su un elenco vuoto: niente riga di oggi, niente da confrontare,
+  // troppo poche righe. Vedi `Trend`.
+  const shownRows = shownClosed.length + (shownCurrent === null ? 0 : 1)
+  const byPeriod: Trend | null =
+    shownCurrent !== null && comparable && shownRows >= TREND_MIN_ROWS
+      ? { closed: shownClosed, current: shownCurrent }
+      : null
 
   /* --- Niente da mostrare, e non e' lo stato vuoto ------------------------- */
 
@@ -1478,7 +1576,7 @@ export function statsView(input: StatsInput): StatsView {
   //
   // `present` e' un fatto sul periodo e non lo tocca nessuna scelta di lettura:
   // `outside` resta cio' che dice, cioe' che li' non e' caduto niente.
-  if (present.length === 0 && rows.length === 0) {
+  if (present.length === 0 && byPeriod === null) {
     return { kind: 'outside', period: input.period, range: current.range }
   }
 
@@ -1501,6 +1599,6 @@ export function statsView(input: StatsInput): StatsView {
     current,
     tiles,
     byCategory,
-    byPeriod: { rows },
+    byPeriod,
   }
 }
