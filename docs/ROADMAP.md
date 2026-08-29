@@ -25,11 +25,11 @@ sa gia', e per questo non puo' invecchiare. I giudizi — cosa e' in volo, cosa
 aspetta una persona — stanno sotto, scritti a mano e timbrati con lo SHA a cui
 sono stati rivisti.
 
-- **Ultimo commit**: `1267f4b` — docs: si salva quando un agente rientra, perche' la fine puo' non essere nostra
+- **Ultimo commit**: `35c54f0` — docs: il blocco rigenerato dopo la ripresa
 - **Data**: 29/08/2026 20:15
 - **Ramo**: `fase-6-wip`
 - **Pushato**: si, `origin/fase-6-wip` e' allo stesso commit
-- **Rispetto a `origin/main`**: 5 commit avanti
+- **Rispetto a `origin/main`**: 6 commit avanti
 - **Albero di lavoro**: **non pulito**, ci sono modifiche non committate
 
 - **Test unitari**: 698 in 23 file, tutti verdi
@@ -51,12 +51,19 @@ sono stati rivisti.
 
 ## In volo adesso
 
-<!-- JUDGMENT rivisto=848f417 -->
-> Rivisto a `848f417`, 4 commit fa.
+<!-- JUDGMENT rivisto=35c54f0 -->
+> Rivisto a `35c54f0`, cioe' a questo commit.
 
-**Fase 6 sul ramo `fase-6-wip`.** `origin/main` e' a `d9d6471` — un commit
-indietro, e quel commit e' documentazione — quindi **la fase 6 e' gia' su Pages**,
-`58e0880` compreso.
+**Fase 6 sul ramo `fase-6-wip`, cinque commit sopra `origin/main`.** Il ramo e'
+spinto; `main` non e' stato toccato, quindi **cio' che sta su Pages e' ancora
+`d9d6471`** — la fase 6 di prima delle cinque decisioni, non quella di adesso.
+
+Qui c'era scritto *"la fase 6 e' gia' su Pages"*, ed era vero a `848f417`. Quattro
+commit dopo non lo era piu', e la riga non se n'era accorta: e' il guasto che questa
+meta' del documento **dichiara di avere per costruzione** — i fatti rigenerati
+tacciono un difetto, i giudizi scritti a mano dichiarano aperto cio' che e' chiuso e
+chiuso cio' che e' aperto. L'ha preso `npm run state -- --check`, che segnalava tre
+giudizi oltre la soglia dei cinque commit.
 
 ### Qui c'era scritto che non ci si spingeva, e il push era gia' avvenuto
 
@@ -184,78 +191,90 @@ come *rilievi da verificare a occhio*, non come i dieci qui sopra.
 progetto la sceglie chi la esporta, e chi la usa eredita gli stati che quel giorno
 c'erano. La sesta scena e' costruita, e va detto che e' costruita.
 
-Le riparazioni sono decise e non applicate: **sono il primo lavoro della prossima
-sessione**, prima del gate.
+### Dove stanno i quindici adesso — **derivato dall'albero, riga per riga**
 
-### Aperto nel codice (riverificato il 29 agosto)
+Qui c'era scritto *"le riparazioni sono decise e non applicate: sono il primo lavoro
+della prossima sessione"*. Sono state fatte, in `118848d` e `93011ec`.
 
-**Uno solo, e non riguarda il prodotto.** Le due voci che erano qui — `tsc` rosso e
-il controllo D mancante — sono chiuse, e la scheda `Quotidiane` e' uscita.
+**Ogni riga dice da dove viene il proprio esito.** Non e' pedanteria: la versione
+precedente di questa sezione era sbagliata su sei affermazioni su otto perche' era
+stata dettata a memoria, e senza sapere **come** una riga e' stata ottenuta l'unico
+modo di aggiornarla e' riscriverla a occhio — che e' come si e' rotta.
 
-1. ~~**`tsc` e' rosso.**~~ **Chiuso il 28 agosto** con `0cbc6ac`. L'helper e' stato
-   finito derivando l'atteso dalla copy invece di ricopiarla — e nel farlo si e'
-   scoperto che il matcher, scritto `.+`, **passava anche quando l'interpolazione
-   non avveniva**: `{range}` a schermo sarebbe stato verde. Corretto in `[^{}]+`,
-   con una sonda a sette casi. Una seconda asserzione nello stesso file aveva lo
-   stesso difetto e misurava altezze contro la copy sbagliata.
-   *Derivato da:* `npx tsc --noEmit` verde, suite e2e 287 passati.
+| # | rilievo | esito | derivato da |
+|---|---|---|---|
+| 1 | sei affermazioni per un fatto solo | **chiuso** | `pace.above`/`pace.below` non esistono piu' in `i18n/it.ts` (0 occorrenze); restano quattro livelli |
+| 2 | *"Restano −88,00 €"* | **chiuso** | `budget-view.ts:175` — `t(over ? 'hero.over' : 'hero.remaining')`, e `'hero.over': 'Oltre il budget'` |
+| 3 | *"Oggi 0,00 €"* + *"Oggi non hai segnato niente"* | **chiuso** | `Home.tsx` — `today__total` scrive la cifra solo con `todayRows.length > 0`; lo stato vuoto e' intatto |
+| 4 | doppia didascalia sotto il numero grande | **chiuso** | `hero.note` e' una riga sola (`di {budget} · {spent} spesi`); la seconda e' migrata in `.slot__fixed` |
+| 5 | fisse senza barre, la piu' lunga vale 42 | **chiuso** | `asChart` non e' piu' su `SectionShape`: `stats-view.ts:680` lo dichiara salito su `Breakdown` |
+| 6 | manca il fatto dominante in cima | **chiuso** | `BreakdownSplit` in `stats-view.ts` (4 occorrenze) e `stats__split` in `Stats.tsx` (3) |
+| 7 | la scheda ripete un numero 200 px sotto | **chiuso** | `Stats.tsx:953` — `.stats__rate`, una riga, con `stats.perMonthRate` |
+| 8 | *"DOVE SONO FINITI"* e' monco | **chiuso** | `Stats.tsx:383` — `stats__titleTotal` |
+| 9 | *"Settimana per settimana"* sembra rotta | **chiuso** | `statistiche.spec.ts:2252`, il test sulla piega a 390x844 |
+| 10 | la causa comune del 5 | **chiuso, e la diagnosi era imprecisa** | vedi sotto |
+| 11 | `fullPage` non poteva fallire | **chiuso** | l'harness scatta `piega` e `intero` con due nomi |
+| 12 | B ha la risposta fuori campo | **chiuso** | `Stats.tsx` rende `trend.current` **per prima**, poi `closed` invertiti |
+| 13 | tre velocita' al giorno | **chiuso** | `allowance.over` e' l'unica riga col confronto; `pace.*` cancellate |
+| 14 | *"Restano"* con due significati | **chiuso** | `allowance.left` non e' piu' letta nel ramo sforato |
+| 15 | il 7 sottostima, 0b lo peggiora | **chiuso** | `530,00 €/mese` contro `530,00 €` — [DEBITO §5](DEBITO.md) chiusa |
 
-1. **`home.spec.ts:528` e' instabile sotto contesa — e NON riguarda il prodotto.**
-   E' un test che **si dichiara verde senza aver misurato niente**: con i dati gia'
-   arrivati al primo frame non c'e' nessun guscio da confrontare, quindi il gate non
-   cade — non trova. La confusione fra *non so* e *non c'e'*, sopravvissuta in un
-   test invece che in un campo. Nessun utente ne vede niente. Il gate anti-CLS cade con
-   *"al primo frame i dati erano gia' arrivati"* alla prima corsa della suite
-   intera; isolato con `--repeat-each=5` fa 30/30. Nella corsa rossa
-   `firstGeometry` e `finalGeometry` sono **identiche** e CLS resta 0: non cade il
-   gate sulla deriva, cade la sua **premessa**. E' il primissimo test della corsa e
-   paga l'avvio a freddo con quattro worker insieme — FCP 287 ms contro 44 ms da
-   solo. Il commento di quel test lo aveva previsto alla lettera.
-   La cura **non** e' renderlo piu' permissivo — accetterebbe la tautologia che
-   quella riga esiste per impedire — ma togliere la contesa a quella scena o
-   ritardare il repository di proposito.
-   *Derivato da:* due corse della suite intera, una rossa e una verde, piu' trenta
-   esecuzioni isolate.
-~~3. `dead-surface.mjs` non guarda `src/ui`.~~ **Chiuso il 28 agosto**: il
-   controllo D e' in CI, e ha preso `StatsTiles.variableCents` nel giro stesso in
-   cui la rimozione della scheda l'ha lasciato orfano. Il suo falso negativo e'
-   misurato e scritto dentro la funzione.
-   *Derivato da:* `npm run audit:source`, quattro controlli.
+**Il 10 merita una riga sua, perche' la sua diagnosi era sbagliata e la riparazione
+giusta lo stesso.** Diceva *"la soglia per sezione incrociata con la scala per
+sezione"*. Misurando, **la causa del 5 era la sola soglia**: le fisse avevano due
+righe contro `BREAKDOWN_MIN_ROWS` = 3, e sarebbe bastato spostare quella. La scala
+unica e' stata tolta insieme, e ha un prezzo suo — vedi la riga qui sotto. Una
+diagnosi che nomina due cause dove ce n'e' una porta a riparare la seconda senza
+mai misurarla.
 
-~~4. La scheda `Quotidiane` ripete il proprio numero tre volte.~~ **Chiusa il 29
-   agosto** con `58e0880`, dopo aver spostato `periodRangeLabel` sul titolo di A —
-   perche' a cadere non era ADR 016 §2 ma il **confine del periodo**, in due stati
-   dove B non c'e'.
-   *Derivato da:* `stats__titleRange` in `Stats.tsx`, e `variableCents` che non
-   esiste piu' nel modello.
+### Aperto adesso — due voci, e nessuna delle due e' un difetto del prodotto
 
+1. **`home.spec.ts:528` si dichiara verde senza misurare.** L'unico criterio di
+   uscita verificabile ancora aperto. Con i dati gia' arrivati al primo frame non
+   c'e' nessun guscio da confrontare, quindi il gate anti-CLS non cade: **non
+   trova**. E' la confusione fra *non so* e *non c'e'*, sopravvissuta in un test.
+   Nessun utente ne vede niente.
+   *Derivato da:* `npm run state`, `> Non applicata: manca "premessa costruita"`.
 
-### Chiuso, e nessuna delle chiusure e' stata riletta da un critico
+2. **Il prezzo della scala unica e' misurato e non e' stato deciso a occhio.** Nello
+   stato di default sei righe cadono fra 4 e 19 px, e **Svago (26,00 €) e Coffeeshop
+   (24,00 €) distano 0,75 px, Coffeeshop e Trasporti (23,00 €) 0,37**: sotto il
+   pixel non e' *"difficile da confrontare"*, e' **identico**. Il raggio a 2 px
+   restituisce la forma, non il confronto; il confronto lo restituisce
+   l'interruttore delle fisse.
+   *Derivato da:* misura in pagina a 390 punti, colonna 195,81 px, sull'export del
+   26 agosto.
 
-Sei rilievi dei gate precedenti risultano **gia' riparati nell'albero**: A divisa
-in due sezioni, il testo di `outside` che non promette piu' un confronto che non
-comincia, la stessa frase resa vera per i suoi due inquilini, il nome che non
-tronca piu' a 320, `Storico` interpolato da `nav.history`, il pavimento della barra
-nel modello.
+### Chiuso in questo giro, e cosa **cadrebbe** se venisse disfatto
 
-**Questa e' la cosa che conta piu' delle sei righe**: le riparazioni esistono e
-**nessuno le ha lette**. L'ultimo rapporto del critico descrive un albero
-precedente ed e' scaduto in tutte e due le direzioni — sei voci non valgono piu', e
-cio' che le ha chiuse non e' mai passato sotto un secondo lettore.
+La domanda che il giro precedente si era posta — *"quali chiusure hanno un test che
+cadrebbe se venissero disfatte?"* — questa volta ha una risposta, ed e' la ragione
+per cui vale la pena scriverla: i tre ALTO della fase precedente stavano tutti
+**dentro le riparazioni del giro prima**.
 
-Quindi la lista vecchia **non si aggiorna: si butta.** Appena `tsc` e' verde,
-`product-critic` riparte da zero sull'albero di adesso. E con una domanda in piu',
-che stavolta ha una risposta misurabile: **quali di quelle chiusure hanno un test
-che cadrebbe se venissero disfatte?** Una riparazione senza quel test e' una
-riparazione che il prossimo refactor annulla in silenzio — e i tre ALTO di questa
-fase stavano tutti dentro le riparazioni del giro prima.
+- **scala per sezione rimessa** -> 21 test unitari
+- **soglia per sezione rimessa** -> 14
+- **`showFixed` come filtro invece che ricalcolo della scala** -> 2, di cui uno dedicato
+- **`split` che segue il selettore** -> 2
+- **`outside` che legge le sezioni invece del periodo** -> 1
+- **chiusi camminati da `current.start`** -> 19
+- **la soglia che non conta la riga di oggi** -> 14
+- **ordine cronologico rimesso in B** -> 2 e2e, e quello sulla piega cade **anche**
+  se la sezione scende per un'altra ragione
+
+**E una che non e' sorvegliata da niente, dichiarata invece che taciuta**: nel
+modello il taglio sulla testa della finestra e' applicato anche alla riga di oggi, e
+togliendolo **94 test su 94 restano verdi** — la soglia e `comparableToBudget`
+mascherano la stessa uscita. E' la forma di DEBITO §6, trovata **dentro** la sua
+riparazione. Sta scritta accanto al codice con la ragione: il giorno in cui una
+delle due maschere cade, B mostrerebbe un periodo in cui l'app non aveva dati.
 
 ## In sospeso sul telefono — nessuna di queste e' automatizzabile
 
 Sono ferme dal **24 agosto** e vanno fatte **in quest'ordine**, che non e' una
 preferenza: ogni passo distrugge la possibilita' di fare il precedente.
 
-<!-- JUDGMENT rivisto=58e0880 -->
+<!-- JUDGMENT rivisto=35c54f0 -->
 > Rivisto a `58e0880`, 8 commit fa. **Da riguardare.**
 
 ### Stato al 29 agosto: **i passi 1 e 2 sono FATTI**
@@ -349,12 +368,23 @@ macchina non puo' leggere.
 
 ## Il disco
 
-<!-- JUDGMENT rivisto=58e0880 -->
+<!-- JUDGMENT rivisto=35c54f0 -->
 > Rivisto a `58e0880`, cioe' a questo commit.
 
 **Rivisto il 29 agosto, derivando: 10 GB liberi, 62% di capacita'.** Il taglio
 regge — `~/.ollama` e' fermo a 12 KB, solo le chiavi — e la regola sulla e2e non
 morde piu': si misura a ogni giro, tre volte in questa sessione.
+
+**Ri-derivato la sera del 29 agosto, e i numeri non si sono mossi**: `df` da' gli
+stessi 10 GB e lo stesso 62%, `~/.ollama` gli stessi 12 KB. `node_modules` del
+progetto vale 160 MB e `test-results` 424 KB — cioe' le due cose che crescono qui
+non crescono abbastanza da contare.
+
+Va scritto che e' stato **ri-derivato** e non solo ritimbrato, perche' per un
+momento questa voce ha portato un timbro nuovo su una misura vecchia: il timbro
+dice *"qualcuno ha riguardato"*, e spostarlo senza guardare e' precisamente il
+difetto che esiste per impedire. Un timbro falso e' peggio di un timbro scaduto —
+lo scaduto si vede.
 
 **La soglia non si toglie.** Il calo che l'ha prodotta veniva dal provisioning di
 una VM, che ricapita a ogni sessione nuova: e' un ciclo, non un evento chiuso.
@@ -570,7 +600,7 @@ giorno in cui serviva davvero.
 
 ## Decisioni prese e non ancora applicate
 
-<!-- JUDGMENT rivisto=b289fff -->
+<!-- JUDGMENT rivisto=35c54f0 -->
 > Rivisto a `b289fff`, 6 commit fa. **Da riguardare.**
 
 **L'esistenza di una decisione e' un giudizio; la sua applicazione e' un fatto
