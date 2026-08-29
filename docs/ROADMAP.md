@@ -25,9 +25,9 @@ sa gia', e per questo non puo' invecchiare. I giudizi — cosa e' in volo, cosa
 aspetta una persona — stanno sotto, scritti a mano e timbrati con lo SHA a cui
 sono stati rivisti.
 
-- **Ultimo commit**: `b289fff` — docs: i passi 1 e 2 sul telefono sono fatti, e una derivazione vale dove ha guardato
-- **Data**: 29/08/2026 03:13
-- **Pushato**: **no: 9 commit non pushati**
+- **Ultimo commit**: `d9d6471` — docs: il criterio gate il link agli amici, non main — emendato, non scavalcato
+- **Data**: 29/08/2026 03:21
+- **Pushato**: si, `origin/main` e' allo stesso commit
 - **Albero di lavoro**: **non pulito**, ci sono modifiche non committate
 
 - **Test unitari**: 683 in 23 file, tutti verdi
@@ -50,7 +50,7 @@ sono stati rivisti.
 ## In volo adesso
 
 <!-- JUDGMENT rivisto=b289fff -->
-> Rivisto a `b289fff`, cioe' a questo commit.
+> Rivisto a `b289fff`, un commit fa.
 
 **Fase 6 sul ramo `fase-6-wip`.** Main resta a `origin/main` e pubblica su Pages:
 non ci si spinge finche' la schermata non e' stata riletta.
@@ -70,7 +70,45 @@ meta' rischiano di **dichiarare aperto cio' che e' chiuso**, e si rifa' lavoro c
 esiste. Sono due guasti diversi, e il secondo e' quello che una lista scritta a
 mano produce da sola.
 
-### Aperto (riverificato nell'albero il 29 agosto, prima del push su main)
+### Dieci rilievi da uno sguardo, 29 agosto
+
+**Derivazione dichiarata: uno screenshot guardato da una persona, non una misura.**
+E' la prima volta che questa derivazione compare in questo documento, e va scritta
+com'e' — perche' e' la sola classe di difetti che il resto del metodo non copre.
+
+**Cinque gate, oltre cinquanta mutazioni provate disfacendo, quattro controlli
+automatici in CI — e nessuno dei dieci.** Non perche' fossero difficili: perche'
+**nessuno di loro e' una proprieta' del dato**. *"Sei affermazioni dicono lo stesso
+fatto"* e *"il peso visivo e' inverso agli importi"* non sono asserzioni
+geometriche: sono giudizi su cosa domina uno schermo, e un agente che legge
+`boundingBox()` non li puo' formulare.
+
+**Home** — la ripetizione, non il volume:
+1. Sei affermazioni per un fatto solo (numero, colore, barra, *"il budget e'
+   finito"*, *"quello che spendi da qui e' in piu'"*, *"Sopra ritmo"*).
+2. **"Restano −88,00 €"** e' una contraddizione, viva dalla fase 4.
+3. *"Oggi 0,00 €"* + *"Oggi non hai segnato niente"*: lo stesso fatto due volte, un
+   numero e una frase.
+4. Doppia didascalia sotto il numero grande.
+
+**Statistiche** — il peso visivo e' inverso agli importi:
+5. Le uniche barre sono nelle Quotidiane. **Fisse ha 530 € su 818 e nessuna barra**,
+   e la barra piu' lunga a schermo ne vale 129.
+6. Manca un fatto dominante in cima: due terzi sono l'affitto e **non si vede da
+   nessuna parte**.
+7. La scheda grigia in alto prende **un quinto dello schermo** per ripetere un
+   numero che compare 200 px sotto — ed e' **DEBITO §5 che si avvera**: 530,00 €
+   proiezione e 530,00 € materializzate, identiche per coincidenza.
+8. **"DOVE SONO FINITI" e' monco**: finiti *cosa?* Il titolo vuole il totale dentro.
+9. *"Settimana per settimana"* e' un'intestazione seguita dal vuoto sotto la piega:
+   **sembra rotta**.
+10. La causa comune del 5: la soglia per sezione incrociata con la scala per
+    sezione. Vedi la decisione 0a.
+
+Le riparazioni sono decise e non applicate: **sono il primo lavoro della prossima
+sessione**, prima del gate.
+
+### Aperto nel codice (riverificato il 29 agosto)
 
 **Uno solo, e non riguarda il prodotto.** Le due voci che erano qui — `tsc` rosso e
 il controllo D mancante — sono chiuse, e la scheda `Quotidiane` e' uscita.
@@ -139,7 +177,7 @@ Sono ferme dal **24 agosto** e vanno fatte **in quest'ordine**, che non e' una
 preferenza: ogni passo distrugge la possibilita' di fare il precedente.
 
 <!-- JUDGMENT rivisto=58e0880 -->
-> Rivisto a `58e0880`, 2 commit fa.
+> Rivisto a `58e0880`, 3 commit fa.
 
 ### Stato al 29 agosto: **i passi 1 e 2 sono FATTI**
 
@@ -354,13 +392,27 @@ Il controllo verifica che la **forma** esista, non che l'elenco sia completo:
 quella parte resta a chi legge il gate. E' il limite dichiarato di questo ago,
 come per la regola in CLAUDE.md.
 
-#### 5. Gli screenshot di Statistiche guardati da un essere umano
+#### 5. Gli screenshot guardati da un essere umano — **e viene PRIMA del gate**
 
 <!-- USCITA -->
 > **Giudizio**, senza controllo per costruzione: nessuna macchina puo' dirlo.
 
 **Giudizio, e la sola voce che non puo' diventare altro.** 390 chiaro, 390 scuro,
-320, stato vuoto, stato senza budget. **Un grafico che nessuno ha guardato non e'
+320, stato vuoto, stato senza budget.
+
+**Spostata prima del gate il 29 agosto, e l'ordine e' l'argomento.** Fatta una
+volta, ha prodotto **dieci rilievi** che cinque gate, cinquanta mutazioni e quattro
+controlli in CI non avevano visto — perche' nessuno di loro e' una proprieta' del
+dato. Metterla dopo il gate significa far girare il gate su una schermata che
+verra' ridisegnata: il suo rapporto scade prima di essere letto.
+
+**L'ordine e': screenshot → guardati → riparazioni → gate.**
+
+E la riga che vale per chi legge quanto per chi ha scritto: al gate precedente era
+gia' scritto qui che *"tutte le misure di questa fase le hanno prese agenti che
+leggevano numeri, non persone che leggevano una schermata"*. Era capito, ed era
+**penultimo in un elenco di otto**. **Sapere dove sta il buco e metterlo in coda e'
+un modo di non guardarci.** **Un grafico che nessuno ha guardato non e'
 verificato** — e finora nessuno l'ha guardato: tutte le misure di questa fase le
 hanno prese agenti che leggevano numeri, non persone che leggevano una schermata.
 
@@ -454,6 +506,139 @@ giudizio resta umano — *cosa* si e' deciso e *perche'*. Il fatto e' derivato.
 E c'e' un guadagno che vale da solo: **una decisione la cui applicazione non si
 riesce a esprimere come controllo e' una decisione troppo vaga per essere
 implementata.** Scrivere il controllo la filtra mentre la si prende.
+
+### 0. Le decisioni del 29 agosto, dallo sguardo — non ancora nel codice
+
+**Sono nate guardando gli screenshot, non da un test.** Vedi "In volo adesso" per i
+dieci rilievi e per cosa questo dice del metodo.
+
+#### 0a. Scala unica per tutta A
+
+<!-- DECISION
+     absent:  src/ui/stats-view.ts :: sulla scala **della sezione**
+     present: src/ui/stats-view.ts :: scala unica di A
+-->
+> **Non applicata**: c’e’ ancora `sulla scala **della sezione**` in `src/ui/stats-view.ts`; manca `scala unica di A` in `src/ui/stats-view.ts`.
+
+Tutte le righe di A su **una scala sola**. Le sezioni restano come **intestazioni**
+— raggruppano e ordinano — e **non hanno scale proprie**.
+
+Si tolgono **due** regole: la scala per sezione e il minimo di tre righe per
+sezione. (La terza che sembrava esserci, *"o tutte le sezioni hanno barre o
+nessuna"*, **non e' mai stata implementata**: era una proposta rimasta aperta su una
+domanda — se valesse anche con una riga sola. Non si toglie: non si mette.)
+
+**Il motivo e' l'incrocio, non la singola regola.** Quelle regole erano ciascuna
+difendibile, e il difetto trovato guardando lo schermo — **le barre solo nelle
+Quotidiane, con il peso visivo inverso agli importi**: la sezione Fisse ha 530 € su
+818 e nessuna barra, mentre la barra piu' lunga a schermo ne vale 129 — e' nato dal
+loro **incrocio**. Nessun gate poteva vederlo, perche' ogni regola presa da sola
+faceva il suo mestiere. **Meno regole, meno incroci.**
+
+#### 0b. Barra divisa in cima
+
+<!-- DECISION
+     present: src/ui/Stats.tsx :: stats__split
+-->
+> **Non applicata**: manca `stats__split` in `src/ui/Stats.tsx`.
+
+Porta la proporzione fisse/quotidiane e **libera A dal doverla raccontare**: due
+terzi sono l'affitto, e oggi non c'e' nessun posto dove si veda.
+
+**Un accento e un grigio, non due tinte di categoria** — e' la contraddizione di
+`dataviz` accolta: *"otto tinte categoriche quando la storia e' un numero solo"* e'
+l'errore da manuale, e la risposta e' **emphasis**. Con due segmenti serve una
+legenda o **etichette dirette**: i due totali scritti accanto la soddisfano, ma
+vanno scritti.
+
+Forma alternativa ammessa: **ciambella a due segmenti** col totale nel mezzo — due
+angoli si confrontano bene. **La torta a sette fette e' esclusa**: 62% e sei
+spicchi fra 1% e 16% costringono a una legenda e a confrontare angoli.
+
+#### 0c. Selettore fisse si'/no su A
+
+<!-- DECISION
+     present: src/ui/i18n/it.ts :: stats.showFixed
+-->
+> **Non applicata**: manca `stats.showFixed` in `src/ui/i18n/it.ts`.
+
+Sostituisce **una regola di layout con un controllo dell'utente**. Tre vincoli:
+
+- **acceso di default** — spento nasconderebbe 507 € dietro un controllo, cioe'
+  ADR 016 §1 di nuovo, dalla porta di servizio;
+- lo **stato dev'essere leggibile senza toccare niente**;
+- **non si applica a B**: con le fisse accese la traccia del budget non
+  significherebbe piu' niente. Li' o non si applica, o la traccia sparisce — che e'
+  gia' la regola di `comparableToBudget`.
+
+#### 0d. Home: quattro livelli invece di sei affermazioni
+
+<!-- DECISION
+     absent: src/ui/i18n/it.ts :: 'allowance.over.main'
+-->
+> **Non applicata**: c’e’ ancora `'allowance.over.main'` in `src/ui/i18n/it.ts`.
+
+Oggi **sei affermazioni dicono lo stesso fatto**: il numero, il colore, la barra,
+*"Il budget del periodo e' finito"*, *"quello che spendi da qui e' in piu'"*,
+*"Sopra ritmo"*. **Ne resta una, e i numeri prendono il posto delle frasi.**
+
+1. **enorme**: −88,00 €
+2. **una riga**: oltre i 200,00 € della settimana
+3. **una riga, l'unica azionabile**: 2 giorni · 48,00 €/g contro 28,57 sostenibili
+4. **nota in fondo**: 530,00 € di fisse, escluse dal budget — ADR 016 §2, **resta
+   obbligatoria**
+
+Si tolgono *"Il budget del periodo e' finito"* (lo dicono il segno e il colore),
+*"quello che spendi da qui e' in piu'"* (implicito in un numero negativo) e la
+doppia didascalia sotto il numero grande. E *"Oggi 0,00 €"* seguito da *"Oggi non
+hai segnato niente"* e' di nuovo lo stesso fatto due volte, un numero e una frase.
+
+**La regola che tiene insieme le due riparazioni**: dove ci sono dati **si mostrano
+numeri**, dove non ce ne sono **si parla**. Lo stato vuoto della Home e' l'esempio
+giusto **e non si tocca**.
+
+*(Nota su `dataviz`, che qui dice l'opposto: lei vuole etichette **selettive** — mai
+un numero su ogni punto. Vince la nostra, e la ragione va scritta e non
+presupposta: **non abbiamo un asse e non abbiamo un tooltip**, quindi togliere i
+numeri lascerebbe il lettore senza nessun modo di sapere quanto vale una barra. La
+regola di dataviz presuppone due cose che abbiamo deliberatamente rimosso.)*
+
+#### 0e. `hero.remaining` deve cambiare col segno
+
+<!-- DECISION
+     present: src/ui/i18n/it.ts :: 'hero.over'
+-->
+> **Non applicata**: manca `'hero.over'` in `src/ui/i18n/it.ts`.
+
+**"Restano −88,00 €" e' una contraddizione, ed e' viva dalla fase 4.** Verificato:
+`heroCopy` restituisce `t('hero.remaining')` **incondizionatamente**, e non esiste
+nessuna chiave per il negativo.
+
+**E la forma del difetto e' quella della fase**: `over` **e' gia' calcolato**
+(`remainingCents < 0`) e guida il **colore** (`data-tone`), non la **parola**. Il
+fatto era li', usato per la decorazione e non per la frase — il "peso visivo
+inverso all'importanza", in miniatura e in una riga di codice.
+
+### 0f. Da valutare, con la condizione scritta
+
+**Tavolozza di default.** Misurata col validatore: separazione per daltonismo
+**8,7** su soglia 8 — regge — ma **tre colori su otto sotto la soglia di croma**
+(`#81a369` 0,09 · `#845e23` 0,089 · `#676c75` **0,015**): si leggono come grigi, e
+un colore che non fa identita' non fa il suo lavoro in un grafico. **Le categorie
+esistenti non si toccano** — sono scelte dell'utente — cambiano i **default** per
+chi installa dopo. **Condizione: adesso**, finche' il parco installato e' un
+telefono. Dopo diventa una migrazione di dati altrui.
+
+**Andamenti per categoria nel tempo.** Non ora, e **non per scope**: con quattro
+giorni di dati risponde a una domanda che nessuno puo' ancora farsi.
+**Condizione di riapertura: otto settimane piene di storia.**
+
+**`tabular-nums` sul numero grande della Home.** `dataviz` lo vieta
+esplicitamente (*"le cifre a larghezza uguale fanno sembrare `121` slegato"*); il
+commento in `Home.css` porta il contro-argomento *"e' un numero che si guarda
+mentre si digita dietro al foglio"*. **Da misurare, non da assumere**: se il foglio
+copre quel numero mentre si digita, l'argomento e' falso e vince la skill. E' una
+misura da dieci secondi, non fatta per budget.
 
 ### 1. A si divide in due sezioni — Fisse e Variabili
 
