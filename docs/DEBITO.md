@@ -366,6 +366,32 @@ nell'etichetta, una terza schermata che ripete la proiezione senza — questa vo
 torna aperta con lo stesso argomento. **La cosa da sorvegliare e' il suffisso
 attaccato al numero**, non il testo che lo circonda.
 
+### Poi la coppia si e' sciolta: `stats.perMonthRate` non esiste piu'
+
+Chi cerca il suffisso nel codice non lo trova, e va detto qui prima che qualcuno
+concluda che la chiusura e' stata disfatta.
+
+Il 29 agosto sera, **la proiezione mensile e' uscita dalle Statistiche**: era una
+riga in testa alla schermata (`.stats__rate`) e scriveva la stessa cifra che il
+totale della parte fisse scrive duecento pixel piu' sotto. Il suffisso distingueva
+le **unita'** — ed e' cio' che chiudeva questa voce — ma non toglieva il fatto che
+il numero fosse a schermo **due volte nella stessa occhiata**, il che era un
+secondo difetto, di un'altra famiglia, che il suffisso non aveva mai avuto il
+compito di riparare.
+
+Con la riga se ne sono andate `stats.fixed` e `stats.perMonthRate` (nessun lettore
+rimasto, controllo B di `audit:source`).
+
+**Questa voce resta chiusa, e per una ragione piu' forte di prima**: le due
+quantita' non stanno piu' sulla stessa schermata, quindi la coincidenza non ha piu'
+dove prodursi. La proiezione vive dove ADR 016 §3 la mette — *"accanto al budget,
+**in Impostazioni**"* — con la propria etichetta (`fixed.total`, *"In tutto
+{amount} al mese."*), sotto il gruppo del budget.
+
+**E come si riapre adesso**: il giorno in cui una schermata torna a scrivere le due
+quantita' insieme. Se succedesse, il rimedio gia' trovato — l'unita' dentro il
+numero — resta valido e va rimesso; ma il primo rimedio e' non rimetterle insieme.
+
 ## 6. "In corso" e "ultima riga" sono indistinguibili da qualunque test
 
 **Stato: aperto**, e non si chiude scrivendo un altro test — nessuno puo' cadere.

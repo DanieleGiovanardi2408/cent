@@ -32,7 +32,15 @@
   -webkit-overflow-scrolling: touch;
   display: flex;
   flex-direction: column;
-  gap: var(--sp-5);
+  /* **Lo spazio bianco sta fra le sezioni, non fra le righe.**
+   *
+   * Sono due cose diverse: le sezioni rispondono a due domande diverse, le
+   * righe sono la stessa cosa ripetuta. Finche' i due spazi erano confrontabili
+   * — 24 px fra le sezioni, 8 px + 32 px di aria interna fra due barre alte 12
+   * — l'elenco si leggeva come una schermata di impostazioni, cioe' un elenco
+   * di voci, invece che come un grafico. Adesso il passo di riga e' 44 px con
+   * una barra da 24 (vedi `.stat`), e il respiro e' tutto qui: 32 px. */
+  gap: var(--sp-6);
   padding-block-end: var(--sp-3);
 
   /* **Qui c'era `scroll-snap-type: y proximity`, e non c'e' piu': non poteva
@@ -65,47 +73,48 @@
   flex: none;
 }
 
-/* --- la proiezione mensile delle fisse (ADR 016 §3) ---------------------- */
+/* --- il numero grande di A ------------------------------------------------ */
 
-/* **Una riga, e prima era una scheda alta 109 px.**
+/* **Qui c'era `.stats__rate`, la proiezione mensile delle fisse, e non c'e'
+ * piu'.** Scriveva `530,00 €/mese` in testa mentre il totale della parte fisse
+ * scrive `530,00 €` duecento pixel piu' sotto: il suffisso distingueva le
+ * **unita'** e non toglieva il fatto che il numero fosse a schermo due volte.
+ * ADR 016 §3 non cade con lei, perche' abita altrove — *"accanto al budget, in
+ * Impostazioni"* — e li' c'e' davvero (`Settings.tsx` -> `FixedCosts`,
+ * `fixed.total`). L'argomento per esteso sta in `Stats.tsx`, dove stava la riga.
  *
- * Un quinto dell'altezza utile per una cifra sola, in cima a una schermata che
- * non riesce a mettere due righe di B sopra la piega: il peso visivo era
- * l'inverso dell'importanza. La proiezione e' **contesto** — quanto costa stare
- * qui, al mese — non e' la risposta a nessuna delle due domande della
- * schermata, e non merita il posto che aveva.
+ * ## Il numero grande, e perche' e' una hero
  *
- * Resta in testa e non in fondo perche' ADR 016 §3 la vuole **accanto** alla
- * prima cifra: il totale del periodo, che sta sul titolo di A trenta pixel piu'
- * sotto. Una nota a pie' di pagina l'avrebbe staccata dall'unica cosa che la
- * rende leggibile.
+ * Il totale del periodo c'era gia' — `.stats__titleTotal`, `--fs-300`, in coda
+ * al titolo — e portava **la risposta alla domanda della schermata** con meno
+ * peso di una delle sue voci: misurato a 390 punti, `618,00 €` a 17 px sopra
+ * `507,00 €` a 15 px semibold, cioe' due passi di scala tipografica per una
+ * differenza di rango che ne vale molti di piu'.
  *
- * Nessun fondo grigio: la distinzione fra "contesto" e "dati" la fa gia' la
- * tipografia (13 px, muta, contro il titolo e le barre). Un riquadro qui
- * chiedeva attenzione per una cifra che non ne vuole. */
-.stats__rate {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--sp-3);
-  color: var(--text-muted);
-  font-size: var(--fs-100);
-}
-
-.stats__rateLabel {
-  overflow: hidden;
-  min-inline-size: 0;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* Cifre tabulari: sta sul bordo destro, incolonnata con tutti gli altri importi
- * della schermata. Le proporzionali servono a un numero grande e isolato — la
- * scheda che c'era prima — e questo non lo e' piu'. */
-.stats__rateValue {
-  flex: none;
+ * Il metro e' **interno all'app**: la Home risponde con `--fs-hero`, e la Home
+ * funziona. `dataviz` chiede *"esattamente una hero figure per vista"* e qui ce
+ * n'erano **zero**, quindi non c'e' nessun conflitto da arbitrare — c'e' una
+ * casella vuota da riempire. Resta il divieto di farne due: se un giorno questa
+ * schermata volesse un secondo numero grande, e' questo che va rimesso in riga.
+ *
+ * `--fs-600` e non `--fs-hero`: 40 px fissi contro `min(3.5rem, 11.5vw)`. Il
+ * numero della Home e' **la risposta a una domanda sul futuro** e cambia ogni
+ * volta che si tocca il FAB; questo e' un consuntivo, e leggerlo piu' grande di
+ * quello sarebbe dire che conta di piu'. Fisso e non in `vw` perche' non ha il
+ * problema che `--fs-hero` risolve: il residuo puo' valere `-99.999,99 €`
+ * (dodici caratteri col segno), questo totale no — e' una somma di spese di un
+ * periodo, sempre positiva, e a 40 px tabulari otto caratteri stanno in 288 px
+ * di contenuto con margine.
+ *
+ * `--lh-tight` e `--tracking-tight` come la Home: un numero grande con
+ * l'interlinea del corpo si porta dietro aria che non serve a nessuno. */
+.stats__hero {
+  grid-column: 1 / -1;
   color: var(--text);
+  font-size: var(--fs-600);
   font-weight: var(--fw-semibold);
+  line-height: var(--lh-tight);
+  letter-spacing: var(--tracking-tight);
   font-variant-numeric: tabular-nums;
 }
 
@@ -133,6 +142,22 @@
 .stats__section {
   --plot-min: 7rem;
   --name-max: 8.5rem;
+  /* **L'altezza di una marca.** Vale per le barre delle righe (`.stat__plot`) e
+   * per la barra divisa (`.stats__split`): sono lo stesso inchiostro, e due
+   * spessori diversi si leggerebbero come due tipi di grafico.
+   *
+   * Era `0.75rem`, cioe' 12 px dentro una riga alta 44 con 8 di distacco: una
+   * barra che occupava **il 23%** del proprio passo, con il resto vuoto. E' la
+   * ragione per cui la schermata si leggeva come un elenco di impostazioni e
+   * non come un grafico — l'inchiostro era la minoranza, e cio' che l'occhio
+   * legge per primo in un elenco di barre e' la **massa**, non la lunghezza.
+   *
+   * A 24 px dentro un passo di 44 (riga 40 + 4 di distacco) l'inchiostro e' il
+   * **55%**. Il numero non e' scelto a occhio: e' il piu' grande che stia dentro
+   * una riga che deve continuare a ospitare **due righe di etichetta**
+   * (`--fs-200` a `--lh-snug` = 37,5 px, vedi `.stat__name`) senza che la riga
+   * col nome lungo diventi piu' alta delle altre. */
+  --bar-h: 1.5rem;
 
   display: grid;
   /* La barra prende quello che avanza, e mai meno di --plot-min. Il nome si
@@ -155,23 +180,26 @@
   grid-template-columns: minmax(0, 1fr) max-content;
 }
 
-/* La riga del titolo di A: la domanda a sinistra, la sua risposta a destra.
+/* **La riga del titolo di B**, e adesso solo di lei: la domanda a sinistra, il
+ * nome di cio' che conta a destra, sulla stessa linea di base.
  *
- * **`DOVE SONO FINITI · 24–30 AGO` era monco**: finiti *quanto?* Un titolo che
- * pone una domanda in cima a una schermata che esiste per rispondere, e non
- * porta il numero, lascia il lettore a sommare sette righe.
+ * ## Perche' A non ce l'ha piu'
  *
- * Il totale sta **fuori dall'`<h2>`** e non dentro: l'intestazione resta la
- * domanda — un test la legge intera, e `text-transform: uppercase` non deve
- * arrivare a una cifra — e la cifra e' un dato accanto, incolonnato sul bordo
- * destro come tutti gli importi della schermata.
+ * Perche' in A i due pezzi non stanno piu' su una riga: il totale del periodo e'
+ * diventato il **numero grande** della schermata (`.stats__hero`) e sta sotto la
+ * domanda, con la barra divisa subito sotto di lui. Un contenitore che teneva
+ * insieme due campate `1 / -1` non aggiungeva nessuna colonna, quindi e' uscito
+ * invece di restare come box vuoto.
+ *
+ * ## Perche' B invece ce l'ha ancora
+ *
+ * Perche' li' i due pezzi sono due meta' della **stessa frase** — *"settimana
+ * per settimana"* e *"delle quotidiane"* — e impilarli costava 26 px, cioe' 26
+ * px che allontanano dalla piega la seconda riga del confronto: l'unica ragione
+ * per cui quella sezione esiste. Il conto e' in `Stats.tsx`, su `Periods`.
  *
  * `align-items: baseline` e non `center`: due tipografie diverse sulla stessa
- * riga si leggono come una riga sola solo se stanno sulla stessa linea di base.
- *
- * B non ha questa riga — nessun totale: sarebbe la somma di otto periodi, che
- * non chiede nessuno — quindi il suo titolo resta un figlio diretto della
- * griglia. */
+ * riga si leggono come una riga sola solo se stanno sulla stessa linea di base. */
 .stats__head {
   grid-column: 1 / -1;
   display: flex;
@@ -209,19 +237,11 @@
   border-block-start: none;
 }
 
-.stats__head > .stats__partTitle .stats__partName {
-  flex: none;
-}
-
-/* Il totale del periodo. Tabulare come gli importi che somma: e' sullo stesso
- * bordo destro, e le proporzionali lo farebbero ballare al cambio di cifra. */
-.stats__titleTotal {
-  flex: none;
-  color: var(--text);
-  font-size: var(--fs-300);
-  font-weight: var(--fw-semibold);
-  font-variant-numeric: tabular-nums;
-}
+/* Dentro la riga del titolo di B il nome di parte non deve cedere spazio: la
+ * sua griglia si dimensiona sul contenuto (`flex: none` sul padre), quindi la
+ * colonna `minmax(0, 1fr)` si risolve sul `max-content` del nome. Non serve
+ * nessuna dichiarazione: la riga che c'era — `flex: none` sul nome — parlava a
+ * un padre che adesso e' una griglia, cioe' non parlava a nessuno. */
 
 /* Il confine del periodo, in coda al titolo di A: `DOVE SONO FINITI · 17–23 ago`.
  *
@@ -290,11 +310,31 @@
  *
  * `space-between` e non una griglia: sono due cose, e la seconda sta a destra
  * come tutti gli importi di questa schermata. */
+/* ## Due righe, e la seconda non costa niente
+ *
+ * Da 0a ogni sezione **dichiara quanto vale la propria barra piena**
+ * (`.stats__partScale`). Quella didascalia doveva stare da qualche parte senza
+ * aggiungere una riga all'elenco, e il posto c'era gia': l'intestazione delle
+ * fisse dichiara `min-block-size: var(--tap-min)` perche' dentro ha
+ * l'interruttore, e il suo testo ne usa **18,75 su 44**. La seconda riga entra
+ * nei 25 che avanzavano.
+ *
+ * Quindi da `flex` a `grid` a due righe:
+ *
+ *     nome ................................ totale   [interruttore]
+ *     barra intera = 42,00 €                         (spanning)
+ *
+ * L'interruttore attraversa tutte e due le righe e si centra: e' una figura, e
+ * non ha una linea di base con cui allinearsi a niente.
+ *
+ * `align-items: baseline` sulle prime due celle e non `center`: nome e totale
+ * sono due testi di due pesi diversi sulla stessa riga. */
 .stats__partTitle {
   grid-column: 1 / -1;
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  column-gap: var(--sp-2);
   align-items: baseline;
-  gap: var(--sp-2);
   color: var(--text);
   font-size: var(--fs-200);
   font-weight: var(--fw-semibold);
@@ -349,12 +389,58 @@
  * decisione"*, quindi si accentua cio' su cui si decide. Le fisse restano
  * dominanti **per area**, che e' il fatto che la barra deve dire.
  *
- * `--line-strong` e `--text`, e non `--brand`: quello e' gia' il colore delle
- * barre di B e del FAB, e un terzo significato sullo stesso token lo
- * svuoterebbe. Sul fondo valgono 3,19:1 e 16,5:1 (chiaro), 3,3:1 e 16,3:1
- * (scuro); **fra loro** 5,1:1 in chiaro e 4,8:1 in scuro — cioe' la differenza
- * e' di luminanza e non di tinta, e la barra si legge anche senza distinguere i
- * colori. */
+ * ## L'accento **e'** `--brand`, e qui c'era scritto il contrario
+ *
+ * Il divieto era *"non `--brand`: e' gia' il colore delle barre di B e del FAB,
+ * e un terzo significato sullo stesso token lo svuoterebbe"*. Era vero per il
+ * FAB e **falso per B**: li' `--brand` significa gia' *"quotidiane"* — sono le
+ * barre della sezione che porta `stats.variable` sopra di se' — ed e' esattamente
+ * cio' che questo segmento e'. Non e' un terzo significato: e' **lo stesso**,
+ * detto due volte nella stessa schermata sulla stessa quantita'. Il divieto era
+ * un'applicazione troppo larga di un argomento giusto.
+ *
+ * Cosa si compra: chi guarda la barra divisa e poi scende a B vede **il verde
+ * nello stesso posto**, e le due letture si legano senza che nessuna frase le
+ * leghi. Cosa si perde e' scritto qui sotto, con il numero.
+ *
+ * ## Il numero che si perde, e perche' nessun altro colore lo salvava
+ *
+ * La coppia di prima — `--line-strong` e `--text` — valeva **5,17:1 fra i due
+ * segmenti** (4,98 in scuro), cioe' la differenza era di **luminanza** e la
+ * barra si leggeva anche senza distinguere le tinte. Con `--brand` quel numero
+ * scende a **1,88:1 in chiaro e 2,63:1 in scuro** (misurati sui token, e
+ * ricampionati sui pixel dipinti da `colori.spec.ts`).
+ *
+ * **Nessuna coppia con `--brand` puo' fare meglio**, e non e' un'opinione. In
+ * tema chiaro `--bg` ha luminanza relativa 0,906 e `--brand` 0,109: un colore a
+ * 3:1 da tutti e due dovrebbe avere luminanza **≤ 0,269** (per staccarsi dal
+ * fondo) e **≥ 0,427** (per staccarsi dall'accento) nello stesso momento. Non
+ * esiste. In scuro le due luminanze si scambiano e il vincolo resta impossibile
+ * identico. E' la stessa impossibilita' del segno del maturato, in un'altra
+ * stanza — li' e' risolta con una guaina, qui non serve.
+ *
+ * ## Perche' non serve: il confine e' un **vuoto**, non un bordo
+ *
+ * Il requisito vero non e' *"i due segmenti si distinguono l'uno dall'altro"*: e'
+ * *"si vede dove finisce l'uno e comincia l'altro"* e *"si vede quanto e' lungo
+ * ciascuno"*. Il primo lo porta il vuoto da 2 px in mezzo, che e' dipinto nel
+ * colore della superficie e quindi si stacca da tutti e due (3,19:1 dal grigio,
+ * 6,00:1 dall'accento in chiaro). Il secondo lo porta il contrasto di ciascun
+ * segmento **col fondo**, che resta sopra 3:1 in tutti e quattro i casi:
+ *
+ *     tema      fisse (--line-strong)   quotidiane (--brand)
+ *     chiaro    3,19:1                  6,00:1
+ *     scuro     3,28:1                  8,62:1
+ *
+ * E chi non distingue le tinte affatto legge comunque due masse di luminanza
+ * diversa separate da una fessura chiara: il verso della lettura — *"la parte
+ * grigia e' la piu' lunga"* — non dipende da quale delle due sia verde.
+ *
+ * ## E `--text` esce, che e' l'altra meta' del cambio
+ *
+ * Il segmento delle quotidiane era **nero pieno**: 16,5:1 sul fondo, cioe' la
+ * cosa piu' scura della schermata addosso alla quantita' minoritaria. Il peso
+ * visivo andava all'inverso della gerarchia che ADR 016 dichiara. */
 .stats__partTitle[data-kind="fixed"],
 .stats__seg[data-kind="fixed"] {
   --seg: var(--line-strong);
@@ -362,28 +448,90 @@
 
 .stats__partTitle[data-kind="variable"],
 .stats__seg[data-kind="variable"] {
-  --seg: var(--text);
+  --seg: var(--brand);
 }
 
-/* Il nome della parte cede per primo: se lo spazio non basta si accorcia lui e
- * non il totale, che e' una cifra e mezza cifra non vuol dire niente.
+/* Il nome della parte cede per primo, e **cede in altezza**.
  *
- * `flex: 1` e non piu' `space-between` sul padre: i figli adesso possono essere
- * tre — nome, totale, interruttore — e `space-between` avrebbe messo il totale
- * **in mezzo**, cioe' fuori dalla colonna degli importi. Con il nome che cresce,
- * cio' che segue resta impilato a destra in qualunque ordine. */
+ * ## Il difetto: `Fisse in questo peri…`
+ *
+ * Misurato a 320 punti (288 px di contenuto) con la parte fisse a piu' righe,
+ * cioe' col totale acceso: il nome vale 165 px, il totale 68, l'interruttore 44,
+ * i distacchi 16 — **293 px contro 288**. Con `white-space: nowrap` e
+ * `text-overflow: ellipsis` la richiesta in eccesso si pagava dove si paga
+ * sempre: togliendo lettere a una stringa che scriviamo noi.
+ *
+ * ## Il rimedio e' quello gia' scelto per l'etichetta di riga
+ *
+ * Due righe invece di una (`.stat__name`, piu' sotto): l'etichetta cede in
+ * larghezza e **non perde niente**, e l'asse su cui cede e' quello in cui costa
+ * meno. Qui costa ancora meno che li', perche' la seconda riga
+ * dell'intestazione delle fisse e' gia' pagata dai 44 px che il bersaglio
+ * dichiara.
+ *
+ * Il clamp resta, e non e' decorativo: **e' cio' che rende il caso osservabile**.
+ * Senza `overflow: hidden` un testo troppo lungo non perde lettere ma non
+ * segnala nemmeno niente, e il controllo a 320 punti — che chiede *"il contenuto
+ * e' piu' alto di cio' che si vede?"* — diventerebbe verde per costruzione. E'
+ * la stessa mutazione gia' provata su `.stat__name`.
+ *
+ * `overflow-wrap: anywhere` per la stessa ragione di li': senza, una parola piu'
+ * larga della colonna resta su una riga e `-webkit-box` la taglia **a meta'
+ * glifo, senza puntini**. Nessuna delle due parole di oggi lo e' — la piu' lunga
+ * e' `Quotidiane`, 82 px — ma la condizione non e' su queste due parole: e' su
+ * cio' che il clamp fa quando non trova dove andare a capo. */
 .stats__partName {
-  flex: 1 1 auto;
+  grid-area: 1 / 1 / 2 / 2;
+  display: -webkit-box;
   overflow: hidden;
   min-inline-size: 0;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  line-height: var(--lh-snug);
+  overflow-wrap: anywhere;
+}
+
+/* **Quanto vale una barra piena in questa sezione** (0a).
+ *
+ * ## Perche' e' scritta, e perche' la geometria non bastava
+ *
+ * La scala e' della sezione: la riga piu' grande di ciascuna arriva a fondo
+ * colonna. Sui dati veri questo vuol dire `Casa 507,00 €` e `Spesa 42,00 €`
+ * dipinte della **stessa identica lunghezza**, a centoventi pixel di distanza.
+ * Qui sopra c'era scritto che *"due barre piene con due importi diversi dicono
+ * da sole che le scale sono due"*: dicono che **qualcosa** non torna, non
+ * **cosa**, e la differenza fra le due e' tutta a carico del lettore.
+ *
+ * ## Perche' e' muta e piccola
+ *
+ * Perche' e' una **legenda**, non un dato: `--fs-100` e `--text-muted`, cioe' lo
+ * stesso peso della nota dei giorni vissuti in B. Se avesse il peso di un
+ * importo si metterebbe in fila con gli importi veri, che stanno tutti
+ * sull'altro bordo — e la colonna delle cifre e' l'unica cosa che questa
+ * schermata promette di tenere incolonnata.
+ *
+ * Tabulari: contiene un importo, ed e' incolonnata con niente ma cambia ogni
+ * giorno. */
+.stats__partScale {
+  /* Attraversa le due colonne del testo e si ferma prima dell'interruttore:
+   * puo' essere lunga quanto vuole senza mai finirgli sotto. */
+  grid-area: 2 / 1 / 3 / 3;
+  color: var(--text-muted);
+  font-size: var(--fs-100);
+  font-weight: var(--fw-regular);
+  line-height: var(--lh-snug);
+  font-variant-numeric: tabular-nums;
 }
 
 /* Il totale della parte. Tabulari come gli importi delle righe che somma: e'
- * incolonnato con loro, e le proporzionali lo farebbero ballare. */
+ * incolonnato con loro, e le proporzionali lo farebbero ballare.
+ *
+ * Sta sulla prima riga, accanto al nome: **e' l'etichetta diretta del proprio
+ * segmento della barra divisa**, e una legenda che si stacca dal proprio nome
+ * smette di essere una legenda. */
 .stats__partTotal {
-  flex: none;
+  grid-area: 1 / 2 / 2 / 3;
   font-variant-numeric: tabular-nums;
 }
 
@@ -391,9 +539,14 @@
 
 /* **Due terzi sono l'affitto, e non si vedeva da nessuna parte.**
  *
- * La proporzione fra le due nature e' il fatto dominante del periodo, e con la
- * scala unica le due sezioni da sole non lo dicono: dicono chi ha la riga piu'
- * lunga, non quanto pesa una natura sull'altra.
+ * La proporzione fra le due nature e' il fatto dominante del periodo, e **le due
+ * sezioni da sole non lo dicono in nessuna delle due configurazioni di scala**:
+ * con una scala sola dicevano chi ha la riga piu' lunga; da quando la scala e'
+ * per sezione (0a) le due barre piu' lunghe arrivano tutte e due a fondo
+ * colonna, quindi non dicono nemmeno quello.
+ *
+ * Sta **subito sotto il numero grande** e non altrove: e' la sua decomposizione,
+ * e i due elementi sono una frase sola.
  *
  * **I 2 px in mezzo sono un vuoto, non un bordo.** Un contorno fra due marche
  * che si toccano davvero aggiunge una terza tinta proprio sul confine, cioe'
@@ -410,7 +563,11 @@
   grid-column: 1 / -1;
   display: flex;
   gap: 2px;
-  block-size: 0.75rem;
+  /* Alta come le barre delle righe (`--bar-h`), e non di piu': e' lo stesso
+   * inchiostro e due spessori diversi si leggerebbero come due tipi di grafico.
+   * Sta subito sotto il numero grande, che e' cio' che la fa leggere per prima
+   * senza doverla ingrossare. */
+  block-size: var(--bar-h);
   overflow: hidden;
 }
 
@@ -429,7 +586,12 @@
  * quella del disegno, 34 px, e la lingua non c'entrerebbe niente: sarebbe
  * piccolo in tutte e due. */
 .stats__toggle {
-  flex: none;
+  /* Terza colonna, tutte le righe che ci sono: la didascalia della scala puo'
+   * aggiungerne una seconda, e un interruttore ancorato alla prima resterebbe
+   * appeso in alto invece che al centro di cio' che comanda. `align-self:
+   * center` e non `baseline`: e' una figura, e non ha una linea di base. */
+  grid-area: 1 / 3 / -1 / 4;
+  align-self: center;
   display: flex;
   align-items: center;
   justify-content: flex-end;
@@ -656,17 +818,60 @@
   display: grid;
   grid-column: 1 / -1;
   grid-template-columns: subgrid;
-  row-gap: var(--sp-2);
+  /* **Zero, ed era `--sp-2`.** Lo spazio bianco appartiene alle sezioni, non
+   * alle righe: due sezioni sono due domande, due righe sono la stessa cosa
+   * ripetuta.
+   *
+   * Zero non vuol dire che le barre si toccano: la riga e' alta 40 e la barra
+   * 24, quindi fra due marche restano **16 px** di respiro che la riga si porta
+   * dentro. Col passo vecchio — riga 44, distacco 8, barra 12 — ce n'erano
+   * **40 per 12 di inchiostro**, cioe' la proporzione di un elenco di voci e non
+   * di un grafico.
+   *
+   *     passo   barra   inchiostro sul passo
+   *      52      12          23%              <- prima
+   *      40      24          60%              <- adesso
+   *
+   * E i 12 px per riga che se ne vanno sono cio' che porta la **sesta** riga di
+   * B sopra la piega, misurato sulla scena dell'export del 26 agosto a 390x844:
+   * 11 righe intere prima, 12 dopo. Il respiro e' tutto fra le sezioni
+   * (`.stats`, `--sp-6`), dove separa due domande invece di otto risposte alla
+   * stessa. */
+  row-gap: 0;
 }
 
 /* --- la riga: etichetta, barra, importo --------------------------------- */
 
+/* **40 px, e non e' piu' `--tap-min`.**
+ *
+ * Non e' un allentamento del pavimento sui bersagli: una riga di A o di B **non
+ * e' un bersaglio**. E' un `<li>` dentro un `<ul>`, ruolo `listitem`, e la sonda
+ * delle sovrapposizioni cerca i comandi per **ruolo** (`probe.ts`, l'insieme
+ * `COMANDI`) — un `listitem` non ci sta dentro e non ci stava nemmeno prima.
+ * L'unico bersaglio di questa schermata e' l'interruttore delle fisse, che i
+ * suoi 44 px continua a dichiararli.
+ *
+ * I 44 erano quindi una misura di **ritmo** scritta con il token di un'altra
+ * cosa, ed e' il numero che teneva la barra al 23% del proprio passo. Il
+ * pavimento vero e' il contenuto che la riga deve poter ospitare senza cambiare
+ * altezza, e sono due casi misurati:
+ *
+ *     due righe di nome        --fs-200 a --lh-snug   37,5 px
+ *     nome + giorni vissuti    18,75 + 16,25          35,0 px
+ *
+ * 40 li copre tutti e due con margine, e con una barra da 24 lascia 8 px per
+ * lato — abbastanza perche' la marca non tocchi il testo delle righe vicine.
+ *
+ * Resta vero cio' che il numero proteggeva: **le righe sono alte tutte uguali**,
+ * e ci sono due test che lo chiedono (il nome andato a capo in A, la nota dei
+ * giorni in B). Sono scritti come *"un solo valore fra le altezze"*, non come
+ * *"44"*: cadono se questo numero smette di bastare, non perche' e' cambiato. */
 .stat {
   display: grid;
   grid-column: 1 / -1;
   grid-template-columns: subgrid;
   align-items: center;
-  min-block-size: var(--tap-min);
+  min-block-size: 2.5rem;
 }
 
 /* L'etichetta: **due righe, poi i puntini**.
@@ -779,7 +984,7 @@
 .stat__plot {
   position: relative;
   display: block;
-  block-size: 0.75rem;
+  block-size: var(--bar-h);
   min-inline-size: 0;
 }
 
@@ -857,44 +1062,42 @@
   inset-inline-start: 0;
   border: 1px solid var(--line-strong);
 
-  /* **2 px, e non `--radius-1`: sotto una certa larghezza il raggio pieno
-   * cancella la forma della barra.**
+  /* **2 px, e non `--radius-1`. Il numero non cambia, la ragione si': va
+   * ri-derivata perche' la barra e' passata da 12 a 24 px di altezza.**
    *
-   * Un raggio si applica **fino a meta' del lato piu' corto**: su una barra alta
-   * 12 px il browser usa `min(radius, larghezza/2, 6)`. Con `--radius-1` (8 px)
-   * il tratto dritto e' quindi `larghezza - 12`, e sotto i 12 px non ne resta
-   * niente: la barra smette di essere un rettangolo e diventa una lente.
+   * Un raggio si applica fino a meta' del lato piu' corto: il browser usa
+   * `min(r, larghezza/2, altezza/2)`. Con la barra alta 12 il freno era
+   * **l'altezza** — `--radius-1` (8 px) veniva ridotto a 6 su ogni barra, quindi
+   * il tratto dritto valeva `larghezza - 12` e sotto i 12 px di larghezza non ne
+   * restava niente. Con la barra alta 24 quel freno sale a 12, cioe' **non
+   * frena piu' niente**: il freno adesso e' la larghezza, e `--radius-1` su una
+   * barra corta la arrotonda **fino a farla sparire**.
    *
-   * Misurato in pagina, 390 punti, colonna del grafico 195,81 px, sull'export
-   * vero del 26 agosto:
+   *     larghezza   r = --radius-1 (8)        r = 2
+   *                 effettivo  tratto dritto  effettivo  tratto dritto
+   *       7,17        3,58        0,00          2,00        3,17
+   *      12,00        6,00        0,00          2,00        8,00
+   *      44,00        8,00       28,00          2,00       40,00
    *
-   *     Casa        507,00 €   larga 195,81   tratto dritto 183,81
-   *     Spesa        42,00 €   larga  19,42   tratto dritto   7,42
-   *     Svago        26,00 €   larga  13,34   tratto dritto   1,34
-   *     Coffeeshop   24,00 €   larga  12,59   tratto dritto   0,59
-   *     Fuori        10,00 €   larga   7,28   tratto dritto   0,00
+   * Sotto le due volte il raggio la barra smette di essere un rettangolo e
+   * diventa una lente, e l'occhio smette di confrontare **lunghezze** per
+   * confrontare **macchie**. 2 px e' il minimo che ammorbidisce lo spigolo senza
+   * mangiare il tratto.
    *
-   * Cinque righe su sei senza tratto dritto: l'occhio smette di confrontare
-   * **lunghezze** e comincia a confrontare **macchie**, che e' un confronto molto
-   * peggiore. Ed e' il difetto della fase in miniatura — il peso visivo che
-   * smette di seguire l'importo — rientrato da una proprieta' grafica dopo essere
-   * stato tolto dal modello.
+   * ## Le barre cortissime sono molto meno frequenti di prima, e non e' una
+   * ragione per togliere il freno
    *
-   * **Cosa questo NON ripara, e va scritto perche' il numero e' piccolo e la
-   * tentazione di crederlo risolto e' grande.** Le larghezze restano quelle:
-   * Svago e Coffeeshop distano **0,75 px** e Coffeeshop e Trasporti **0,37**,
-   * cioe' sotto il pixel. A quella scala 26,00 € e 24,00 € non sono difficili da
-   * confrontare: sono **identici**. Il raggio restituisce la forma, non il
-   * confronto — quello lo restituisce l'interruttore delle fisse, che ricalcola
-   * la scala (0c). Chi legge questo commento cercando di capire perche' le
-   * quotidiane sono corte sta guardando il posto sbagliato: la ragione e' 0a, ed
-   * e' voluta.
+   * Con la scala **per sezione** (0a) le larghezze del caso vero sono cambiate:
+   * misurate a 390 punti sull'export del 26 agosto, `Trasporti 9,00 €` e' passata
+   * da **7,17 px a 44,00**, `Fuori 10,00 €` da 7,28 a 48,50. Il caso che il
+   * raggio piccolo protegge e' quindi raro adesso — ma non e' sparito: basta una
+   * sezione con due fisse molto diverse (un affitto e un abbonamento) perche'
+   * torni identico, e li' il freno serve com'e' sempre servito.
    *
    * Perche' 2 e non 0: il contorno da 1 px esiste perche' quattro degli otto
-   * colori stanno sotto 3:1 sul fondo, e uno spigolo vivo su un rettangolo alto
-   * 12 con un bordo chiaro legge come un artefatto. 2 px e' il minimo che
-   * ammorbidisce senza mangiare il tratto — a 7,28 px di larghezza ne lascia
-   * comunque 3,28 dritti, dove `--radius-1` ne lasciava zero. */
+   * colori stanno sotto 3:1 sul fondo, e uno spigolo vivo su un rettangolo con
+   * un bordo chiaro legge come un artefatto.
+   */
   border-radius: 2px;
 }
 

@@ -2116,13 +2116,32 @@ describe('la finestra dei periodi', () => {
 })
 
 /*
- * **Le fisse sono due quantita' e stanno in due posti**: la proiezione mensile
- * qui in testa, il fatto del periodo nel totale della sezione fisse di A. I test
- * di questo blocco leggono l'una e l'altra da dove vivono davvero, che e' anche
- * il modo in cui le legge il componente — un test che leggesse il fatto da un
- * campo dei tiles terrebbe in vita un campo che nessuno chiama.
+ * **Le fisse sono due quantita', e da oggi stanno in due moduli.**
+ *
+ * La **proiezione** — quanto costeranno al mese le regole in vigore — non passa
+ * piu' di qui: viveva in `StatsTiles`, letta da una riga in testa alle
+ * Statistiche, ed e' uscita col suo ultimo lettore. La sua casa e' Impostazioni,
+ * dove ADR 016 §3 la vuole *"accanto al budget"*, che e' la meta' senza cui non
+ * significa niente.
+ *
+ * Qui resta il **fatto**: quanto e' uscito davvero nel periodo, che vive nel
+ * totale della sezione fisse di A e in `current.recurringSpentCents`.
+ *
+ * **Questo blocco diceva "C — le due cifre in testa", e non e' stato rinominato
+ * per estetica.** Sei asserzioni leggevano `tiles`, e tolte quelle restava un
+ * blocco il cui nome prometteva un confronto che nessuna riga faceva piu'. Il
+ * nome di un test e' cio' che si legge quando cade: un nome che promette due
+ * cifre sopra asserzioni che ne guardano una manda a cercare il difetto dalla
+ * parte sbagliata.
+ *
+ * Cio' che i test provano adesso e' **piu' stretto e piu' vero**: che A conta
+ * cio' che e' uscito e non cio' che e' previsto. Una regola nuova che non ha
+ * ancora generato niente non entra; una regola disattivata dopo aver generato
+ * lascia la sua spesa dentro. Sono i due versi della stessa proprieta', ed erano
+ * gia' provati qui — solo che prima stavano accanto a un confronto che li
+ * copriva.
  */
-describe('C — le due cifre in testa, e le fisse che sono due quantita', () => {
+describe('Le fisse in A sono un fatto retrospettivo, non una proiezione', () => {
   /** L'affitto uscito questa settimana: un fatto, gia' a disco. */
   const affitto = makeExpense({
     date: '2026-08-24',
@@ -2132,10 +2151,9 @@ describe('C — le due cifre in testa, e le fisse che sono due quantita', () => 
   })
   const caffe = makeExpense({ date: OGGI, categoryId: 'c-cibo', amountCents: 400 })
 
-  it('senza fisse ne regole la seconda cifra non si mostra', () => {
+  it('senza fisse ne regole la sezione delle fisse non esiste', () => {
     const v = ready({ expenses: [caffe] })
-    expect(v.tiles.hasFixed).toBe(false)
-    expect(v.tiles.fixedMonthlyCents).toBe(0)
+    expect(v.current.recurringSpentCents).toBe(0)
     expect(sezione(v, 'fixed')).toBeUndefined()
   })
 
@@ -2149,32 +2167,32 @@ describe('C — le due cifre in testa, e le fisse che sono due quantita', () => 
         makeRule({ startDate: '2026-08-01', amountCents: 3000, categoryId: 'c-cibo' }),
       ],
     })
-    expect(v.tiles.fixedMonthlyCents).toBe(53700)
-    // Il fatto e' una riga sola — il canone di questa settimana — quindi la
-    // sezione non porta un totale e la cifra da confrontare e' la riga. Con un
-    // `totale()` a `undefined` la disuguaglianza qui sotto sarebbe vera per
-    // assenza invece che per differenza.
+    // **A e' retrospettiva, e questo test lo prova sul caso che lo distingue.**
+    // Ci sono due regole in vigore per 537,00 € al mese, e in A c'e' **una riga
+    // sola** da 507,00: la seconda regola non ha ancora generato niente.
+    //
+    // Qui c'era anche il confronto con `tiles.fixedMonthlyCents` (53700), cioe'
+    // con la proiezione. Non e' piu' scrivibile: `StatsTiles` e' uscita col suo
+    // ultimo lettore, e la proiezione vive in Impostazioni — che e' dove ADR 016
+    // §3 la vuole, *"accanto al budget"*. Il fatto che quel test provava — le due
+    // quantita' sono diverse — resta vero, ma **non e' piu' una proprieta' di
+    // questo modulo**: qui c'e' solo il fatto, e la proiezione sta altrove.
+    // Asserirla di qui vorrebbe dire importare `monthlyFixedCosts` per il solo
+    // test, cioe' tenere in vita una superficie che nessuno chiama.
+    expect(sezione(v, 'fixed')?.rows).toHaveLength(1)
     expect(unica(sezione(v, 'fixed')).cents).toBe(50700)
-    // Due quantita' legittime e diverse. Con un nome solo, una delle due
-    // mentiva: il tasso mensile non e' quello che e' uscito questa settimana.
-    expect(v.tiles.fixedMonthlyCents).not.toBe(unica(sezione(v, 'fixed')).cents)
-    expect(v.tiles.hasFixed).toBe(true)
+    expect(v.current.recurringSpentCents).toBe(50700)
   })
 
-  it('una regola disattivata dopo aver generato la spesa: il fatto resta in A, la scheda tace', () => {
+  it('una regola disattivata dopo aver generato la spesa: il fatto resta in A', () => {
     const v = ready({
       expenses: [affitto, caffe],
       // Disattivare e' **quello che l'app consiglia** quando una regola ha gia'
       // generato spese: `toast.ruleInUse` dice "si puo' solo disattivare".
       rules: [makeRule({ startDate: '2026-01-01', amountCents: 50700, active: false })],
     })
-    // Non c'e' nessun tasso mensile: le regole in vigore sono zero. La scheda
-    // e' quella cifra, quindi non si mostra — se `hasFixed` tornasse a
-    // comprendere "c'e' una sezione di fisse", questo test stamperebbe
-    // **"Spese fisse / 0,00 € / ogni mese"** in cifre grandi.
-    expect(v.tiles.fixedMonthlyCents).toBe(0)
-    expect(v.tiles.hasFixed).toBe(false)
-    // E il fatto non si perde: e' in A, sotto un'etichetta che dice un'altra
+    // Le regole in vigore sono zero, quindi non c'e' nessun tasso mensile da
+    // nessuna parte — ed e' la cosa giusta. **Il fatto non si perde: e' in A, sotto un'etichetta che dice un'altra
     // cosa (`stats.fixedInPeriod`, "Fisse in questo periodo"). E' li' che quella
     // cifra ha un invariante — e' la somma delle righe che le stanno sotto —
     // ed e' quell'etichetta a togliere la contraddizione che il disgiunto
@@ -2184,16 +2202,16 @@ describe('C — le due cifre in testa, e le fisse che sono due quantita', () => 
     invariantiDiA(v)
   })
 
-  it('una regola attiva che non ha ancora generato niente basta a parlarne', () => {
+  it('una regola attiva che non ha ancora generato niente non entra in A', () => {
     const v = ready({
       expenses: [caffe],
       rules: [makeRule({ startDate: '2026-08-01', amountCents: 3000 })],
     })
-    // Il verso opposto: nessuna fissa uscita nel periodo, ma il costo mensile
-    // c'e' ed e' il secondo dei due numeri di ADR 016 §3.
+    // Il verso opposto del test qui sopra: una regola in vigore da 30,00 € al
+    // mese, e in A **niente**. E' la definizione di retrospettivo, ed e' la
+    // ragione per cui la proiezione non poteva vivere qui: A risponde a "cosa e'
+    // uscito", non a "cosa uscira'".
     expect(v.current.recurringSpentCents).toBe(0)
-    expect(v.tiles.fixedMonthlyCents).toBe(3000)
-    expect(v.tiles.hasFixed).toBe(true)
     expect(sezione(v, 'fixed')).toBeUndefined()
   })
 
@@ -2211,17 +2229,13 @@ describe('C — le due cifre in testa, e le fisse che sono due quantita', () => 
     expect(sezione(v, 'fixed')?.rows).toHaveLength(1)
     expect(unica(sezione(v, 'fixed')).cents).toBe(0)
     expect(totale(sezione(v, 'fixed'))).toBeUndefined()
-    // A schermo: nessuna scheda "Spese fisse", e sotto "Fisse in questo periodo"
-    // una riga che dice `0,00 €` — una volta, non due. Sono **un silenzio e un
-    // fatto**, non due fatti in disaccordo: la contraddizione di prima nasceva
-    // da due etichette uguali sopra due numeri diversi, e le etichette adesso
-    // sono due.
-    expect(v.tiles.hasFixed).toBe(false)
-    expect(v.tiles.fixedMonthlyCents).toBe(0)
+    // A schermo: sotto "Fisse in questo periodo" una riga che dice `0,00 €`,
+    // una volta sola. Il totale di parte non c'e' perche' con una riga sola
+    // sarebbe la stessa cifra due volte.
     invariantiDiA(v)
   })
 
-  it('il budget non serve per rispondere a C', () => {
+  it('il budget non serve per contare cosa e uscito', () => {
     const v = ready({ expenses: [caffe], budgets: [] })
     // E' l'unica delle tre domande a cui l'app risponde dal primo giorno.
     expect(v.current.spentCents).toBe(400)

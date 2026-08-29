@@ -180,7 +180,6 @@ import { computeBudgetMetrics, countsTowardBudget, periodRange } from '../core/b
 import type { BudgetMetrics, PeriodRange } from '../core/budget'
 import { addDays, isBefore } from '../core/date'
 import type { IsoDate } from '../core/date'
-import { monthlyFixedCosts } from '../core/recurring-plan'
 import type { Budget, BudgetPeriod, Category, Expense, RecurringRule } from '../core/types'
 import type { Cents } from '../core/money'
 
@@ -643,82 +642,45 @@ export interface PeriodBar {
 }
 
 /**
- * Le due cifre in testa (C).
+ * **`StatsTiles` non c'e' piu', ed e' uscita col suo ultimo lettore.**
  *
- * ## Le fisse sono **due** quantita', ed erano un nome solo
+ * Portava `fixedMonthlyCents` (la proiezione al mese) e `hasFixed`, e li leggeva
+ * una cosa sola: la riga `Spese fisse 530,00 €/mese` in testa alle Statistiche.
+ * Quella riga e' caduta perche' **scriveva 530,00 € duecento pixel sopra un altro
+ * 530,00 €** — la sezione delle fisse — e due volte lo stesso numero nella stessa
+ * occhiata resta due volte, anche quando il suffisso distingue le unita'.
  *
- * `fixedMonthlyCents` e' una **proiezione**: quanto costeranno al mese le regole
- * in vigore, da qui in avanti. Le fisse **davvero uscite nel periodo** sono un
- * fatto retrospettivo, e sono un'altra cosa. Il difetto misurato, quando si
- * chiamavano tutte e due "fisse": disattivando la regola dell'affitto **dopo**
- * che ha generato la spesa, la scheda spariva — `monthlyFixedCosts` conta solo
- * le regole attive — mentre A continuava a mostrare 507,00 € di fisse uscite. E
- * disattivare e' **quello che l'app consiglia**: `toast.ruleInUse` dice *"si
- * puo' solo disattivare"*.
+ * ## Perche' togliendola ADR 016 §3 non cade
  *
- * **Il difetto non era che la scheda sparisse**: era che sparendo contraddiceva
- * una riga che diceva "fisse" con la stessa parola. Dati due nomi diversi, oggi
- * in quel caso la scheda tace ed e' la cosa giusta — l'argomento per esteso sta
- * su `hasFixed`.
+ * §3 dice *"due numeri, non uno"*, e la sua **condizione** e' *"la seconda cifra ha
+ * senso solo se si vede la prima"* — dove la prima e' **il budget**. Alla lettera:
+ * *"accanto al budget, **in Impostazioni**"*. La casa di §3 e' `Settings.tsx`, dove
+ * `<FixedCosts>` sta una riga sotto il gruppo del budget, ed e' li' che le due
+ * cifre si vedono insieme.
  *
- * ## Il fatto retrospettivo non e' un campo di qui, ed e' la stessa decisione
+ * Nelle Statistiche **il budget non c'e'**. Quella riga citava §3 senza portarne la
+ * condizione: era la meta' di una coppia, da sola, in una schermata dove l'altra
+ * meta' non esiste. E' *"una riparazione che cita un argomento altrui ne riscrive
+ * la condizione sul posto"* — se la condizione non si riesce a scrivere,
+ * l'argomento non vale qui.
  *
- * Ha vissuto un giorno come `fixedInPeriodCents`, ed e' stato tolto: il
- * componente quel numero lo prende da `BreakdownSection.totalCents` della parte
- * fisse, che e' dove ha un **invariante** — e' la somma delle righe che gli
- * stanno sotto — mentre qui sarebbe stato lo stesso numero con un secondo nome,
- * senza chiamanti, tenuto vivo dai propri test. E' il precedente di
- * `expensesInRange` e `planBudgetChange`, applicato una terza volta, e la
- * condizione qui e' scritta e non citata: la separazione serviva a rendere
- * **inesprimibile** la confusione fra proiezione e fatto, e due nomi diversi in
- * due tipi diversi la rendono inesprimibile esattamente quanto due campi nello
- * stesso tipo — con un numero in meno da tenere allineato.
+ * ## Come l'abbiamo quasi sbagliata, che e' la parte da ricordare
  *
- * Chi cerca il totale delle fisse del periodo lo trova in un posto solo, e li'
- * viene dalle metriche e spiega le righe che sono a schermo.
+ * Il brief che ordinava di togliere la riga portava una condizione di
+ * disobbedienza: *"se togliendola ADR 016 §3 cade, non toglierla"*. Era stata
+ * scritta leggendo **la parafrasi in CLAUDE.md**, che dice *"accanto al budget, il
+ * totale mensile delle fisse"* e **ha perso le due parole `in Impostazioni`**,
+ * cioe' il posto. Senza il posto, "accanto al budget" si legge come "in qualunque
+ * schermata parli di soldi".
+ *
+ * E' [DEBITO.md](../../docs/DEBITO.md) §1 che morde per la prima volta su una
+ * decisione invece che su una stringa a schermo: una copia che parafrasa, perde una
+ * condizione, e produce un'istruzione sbagliata. L'ha presa un agente che e' andato
+ * a leggere l'ADR invece della parafrasi.
+ *
+ * `monthlyFixedCosts` resta viva e non e' orfana: la chiama `recurring-view.ts`, che
+ * alimenta `FixedCosts` — cioe' la casa vera di §3.
  */
-export interface StatsTiles {
-  /** Il tasso mensile delle regole in vigore oggi. **Al mese**, non del periodo. */
-  readonly fixedMonthlyCents: Cents
-  /**
-   * **C'e' un tasso mensile da annunciare**, cioe' `fixedMonthlyCents > 0`.
-   *
-   * E' la condizione della cifra che la scheda mostra, e nient'altro: la scheda
-   * *e'* quel numero, quindi dove il numero e' zero la scheda non ha niente da
-   * dire.
-   *
-   * ## Ha avuto un secondo disgiunto per un giorno, e la sua ragione e' scaduta
-   *
-   * Era `|| c'e' una sezione di fisse in A`, aggiunto per un difetto vero:
-   * disattivando la regola **dopo** che ha generato la spesa — cioe' facendo
-   * quello che l'app stessa consiglia (`toast.ruleInUse`) — la scheda spariva
-   * mentre A mostrava 507,00 € di fisse uscite. Ma quel difetto era una
-   * **contraddizione fra due etichette uguali**: `Spese fisse / 0,00 € / ogni
-   * mese` sopra `Spese fisse 620,00 €`.
-   *
-   * E' stato riparato una seconda volta e meglio, **dando alla parte di A
-   * un'etichetta propria** (`stats.fixedInPeriod`, "Fisse in questo periodo").
-   * Con due nomi distinti la scheda non contraddice piu' niente stando via: A
-   * dice cos'e' uscito nel periodo, e nessuno afferma che un tasso mensile
-   * esista.
-   *
-   * Restandoci, il disgiunto produceva invece un'affermazione **nuova**, e
-   * misurata: `Spese fisse / 0,00 € / ogni mese` in cifre grandi sopra `Fisse in
-   * questo periodo 900,00 €`. Uno zero in corpo grande non e' un'informazione
-   * prudente, e' una risposta a una domanda che nessuno ha fatto.
-   *
-   * Resta falso anche nel caso degenere della ricorrente da **zero centesimi**,
-   * che produce una sezione di fisse con una riga sola: li' la scheda tace e
-   * sotto `Fisse in questo periodo` c'e' una riga che dice `0,00 €` — il totale
-   * di parte non c'e', perche' con una riga sola sarebbe la stessa cifra due
-   * volte (vedi `BreakdownSection`). Le due cose non si contraddicono: sono un
-   * silenzio e un fatto, non due fatti diversi.
-   *
-   * E' la stessa ragione per cui `hero.fixed` tace: annunciare dove non c'e'
-   * niente da annunciare insegna a non leggere l'annuncio.
-   */
-  readonly hasFixed: boolean
-}
 
 /** Quale delle due nature conta una sezione di A. Il titolo lo scrive il componente. */
 export type BreakdownKind = 'fixed' | 'variable'
@@ -1148,7 +1110,6 @@ export type StatsView =
       readonly kind: 'ready'
       readonly period: BudgetPeriod
       readonly current: BudgetMetrics
-      readonly tiles: StatsTiles
       readonly byCategory: Breakdown
       /**
        * B, oppure **`null` quando la sezione non c'e'** — e non un `Trend` con
@@ -1718,24 +1679,18 @@ export function statsView(input: StatsInput): StatsView {
     return { kind: 'outside', period: input.period, range: current.range }
   }
 
-  /* --- C: le due cifre in testa ------------------------------------------- */
-
-  const fixed = monthlyFixedCosts(input.rules, input.day)
-  const tiles: StatsTiles = {
-    fixedMonthlyCents: fixed.totalCents,
-    // Solo il tasso: la scheda **e'** quella cifra. Il disgiunto che c'era qui
-    // — "oppure c'e' una sezione di fisse" — copriva una contraddizione fra due
-    // etichette uguali, che non esiste piu' da quando la parte di A si chiama
-    // `stats.fixedInPeriod`; e in cambio faceva stampare `0,00 € / ogni mese`
-    // in cifre grandi. Vedi `StatsTiles.hasFixed`.
-    hasFixed: fixed.totalCents > 0,
-  }
+  /* --- C non c'e' piu': la proiezione al mese vive in Impostazioni ---------
+   *
+   * Qui si costruivano `tiles`, e l'unica cosa che le leggeva era la riga
+   * `Spese fisse 530,00 €/mese` in testa alla schermata. E' caduta perche'
+   * scriveva la stessa cifra della sezione delle fisse, duecento pixel piu'
+   * sopra. L'argomento per esteso e la ragione per cui ADR 016 §3 non cade
+   * stanno dove stava il tipo. */
 
   return {
     kind: 'ready',
     period: input.period,
     current,
-    tiles,
     byCategory,
     byPeriod,
   }

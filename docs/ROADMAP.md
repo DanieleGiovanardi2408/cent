@@ -25,17 +25,17 @@ sa gia', e per questo non puo' invecchiare. I giudizi — cosa e' in volo, cosa
 aspetta una persona — stanno sotto, scritti a mano e timbrati con lo SHA a cui
 sono stati rivisti.
 
-- **Ultimo commit**: `29ef2ba` — docs: "In volo adesso" derivato dall'albero, e un timbro che stavo spostando senza guardare
-- **Data**: 29/08/2026 20:22
+- **Ultimo commit**: `8f12a70` — feat: la scala torna per sezione, e ogni sezione dichiara quanto vale una barra piena
+- **Data**: 29/08/2026 21:57
 - **Ramo**: `fase-6-wip`
 - **Pushato**: si, `origin/fase-6-wip` e' allo stesso commit
-- **Rispetto a `origin/main`**: 7 commit avanti
+- **Rispetto a `origin/main`**: 9 commit avanti
 - **Albero di lavoro**: **non pulito**, ci sono modifiche non committate
 
-- **Test unitari**: 698 in 23 file, tutti verdi
-- **Test e2e dichiarati**: 327 in 14 file, su 4 progetti (iphone-se, iphone-14, landscape, dark)
-- **Test e2e eseguiti**: non misurato — l'ultima esecuzione e' piu' vecchia dei sorgenti — va rilanciata
-- **Bundle iniziale**: 55.3 KB gzip su 60.0 KB (4.7 KB di margine)
+- **Test unitari**: 700 in 23 file, tutti verdi
+- **Test e2e dichiarati**: 329 in 14 file, su 4 progetti (iphone-se, iphone-14, landscape, dark)
+- **Test e2e eseguiti**: 311 passati, 18 saltati, in 2.7 minuti. I saltati sono condizionali (ADR 013): solo un'esecuzione li vede.
+- **Bundle iniziale**: 55.2 KB gzip su 60.0 KB (4.8 KB di margine)
 
 - **Schema del database**: 4. La scala delle migrazioni:
   - **1** — Schema iniziale: expenses, categories, recurringRules, budgets, settings
@@ -52,7 +52,7 @@ sono stati rivisti.
 ## In volo adesso
 
 <!-- JUDGMENT rivisto=35c54f0 -->
-> Rivisto a `35c54f0`, un commit fa.
+> Rivisto a `35c54f0`, 3 commit fa.
 
 **Fase 6 sul ramo `fase-6-wip`, cinque commit sopra `origin/main`.** Il ramo e'
 spinto; `main` non e' stato toccato, quindi **cio' che sta su Pages e' ancora
@@ -628,7 +628,7 @@ dieci rilievi e per cosa questo dice del metodo.
      present: src/ui/stats-view.ts :: la scala e' della sezione
      present: src/ui/stats-view.ts :: scaleCents
 -->
-> **Non applicata**: manca `la scala e' della sezione` in `src/ui/stats-view.ts`; manca `scaleCents` in `src/ui/stats-view.ts`.
+> **Applicata**, verificato da: `la scala e' della sezione`, `scaleCents`.
 
 **La scala torna per sezione.** Ogni sezione di A ha la propria, con la barra piu'
 lunga a fondo colonna, **e la dichiara**. La soglia resta **sull'insieme** — era lei

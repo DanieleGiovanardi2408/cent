@@ -501,10 +501,9 @@ export const en: Record<keyof typeof it, string> = {
     'This period is {range}, and nothing you have logged falls inside it: it is all in {history}. The next expense you add today shows up here.',
 
   'stats.variable': 'Day to day',
-  'stats.fixed': 'Fixed costs',
-  // L'unita' sulla cifra, non sull'etichetta: e' cio' che chiude DEBITO.md §5.
-  // Vedi it.ts per il conto.
-  'stats.perMonthRate': '{amount}/month',
+  // `stats.fixed` e `stats.perMonthRate` sono uscite con la riga che le leggeva
+  // (la proiezione mensile in testa alle Statistiche, che ripeteva il totale
+  // della parte fisse). Vedi it.ts.
   // Acceso a ogni apertura, mai ricordato. Spento, la cifra delle fisse resta
   // sull'intestazione e nella barra divisa. Vedi it.ts.
   'stats.showFixed': 'Show fixed costs',
@@ -513,6 +512,19 @@ export const en: Record<keyof typeof it, string> = {
   // Vedi it.ts: la scheda in testa e' una previsione al mese, questa e' quanto e'
   // uscito nel periodo. Due numeri, due etichette.
   'stats.fixedInPeriod': 'Fixed this period',
+  // **Quanto vale una barra piena in questa sezione.**
+  //
+  // Da 0a la scala e' della sezione, quindi la riga piu' grande di ciascuna
+  // arriva a fondo colonna: sui dati veri `Home 507.00` e `Groceries 42.00`
+  // sono dipinte della **stessa lunghezza**, una sopra l'altra. Finche' niente
+  // dice che i due fondi colonna valgono cose diverse, sono due barre piene
+  // identiche accanto a due importi di un ordine di grandezza diverso — cioe'
+  // una bugia grafica.
+  //
+  // `=` e non una frase: e' una legenda, e va letta come tale in mezzo secondo.
+  // Con un verbo ("bars are scaled to…") sarebbe una riga da leggere, e nessuno
+  // legge una didascalia sotto un titolo.
+  'stats.scale': 'Full bar = {amount}',
   'stats.byPeriod.weekly': 'Week by week',
   'stats.byPeriod.monthly': 'Month by month',
   // Il periodo ha **solo** spese fisse e l'utente le ha spente: A resta senza

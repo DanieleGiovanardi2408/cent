@@ -846,20 +846,16 @@ export const it = {
     'Questo periodo è {range}, e nessuna delle tue spese ci cade dentro: le trovi tutte nello {history}. La prossima spesa che segni oggi compare qui.',
 
   'stats.variable': 'Quotidiane',
-  'stats.fixed': 'Spese fisse',
-  // **L'unita' sta sul numero, e non e' tipografia: e' cio' che chiude
-  // `DEBITO.md` §5.** Questa cifra e' una proiezione *al mese*; trecento pixel
-  // piu' sotto A ne scrive una *nel periodo*, e una settimana su quattro le due
-  // sono **identiche per costruzione** (una regola mensile da 530,00 € nella
-  // settimana in cui scatta). Due numeri diversi che si somigliano si notano;
-  // due numeri identici che significano cose diverse **non si notano affatto**.
+  // Qui c'erano `stats.fixed` (*"Spese fisse"*) e `stats.perMonthRate`
+  // (*"{amount}/mese"*): la riga in testa alle Statistiche che scriveva la
+  // proiezione mensile delle regole. La riga non c'e' piu' — ripeteva la cifra
+  // che il totale della parte fisse scrive duecento pixel piu' sotto — e le due
+  // chiavi se ne sono andate con lei invece di restare vive nel dizionario e
+  // morte nei fatti, che e' il difetto per cui il controllo B di
+  // `dead-surface.mjs` esiste (`history.blank.install`).
   //
-  // La condizione scritta nel debito chiedeva *"una forma che renda le due
-  // unita' distinguibili senza leggere l'etichetta"* — perche' e' proprio
-  // l'etichetta che la coincidenza fa saltare. `530,00 €/mese` accanto a
-  // `530,00 €` la soddisfa sul numero: la differenza e' dentro la cifra, dove
-  // l'occhio cade comunque.
-  'stats.perMonthRate': '{amount}/mese',
+  // Il fatto che portavano vive dove ADR 016 §3 lo mette: `fixed.total`,
+  // *"In tutto {amount} al mese."*, in Impostazioni, subito sotto il budget.
   // L'interruttore che toglie le fisse dalla **scala** di A, non solo dalle
   // righe. Nasce acceso a ogni apertura e non si ricorda: un controllo di vista
   // che tornasse spento nasconderebbe 507,00 € a chi non l'ha mai toccato, cioe'
@@ -883,6 +879,12 @@ export const it = {
   // l'intestazione sono la stessa quantita', e due parole per lo stesso numero
   // sarebbero una parafrasi in piu'.
   'stats.fixedInPeriod': 'Fisse in questo periodo',
+  // Vedi en.ts per l'argomento. Nomina **l'importo** e non la categoria: la
+  // frase che c'era prima ("le barre sono in scala su {nome}, la piu' grande")
+  // e' uscita anche perche' citava un nome che la riga accanto accorciava —
+  // `Casa affitto utenze e condomin` contro `Casa affitto utenze e cond…`. Un
+  // importo non tronca mai: la sua colonna e' `max-content`.
+  'stats.scale': 'Barra intera = {amount}',
   'stats.byPeriod.weekly': 'Settimana per settimana',
   'stats.byPeriod.monthly': 'Mese per mese',
   // Vedi en.ts: il periodo ha solo spese fisse e l'utente le ha spente. La frase

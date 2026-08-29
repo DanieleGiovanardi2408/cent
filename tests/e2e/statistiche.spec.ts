@@ -530,11 +530,20 @@ test('a schermo vuoto le Statistiche dicono cosa comparira, non "nessun dato"', 
   // E soprattutto: **nessuna barra**, nemmeno lunga zero. Otto righe da zero
   // sarebbero un grafico degenere spacciato per schermata vuota.
   await expect(page.locator('.stat__bar')).toHaveCount(0)
-  // E nessuna cifra in testa: la proiezione mensile delle fisse c'e' solo dove
-  // una regola esiste, e qui non esiste niente. (Era `.tile`, la scheda grigia:
-  // il selettore segue la forma nuova perche' un'asserzione su una classe morta
-  // e' vera per sempre e non sorveglia piu' niente.)
-  await expect(page.locator('.stats__rate')).toHaveCount(0)
+  // **E nessuna cifra, nessuna.** Qui c'era `expect('.stats__rate').toHaveCount(0)`,
+  // che sorvegliava la proiezione mensile delle fisse: quella riga non esiste
+  // piu' in nessuno stato, quindi quell'asserzione sarebbe **vera per sempre**,
+  // cioe' esattamente la classe morta che il commento precedente diceva di aver
+  // appena evitato.
+  //
+  // Il fatto che difendeva vale ancora e si scrive senza nominare una forma:
+  // **sullo schermo vuoto non c'e' nessun importo**. Cosi' prende anche il
+  // numero grande di A (`.stats__hero`), che qui non deve esserci — e prendera'
+  // la prossima cifra che a qualcuno venga voglia di mettere in testa.
+  await expect(
+    page.locator('.stats'),
+    'lo schermo vuoto porta un importo: non c\'e\' niente di cui sia il totale',
+  ).not.toContainText('€')
 })
 
 /**
@@ -844,23 +853,38 @@ test('con spese e senza budget: le righe ci sono, le tracce no', async ({ page }
     settanta,
     `il totale delle variabili e' scritto ${settanta} volte sulla stessa schermata`,
   ).toBe(1)
-  // E senza spese fisse non c'e' **nessuna** riga della proiezione mensile: la
-  // cifra non esiste, e una riga che dicesse `0,00 €/mese` sarebbe un fatto
-  // inventato in cima alla schermata.
-  await expect(page.locator('.stats__rate')).toHaveCount(0)
+  // (Qui c'era `expect('.stats__rate').toHaveCount(0)`, sulla riga della
+  // proiezione mensile. La riga non esiste piu' in nessuno stato: il conteggio
+  // dei `70,00` qui sopra copre gia' il fatto che questo test chiede — la cifra
+  // delle variabili e' scritta **una volta sola** — e lo copre senza nominare
+  // una classe che non c'e'.)
 
   // Senza nemmeno una spesa fissa A ha **una parte sola**. Due parti qui
   // vorrebbero dire una sezione delle fisse vuota, cioe' un titolo sopra il
   // niente.
   const parti = page.locator('.stats__section').first().locator('.stats__partTitle')
   await expect(parti).toHaveCount(1)
-  await expect(parti.first()).toHaveText(dizionario['stats.variable'])
+  // Il **nome** si legge dal proprio elemento e non dall'intero `<h3>`: da 0a
+  // l'intestazione porta anche la didascalia della scala (`stats.scale`), che e'
+  // un'altra cosa e ha una sua asserzione altrove. Cio' che questo test chiede a
+  // questa riga e' *"la parte si chiama Quotidiane"*.
+  await expect(parti.first().locator('.stats__partName')).toHaveText(dizionario['stats.variable'])
   // **E l'intestazione non porta il totale, perche' lo porta gia' il titolo.**
+  // Detto sull'intero `<h3>` e non sull'assenza di `.stats__partTotal`: il
+  // difetto e' *"la stessa cifra due volte"*, e una cifra rimessa dentro un
+  // altro figlio dell'intestazione sarebbe lo stesso difetto con un'altra
+  // classe. La didascalia della scala qui vale `40,00 €` (la riga piu' grande),
+  // che e' un altro numero: se un giorno coincidesse col totale, coinciderebbe
+  // perche' la parte ha una riga sola — e allora la didascalia non si disegna.
+  await expect(
+    parti.first(),
+    'l\'intestazione della parte ripete il totale del periodo, che e\' gia\' sul numero grande',
+  ).not.toContainText('70,00')
   // Con una sezione sola il totale della sezione *e'* quello del periodo: e' il
   // conteggio qui sopra visto dall'altro verso — dei due posti in cui `70,00 €`
   // potrebbe stare, quello giusto e' il titolo, che risponde alla domanda che
   // pone.
-  await expect(page.locator('.stats__titleTotal')).toHaveText(/70,00/)
+  await expect(page.locator('.stats__hero')).toHaveText(/70,00/)
 
   // E **nessuna nota** sotto i due titoli. Quella di B affermava il confronto col
   // budget anche dove la geometria lo rifiuta; qui il budget non c'e' proprio, e
@@ -1165,7 +1189,7 @@ test('le spese senza categoria sono una riga sola, e non spostano le colonne', a
   // totale del periodo, quindi lo scrive il titolo e l'intestazione tace. Cambia
   // il posto, non il fatto: quella cifra resta l'unica cosa che dichiara che le
   // orfane sono dentro.
-  await expect(page.locator('.stats__titleTotal')).toHaveText(/350,00/)
+  await expect(page.locator('.stats__hero')).toHaveText(/350,00/)
   await expect(sezione.locator('.stats__partTotal')).toHaveCount(0)
 
   const righe = await righeDi(page, 0)
@@ -1220,7 +1244,7 @@ test('sotto tre categorie restano le righe e spariscono le barre', async ({ page
   // Il totale resta, perche' le righe ci sono sempre: senza barre questa e' una
   // tabella, e una tabella con un totale e' ancora una risposta. Sta sul titolo
   // perche' la sezione e' una sola (vedi il test delle orfane, sopra).
-  await expect(page.locator('.stats__titleTotal')).toHaveText(/60,00/)
+  await expect(page.locator('.stats__hero')).toHaveText(/60,00/)
   await expect(sezione.locator('.stats__partTotal')).toHaveCount(0)
 
   // E **nessuna frase** su cosa sia in scala: senza barre parlerebbe di una cosa
@@ -1229,63 +1253,62 @@ test('sotto tre categorie restano le righe e spariscono le barre', async ({ page
 })
 
 /**
- * **A e' divisa in due, e nessuna delle due parti esclude niente** (ADR 016 §1).
+ * **A e' divisa in due, ogni parte ha la propria scala, e ogni parte la
+ * dichiara.**
  *
- * Il difetto originale aveva un nome preciso: una settimana con 507,00 € di
- * affitto leggeva **0,00 €** sotto un titolo che chiede dove sono finiti i soldi,
- * e citava ADR 016 per farlo. §1 dice il contrario — Storico e statistiche
- * mostrano tutto, e' *solo il budget* a escludere.
+ * ## Questo test ha gia' cambiato bandiera una volta, e vale la pena dirlo
  *
- * La riparazione di allora fu mettere le fisse **dentro la stessa barra**, con un
- * segmento tratteggiato. Adesso sono una **parte a se'**, con la propria scala e
- * il proprio totale, e il segmento non c'e' piu': non aveva piu' un dato da
- * portare — dentro la parte delle fisse varrebbe "tutto" su ogni riga.
+ * Si e' chiamato *"ognuna con la propria scala"*, poi *"A ha una scala sola: due
+ * righe qualunque stanno fra loro come i loro importi"*, adesso di nuovo cosi'.
+ * Non e' indecisione: la decisione 0a e' stata presa, **misurata**, e rovesciata
+ * dalla misura.
  *
- * Le due cose che questo test sorveglia e che il vecchio non poteva:
+ * Cosa e' successo, in due righe. La scala unica era stata presa contro
+ * l'anti-pattern *"mai due scale nello stesso campo visivo"*; quell'argomento
+ * parla di due scale sullo **stesso asse di uno stesso grafico**, e due sezioni
+ * con intestazione, colonna e fondo colonna propri sono **small multiples**, che
+ * la stessa disciplina raccomanda quando due misure hanno ordini di grandezza
+ * diversi. Il difetto che aveva reso urgente il cambio — le fisse senza barre —
+ * aveva un'altra causa (la soglia **per sezione**), che e' stata riparata e non
+ * torna indietro: la soglia resta sull'insieme.
  *
- * - **le due scale sono davvero due**: la riga piu' grande di *ciascuna* parte
- *   arriva a fondo colonna. Con una scala sola, 62,00 € accanto a 507,00 €
- *   varrebbero il 12% e la seconda parte sarebbe illeggibile;
- * - **i due totali sono confrontabili**, perche' sono tutti e due del periodo —
- *   che e' cio' che le due schede in testa non sono (una e' al mese).
+ * E il difetto della scala unica e' stato misurato in pagina, 390 punti, colonna
+ * 195,81 px, sull'export vero: `Svago 26,00 €` e `Coffeeshop 24,00 €` distavano
+ * **0,75 px**, `Coffeeshop` e `Trasporti` **0,37**. Sotto il pixel non e'
+ * *"difficile da confrontare"*: e' **identico**.
+ *
+ * ## La condizione che la decisione porta con se', ed e' meta' di questo test
+ *
+ * Due scale sono ammesse **solo se si dichiarano**. Sui dati veri `Casa 507,00 €`
+ * e `Spesa 42,00 €` sono dipinte della stessa identica lunghezza, e finche'
+ * niente dice che i due fondi colonna valgono cose diverse sono una bugia
+ * grafica. La forma precedente diceva *"lo dichiara la geometria"*: e' falso —
+ * la geometria dice che **qualcosa** non torna, non **cosa**.
+ *
+ * Quindi le due meta' di questo test **stanno insieme e non si possono
+ * separare**:
+ *
+ * 1. le due barre piene ci sono (la scala e' della sezione);
+ * 2. le due sezioni scrivono quanto vale la propria barra piena.
+ *
+ * Togliendo la seconda, la prima diventa la firma di un difetto invece che di
+ * una scelta — ed e' esattamente il motivo per cui un test che asserisse solo la
+ * geometria sarebbe verde sul difetto che 0a e' venuta a chiudere.
+ *
+ * ## E la traslazione del pavimento si toglie prima di dividere
+ *
+ * Le frazioni che il modello consegna portano `BAR_MIN_FRACTION` come costante
+ * additiva (una barra non nulla dipinge almeno il proprio contorno), quindi il
+ * confronto fra due righe si fa sul valore **nudo**.
  */
-/**
- * **Una scala sola per tutta A, e le sezioni restano intestazioni.**
- *
- * ## Il nome di questo test era la decisione vecchia
- *
- * Si chiamava *"ognuna con la propria scala"*, e sorvegliava che la riga piu'
- * grande di **ciascuna** parte riempisse la colonna. Quella regola e' caduta, e
- * il test che la difendeva e' la cosa piu' pericolosa che potesse restare in
- * giro: un artefatto che domani giustifica la reintroduzione del difetto.
- *
- * Il difetto era l'**incrocio** fra la scala per sezione e la soglia per
- * sezione, e si misurava cosi': le uniche barre erano nelle quotidiane, la
- * sezione fisse aveva 530 € su 818 e **nessuna barra**, e la barra piu' lunga
- * dello schermo ne valeva 129. Peso visivo inverso agli importi, sotto un titolo
- * che chiede dove sono finiti i soldi.
- *
- * ## Cosa prova adesso, che e' piu' forte
- *
- * **La stessa proporzione fra due righe qualunque di A, senza guardare la
- * sezione.** Non "la piu' grande di ognuna riempie" — che era la firma delle due
- * scale — ma: prese due righe a caso, il rapporto fra le loro barre e' il
- * rapporto fra i loro importi, anche se stanno in sezioni diverse.
- *
- * E' un invariante che **una scala per sezione non puo' soddisfare**: con due
- * scale, 280,00 € di abbonamento e 120,00 € di biglietti sarebbero disegnati con
- * rapporti calcolati su due massimi diversi. Provato disfacendo: con la scala per
- * sezione questo confronto cade, mentre il vecchio ("la piu' grande riempie")
- * passava con tutte e due.
- */
-test('A ha una scala sola: due righe qualunque stanno fra loro come i loro importi', async ({
+test('A ha una scala per sezione, e ogni sezione dichiara quanto vale la sua barra piena', async ({
   page,
 }) => {
   await page.goto('/')
   await chiudiGuida(page)
   // Tre categorie per parte: la soglia sotto la quale le barre spariscono si
-  // applica **a ciascuna**, e con due righe per parte questo test misurerebbe
-  // due tabelle invece di due grafici.
+  // applica **all'insieme**, ma con due righe per parte non ci sarebbe niente da
+  // confrontare dentro una parte.
   await semina(page, [
     { categoria: 'Casa', cents: 50700, fissa: true },
     { categoria: 'Trasporti', cents: 28000, fissa: true },
@@ -1306,12 +1329,12 @@ test('A ha una scala sola: due righe qualunque stanno fra loro come i loro impor
   // distinzione di natura, non una classifica. Se l'ordine seguisse gli importi,
   // il mese in cui le variabili superano l'affitto la schermata si
   // rimescolerebbe sotto le stesse dita.
-  await expect(parti.nth(0)).toHaveText(
-    new RegExp(`${dizionario['stats.fixedInPeriod']}.*877,00`),
+  await expect(parti.nth(0).locator('.stats__partName')).toHaveText(
+    dizionario['stats.fixedInPeriod'],
   )
-  await expect(parti.nth(1)).toHaveText(
-    new RegExp(`${dizionario['stats.variable']}.*212,00`),
-  )
+  await expect(parti.nth(0).locator('.stats__partTotal')).toHaveText(/877,00/)
+  await expect(parti.nth(1).locator('.stats__partName')).toHaveText(dizionario['stats.variable'])
+  await expect(parti.nth(1).locator('.stats__partTotal')).toHaveText(/212,00/)
 
   // Le fisse: Casa 507,00 e Trasporti 280,00. Se tornassero fuori da A la prima
   // parte non esisterebbe affatto.
@@ -1328,10 +1351,6 @@ test('A ha una scala sola: due righe qualunque stanno fra loro come i loro impor
   // stato nascosto: e' sparita la sua causa.
   await expect(page.locator('.stat__fixed')).toHaveCount(0)
 
-  // **Una scala sola.** Le sei righe si leggono tutte contro lo stesso massimo —
-  // Casa, 507,00 € — quindi il rapporto fra due barre e' il rapporto fra due
-  // importi **anche a cavallo delle due sezioni**, che e' precisamente cio' che
-  // due scale non possono dare.
   const misure = await page.evaluate(() =>
     [...document.querySelectorAll('.stats__section')[0]!.querySelectorAll('.stats__rows')].map(
       (elenco) => {
@@ -1346,38 +1365,49 @@ test('A ha una scala sola: due righe qualunque stanno fra loro come i loro impor
     ),
   )
   expect(misure).toHaveLength(2)
+  // Le due colonne finiscono nello stesso punto: e' la premessa senza la quale
+  // "riempie la colonna" non vorrebbe dire la stessa cosa nelle due parti.
   expect(misure[0]!.plot, 'le due parti hanno colonne di larghezza diversa').toBe(misure[1]!.plot)
 
-  // La riga piu' grande **di A** riempie, e non ce n'e' una seconda: due barre
-  // piene sarebbero la firma delle due scale.
+  // 1. **Due barre piene, una per parte.** Con una scala sola le variabili
+  //    starebbero su 507,00 € e la loro riga piu' grande varrebbe il 24%.
   const atteso = (f: number): number => BAR_MIN_FRACTION + (1 - BAR_MIN_FRACTION) * f
   const tutte = [...misure[0]!.barre, ...misure[1]!.barre]
   expect(
     tutte.filter((f) => f > 0.99),
-    `piu' di una barra riempie la colonna: ${JSON.stringify(tutte)}`,
-  ).toHaveLength(1)
-  expect(misure[0]!.barre[0], 'la barra piu\' grande di A non riempie').toBeCloseTo(1, 2)
+    `le barre piene non sono due, una per parte: ${JSON.stringify(tutte)}`,
+  ).toHaveLength(2)
+  expect(misure[0]!.barre[0], 'la riga piu\' grande delle fisse non riempie').toBeCloseTo(1, 2)
+  expect(misure[1]!.barre[0], 'la riga piu\' grande delle variabili non riempie').toBeCloseTo(1, 2)
 
-  // E ogni riga sta sul massimo di A, non su quello della propria parte.
-  // Trasporti fisso 280 su 507; Trasporti a mano 120 su 507; Spesa 62 su 507.
-  expect(misure[0]!.barre[1], 'le fisse non sono sulla scala di A').toBeCloseTo(
+  // 2. **Dentro ogni parte le proporzioni sono esatte, sul massimo di quella
+  //    parte.** Trasporti fisso 280 su 507; Spesa 62 su 120.
+  expect(misure[0]!.barre[1], 'le fisse non sono sulla scala delle fisse').toBeCloseTo(
     atteso(28000 / 50700),
     2,
   )
-  expect(misure[1]!.barre[0], 'le variabili hanno una scala loro').toBeCloseTo(
-    atteso(12000 / 50700),
+  expect(misure[0]!.barre[2]).toBeCloseTo(atteso(9000 / 50700), 2)
+  expect(misure[1]!.barre[1], 'le variabili non sono sulla scala delle variabili').toBeCloseTo(
+    atteso(6200 / 12000),
     2,
   )
-  expect(misure[1]!.barre[1]).toBeCloseTo(atteso(6200 / 50700), 2)
+  expect(misure[1]!.barre[2]).toBeCloseTo(atteso(3000 / 12000), 2)
 
-  // **L'asserzione che nessuna delle due scale poteva soddisfare**: due righe di
-  // sezioni diverse stanno fra loro come i loro importi. Le frazioni portano la
-  // traslazione costante del pavimento, che si toglie prima di dividere.
-  const nudo = (f: number): number => (f - BAR_MIN_FRACTION) / (1 - BAR_MIN_FRACTION)
+  // 3. **E le due scale si dichiarano.** Senza questa meta' il punto 1 sarebbe
+  //    la firma di un difetto: due barre piene con due importi di un ordine di
+  //    grandezza diverso, e niente che dica che i due fondi colonna valgono cose
+  //    diverse. Il valore atteso e' l'importo della riga piu' grande di ciascuna
+  //    parte, che e' cio' che `scaleCents` promette.
+  const scala = (amount: string): string =>
+    dizionario['stats.scale'].replace('{amount}', amount)
+  const scritte = (await parti.locator('.stats__partScale').allInnerTexts()).map((v) =>
+    v.replace(/\s/g, ''),
+  )
   expect(
-    nudo(misure[0]!.barre[1]!) / nudo(misure[1]!.barre[0]!),
-    'una riga fissa e una variabile non sono confrontabili fra loro',
-  ).toBeCloseTo(28000 / 12000, 1)
+    scritte,
+    'le due parti non dichiarano la propria scala: due barre piene senza niente che dica ' +
+      'che i due fondi colonna valgono cose diverse',
+  ).toEqual([scala('507,00 €').replace(/\s/g, ''), scala('120,00 €').replace(/\s/g, '')])
 })
 
 /**
@@ -1500,8 +1530,12 @@ test('con le sole spese a mano A ha una parte sola e nessuna riga di separazione
   // Il nome della natura, senza cifra: con una sezione sola il totale e' quello
   // del titolo, e riscriverlo qui sarebbe la stessa cifra due volte a quaranta
   // pixel — il difetto che il totale nel titolo e' venuto a togliere.
-  await expect(parti.first()).toHaveText(dizionario['stats.variable'])
-  await expect(page.locator('.stats__titleTotal')).toHaveText(/70,00/)
+  await expect(parti.first().locator('.stats__partName')).toHaveText(dizionario['stats.variable'])
+  await expect(
+    parti.first(),
+    'l\'intestazione della parte ripete il totale del periodo, che e\' gia\' sul numero grande',
+  ).not.toContainText('70,00')
+  await expect(page.locator('.stats__hero')).toHaveText(/70,00/)
   await expect(page.locator('.stats')).not.toContainText(dizionario['stats.fixedInPeriod'])
 
   // La separazione e' `.stats__rows + .stats__partTitle`: con una parte sola non
@@ -2769,11 +2803,21 @@ for (const lingua of [
       await page.goto('/')
       await chiudiGuida(page)
       const nomi = await grigliaDiDefault(page)
-      // Dati banali, non ostili: un affitto, tre categorie, una spesa orfana.
-      // Piu' due settimane indietro, cosi' che esista anche B — le sue etichette
-      // ("03–09 ago", "3–9 Aug") le scrive l'app come tutte le altre.
+      // Dati banali, non ostili: un affitto, un abbonamento, tre categorie, una
+      // spesa orfana. Piu' due settimane indietro, cosi' che esista anche B — le
+      // sue etichette ("03–09 ago", "3–9 Aug") le scrive l'app come tutte le
+      // altre.
+      //
+      // **Le fisse sono due, e la seconda e' la premessa del caso peggiore.**
+      // Con una sola la parte non porta il totale (`part.single`), e
+      // l'intestazione delle fisse resta `nome + interruttore`: 165 + 44 px, che
+      // a 320 punti ci stanno comodi. Il difetto vero — `Fisse in questo peri…`
+      // — compare **solo** con il totale acceso, dove la richiesta e' 165 + 68 +
+      // 44 + 16 = **293 px contro 288**. Con una fissa sola questo test era
+      // verde su una scena in cui il caso non esisteva.
       await semina(page, [
         { categoria: nomi.casa, cents: 50700, fissa: true },
+        { categoria: nomi.trasporti, cents: 2300, fissa: true },
         { categoria: nomi.trasporti, cents: 3300 },
         { categoria: nomi.spesa, cents: 2600 },
         { categoria: '(una categoria cancellata da un import)', cents: 1450 },
@@ -2826,7 +2870,21 @@ for (const lingua of [
           etichette: [...document.querySelectorAll('.stat__name, .stat__note')]
             .filter(tagliato)
             .map(testo),
-          nomiParte: [...document.querySelectorAll('.stats__partName')].filter(troncato).map(testo),
+          // **`tagliato`, non `troncato`.** Il nome di parte adesso va a capo
+          // invece di perdere lettere (`.stats__partName`, due righe con clamp),
+          // ed e' la riparazione di `Fisse in questo peri…` — misurato a 320
+          // punti con la parte fisse a piu' righe: nome 165 px, totale 68,
+          // interruttore 44, distacchi 16, cioe' **293 contro 288**.
+          //
+          // Chiedendo solo `troncato` questo controllo diventerebbe verde per
+          // costruzione: senza `white-space: nowrap` la larghezza del contenuto
+          // **non supera mai** quella del box. E' la stessa mutazione gia'
+          // provata su `.stat__name`, un elemento piu' in la'.
+          nomiParte: [...document.querySelectorAll('.stats__partName')].filter(tagliato).map(testo),
+          // La didascalia della scala e' un'altra stringa che l'app scrive da
+          // se' (`stats.scale`), e la porta l'intestazione: se non ci stesse,
+          // sarebbe il difetto appena riparato che rientra dalla riga sotto.
+          scale: [...document.querySelectorAll('.stats__partScale')].filter(tagliato).map(testo),
           titoli: [...document.querySelectorAll('.stats__title')].filter(troncato).map(testo),
           valori: [...document.querySelectorAll('.stat__value')].filter(troncato).map(testo),
           scroll: stats.scrollWidth - stats.clientWidth,
@@ -2842,6 +2900,7 @@ for (const lingua of [
 
       expect(misura.etichette, 'un\'etichetta di riga e\' stata tagliata').toEqual([])
       expect(misura.nomiParte, 'un nome di parte e\' stato tagliato').toEqual([])
+      expect(misura.scale, 'la didascalia della scala e\' stata tagliata').toEqual([])
       expect(misura.titoli, 'un titolo di sezione e\' stato tagliato').toEqual([])
       expect(misura.valori, 'un importo e\' stato tagliato').toEqual([])
       expect(misura.scroll, 'le Statistiche scorrono di lato').toBeLessThanOrEqual(0)

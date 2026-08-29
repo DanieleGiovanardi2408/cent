@@ -654,3 +654,227 @@ test('le otto categorie: etichetta AA e otto superfici distinguibili', async ({
     `le due categorie piu' vicine (${peggiore.coppia}) non si distinguono nel tema ${tema}`,
   ).toBeGreaterThanOrEqual(10)
 })
+
+/**
+ * **La barra divisa: un accento e un grigio, misurati dipinti nei due temi.**
+ *
+ * ## Perche' questo test e' arrivato dopo la barra
+ *
+ * Perche' la barra e' nata con `--line-strong` e `--text` — grigio e nero — e la
+ * scelta si giustificava da se': due valori scuri su un fondo chiaro, **5,17:1
+ * fra loro**, cioe' leggibili anche da chi non distingue le tinte. Poi l'accento
+ * e' diventato `--brand`, perche' in B quel verde significa gia' *"quotidiane"*
+ * ed e' esattamente cio' che quel segmento e'.
+ *
+ * Il cambio **costa un numero**, e un numero che si perde va sorvegliato dove si
+ * perde e non spiegato in un commento: `--brand` contro `--line-strong` vale
+ * **1,88:1 in chiaro e 2,63:1 in scuro**. Nessun altro colore lo salvava — in
+ * tema chiaro un colore a 3:1 sia da `--bg` (L 0,906) sia da `--brand` (L 0,109)
+ * dovrebbe avere luminanza ≤ 0,269 e ≥ 0,427 insieme — quindi la scelta non e'
+ * fra due coppie: e' fra l'accento e quel numero.
+ *
+ * ## Quindi cosa si misura, e cosa **no**
+ *
+ * Non il rapporto fra i due segmenti, che e' sotto 3 per costruzione e restarci
+ * sopra e' impossibile: sarebbe un test che chiede al prodotto una cosa che non
+ * esiste, e finirebbe con una soglia abbassata finche' passa.
+ *
+ * Si misura cio' su cui la lettura poggia davvero, e sono tre cose:
+ *
+ * 1. **ogni segmento contro il fondo** — e' cio' che rende visibile *quanto e'
+ *    lungo* ciascuno, che e' la domanda della barra;
+ * 2. **il vuoto da 2 px contro i due segmenti** — e' cio' che rende visibile
+ *    *dove finisce l'uno*: il confine e' un'assenza di marca, non un bordo, e
+ *    questa e' la riga che lo dice a macchina invece che in un commento;
+ * 3. **la distanza percettiva fra i due**, con ΔE00 e non col contrasto: la
+ *    domanda *"si distinguono?"* fra due marche adiacenti e' percettiva, ed e'
+ *    la stessa misura con cui questo file giudica le otto categorie.
+ *
+ * E si legge anche **la pastiglia dell'intestazione**, perche' e' la legenda: se
+ * divergesse dal proprio segmento, la barra resterebbe leggibile e nessuno
+ * saprebbe piu' quale meta' e' quale.
+ */
+test('la barra divisa: i due segmenti si vedono, e la legenda porta i loro colori', async ({
+  page,
+}, testInfo) => {
+  const tema = testInfo.project.name
+  await apri(page)
+
+  // Una scena con tutte e due le nature: senza fisse la barra non esiste
+  // (`BreakdownSplit` e' `null` quando una meta' e' zero), e il test misurerebbe
+  // il vuoto.
+  await page.evaluate(async () => {
+    const db: IDBDatabase = await new Promise((resolve, reject) => {
+      const request = indexedDB.open('cent')
+      request.onsuccess = () => resolve(request.result)
+      request.onerror = () => reject(request.error)
+    })
+    const categories: { id: string }[] = await new Promise((resolve, reject) => {
+      const request = db.transaction('categories').objectStore('categories').getAll()
+      request.onsuccess = () => resolve(request.result)
+      request.onerror = () => reject(request.error)
+    })
+    const oggi = new Date()
+    const giorno = `${oggi.getFullYear()}-${String(oggi.getMonth() + 1).padStart(2, '0')}-${String(oggi.getDate()).padStart(2, '0')}`
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction('expenses', 'readwrite')
+      const store = tx.objectStore('expenses')
+      const scrivi = (i: number, cents: number, fissa: boolean): void => {
+        store.put({
+          id: `colore-${i}`,
+          createdAt: 1_700_000_000_000 + i,
+          updatedAt: 1_700_000_000_000 + i,
+          amountCents: cents,
+          categoryId: categories[i % categories.length]?.id ?? 'x',
+          date: giorno,
+          source: fissa ? 'recurring' : 'manual',
+          ...(fissa ? { recurringId: 'regola-di-prova' } : {}),
+        })
+      }
+      scrivi(0, 50700, true)
+      scrivi(1, 4200, false)
+      scrivi(2, 2600, false)
+      scrivi(3, 2400, false)
+      tx.oncomplete = () => resolve()
+      tx.onerror = () => reject(tx.error)
+    })
+    db.close()
+  })
+  await page.reload()
+  await page.getByRole('button', { name: /Statistiche|Stats/ }).click()
+  await expect(page.locator('.stats__split')).toHaveCount(1)
+
+  const misura = await page.evaluate(() => {
+    const fondo = (el: Element): string => {
+      for (let p: Element | null = el; p !== null; p = p.parentElement) {
+        const bg = getComputedStyle(p).backgroundColor
+        if (!/,\s*0\)$/.test(bg) && bg !== 'transparent') return bg
+      }
+      return getComputedStyle(document.body).backgroundColor
+    }
+    const seg = (kind: string): Element => {
+      const el = document.querySelector(`.stats__seg[data-kind="${kind}"]`)
+      if (el === null) throw new Error(`nessun segmento "${kind}" nella barra divisa`)
+      return el
+    }
+    // La pastiglia e' un `::before`, quindi il colore si legge dallo
+    // pseudo-elemento e non dal nodo: leggerlo dal padre darebbe il colore del
+    // testo dell'intestazione, cioe' un numero verde su una cosa che non e'
+    // quella misurata.
+    const pastiglia = (kind: string): string => {
+      const h = document.querySelector(`.stats__partTitle[data-kind="${kind}"] .stats__partName`)
+      if (h === null) throw new Error(`nessuna intestazione "${kind}"`)
+      return getComputedStyle(h, '::before').backgroundColor
+    }
+    const split = document.querySelector('.stats__split')
+    if (split === null) throw new Error('nessuna barra divisa')
+    return {
+      fisse: getComputedStyle(seg('fixed')).backgroundColor,
+      quotidiane: getComputedStyle(seg('variable')).backgroundColor,
+      // Il vuoto fra i due segmenti **non e' dipinto**: e' il `gap`, quindi cio'
+      // che si vede li' e' il fondo del contenitore. Si legge di li', non da un
+      // token, perche' il fatto e' *"in mezzo si vede la superficie"*.
+      vuoto: fondo(split),
+      dietro: fondo(split),
+      legendaFisse: pastiglia('fixed'),
+      legendaQuotidiane: pastiglia('variable'),
+    }
+  })
+
+  const fisse = leggiColore(misura.fisse)
+  const quotidiane = leggiColore(misura.quotidiane)
+  const dietro = leggiColore(misura.dietro)
+
+  const suFondo = {
+    fisse: arrotonda(contrasto(fisse, dietro)),
+    quotidiane: arrotonda(contrasto(quotidiane, dietro)),
+  }
+  const fraLoro = arrotonda(contrasto(fisse, quotidiane))
+  const percettiva = arrotonda(deltaE00(fisse, quotidiane))
+
+  console.log(
+    `\n  [${tema}] barra divisa — fisse ${scrivi(fisse)} ${suFondo.fisse}:1 sul fondo · ` +
+      `quotidiane ${scrivi(quotidiane)} ${suFondo.quotidiane}:1 sul fondo · ` +
+      `fra loro ${fraLoro}:1, ΔE00 ${percettiva}`,
+  )
+
+  // 1. Ciascuno contro il fondo: e' cio' che rende leggibile la **lunghezza**.
+  //    3:1 e' la soglia WCAG per un elemento non testuale.
+  expect(
+    suFondo.fisse,
+    `il segmento delle fisse non si stacca dal fondo: ${suFondo.fisse}:1`,
+  ).toBeGreaterThanOrEqual(3)
+  expect(
+    suFondo.quotidiane,
+    `il segmento delle quotidiane non si stacca dal fondo: ${suFondo.quotidiane}:1`,
+  ).toBeGreaterThanOrEqual(3)
+
+  // 2. Il confine. Il vuoto **e'** il fondo, quindi i due numeri qui sopra sono
+  //    gia' la misura del confine: si scrive lo stesso, perche' e' un fatto
+  //    diverso che oggi si appoggia sugli stessi pixel, e il giorno in cui
+  //    qualcuno dipingesse il `gap` cadrebbe qui e non la' — con il messaggio
+  //    giusto.
+  expect(
+    leggiColore(misura.vuoto),
+    'il vuoto fra i due segmenti non e\' la superficie: il confine sarebbe un bordo, ' +
+      'cioe\' una terza tinta proprio dove serve leggere dove finisce l\'uno',
+  ).toEqual(dietro)
+
+  // 3. La distanza percettiva. Non e' il contrasto — sotto 3 per costruzione,
+  //    vedi il commento in testa — e' la domanda "si distinguono?", con la
+  //    stessa misura delle otto categorie.
+  expect(
+    percettiva,
+    `i due segmenti della barra divisa non si distinguono nel tema ${tema}: ΔE00 ${percettiva}`,
+  ).toBeGreaterThanOrEqual(10)
+
+  // 4. La legenda porta i colori dei segmenti. Senza, la barra resterebbe
+  //    leggibile e nessuno saprebbe piu' quale meta' e' quale — e' l'unica cosa
+  //    a schermo che leghi i due nomi ai due colori.
+  expect(
+    leggiColore(misura.legendaFisse),
+    'la pastiglia delle fisse non e\' del colore del proprio segmento',
+  ).toEqual(fisse)
+  expect(
+    leggiColore(misura.legendaQuotidiane),
+    'la pastiglia delle quotidiane non e\' del colore del proprio segmento',
+  ).toEqual(quotidiane)
+
+  // 5. **I due testi che le Statistiche hanno guadagnato**, misurati qui e non
+  //    nel test AA generale: quello enumera schermate raggiungibili **a
+  //    database vuoto**, e nessuno dei due esiste senza spese. Senza questa
+  //    coda resterebbero l'unica copy dell'app che nessuna misura di contrasto
+  //    tocca.
+  //
+  //    Le soglie sono quelle di WCAG e dipendono dalla taglia: il numero grande
+  //    e' 40 px, cioe' testo grande (>= 24), quindi 3:1; la didascalia e' 13 px,
+  //    quindi 4,5:1.
+  const testi = await page.evaluate(() => {
+    const fondo = (el: Element): string => {
+      for (let p: Element | null = el; p !== null; p = p.parentElement) {
+        const bg = getComputedStyle(p).backgroundColor
+        if (!/,\s*0\)$/.test(bg) && bg !== 'transparent') return bg
+      }
+      return getComputedStyle(document.body).backgroundColor
+    }
+    const leggi = (sel: string, soglia: number) => {
+      const el = document.querySelector(sel)
+      if (el === null) throw new Error(`nessun "${sel}" in scena`)
+      const stile = getComputedStyle(el)
+      return {
+        label: `${sel} "${(el.textContent ?? '').trim()}" ${stile.fontSize}`,
+        colore: stile.color,
+        dietro: fondo(el),
+        soglia,
+      }
+    }
+    return [leggi('.stats__hero', 3), leggi('.stats__partScale', 4.5)]
+  })
+  for (const t of testi) {
+    const rapporto = arrotonda(contrasto(leggiColore(t.colore), leggiColore(t.dietro)))
+    console.log(`  [${tema}] ${t.label} = ${rapporto}:1 / ${t.soglia}`)
+    expect(rapporto, `${t.label} sotto la soglia AA della sua taglia`).toBeGreaterThanOrEqual(
+      t.soglia,
+    )
+  }
+})

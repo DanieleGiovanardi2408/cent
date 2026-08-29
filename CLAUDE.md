@@ -322,8 +322,21 @@ decisione**. Ragione per esteso e conseguenze in
    escluderle.
 2. **La Home lo dice**, accanto al numero grande: *"oltre alle spese fisse"*.
    Un'esclusione taciuta e' un numero che mente per omissione.
-3. **Due numeri, non uno**: accanto al budget, il totale mensile delle fisse. La
-   seconda cifra ha senso solo se si vede la prima.
+3. **Due numeri, non uno**: accanto al budget, **in Impostazioni**, il totale
+   mensile delle fisse. La seconda cifra ha senso solo se si vede la prima.
+
+   **Le due parole `in Impostazioni` sono state riaggiunte il 29 agosto**, e la
+   ragione vale piu' della correzione. Erano nell'ADR e non in questa parafrasi, e
+   senza il posto *"accanto al budget"* si legge come *"in qualunque schermata
+   parli di soldi"*. Su quella lettura e' stata scritta un'istruzione a un agente —
+   *"se togliendo questa riga dalle Statistiche §3 cade, non toglierla"* — quando
+   §3 nelle Statistiche non abitava affatto: li' il budget non c'e', quindi la
+   riga citava §3 **senza la sua condizione**.
+   E' [DEBITO.md](docs/DEBITO.md) §1 che morde per la prima volta su una
+   **decisione** invece che su una stringa a schermo: una copia che parafrasa,
+   perde una condizione, e produce un'istruzione sbagliata. L'ha presa un agente
+   che e' andato a leggere l'ADR invece della parafrasi — cioe' non la regola, ma
+   qualcuno che non si e' fidato di lei.
 
 
 ## Schermate

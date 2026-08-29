@@ -267,26 +267,38 @@ function Row({
  * e Storico mostrino tutto, ed e' rispettato: le fisse sono a schermo, con il
  * loro totale, sopra le variabili. Sono divise, non tolte.
  *
- * ## Le due scale si dichiarano con la geometria
+ * ## Le due scale si dichiarano, e la geometria da sola non bastava
  *
  * In ogni parte la barra piu' lunga arriva a fondo colonna, perche' il modello
- * garantisce che la frazione massima di una sezione valga esattamente 1. Due
- * barre piene con due importi diversi dicono da sole che le scale sono due, e
- * l'intestazione dice quali due.
+ * garantisce che la frazione massima di una sezione valga esattamente 1.
  *
- * Qui c'era una frase — *"le barre sono in scala su {nome}, la piu' grande"* — e
- * non c'e' piu' per due ragioni che valgono anche separatamente. La prima:
- * diceva cio' che la prima barra, lunga il 100% per costruzione, dice da se'. La
- * seconda: la sua unica parte non tautologica era **il nome del riferimento**, e
- * quel nome e' esattamente cio' che la riga accorcia — misurato a 320 punti, la
- * frase citava `Casa affitto utenze e condomin` mentre la riga mostrava `Casa
- * affitto utenze e cond…`. Un messaggio che afferma un fatto che lo schermo non
- * conferma.
+ * Qui c'era scritto che quello **basta**: *"due barre piene con due importi
+ * diversi dicono da sole che le scale sono due"*. **E' falso, e lo era anche
+ * allora**: dicono che *qualcosa* non torna, non *cosa*. Sui dati veri `Casa
+ * 507,00 €` e `Spesa 42,00 €` sono dipinte della stessa identica lunghezza, e
+ * cio' che resta al lettore e' una deduzione — che e' *"nessun messaggio afferma
+ * un fatto che l'utente non puo' verificare"* applicato a un fatto che l'utente
+ * dovrebbe **inferire**.
+ *
+ * Quindi ogni sezione lo scrive, e lo scrive **senza costare una riga**: la
+ * didascalia sta sulla seconda riga dell'intestazione di parte, dentro l'altezza
+ * che quell'intestazione dichiara gia' (vedi `PartHead`, prop `scale`).
+ *
+ * ## E nomina l'importo, non la categoria
+ *
+ * Qui c'era anche una frase diversa — *"le barre sono in scala su {nome}, la
+ * piu' grande"* — e non torna. La sua unica parte non tautologica era **il nome
+ * del riferimento**, e quel nome e' esattamente cio' che la riga accorcia:
+ * misurato a 320 punti, la frase citava `Casa affitto utenze e condomin` mentre
+ * la riga mostrava `Casa affitto utenze e cond…`. Un messaggio che afferma un
+ * fatto che lo schermo non conferma.
+ *
+ * `stats.scale` nomina **l'importo**, che non tronca mai: la sua colonna e'
+ * `max-content` e la didascalia e' larga quanto le serve.
  *
  * L'etichetta oggi va a capo invece di troncare (`Stats.css`, `.stat__label`),
- * quindi quel nome si accorcia piu' tardi — ma si accorcia lo stesso: due righe
- * sono un tetto, non un permesso. L'argomento non dipendeva dal **dove** cade il
- * taglio, e continua a valere.
+ * quindi quel nome si accorcerebbe piu' tardi — ma si accorcerebbe lo stesso:
+ * due righe sono un tetto, non un permesso.
  *
  * ## E una categoria puo' stare in tutte e due
  *
@@ -355,34 +367,53 @@ function Categories({
   return (
     // `data-chart` sta sulla **sezione** e non sull'elenco perche' le colonne
     // sono della sezione: e' li' che si decide se ce ne sono tre o due. E la
-    // decisione arriva dal modello gia' presa **sull'insieme**: da quando la
-    // scala e' una sola, "questa parte ha poche righe" non e' piu' una domanda
-    // che qualcuno possa fare a una parte per volta.
+    // decisione arriva dal modello gia' presa **sull'insieme**, e resta cosi'
+    // anche dopo che la scala e' tornata per sezione (0a): era **la soglia per
+    // sezione** la causa del difetto misurato — le fisse con 530 € su 818 e
+    // nessuna barra, mentre la barra piu' lunga dello schermo ne valeva 129 — e
+    // quella non torna indietro. "Questa parte ha poche righe" non e' una
+    // domanda che qualcuno possa fare a una parte per volta.
     <section class="stats__section" data-chart={asChart ? '' : undefined}>
-      {/* "Dove sono finiti · 17–23 ago  642,00 €". La domanda del titolo ha
-          bisogno di un "quando" e di un "quanto": senza il secondo era una
-          domanda senza risposta in cima a una schermata che esiste per
-          rispondere.
+      {/* **La domanda, la sua risposta in grande, e la divisione subito sotto.**
 
-          Il totale sta in un elemento suo dentro la riga del titolo e non
-          dentro l'`<h2>`: l'intestazione resta la domanda — un test la legge
-          intera — e la cifra e' un dato che le sta accanto, incolonnato sul
-          bordo destro come tutti gli importi di questa schermata. */}
-      <div class="stats__head">
-        <h2 class="stats__title">
-          {t('stats.byCategory')}
-          {' · '}
-          {/* Il confine sta in un elemento suo, e non e' per lo stile: e' l'unico
-              posto in cui questa schermata scrive `periodRangeLabel` quando le
-              righe ci sono, e un test lo legge di li' invece di ritagliarlo dal
-              titolo — dove `text-transform: uppercase` glielo restituirebbe in
-              maiuscolo, cioe' diverso da come lo scrive `Intl`. */}
-          <span class="stats__titleRange">{range}</span>
-        </h2>
-        {totalCents === null ? null : (
-          <span class="stats__titleTotal">{money(totalCents)}</span>
-        )}
-      </div>
+          Il totale c'era gia' — era `.stats__titleTotal`, 17 px in coda al
+          titolo — e portava il fatto giusto con il peso sbagliato: misurato a
+          390 punti, `618,00 €` era **piu' piccolo** di `507,00 €` scritto
+          duecento pixel piu' in basso sulla riga di Casa, cioe' la risposta alla
+          domanda della schermata pesava meno di una delle sue voci.
+
+          Il metro e' **interno all'app**: la Home funziona perche' il numero che
+          risponde e' enorme e sta da solo. Qui `dataviz` chiede *"esattamente
+          una hero figure per vista"*, e questa schermata ne aveva **zero** —
+          quindi non c'e' nessun conflitto da arbitrare: la Home ha la sua
+          (`.hero__value`, quanto resta), le Statistiche hanno questa (quanto e'
+          uscito nel periodo), e **non deve diventarne due per schermata**.
+
+          Sta in un `<p>` fuori dall'`<h2>` e non dentro: l'intestazione resta la
+          domanda — un test la legge intera — e `text-transform: uppercase` non
+          deve arrivare a una cifra.
+
+          La barra divisa viene subito dopo, ed e' la ragione per cui il titolo
+          non e' piu' una riga a due colonne: numero grande e sua decomposizione
+          sono la stessa frase, e in mezzo non ci va niente.
+
+          Non c'e' piu' nemmeno il `<div class="stats__head">` che li teneva
+          insieme: erano due campate `1 / -1` dentro un box che non aggiungeva
+          nessuna colonna. `.stats__head` resta, e resta **di B**, dove ha ancora
+          un mestiere — tenere titolo e nome di parte sulla **stessa** riga,
+          perche' ognuno dei 26 px che costavano impilati e' un pixel che
+          allontana dalla piega la seconda riga del confronto. */}
+      <h2 class="stats__title">
+        {t('stats.byCategory')}
+        {' · '}
+        {/* Il confine sta in un elemento suo, e non e' per lo stile: e' l'unico
+            posto in cui questa schermata scrive `periodRangeLabel` quando le
+            righe ci sono, e un test lo legge di li' invece di ritagliarlo dal
+            titolo — dove `text-transform: uppercase` glielo restituirebbe in
+            maiuscolo, cioe' diverso da come lo scrive `Intl`. */}
+        <span class="stats__titleRange">{range}</span>
+      </h2>
+      {totalCents === null ? null : <p class="stats__hero">{money(totalCents)}</p>}
 
       {split === null ? null : <Split split={split} />}
 
@@ -395,6 +426,11 @@ function Categories({
         <PartHead
           kind="fixed"
           amount={split === null ? null : money(split.fixedCents)}
+          // Nessuna riga, quindi nessuna barra, quindi nessuna scala da
+          // dichiarare: questa intestazione si disegna **senza la propria
+          // sezione**, per non far sparire il selettore insieme a cio' che
+          // nasconde.
+          scale={null}
           showFixed={showFixed}
           onToggleFixed={onToggleFixed}
         />
@@ -443,6 +479,46 @@ function Categories({
               part.single || split === null
                 ? null
                 : money(part.kind === 'fixed' ? split.fixedCents : split.variableCents)
+            }
+            // **Quanto vale il fondo colonna di questa sezione** (0a).
+            //
+            // Due condizioni, e la seconda non e' quella che sembra.
+            //
+            // `asChart`: senza barre non c'e' nessuna colonna di cui dire la
+            // lunghezza.
+            //
+            // `!part.single`: **non** perche' con una riga sola la cifra sarebbe
+            // ripetuta. Quello e' vero anche con cinque righe, e va detto:
+            // `scaleCents` e' il massimo della sezione e le righe scendono dalla
+            // piu' grande, quindi vale `rows[0].cents` **sempre**. Una
+            // condizione che pretendesse di evitare la ripetizione la
+            // eviterebbe in un caso su due per una ragione che vale in due casi
+            // su due.
+            //
+            // La ragione vera e' un'altra, ed e' quella che discrimina davvero:
+            // **una didascalia della scala calibra le righe che non sono il
+            // riferimento.** Con cinque righe dice a chi legge che le altre
+            // quattro vanno lette contro 42,00 €; con una riga sola non ce ne
+            // sono, e cio' che resterebbe e' `Barra intera = 900,00 €` sopra
+            // `Casa 900,00 €` — informazione zero, rumore certo. C'e' un test
+            // che sorveglia proprio quel caso (*"la parte con una riga sola non
+            // ripete la sua cifra nell'intestazione"*), ed e' scritto sul testo
+            // dipinto dell'intero `<h3>` apposta perche' nessuna classe nuova
+            // possa aggirarlo. Questa condizione lo rispetta perche' ha la sua
+            // ragione, non perche' il test c'e'.
+            //
+            // E la ripetizione che **resta**, nel caso a piu' righe, si accetta
+            // e si dice perche': non e' la cifra ripetuta di DEBITO §5 — due
+            // quantita' **diverse** che coincidono e che nessuna etichetta
+            // distingue — e' una **legenda**, cioe' una cosa il cui unico
+            // mestiere e' dire che significato ha una geometria. Le due
+            // occorrenze stanno in due pesi diversi (13 px muti contro 15
+            // semibold), su due colonne diverse, e dicono due fatti: *"Spesa e'
+            // 42,00 €"* e *"il fondo di questa colonna vale 42,00 €"*.
+            scale={
+              asChart && !part.single
+                ? t('stats.scale', { amount: money(part.scaleCents) })
+                : null
             }
             showFixed={showFixed}
             onToggleFixed={onToggleFixed}
@@ -512,9 +588,12 @@ function sectionsTotal(sections: readonly BreakdownSection[]): number | null {
  * parte.**
  *
  * Porta la proporzione fisse/quotidiane del periodo e libera A dal doverla
- * raccontare riga per riga: e' il fatto dominante della schermata, e con la
- * scala unica le due sezioni da sole non lo dicono — dicono chi e' piu' lungo,
- * non quanto pesa una natura sull'altra.
+ * raccontare riga per riga: e' il fatto dominante della schermata, e **le due
+ * sezioni da sole non lo dicono in nessuna delle due configurazioni di scala**.
+ * Con una scala sola dicevano chi ha la riga piu' lunga; con la scala per
+ * sezione (0a) le due barre piu' lunghe arrivano tutte e due a fondo colonna,
+ * quindi non dicono nemmeno quello. La proporzione fra le due nature sta qui, e
+ * solo qui.
  *
  * ## Un accento e un grigio, non due tinte di categoria
  *
@@ -615,12 +694,39 @@ function Split({ split }: { readonly split: BreakdownSplit }) {
 function PartHead({
   kind,
   amount,
+  scale,
   showFixed,
   onToggleFixed,
 }: {
   readonly kind: BreakdownSection['kind']
   /** Il totale della parte, o `null` quando lo porta gia' qualcos'altro. */
   readonly amount: string | null
+  /**
+   * **Quanto vale una barra piena in questa sezione**, gia' formattato — o
+   * `null` dove non c'e' niente da dichiarare.
+   *
+   * ## Perche' si scrive, e perche' la geometria non basta
+   *
+   * Con la scala **per sezione** (0a) la riga piu' grande di ciascuna arriva a
+   * fondo colonna. Sui dati veri questo vuol dire `Casa 507,00 €` e `Spesa
+   * 42,00 €` **dipinte esattamente della stessa lunghezza**, una sopra l'altra:
+   * due barre piene identiche accanto a due importi di un ordine di grandezza
+   * diverso.
+   *
+   * Qui c'era scritto che *"lo dichiara la geometria: due barre piene con due
+   * importi diversi dicono da sole che le scale sono due"*. **E' falso, e lo era
+   * anche quando fu scritto**: la geometria dice che *qualcosa* non torna, non
+   * *cosa* — e' una deduzione chiesta al lettore, cioe' la stessa famiglia di
+   * *"nessun messaggio afferma un fatto che l'utente non puo' verificare"*
+   * applicata a un fatto che l'utente dovrebbe **inferire**.
+   *
+   * ## Quando e' `null`
+   *
+   * Dove non ci sono barre, e dove la sezione ha una riga sola. Le due
+   * condizioni e la ragione della seconda — che **non** e' quella del totale —
+   * stanno sul chiamante.
+   */
+  readonly scale: string | null
   readonly showFixed: boolean
   readonly onToggleFixed: () => void
 }) {
@@ -631,6 +737,12 @@ function PartHead({
         {t(fixed ? 'stats.fixedInPeriod' : 'stats.variable')}
       </span>
       {amount === null ? null : <span class="stats__partTotal">{amount}</span>}
+      {/* La scala sta sulla **seconda riga** dell'intestazione, e non e' una
+          riga in piu' dell'elenco: l'intestazione delle fisse dichiara gia'
+          `min-block-size: var(--tap-min)` perche' dentro ha l'interruttore, e
+          il suo testo ne usa 18,75 su 44. La didascalia entra in quelli che
+          avanzano. */}
+      {scale === null ? null : <span class="stats__partScale">{scale}</span>}
       {fixed ? (
         <button
           type="button"
@@ -666,13 +778,20 @@ function PartHead({
  * silenzio.
  *
  * L'etichetta e' `stats.variable`, cioe' **la stessa parola che nomina le
- * quotidiane nell'intestazione di parte di A** — la scheda in
- * testa** e della parte variabile di A. Non e' una frase nuova che dichiara
- * l'esclusione — sarebbe la quarta copia di un fatto che ha gia' la sua casa
- * (DEBITO.md §1.3) — e' il **nome della quantita'**: la stessa parola sopra gli
- * stessi soldi, in tutti e tre i posti in cui la schermata li nomina. Chi legge
- * `Quotidiane 0,00 €` in B ritrova `Quotidiane` in testa e `Spese fisse
- * 900,00 €` accanto, e le due cifre tornano.
+ * quotidiane nell'intestazione di parte di A**. Non e' una frase nuova che
+ * dichiara l'esclusione — sarebbe la quarta copia di un fatto che ha gia' la sua
+ * casa (DEBITO.md §1.3) — e' il **nome della quantita'**: la stessa parola sopra
+ * gli stessi soldi, nei **due** posti in cui la schermata li nomina.
+ *
+ * (Erano tre finche' c'era la scheda in testa, e questa riga ne portava ancora
+ * il relitto: *"— la scheda in testa** e della parte variabile di A"*, mezza
+ * frase rimasta dentro un'altra dopo che la scheda era uscita. E' esattamente
+ * cio' che succede a un commento aggiornato con una sostituzione invece che
+ * riletto.)
+ *
+ * Chi legge `Quotidiane 0,00 €` in B ritrova `Quotidiane` sull'intestazione di
+ * parte di A con il proprio totale accanto, e `Fisse in questo periodo
+ * 900,00 €` sopra: le due cifre tornano.
  *
  * Il marchio e' quello dei titoli di parte di A, e non e' un riuso di comodo: in
  * A quella riga dice *quale dei due tipi di soldi* si sta guardando, e qui dice
@@ -930,34 +1049,36 @@ export function Stats({ phase, expenses, categories, rules, budgets, period, day
 
   return (
     <div class="stats">
-      {/* **La proiezione mensile delle fisse, e adesso e' una riga.**
-          (ADR 016 §3, *"due numeri, non uno"*: la seconda cifra ha senso solo se
-          si vede la prima, e la prima e' il totale del periodo sul titolo di A.)
+      {/* **Qui c'era la proiezione mensile delle fisse — `530,00 €/mese` — e non
+          c'e' piu'.**
 
-          Era una scheda grigia alta 109 px — **un quinto dello schermo utile** —
-          per una cifra sola, sopra una schermata che non riesce a mettere due
-          righe di B sopra la piega. Il peso visivo era l'inverso
-          dell'importanza: la proiezione e' contesto, non e' la risposta a
-          nessuna delle due domande della schermata.
+          Non e' un taglio di spazio: la stessa cifra compariva **due volte nella
+          stessa schermata**. `530,00 €/mese` in testa e `530,00 €` sul totale
+          della parte fisse duecento pixel piu' sotto sono due quantita' diverse
+          — un tasso e un fatto del periodo — che una settimana su quattro
+          coincidono per costruzione, e il suffisso `/mese` distingueva **le
+          unita'** senza togliere il fatto che il numero era scritto due volte.
 
-          **E la cifra porta la propria unita'**, che e' cio' che chiude
-          `DEBITO.md` §5: `530,00 €/mese` qui e `530,00 €` in A sono due
-          quantita' diverse che una settimana su quattro coincidono per
-          costruzione, e finora niente le distingueva **se non l'etichetta** —
-          cioe' proprio la cosa che la coincidenza fa saltare. Adesso la
-          differenza sta dentro il numero, dove l'occhio cade comunque.
+          ## E ADR 016 §3 non cade, perche' non abitava qui
 
-          Resta una cifra che A non puo' dare: A e' retrospettiva e per periodo,
-          questa e' quanto costeranno al mese le regole in vigore. */}
-      {view.tiles.hasFixed ? (
-        <p class="stats__rate">
-          <span class="stats__rateLabel">{t('stats.fixed')}</span>
-          <span class="stats__rateValue">
-            {t('stats.perMonthRate', { amount: money(view.tiles.fixedMonthlyCents) })}
-          </span>
-        </p>
-      ) : null}
+          §3 dice, alla lettera: *"Accanto al budget, **in Impostazioni**, il
+          totale mensile delle fisse"*. E' li' che vive, ed e' li' che si
+          verifica: `Settings.tsx` mette `<FixedCosts>` subito sotto il gruppo
+          del budget — con il commento che cita §3 — e `FixedCosts` scrive
+          `fixed.total`, *"In tutto {amount} al mese."*. I due numeri sono
+          affiancati nella schermata che §3 nomina, e questa riga ne era una
+          terza copia in una schermata che §3 non nomina.
 
+          La riga che portava questa cifra citava §3 come propria ragione. Era
+          una citazione **senza la sua condizione**: l'argomento di §3 e' *"la
+          seconda cifra ha senso solo se si vede la prima"*, e la prima — il
+          budget — nelle Statistiche non c'e'. Qui la cifra stava accanto al
+          totale del periodo, che non e' il budget.
+
+          Ne resta senza lettori `StatsTiles` (`hasFixed`, `fixedMonthlyCents`) e
+          la chiave `stats.perMonthRate`. La chiave e' tolta; il tipo vive in
+          `stats-view.ts` e va tolto di li' — vedi il controllo D di
+          `audit:source`, che e' esattamente la guardia scritta per questo. */}
       <Categories
         breakdown={view.byCategory}
         range={periodRangeLabel(view.period, view.current.range)}
