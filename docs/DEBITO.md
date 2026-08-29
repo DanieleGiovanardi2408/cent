@@ -365,14 +365,53 @@ E' la forma pura di *"un'asserzione che passa sia col codice giusto sia con quel
 sbagliato"*, con l'aggravante che qui **non e' il test a essere debole**: e' il
 mondo a non contenere il controesempio.
 
-**La cura non e' un test.** E' la stessa mossa che questo progetto fa altrove:
-rendere la scelta sbagliata **inesprimibile** invece che sconsigliata — per esempio
-non passando al componente una lista indicizzabile, o non dandogli l'indice. Fino
-ad allora la difesa e' il tipo e la lettura di chi passa.
+## La cura non e' un test: e' una forma. **Valutata, e regge.**
 
-**La condizione che la chiude**: il giorno in cui la finestra smette di finire con
-il periodo corrente. A quel punto la coincidenza cade da sola, e questa voce e'
-gia' scritta per chi arrivera' li'.
+Rendere la scelta sbagliata **inesprimibile** invece che sconsigliata — la mossa
+dell'id deterministico e di `ConfirmedPreview`. Qui e' piu' vicina di quanto
+sembri: **non consegnare un array.**
+
+```ts
+readonly byPeriod: {
+  readonly closed: readonly PeriodBar[]
+  readonly current: PeriodBar | null   // `null` solo quando la sezione non c'e'
+}
+```
+
+Con questa forma **`rows.length - 1` non esiste**, perche' la riga corrente non e'
+nell'array. Il componente rende `closed.map(...)` e poi `current && ...`: l'ordine
+a schermo e' lo stesso, e la confusione sparisce **per costruzione** invece che per
+sorveglianza.
+
+E ne segue un secondo taglio: **`PeriodBar.current` sparisce**. Era la quinta
+cucitura tenuta viva dai soli test, ha appena acquistato un lettore (il bordo
+aperto), e con questa forma torna superfluo — la posizione nel tipo **e'** il fatto.
+E' anche il campo che il controllo D **non puo' vedere**, perche' `.current` e'
+l'idioma dei ref di Preact: toglierlo chiude un buco che nessuna macchina copriva.
+
+### Il costo, misurato
+
+- **`Stats.tsx`**: 2 punti. `closed.map(...)` piu' `current && <Row/>`.
+- **`stats-view.ts`**: 8 punti. Lo split e' `rows.slice(0, -1)` / `rows.at(-1)`, e la
+  soglia diventa `closed.length + (current ? 1 : 0) >= TREND_MIN_ROWS`.
+- **`stats-view.test.ts`**: **34 asserzioni** su `byPeriod.rows`. E' il grosso.
+- **e2e**: 6 riferimenti, ma sul DOM, che non cambia.
+
+**Verdetto: vale piu' di quanto costa**, e le 34 asserzioni sono churn meccanico —
+non richiedono di ripensare cosa provano. **Non e' stato fatto in questa sessione
+per budget, non per dubbio.**
+
+### Una cosa da verificare mentre si fa, e non e' scontata
+
+`current` puo' essere `PeriodBar` e non `PeriodBar | null`? La finestra **finisce
+sempre** col periodo di oggi, quindi quando la sezione esiste `current` esiste. Se
+regge, il tipo diventa ancora piu' stretto e l'assenza della sezione si esprime
+gia' altrove. **Va provato, non assunto**: e' precisamente il tipo di "sempre" che
+questo progetto ha visto cadere tre volte.
+
+**La condizione che chiude questa voce**: la forma sopra nel codice. In subordine —
+se un giorno la finestra smettesse di finire col periodo corrente — la coincidenza
+cade da sola e la voce si chiude per altra via.
 
 ## 3. Rischi noti gia' scritti altrove
 

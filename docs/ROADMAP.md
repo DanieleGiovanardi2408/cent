@@ -25,9 +25,9 @@ sa gia', e per questo non puo' invecchiare. I giudizi — cosa e' in volo, cosa
 aspetta una persona — stanno sotto, scritti a mano e timbrati con lo SHA a cui
 sono stati rivisti.
 
-- **Ultimo commit**: `8fdca25` — test: due riparazioni che nessuno difendeva, e un commento che raccomandava il difetto
-- **Data**: 28/08/2026 22:23
-- **Pushato**: **no: 6 commit non pushati**
+- **Ultimo commit**: `58e0880` — feat: il periodo in corso si dichiara anche senza budget, e otto decisioni su otto
+- **Data**: 29/08/2026 02:50
+- **Pushato**: **no: 7 commit non pushati**
 - **Albero di lavoro**: **non pulito**, ci sono modifiche non committate
 
 - **Test unitari**: 683 in 23 file, tutti verdi
@@ -50,7 +50,7 @@ sono stati rivisti.
 ## In volo adesso
 
 <!-- JUDGMENT rivisto=a8fee93 -->
-> Rivisto a `a8fee93`, 3 commit fa.
+> Rivisto a `a8fee93`, 4 commit fa.
 
 **Fase 6 sul ramo `fase-6-wip`.** Main resta a `origin/main` e pubblica su Pages:
 non ci si spinge finche' la schermata non e' stata riletta.
@@ -127,8 +127,13 @@ fase stavano tutti dentro le riparazioni del giro prima.
 Sono ferme dal **24 agosto** e vanno fatte **in quest'ordine**, che non e' una
 preferenza: ogni passo distrugge la possibilita' di fare il precedente.
 
-<!-- JUDGMENT rivisto=888699a -->
-> Rivisto a `888699a`, 8 commit fa. **Da riguardare.**
+<!-- JUDGMENT rivisto=58e0880 -->
+> Rivisto a `58e0880`, cioe' a questo commit.
+
+**Rivisto il 29 agosto, derivando invece che ricordando**: il backup piu' recente
+in `~/Downloads` e' ancora `cent20260823.json`, quindi **il passo 1 non e' stato
+fatto** — e nemmeno i tre che lo seguono, che da lui dipendono. La finestra e'
+ancora aperta, e ancora unica.
 
 1. **Esportare un backup dall'app installata SENZA toccare la banda di
    aggiornamento.** Per ADR 005 l'app aggiorna solo quando l'utente tocca, quindi
@@ -189,7 +194,17 @@ preferenza: ogni passo distrugge la possibilita' di fare il precedente.
 
 ## Il disco
 
-<!-- JUDGMENT rivisto=888699a -->
+<!-- JUDGMENT rivisto=58e0880 -->
+> Rivisto a `58e0880`, cioe' a questo commit.
+
+**Rivisto il 29 agosto, derivando: 10 GB liberi, 62% di capacita'.** Il taglio
+regge — `~/.ollama` e' fermo a 12 KB, solo le chiavi — e la regola sulla e2e non
+morde piu': si misura a ogni giro, tre volte in questa sessione.
+
+**La soglia non si toglie.** Il calo che l'ha prodotta veniva dal provisioning di
+una VM, che ricapita a ogni sessione nuova: e' un ciclo, non un evento chiuso.
+
+Sotto, la misura che l'ha prodotta.
 
 **Risolto il 26 agosto: da 2,1 GB liberi a 24 GB, dal 89% al 40%.** Cancellati i
 22 GB di modelli in `~/.ollama` (sei modelli locali), dopo aver fermato
@@ -231,6 +246,119 @@ verde che non riguarda piu' questo codice.
 Se il libero scende sotto il gigabyte questa sessione si e' gia' bloccata una volta
 al punto di non poter eseguire nemmeno `df`: se ricapita, la prima mossa e' liberare
 spazio da un Terminale vero, non da qui.
+
+## Criterio di chiusura della fase 6
+
+**Questa sezione esiste perche' la fase 5 non l'aveva.** I suoi nove criteri
+vivevano in una conversazione, e quando una sessione nuova li ha cercati per
+sapere cosa fosse fatto non c'era niente da leggere. Senza, una fase finisce
+*"quando il critico e' soddisfatto"* — e il mestiere del critico e' non esserlo.
+
+### La regola di uscita
+
+**La fase 6 chiude quando un gate produce zero ALTO, e ogni MEDIO e BASSO ha o una
+riparazione o una voce in [DEBITO.md](DEBITO.md) con la sua condizione di
+riapertura.** Gli ALTO bloccano; il resto no — un difetto accettato **con la sua
+condizione scritta** e' una decisione, uno accettato in silenzio e' un difetto.
+
+### Le voci
+
+Sei sono derivabili e portano il proprio controllo, come le decisioni. **Due sono
+giudizi**, e sono marcate come tali: nessuna macchina puo' dire se una schermata
+si legge.
+
+#### 1. Otto decisioni su otto applicate
+
+<!-- USCITA
+     present: docs/ROADMAP.md :: ### 8. Il controllo D entra adesso
+     present: scripts/dead-surface.mjs :: D. Campi di `src/ui`
+-->
+> **Applicata**, verificato da: `### 8. Il controllo D entra adesso`, `D. Campi di `src/ui``.
+
+Lo dice il blocco "Decisioni" qui sotto, che si rigenera.
+
+#### 2. `home.spec.ts:528` costruisce la propria premessa invece di sperarla
+
+<!-- USCITA
+     present: tests/e2e/home.spec.ts :: premessa costruita
+-->
+> **Non applicata**: manca `premessa costruita` in `tests/e2e/home.spec.ts`.
+
+Sotto contesa il gate anti-CLS **non misura niente e si dichiara verde**: con i
+dati gia' arrivati al primo frame non c'e' nessun guscio da confrontare. Non e' un
+test che passa, e' un test **non misurabile** che si dichiara soddisfatto — la
+confusione fra *non so* e *non c'e'*, sopravvissuta in un test invece che in un
+campo.
+
+Le due riparazioni ammesse, in ordine: **ritardare la sorgente dei dati** perche' il
+primo frame sia garantito senza dati (la premessa diventa costruita dal test e non
+dipende da quanti worker girano); oppure, se non praticabile, il test **si dichiara
+non misurabile** e lo dice, invece di passare. Renderlo permissivo no: accetterebbe
+la tautologia che quella riga esiste per impedire.
+
+#### 3. Un gate con zero ALTO
+
+<!-- USCITA -->
+> **Giudizio**, senza controllo per costruzione: nessuna macchina puo' dirlo.
+
+**Giudizio.** Nessun controllo puo' dirlo: e' il gate stesso a produrlo. Va scritto
+qui l'esito con lo SHA su cui e' stato fatto, altrimenti "il critico e' passato"
+diventa un ricordo.
+
+#### 4. Ogni MEDIO e BASSO riparato o in DEBITO con la sua condizione
+
+<!-- USCITA
+     present: docs/DEBITO.md :: La condizione che la chiude
+-->
+> **Applicata**, verificato da: `La condizione che la chiude`.
+
+Il controllo verifica che la **forma** esista, non che l'elenco sia completo:
+quella parte resta a chi legge il gate. E' il limite dichiarato di questo ago,
+come per la regola in CLAUDE.md.
+
+#### 5. Gli screenshot di Statistiche guardati da un essere umano
+
+<!-- USCITA -->
+> **Giudizio**, senza controllo per costruzione: nessuna macchina puo' dirlo.
+
+**Giudizio, e la sola voce che non puo' diventare altro.** 390 chiaro, 390 scuro,
+320, stato vuoto, stato senza budget. **Un grafico che nessuno ha guardato non e'
+verificato** — e finora nessuno l'ha guardato: tutte le misure di questa fase le
+hanno prese agenti che leggevano numeri, non persone che leggevano una schermata.
+
+E' la stessa distinzione del criterio di chiusura di ogni fase — *"l'app installata
+su un telefono vero"* — applicata dentro la fase: la suite dice che le proporzioni
+sono giuste, **non** che il risultato si legga.
+
+#### 6. Le verifiche verdi e i numeri scritti
+
+<!-- USCITA
+     present: docs/ROADMAP.md :: STATE:BEGIN
+-->
+> **Applicata**, verificato da: `STATE:BEGIN`.
+
+`tsc`, `audit:source` (A, B, C, D), `state --check`; bundle sotto 60 KB; e2e **col
+suo numero**, non "verde". Stanno tutti nel blocco rigenerato in cima, quindi
+questa voce chiede solo che quel blocco esista e sia fresco.
+
+#### 7. Push su main
+
+<!-- USCITA -->
+> **Giudizio**, senza controllo per costruzione: nessuna macchina puo' dirlo.
+
+**Giudizio del proprietario**, non un controllo: main pubblica su Pages, e finche'
+la voce 5 non e' fatta la schermata non l'ha vista nessuno.
+
+#### 8. Statistiche vista sul telefono coi dati veri
+
+<!-- USCITA -->
+> **Giudizio**, senza controllo per costruzione: nessuna macchina puo' dirlo.
+
+**Giudizio**, e comprende il **picco mensile**: una spesa mensile dentro una vista
+settimanale fa un salto una settimana su quattro. E' vero — e' quando i soldi sono
+usciti davvero — ma va guardato coi dati veri prima di dichiararlo accettabile.
+
+---
 
 ## Decisioni prese e non ancora applicate
 

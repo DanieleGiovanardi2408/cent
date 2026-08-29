@@ -720,6 +720,31 @@ quindi nessuno rimisura leggendo: conteggi dei test, peso del bundle, scala dell
 migrazioni, eta' dei giudizi. **E' la differenza fra una guardia e un rumore**, ed
 e' la stessa scelta della calibrazione dell'hook.
 
+## "Deriva, non dettare" vale per i brief agli agenti, non solo per i documenti
+
+Un brief che **descrive lo stato attuale** e' un dettato, e invecchia fra il momento
+in cui lo scrivi e quello in cui l'agente legge. Un brief che dichiara
+l'**obiettivo** e chiede all'agente di derivare lo stato **non puo' invecchiare**.
+
+Due casi, a un giorno di distanza e dalla stessa mano:
+
+- **Nel messaggio di chiusura** e' stato dettato il contenuto di "Decisioni prese e
+  non ancora applicate". Cinque decisioni su sei erano gia' implementate, e sei
+  degli otto difetti elencati erano gia' chiusi: il documento mandava a **rifare
+  lavoro che esisteva**.
+- **In un brief a `ui-craft`** c'era scritto *"`.stat__unlived` **resta**, riscrivi
+  il suo commento"*. Sull'albero era gia' stata cancellata, perche' accorciava la
+  rotaia del pro-rata che ADR 010 rifiuta — con un guardiano a pixel che ne
+  sorveglia l'assenza.
+
+**E la parte buona vale quanto il difetto**: l'agente ha applicato **l'argomento
+invece della lettera**, si e' rifiutato di reintrodurre il pro-rata, e ha riscritto
+il commento della rotaia spiegando perche' anche una versione "attenuata" della
+banda resterebbe sbagliata. **Un agente che disobbedisce a un brief sbagliato per
+la ragione giusta** e' la prova che il metodo si e' propagato oltre chi lo scrive —
+ed e' il motivo per cui un brief deve portare **l'argomento** e non solo
+l'istruzione: senza l'argomento, quella disobbedienza non sarebbe stata possibile.
+
 ## Una riparazione che cita un argomento altrui ne riscrive la condizione sul posto
 
 Non *"come da ADR X"*, e nemmeno *"come per il contorno"*: **"vale perche' qui

@@ -403,6 +403,27 @@ function restampJudgments(text, judgments) {
  * giudizio resta umano — *cosa* si e' deciso e *perche'*; il fatto diventa
  * derivato — se e' nel codice o no.
  *
+ * ## `present:` si preferisce sempre; `absent:` si accoppia
+ *
+ * **Tre condizioni su otto sono state scritte male, e tutte e tre erano `absent`.**
+ * Non e' un caso, ed e' meccanico: un ago `present:` chiede che qualcosa di
+ * preciso sia stato **costruito**, e c'e' un solo modo di soddisfarlo. Un ago
+ * `absent:` chiede che una parola non ci sia, e **lo soddisfa qualunque cosa la
+ * faccia sparire** — un commento cancellato (e' successo: due commenti che
+ * nominavano l'accoppiamento facevano fallire la voce del pavimento), una
+ * flessione diversa (e' successo: *"riscriverne"* contro *"ne riscrive"*), una
+ * classe che doveva restare (e' successo: `tile__label` sopravvive sulla scheda
+ * che non e' stata tolta).
+ *
+ * Quindi: **dove `absent:` e' inevitabile, si accoppia con il `present:` della
+ * cosa che ha preso il posto.** *"X non c'e'"* e' debole; **"X non c'e' e Y c'e'"**
+ * e' forte, perche' Y puo' esistere solo se il lavoro e' stato fatto davvero.
+ *
+ * La voce della scheda lo fa: `absent: variableCents` (il campo esisteva **solo**
+ * per quella scheda, e il controllo D l'ha trovato orfano nel giro stesso) accanto
+ * a `present: stats__titleRange` (il confine del periodo spostato sul titolo di A
+ * **prima** del taglio). Nessuna delle due da sola direbbe che il lavoro e' finito.
+ *
  * ## Il guadagno secondario, che vale da solo
  *
  * **Una decisione la cui applicazione non si riesce a esprimere come controllo e'
@@ -418,14 +439,14 @@ function restampJudgments(text, judgments) {
  */
 function decisionChecks(text) {
   const found = []
-  const block = /<!-- DECISION\s+([\s\S]*?)-->/g
+  const block = /<!-- (DECISION|USCITA)\s+([\s\S]*?)-->/g
   for (let m = block.exec(text); m !== null; m = block.exec(text)) {
     const conditions = []
-    for (const line of m[1].split('\n')) {
+    for (const line of m[2].split('\n')) {
       const c = /^\s*(present|absent):\s*(\S+)\s*::\s*(.+?)\s*$/.exec(line)
       if (c !== null) conditions.push({ kind: c[1], file: c[2], needle: c[3] })
     }
-    found.push({ raw: m[0], conditions })
+    found.push({ raw: m[0], kind: m[1], conditions })
   }
   return found
 }
@@ -452,6 +473,16 @@ function holds(condition) {
 }
 
 function decisionStamp(decision) {
+  if (decision.conditions.length === 0 && decision.kind === 'USCITA') {
+    /*
+     * Un criterio di uscita senza controllo non e' un difetto: e' un **giudizio**,
+     * e alcune cose non possono essere altro. "Gli screenshot li ha guardati una
+     * persona" non ha una macchina che lo dica, e fingere il contrario sarebbe
+     * peggio che ammetterlo — un controllo che finge di coprire un giudizio
+     * produce la falsa sicurezza che questa sezione esiste per togliere.
+     */
+    return '> **Giudizio**, senza controllo per costruzione: nessuna macchina puo\' dirlo.'
+  }
   if (decision.conditions.length === 0) {
     return '> **Senza controllo.** Una decisione che non sa dire come si verifica non si sa nemmeno quando e` finita.'
   }
@@ -469,12 +500,23 @@ function decisionStamp(decision) {
 /** Riscrive la riga di timbro subito dopo ogni blocco `<!-- DECISION ... -->`. */
 function restampDecisions(text) {
   let out = text
+  /*
+   * **Si cerca a partire da dove si e' arrivati, non da capo.**
+   *
+   * Quattro criteri di uscita sono giudizi e portano lo stesso marcatore vuoto,
+   * `<!-- USCITA -->`: testualmente **identici**. Con `indexOf` da zero, tutti e
+   * quattro trovavano il primo, e il timbro veniva riscritto quattro volte sullo
+   * stesso blocco mentre gli altri tre restavano senza. Una collisione di chiavi,
+   * nel codice che serve a non fidarsi della memoria.
+   */
+  let da = 0
   for (const d of decisionChecks(text)) {
-    const at = out.indexOf(d.raw)
+    const at = out.indexOf(d.raw, da)
     if (at === -1) continue
+    da = at + d.raw.length
     const after = at + d.raw.length
     const rest = out.slice(after)
-    const replaced = rest.replace(/^\n+(> \*\*(?:Applicata|Non applicata|Senza controllo)[^\n]*\n\n?)?/, `\n${decisionStamp(d)}\n\n`)
+    const replaced = rest.replace(/^\n+(> \*\*(?:Applicata|Non applicata|Senza controllo|Giudizio)[^\n]*\n\n?)?/, `\n${decisionStamp(d)}\n\n`)
     out = out.slice(0, after) + replaced
   }
   return out
@@ -558,6 +600,14 @@ function renderBlock(f) {
 
 /* -------------------------------------------------------------------- main */
 
+const conteggioUscite = () => {
+  const giudizi = uscite.filter((u) => u.unchecked).length
+  return (
+    `  Criteri di uscita: ${usciteOk}/${uscite.length - giudizi} verificabili soddisfatti, ` +
+    `${giudizi} giudizi che nessuna macchina puo' dire`
+  )
+}
+
 const check = process.argv.includes('--check')
 const text = readFileSync(ROADMAP, 'utf8')
 
@@ -640,8 +690,17 @@ const decisions = decisionChecks(text).map((d) => ({
   applied: d.conditions.length > 0 && d.conditions.every(holds),
   unchecked: d.conditions.length === 0,
 }))
-const applied = decisions.filter((d) => d.applied).length
-const unchecked = decisions.filter((d) => d.unchecked).length
+const applied = decisions.filter((d) => d.kind === 'DECISION' && d.applied).length
+const unchecked = decisions.filter((d) => d.kind === 'DECISION' && d.unchecked).length
+const decisionCount = decisions.filter((d) => d.kind === 'DECISION').length
+/*
+ * I criteri di uscita della fase. Stessa macchina delle decisioni, conteggio
+ * separato: sono due domande diverse — "cosa abbiamo deciso e' nel codice?" e
+ * "la fase si puo' chiudere?" — e un numero solo che le somma non risponde a
+ * nessuna delle due.
+ */
+const uscite = decisions.filter((d) => d.kind === 'USCITA')
+const usciteOk = uscite.filter((d) => d.applied).length
 
 if (check) {
   const drifted = withoutIdentity(next) !== withoutIdentity(text)
@@ -664,9 +723,10 @@ if (check) {
     )
   }
   if (!stale.length && !unknown.length) console.log('  Giudizi: nessuno oltre la soglia.')
+  if (uscite.length > 0) console.log(conteggioUscite())
   if (decisions.length > 0) {
     console.log(
-      `  Decisioni: ${applied}/${decisions.length} applicate` +
+      `  Decisioni: ${applied}/${decisionCount} applicate` +
         (unchecked > 0 ? `, ${unchecked} senza controllo` : ''),
     )
   }
@@ -692,12 +752,13 @@ if (check) {
 
 writeFileSync(ROADMAP, next)
 console.log(`\n  ${ROADMAP}: blocco rigenerato a \`${facts.commit.sha}\`.`)
-if (decisions.length > 0) {
+if (decisionCount > 0) {
   console.log(
-    `  Decisioni: ${applied}/${decisions.length} applicate` +
+    `  Decisioni: ${applied}/${decisionCount} applicate` +
       (unchecked > 0 ? `, ${unchecked} senza controllo` : ''),
   )
 }
+if (uscite.length > 0) console.log(conteggioUscite())
 for (const j of judgments) console.log(`  Giudizio ${j.sha}: ${j.distance} commit fa.`)
 for (const j of stale) console.log(`  ^ oltre la soglia di ${JUDGMENT_MAX_AGE}: da riguardare.`)
 console.log('')
