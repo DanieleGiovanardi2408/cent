@@ -25,16 +25,16 @@ sa gia', e per questo non puo' invecchiare. I giudizi — cosa e' in volo, cosa
 aspetta una persona — stanno sotto, scritti a mano e timbrati con lo SHA a cui
 sono stati rivisti.
 
-- **Ultimo commit**: `35c54f0` — docs: il blocco rigenerato dopo la ripresa
-- **Data**: 29/08/2026 20:15
+- **Ultimo commit**: `29ef2ba` — docs: "In volo adesso" derivato dall'albero, e un timbro che stavo spostando senza guardare
+- **Data**: 29/08/2026 20:22
 - **Ramo**: `fase-6-wip`
 - **Pushato**: si, `origin/fase-6-wip` e' allo stesso commit
-- **Rispetto a `origin/main`**: 6 commit avanti
+- **Rispetto a `origin/main`**: 7 commit avanti
 - **Albero di lavoro**: **non pulito**, ci sono modifiche non committate
 
 - **Test unitari**: 698 in 23 file, tutti verdi
 - **Test e2e dichiarati**: 327 in 14 file, su 4 progetti (iphone-se, iphone-14, landscape, dark)
-- **Test e2e eseguiti**: 309 passati, 18 saltati, in 2.5 minuti. I saltati sono condizionali (ADR 013): solo un'esecuzione li vede.
+- **Test e2e eseguiti**: non misurato — l'ultima esecuzione e' piu' vecchia dei sorgenti — va rilanciata
 - **Bundle iniziale**: 55.3 KB gzip su 60.0 KB (4.7 KB di margine)
 
 - **Schema del database**: 4. La scala delle migrazioni:
@@ -52,7 +52,7 @@ sono stati rivisti.
 ## In volo adesso
 
 <!-- JUDGMENT rivisto=35c54f0 -->
-> Rivisto a `35c54f0`, cioe' a questo commit.
+> Rivisto a `35c54f0`, un commit fa.
 
 **Fase 6 sul ramo `fase-6-wip`, cinque commit sopra `origin/main`.** Il ramo e'
 spinto; `main` non e' stato toccato, quindi **cio' che sta su Pages e' ancora
@@ -622,21 +622,97 @@ implementata.** Scrivere il controllo la filtra mentre la si prende.
 **Sono nate guardando gli screenshot, non da un test.** Vedi "In volo adesso" per i
 dieci rilievi e per cosa questo dice del metodo.
 
-#### 0a. Scala unica per tutta A
+#### 0a. ~~Scala unica per tutta A~~ — **RIAPERTA e ROVESCIATA il 29 agosto sera**
 
 <!-- DECISION
-     absent:  src/ui/stats-view.ts :: sulla scala **della sezione**
-     present: src/ui/stats-view.ts :: scala unica di A
+     present: src/ui/stats-view.ts :: la scala e' della sezione
+     present: src/ui/stats-view.ts :: scaleCents
 -->
-> **Applicata**, verificato da: `!sulla scala **della sezione**`, `scala unica di A`.
+> **Non applicata**: manca `la scala e' della sezione` in `src/ui/stats-view.ts`; manca `scaleCents` in `src/ui/stats-view.ts`.
 
-Tutte le righe di A su **una scala sola**. Le sezioni restano come **intestazioni**
-— raggruppano e ordinano — e **non hanno scale proprie**.
+**La scala torna per sezione.** Ogni sezione di A ha la propria, con la barra piu'
+lunga a fondo colonna, **e la dichiara**. La soglia resta **sull'insieme** — era lei
+la causa del difetto, e non torna indietro.
 
-Si tolgono **due** regole: la scala per sezione e il minimo di tre righe per
-sezione. (La terza che sembrava esserci, *"o tutte le sezioni hanno barre o
-nessuna"*, **non e' mai stata implementata**: era una proposta rimasta aperta su una
-domanda — se valesse anche con una riga sola. Non si toglie: non si mette.)
+##### Perche' era stata presa, e dove l'argomento non valeva
+
+L'argomento era l'anti-pattern numero uno di `dataviz`: *"mai due scale nello stesso
+campo visivo — l'allineamento fra le due e' arbitrario, quindi il grafico inventa
+una correlazione che nei dati non c'e'"*.
+
+**Quell'argomento parla di due scale sullo stesso asse di uno stesso grafico.** Due
+sezioni con intestazione propria, colonna propria e la barra piu' lunga a fondo
+colonna sono un'altra forma — sono **small multiples**, che la stessa disciplina
+non solo ammette ma raccomanda quando due misure hanno ordini di grandezza diversi.
+E' *"una decisione vale dove vale il suo argomento"* nella forma che questo progetto
+non aveva ancora incontrato: non una decisione applicata troppo stretta, ma una
+**applicata troppo larga** — l'argomento era giusto, il caso era un altro.
+
+##### E la ragione per cui sembrava urgente era un'altra
+
+Il difetto misurato era **le fisse senza barre**: 530 € su 642 e nessuna barra,
+mentre la piu' lunga a schermo ne valeva 42. La causa era la **soglia per sezione**
+(due righe contro `BREAKDOWN_MIN_ROWS` = 3), non la scala. Il rilievo 10 nominava
+due cause dove ce n'era una, e la seconda e' stata riparata **senza mai misurarla**.
+
+##### Il criterio, che vale oltre questo caso
+
+> **Un difetto misurato batte un difetto ipotizzato.**
+
+Il difetto della scala unica e' stato misurato in pagina, 390 punti, colonna 195,81
+px, sull'export vero:
+
+| | importo | scala unica | scala per sezione |
+|---|---|---|---|
+| Casa (fisse) | 507,00 € | 195,81 px | 195,81 px |
+| Spesa | 42,00 € | **19,42** | 195,81 |
+| Svago | 26,00 € | **13,34** | 122,55 |
+| Coffeeshop | 24,00 € | **12,59** | 113,39 |
+| Fuori | 10,00 € | **7,28** | 49,28 |
+
+Svago e Coffeeshop distano **0,75 px**, Coffeeshop e Trasporti (23,00 €) **0,37**.
+Sotto il pixel non e' *"difficile da confrontare"*: e' **identico**. Il difetto
+dell'altra forma — la correlazione inventata — resta **ipotetico**, e per di piu' e'
+oggi contraddetto prima di potersi formare (vedi sotto).
+
+##### Cosa e' cambiato sotto l'argomento mentre lo applicavamo
+
+**La barra divisa toglie a 0a la sua ragione principale.** Il rischio delle due
+scale era che l'occhio confrontasse una barra di una sezione con una dell'altra e ne
+ricavasse una proporzione falsa. Da 0b la proporzione vera sta **scritta sopra**:
+chi guarda ha `530 / 112` in cima prima di arrivare alle righe. La lettura sbagliata
+e' contraddetta da un elemento che nel momento in cui 0a e' stata presa **non
+esisteva ancora**.
+
+##### La condizione, che e' la parte nuova e non c'era prima
+
+**Ogni sezione dichiara la propria scala.** Non basta che le scale siano due: devono
+**dirsi**, perche' sui dati veri `Casa 507,00 €` e `Spesa 42,00 €` disegnano
+**esattamente la stessa lunghezza**, e due barre piene identiche accanto a due
+importi di un ordine di grandezza diverso sono una bugia grafica finche' qualcosa
+non dice che i due fondi colonna valgono cose diverse.
+
+La forma precedente diceva *"si dichiarano nella geometria: due barre piene con due
+importi diversi dicono da sole che le scale sono due"*. **Non e' vero e non lo era
+allora**: dice che *qualcosa* non torna, non *cosa*. E' una deduzione chiesta al
+lettore, e questo progetto ha una regola contro — *nessun messaggio afferma un fatto
+che l'utente non puo' verificare*, che vale identico per un fatto che l'utente deve
+**inferire**.
+
+Quindi il modello consegna `BreakdownSection.scaleCents` — quanto vale una barra
+piena in quella sezione — e la schermata lo scrive. Il controllo di questa voce
+guarda quel campo, non una frase.
+
+##### Come ci si e' arrivati, e vale quanto la decisione
+
+Non da un ragionamento: da **due immagini affiancate**, stessa fixture, stesso
+viewport, stesso periodo, con la variante costruita dietro un provino non
+committato. La misura diceva gia' tutto e non era bastata a nessuno dei due; le due
+immagini hanno chiuso la questione in un secondo.
+
+E' la stessa lezione del criterio 5, applicata a una decisione invece che a un gate:
+**un grafico che nessuno ha guardato non e' verificato** — e quando due forme sono
+entrambe difendibili a parole, si guardano invece di discuterle.
 
 **Il motivo e' l'incrocio, non la singola regola.** Quelle regole erano ciascuna
 difendibile, e il difetto trovato guardando lo schermo — **le barre solo nelle
