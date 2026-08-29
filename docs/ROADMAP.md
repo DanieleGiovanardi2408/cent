@@ -25,9 +25,11 @@ sa gia', e per questo non puo' invecchiare. I giudizi — cosa e' in volo, cosa
 aspetta una persona — stanno sotto, scritti a mano e timbrati con lo SHA a cui
 sono stati rivisti.
 
-- **Ultimo commit**: `d9d6471` — docs: il criterio gate il link agli amici, non main — emendato, non scavalcato
-- **Data**: 29/08/2026 03:21
-- **Pushato**: si, `origin/main` e' allo stesso commit
+- **Ultimo commit**: `848f417` — docs: dieci rilievi da uno sguardo, e le cinque decisioni di disegno che ne escono
+- **Data**: 29/08/2026 16:08
+- **Ramo**: `fase-6-wip`
+- **Pushato**: si, `origin/fase-6-wip` e' allo stesso commit
+- **Rispetto a `origin/main`**: 1 commit avanti
 - **Albero di lavoro**: **non pulito**, ci sono modifiche non committate
 
 - **Test unitari**: 683 in 23 file, tutti verdi
@@ -49,11 +51,43 @@ sono stati rivisti.
 
 ## In volo adesso
 
-<!-- JUDGMENT rivisto=b289fff -->
-> Rivisto a `b289fff`, un commit fa.
+<!-- JUDGMENT rivisto=848f417 -->
+> Rivisto a `848f417`, cioe' a questo commit.
 
-**Fase 6 sul ramo `fase-6-wip`.** Main resta a `origin/main` e pubblica su Pages:
-non ci si spinge finche' la schermata non e' stata riletta.
+**Fase 6 sul ramo `fase-6-wip`.** `origin/main` e' a `d9d6471` — un commit
+indietro, e quel commit e' documentazione — quindi **la fase 6 e' gia' su Pages**,
+`58e0880` compreso.
+
+### Qui c'era scritto che non ci si spingeva, e il push era gia' avvenuto
+
+La riga precedente diceva *"Main resta a `origin/main` e pubblica su Pages: non ci
+si spinge finche' la schermata non e' stata riletta"*. Timbrata `b289fff`, cioe'
+**il commit prima dell'emendamento che la supera**: `d9d6471` ha riscritto la voce
+7 del criterio di chiusura stabilendo che **il push su main non e' un passo a se',
+e' il modo in cui si esegue la voce 5** — Statistiche non e' guardabile sul
+telefono se non passando da Pages.
+
+L'emendamento e' stato applicato dove era stato discusso e **non e' stato cercato
+dove altro valeva**. Questa riga e' rimasta nella forma precedente, e da allora
+descriveva come divieto cio' che era gia' diventato lo strumento: chi la legge oggi
+trova un albero che la contraddice e non ha modo di sapere quale delle due sia
+invecchiata.
+
+E' **la settima ricorrenza di "una decisione vale dove vale il suo argomento"**, in
+una forma nuova: non una decisione applicata troppo stretta, ma una decisione
+**emendata** in un punto mentre la sua vecchia formulazione restava viva in un
+altro. Il costo e' lo stesso — un difetto che si crede gia' corretto — e la ragione
+per cui e' arrivata qui e' la solita: la sezione degli emendamenti e la sezione dei
+giudizi sono due posti, e chi emenda sta guardando il primo.
+
+**La regola operativa che ne segue, ed e' controllabile a occhio**: chi emenda una
+voce del criterio di chiusura rilegge "In volo adesso" nello stesso gesto. Sono le
+due meta' scritte a mano dello stesso documento, e l'una racconta cio' che l'altra
+decide.
+
+**Cosa vale adesso**: il push su main e' consentito e atteso, perche' e' cio' che
+rende la schermata guardabile. Cio' che resta chiuso e' **dare il link a qualcuno**
+(voce 7), e resta chiuso finche' le voci 5 e 8 non sono fatte.
 
 ### Come e' stata derivata questa lista, e perche' la riga lo dice
 
@@ -177,7 +211,7 @@ Sono ferme dal **24 agosto** e vanno fatte **in quest'ordine**, che non e' una
 preferenza: ogni passo distrugge la possibilita' di fare il precedente.
 
 <!-- JUDGMENT rivisto=58e0880 -->
-> Rivisto a `58e0880`, 3 commit fa.
+> Rivisto a `58e0880`, 4 commit fa.
 
 ### Stato al 29 agosto: **i passi 1 e 2 sono FATTI**
 
@@ -492,6 +526,7 @@ giorno in cui serviva davvero.
 ## Decisioni prese e non ancora applicate
 
 <!-- JUDGMENT rivisto=b289fff -->
+> Rivisto a `b289fff`, 2 commit fa.
 
 **L'esistenza di una decisione e' un giudizio; la sua applicazione e' un fatto
 derivabile.** Erano due cose diverse nella stessa sezione, ed e' per questo che

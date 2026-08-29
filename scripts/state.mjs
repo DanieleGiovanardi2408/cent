@@ -49,8 +49,9 @@
  * lupo, la stessa che questo progetto ha gia' deciso di non sopportare per l'hook
  * lento e per il test che allarma a vuoto.
  *
- * Quindi il confronto salta le quattro righe di identita' (`Ultimo commit`,
- * `Data`, `Pushato`, `Albero di lavoro`): sono vere al momento in cui si
+ * Quindi il confronto salta le righe di identita' (`Ultimo commit`, `Data`,
+ * `Ramo`, `Pushato`, `Rispetto a origin/main`, `Albero di lavoro`): cambiano a
+ * ogni commit e a ogni cambio di ramo per costruzione. Sono vere al momento in cui si
  * rigenera, si rileggono in un secondo con `git log -1`, e nessuno le usa per
  * decidere. Restano nel documento perche' servono **a chi legge**, non al check.
  *
@@ -107,25 +108,86 @@ const git = (...args) => sh('git', args)
 
 /* ------------------------------------------------------------------ commit */
 
+/**
+ * Il confronto e' col **proprio upstream**, e la riga **nomina il ramo**.
+ *
+ * Qui c'era `origin/main..HEAD` cablato, e lo eseguiva anche stando su un ramo di
+ * lavoro: il 29 agosto, con `fase-6-wip` allineato al proprio origin, il blocco
+ * rigenerato scriveva **"no: 1 commit non pushati"**. Il numero era vero contro
+ * `main` e la frase era falsa contro il ramo su cui si stava lavorando — e il
+ * blocco non diceva contro cosa avesse misurato.
+ *
+ * E' la malattia che questo blocco esiste per chiudere, ricomparsa dentro lo
+ * script che lo genera: **una derivazione vale dove ha guardato, e deve dire
+ * dove.** Un fatto rigenerato non puo' invecchiare, ma puo' misurare un'altra
+ * cosa da quella che il lettore crede — che e' peggio, perche' si presenta come
+ * misura.
+ *
+ * Quindi due righe invece di una: **`Pushato`** risponde a *"il mio lavoro e' al
+ * sicuro?"* e guarda `@{upstream}`; **`Rispetto a origin/main`** risponde a *"cosa
+ * c'e' in produzione?"* e resta perche' e' Pages a costruire da li'. Su `main`
+ * l'upstream **e'** `origin/main` e la seconda riga sparisce, invece di ripetere
+ * la prima con altre parole.
+ */
 function commitFacts() {
   const sha = git('rev-parse', '--short', 'HEAD')
   const subject = git('log', '-1', '--format=%s')
   const date = git('log', '-1', '--format=%ad', '--date=format:%d/%m/%Y %H:%M')
+  const branch = git('rev-parse', '--abbrev-ref', 'HEAD')
+
+  // Il ramo puo' non avere upstream (appena creato, mai pushato). Non e' un
+  // errore dello script: e' un fatto sul ramo, e si scrive come tale.
+  let upstream = null
+  try {
+    upstream = git('rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}')
+  } catch {
+    upstream = null
+  }
+
+  const compare = (ref) => {
+    const ahead = git('rev-list', '--count', `${ref}..HEAD`)
+    const behind = git('rev-list', '--count', `HEAD..${ref}`)
+    return { ahead: Number(ahead), behind: Number(behind) }
+  }
+
   let pushed
   try {
-    const ahead = git('rev-list', '--count', 'origin/main..HEAD')
-    const behind = git('rev-list', '--count', 'HEAD..origin/main')
-    pushed =
-      ahead === '0' && behind === '0'
-        ? "si, `origin/main` e' allo stesso commit"
-        : ahead === '0'
-          ? `no: **origin/main e' avanti di ${behind}**`
-          : `**no: ${ahead} commit non pushati**`
+    if (upstream === null) {
+      pushed = `**no: \`${branch}\` non ha un upstream, non e' mai stato pushato**`
+    } else {
+      const { ahead, behind } = compare(upstream)
+      pushed =
+        ahead === 0 && behind === 0
+          ? `si, \`${upstream}\` e' allo stesso commit`
+          : ahead === 0
+            ? `no: **\`${upstream}\` e' avanti di ${behind}**`
+            : `**no: ${ahead} commit non pushati su \`${upstream}\`**`
+    }
   } catch {
-    pushed = 'non verificabile (nessun `origin/main` raggiungibile)'
+    pushed = `non verificabile (nessun \`${upstream ?? 'upstream'}\` raggiungibile)`
   }
+
+  // La seconda riga esiste solo quando dice qualcosa che la prima non dice.
+  let vsMain = null
+  if (upstream !== 'origin/main') {
+    try {
+      const { ahead, behind } = compare('origin/main')
+      vsMain =
+        ahead === 0 && behind === 0
+          ? 'allo stesso commit'
+          : [
+              ahead > 0 ? `${ahead} commit avanti` : null,
+              behind > 0 ? `${behind} commit indietro` : null,
+            ]
+              .filter(Boolean)
+              .join(', ')
+    } catch {
+      vsMain = 'non verificabile (nessun `origin/main` raggiungibile)'
+    }
+  }
+
   const dirty = git('status', '--porcelain')
-  return { sha, subject, date, pushed, dirty }
+  return { sha, subject, date, branch, pushed, vsMain, dirty }
 }
 
 /* ------------------------------------------------------------------- test */
@@ -541,7 +603,11 @@ function renderBlock(f) {
   L.push('')
   L.push(`- **Ultimo commit**: \`${f.commit.sha}\` — ${f.commit.subject}`)
   L.push(`- **Data**: ${f.commit.date}`)
+  L.push(`- **Ramo**: \`${f.commit.branch}\``)
   L.push(`- **Pushato**: ${f.commit.pushed}`)
+  if (f.commit.vsMain !== null) {
+    L.push(`- **Rispetto a \`origin/main\`**: ${f.commit.vsMain}`)
+  }
   L.push(
     `- **Albero di lavoro**: ${f.commit.dirty ? '**non pulito**, ci sono modifiche non committate' : 'pulito'}`,
   )
@@ -677,7 +743,9 @@ const withoutIdentity = (s) =>
     .split('\n')
     .filter(
       (line) =>
-        !/^- \*\*(Ultimo commit|Data|Pushato|Albero di lavoro)\*\*/.test(line) &&
+        !/^- \*\*(Ultimo commit|Data|Ramo|Pushato|Rispetto a `origin\/main`|Albero di lavoro)\*\*/.test(
+          line,
+        ) &&
         !/^> Rivisto a /.test(line) &&
         !unmeasurable.some((u) => line.startsWith(`- **${u.label}**`)),
     )
