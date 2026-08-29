@@ -25,17 +25,17 @@ sa gia', e per questo non puo' invecchiare. I giudizi — cosa e' in volo, cosa
 aspetta una persona — stanno sotto, scritti a mano e timbrati con lo SHA a cui
 sono stati rivisti.
 
-- **Ultimo commit**: `01e3247` — fix: il fatto "Pushato" misurava contro un ramo che non era il proprio
-- **Data**: 29/08/2026 16:17
+- **Ultimo commit**: `1267f4b` — docs: si salva quando un agente rientra, perche' la fine puo' non essere nostra
+- **Data**: 29/08/2026 20:15
 - **Ramo**: `fase-6-wip`
-- **Pushato**: **no: 1 commit non pushati su `origin/fase-6-wip`**
-- **Rispetto a `origin/main`**: 2 commit avanti
+- **Pushato**: si, `origin/fase-6-wip` e' allo stesso commit
+- **Rispetto a `origin/main`**: 5 commit avanti
 - **Albero di lavoro**: **non pulito**, ci sono modifiche non committate
 
 - **Test unitari**: 698 in 23 file, tutti verdi
-- **Test e2e dichiarati**: 321 in 14 file, su 4 progetti (iphone-se, iphone-14, landscape, dark)
-- **Test e2e eseguiti**: 305 passati, 16 saltati, in 2.5 minuti. I saltati sono condizionali (ADR 013): solo un'esecuzione li vede.
-- **Bundle iniziale**: 55.2 KB gzip su 60.0 KB (4.8 KB di margine)
+- **Test e2e dichiarati**: 327 in 14 file, su 4 progetti (iphone-se, iphone-14, landscape, dark)
+- **Test e2e eseguiti**: 309 passati, 18 saltati, in 2.5 minuti. I saltati sono condizionali (ADR 013): solo un'esecuzione li vede.
+- **Bundle iniziale**: 55.3 KB gzip su 60.0 KB (4.7 KB di margine)
 
 - **Schema del database**: 4. La scala delle migrazioni:
   - **1** — Schema iniziale: expenses, categories, recurringRules, budgets, settings
@@ -52,7 +52,7 @@ sono stati rivisti.
 ## In volo adesso
 
 <!-- JUDGMENT rivisto=848f417 -->
-> Rivisto a `848f417`, un commit fa.
+> Rivisto a `848f417`, 4 commit fa.
 
 **Fase 6 sul ramo `fase-6-wip`.** `origin/main` e' a `d9d6471` — un commit
 indietro, e quel commit e' documentazione — quindi **la fase 6 e' gia' su Pages**,
@@ -256,7 +256,7 @@ Sono ferme dal **24 agosto** e vanno fatte **in quest'ordine**, che non e' una
 preferenza: ogni passo distrugge la possibilita' di fare il precedente.
 
 <!-- JUDGMENT rivisto=58e0880 -->
-> Rivisto a `58e0880`, 5 commit fa.
+> Rivisto a `58e0880`, 8 commit fa. **Da riguardare.**
 
 ### Stato al 29 agosto: **i passi 1 e 2 sono FATTI**
 
@@ -571,7 +571,7 @@ giorno in cui serviva davvero.
 ## Decisioni prese e non ancora applicate
 
 <!-- JUDGMENT rivisto=b289fff -->
-> Rivisto a `b289fff`, 3 commit fa.
+> Rivisto a `b289fff`, 6 commit fa. **Da riguardare.**
 
 **L'esistenza di una decisione e' un giudizio; la sua applicazione e' un fatto
 derivabile.** Erano due cose diverse nella stessa sezione, ed e' per questo che
