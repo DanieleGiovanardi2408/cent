@@ -404,6 +404,42 @@ Con il criterio in mano si decide caso per caso invece di ricordarsi un divieto 
 che e' il modo in cui questa regola ha una possibilita' di reggere il giorno in cui
 si hanno due agenti in volo e fretta.
 
+### E il rovescio: si salva quando un agente rientra, non a fine sessione
+
+La regola qui sopra dice **quando non misurare**. Questa dice **quando salvare**, ed
+e' la stessa famiglia: tutte e due guardano il momento in cui l'albero e' fermo.
+
+> **Commit e push del ramo ogni volta che un agente rientra.** Non a fine sessione.
+
+**Un agente che consegna e' il punto naturale in cui l'albero e' coerente** — ha
+appena finito, `tsc` e la suite sono appena stati letti — e committare li' costa
+dieci secondi.
+
+**Perche' non basta farlo alla fine.** Perche' la fine puo' non essere nostra. Tre
+sessioni di questo progetto sono finite di colpo: le prime due le abbiamo chiuse
+noi, con calma; la terza e' stata **terminata dal limite di sessione** mentre
+`ui-craft` scriveva, e in quel momento vivevano solo su questa macchina **tre
+commit** piu' il lavoro non committato di due agenti. Nessuna procedura di chiusura
+puo' proteggere da una chiusura che non ti lascia eseguire niente: **una fine
+involontaria non esegue una chiusura ordinata**, quindi la protezione non puo'
+stare alla fine — dev'essere **periodica**.
+
+E' lo stesso spostamento gia' fatto due volte in questo progetto: dal *ricordare* al
+*leggere* per le dichiarazioni di irraggiungibilita', dal *ricordare* all'*hook* per
+il typecheck. Qui e' dal *ricordare a fine sessione* a **un innesco che arriva da
+solo**, perche' l'arrivo di un rapporto e' un evento che non si puo' dimenticare: e'
+gia' sullo schermo.
+
+**Il ramo, mai `main`.** Salvare non e' spedire — su `main` continuano a valere i
+criteri di chiusura, gate compreso. Un ramo di lavoro spinto e' una copia, e una
+copia non ha bisogno di essere finita per valere.
+
+**Cosa fare se `tsc` e' rosso perche' il lavoro e' a meta'**: se e' questione di
+poche righe si completa; altrimenti si committa lo stesso con `--no-verify`
+**dichiarato nel messaggio insieme alla ragione**. E' ammesso quando si **salva** un
+albero, mai quando se ne **spedisce** uno. Un messaggio che tace un `--no-verify` e'
+gia' un debito dichiarato in un messaggio di commit, cioe' non dichiarato affatto.
+
 ### La regola da sola non basta: `.githooks/pre-commit`
 Questa e' esattamente il tipo di regola che fallisce, perche' chiede di ricordarsi
 una cosa **nel momento in cui si stanno gestendo due agenti e si ha fretta**.
