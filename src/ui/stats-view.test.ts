@@ -419,7 +419,7 @@ describe('il totale di parte esiste solo dove ha qualcosa da spiegare', () => {
     expect(unica(sezione(v, 'variable')).cents).toBe(400)
     // La cifra del periodo resta leggibile dove ha una casa: le metriche, e la
     // scheda in testa che le usa.
-    expect(v.tiles.variableCents).toBe(400)
+    expect(v.current.spentCents).toBe(400)
     expect(v.current.recurringSpentCents).toBe(90000)
   })
 
@@ -628,14 +628,24 @@ describe('A comprende le fisse, B no (ADR 016 §1)', () => {
   })
 
   /*
-   * **Identita' con la Home**, non due calcoli confrontati. La cifra grande
-   * della Home e' lo speso *del budget*: e' `tiles.variableCents` a doverla
-   * ripetere al centesimo.
+   * **Identita' con la Home**, non due calcoli confrontati.
+   *
+   * La portava `tiles.variableCents`, la cifra della scheda "Quotidiane". Quella
+   * scheda **e' uscita** — ripeteva il totale di una sezione trenta pixel piu'
+   * sotto — e con lei il campo, che il controllo D ha trovato senza lettori nel
+   * giro stesso in cui e' rimasto orfano.
+   *
+   * **Il fatto da difendere non e' cambiato**: la cifra grande della Home e' lo
+   * speso *del budget*, e questa schermata deve ripeterla al centesimo. E'
+   * cambiato **chi la porta** — adesso il totale della parte variabile di A — e
+   * l'asserzione lo segue invece di seguire il campo cancellato. Un'identita' che
+   * si riscrive sul numero atteso quando il portatore cambia smette di essere
+   * un'identita'.
    */
-  it('la cifra variabile in testa e esattamente lo speso del periodo', () => {
+  it('il totale della parte variabile e esattamente lo speso del periodo', () => {
     const v = ready({ expenses: [...spese, affitto] })
-    expect(v.tiles.variableCents).toBe(v.current.spentCents)
-    expect(v.tiles.variableCents).toBe(7000)
+    expect(totale(sezione(v, 'variable'))).toBe(v.current.spentCents)
+    expect(v.current.spentCents).toBe(7000)
   })
 })
 
@@ -775,7 +785,7 @@ describe('dati ostili', () => {
     expect(sezione(v, 'variable')?.rows.map((r) => r.cents)).toEqual([4400, 1000, 1, 0])
     expect(totale(sezione(v, 'fixed'))).toBe(93900)
     expect(totale(sezione(v, 'variable'))).toBe(5401)
-    expect(v.tiles.variableCents).toBe(5401)
+    expect(v.current.spentCents).toBe(5401)
     // La categoria mai usata non e' una riga in nessuna delle due.
     for (const s of v.byCategory.sections) {
       expect(s.rows.map((r) => r.categoryId)).not.toContain('h-mai')
@@ -891,7 +901,7 @@ describe('B — spese si, budget no', () => {
     // La cifra che B avrebbe ristampato e' **esattamente** quella della scheda,
     // e il periodo pure: e' per questo che ristamparla non aggiungeva niente.
     // Se un giorno la soglia tornasse a governare le sole barre, questa cade.
-    expect(v.tiles.variableCents).toBe(9000)
+    expect(v.current.spentCents).toBe(9000)
     expect(v.current.range).toEqual({ start: '2026-08-24', end: '2026-08-30' })
     invariantiDiA(v)
   })
@@ -902,6 +912,235 @@ describe('B — spese si, budget no', () => {
     expect(rows[rows.length - 1]?.current).toBe(true)
     expect(rows[rows.length - 1]?.range).toEqual({ start: '2026-08-24', end: '2026-08-30' })
     expect(rows.filter((r) => r.current)).toHaveLength(1)
+  })
+})
+
+/*
+ * **Il periodo in corso non e' un periodo finito**, e per un giorno lo e' stato
+ * ovunque non ci fosse un budget.
+ *
+ * Il difetto misurato, senza budget, di mercoledi': tre settimane piene da
+ * 70,00 € e la corrente con 30,00 € su tre giorni. Barre
+ * `175,98 / 175,98 / 175,98 / 77,20` px, DOM identico, **nessuna marca**. Il
+ * passo e' lo stesso in tutte e quattro — 10,00 € al giorno — e la forma diceva
+ * 44%. L'unica marca che dichiarava l'incompletezza era la regione fra il
+ * maturato e la barra, cioe' una cosa che **esiste solo se esiste la rotaia**:
+ * l'incompletezza era legata a un campo con cui non c'entra niente.
+ *
+ * Qui si asserisce che i due numeri escono, che escono **dalla riga giusta**, e
+ * che `current` non e' nessuna delle due scorciatoie che gli somigliano. Come si
+ * disegnano e' del componente: di lunghezze, in questo blocco, non ce n'e'
+ * nessuna in piu' di prima — e non e' una dimenticanza, e' l'argomento su
+ * `PeriodBar.daysLived`.
+ */
+describe('B — un periodo in corso si dichiara tale anche senza budget', () => {
+  /** Vero se `range` contiene `day`. Il **fatto** che `current` afferma. */
+  function contiene(range: { start: string; end: string }, day: string): boolean {
+    return range.start <= day && day <= range.end
+  }
+
+  /**
+   * La scena misurata: 10,00 € al giorno da tre settimane e mezza. Le tre
+   * settimane chiuse fanno 70,00 €, la corrente ne ha vissuti tre e fa 30,00 €.
+   */
+  const passoCostante: readonly Expense[] = [
+    makeExpense({ date: '2026-08-03', categoryId: 'c-cibo', amountCents: 7000 }),
+    makeExpense({ date: '2026-08-10', categoryId: 'c-cibo', amountCents: 7000 }),
+    makeExpense({ date: '2026-08-17', categoryId: 'c-cibo', amountCents: 7000 }),
+    makeExpense({ date: '2026-08-24', categoryId: 'c-cibo', amountCents: 3000 }),
+  ]
+
+  it('la riga corrente porta i giorni vissuti, le altre no perche non ne hanno da portare', () => {
+    const v = ready({ expenses: passoCostante })
+    const rows = v.byPeriod.rows
+    expect(rows.map((r) => r.cents)).toEqual([7000, 7000, 7000, 3000])
+    // Le tre chiuse: vissute per intero. Se i giorni venissero dalle metriche
+    // del periodo **corrente** invece che dalle proprie, qui sarebbero 3 su 7 e
+    // tre settimane finite risulterebbero eternamente incomplete.
+    for (const riga of rows.slice(0, 3)) {
+      expect(riga.daysLived).toBe(7)
+      expect(riga.daysTotal).toBe(7)
+    }
+    const corrente = rows[rows.length - 1]!
+    expect(corrente.daysLived).toBe(3)
+    expect(corrente.daysTotal).toBe(7)
+    // Ed escono dalle metriche gia' calcolate, non da una seconda aritmetica.
+    expect(corrente.daysLived).toBe(v.current.daysLived)
+    expect(corrente.daysTotal).toBe(v.current.daysTotal)
+  })
+
+  it('senza i due giorni la forma dice 44% dove il passo e identico', () => {
+    const v = ready({ expenses: passoCostante })
+    const rows = v.byPeriod.rows
+    // Nessuna traccia: e' lo stato senza budget, cioe' quello in cui la marca
+    // dell'incompletezza non esisteva affatto.
+    expect(rows.every((r) => r.track === null)).toBe(true)
+    // Il fatto che la forma non dice e i due interi si': **lo stesso passo**.
+    expect(rows.map((r) => r.cents / r.daysLived)).toEqual([1000, 1000, 1000, 1000])
+    // E la forma, che resta quella che era: la barra corrente vale il 44% della
+    // piena. Non e' un difetto da correggere sull'asse — 3/7 dei soldi sono 3/7
+    // dei soldi — e' un fatto che va **dichiarato** accanto, e la dichiarazione
+    // sono i due numeri sopra.
+    const corrente = rows[rows.length - 1]!
+    expect(rows[0]?.fraction).toBe(1)
+    expect(corrente.fraction).toBeCloseTo(BAR_MIN_FRACTION + (1 - BAR_MIN_FRACTION) * (3 / 7), 10)
+    // Il **rapporto** misurato dal gate — 77,20 px contro 175,98 — e' questo, e
+    // non si scrive in pixel: la larghezza della colonna dipende dal viewport
+    // (vedi `COLONNA_MIN_PX` e `COLONNA_PX`), il rapporto no. Quello che il
+    // difetto diceva era 44%, ed e' ancora 44%: e' giusto che lo dica, perche'
+    // 3/7 dei soldi sono 3/7 dei soldi. Cio' che mancava era il resto della
+    // frase.
+    expect(corrente.fraction / (rows[0]?.fraction ?? 1)).toBeCloseTo(77.2 / 175.98, 3)
+  })
+
+  it('l ultimo giorno del periodo i giorni sono pari e il periodo e ancora in corso', () => {
+    // Domenica 30 agosto, ultimo giorno della settimana 24–30. `daysLived`
+    // vale 7 come `daysTotal`, e ci si puo' ancora spendere per tutto il giorno.
+    //
+    // **E' la mutazione che questo test esiste per prendere**: `current` dedotto
+    // da `daysLived < daysTotal` qui vale `false`, la riga di oggi smette di
+    // esistere, e succede una volta a settimana — la domenica, cioe' il giorno
+    // in cui quanto resta e' la cosa piu' utile della schermata.
+    const v = ready({
+      expenses: [
+        makeExpense({ date: '2026-08-19', categoryId: 'c-cibo', amountCents: 4000 }),
+        makeExpense({ date: '2026-08-30', categoryId: 'c-cibo', amountCents: 1000 }),
+      ],
+      day: '2026-08-30',
+    })
+    const corrente = v.byPeriod.rows.find((r) => r.current)
+    expect(corrente).toBeDefined()
+    expect(corrente?.range).toEqual({ start: '2026-08-24', end: '2026-08-30' })
+    expect(corrente?.daysLived).toBe(7)
+    expect(corrente?.daysTotal).toBe(7)
+    expect(corrente?.daysLived).toBe(corrente?.daysTotal)
+    // Il periodo e' in corso, e non e' un'opinione: resta un giorno, che e'
+    // oggi. `daysRemaining` conta oggi incluso.
+    expect(v.current.daysRemaining).toBe(1)
+    // La riga corrente esiste **una** e non zero: sotto la mutazione questa
+    // vale 0.
+    expect(v.byPeriod.rows.filter((r) => r.current)).toHaveLength(1)
+  })
+
+  it('current e il periodo che contiene oggi, non l ultima riga ne la piu alta', () => {
+    // Quattro settimane, la corrente e' la piu' **bassa** e in mezzo ce n'e' una
+    // a zero: nessuna delle scorciatoie che somigliano a `current` — la barra
+    // piu' alta, l'unica non nulla, quella con la traccia — la indovina.
+    const v = ready({
+      expenses: [
+        makeExpense({ date: '2026-08-05', categoryId: 'c-cibo', amountCents: 5000 }),
+        makeExpense({ date: '2026-08-19', categoryId: 'c-spesa', amountCents: 8000 }),
+        makeExpense({ date: OGGI, categoryId: 'c-cibo', amountCents: 1000 }),
+      ],
+    })
+    const rows = v.byPeriod.rows
+    expect(rows.map((r) => r.range.start)).toEqual([
+      '2026-08-03',
+      '2026-08-10',
+      '2026-08-17',
+      '2026-08-24',
+    ])
+    expect(rows.map((r) => r.cents)).toEqual([5000, 0, 8000, 1000])
+    // **Il fatto**, ricalcolato dalle date invece che dalla posizione: `current`
+    // e' vero esattamente dove il periodo contiene oggi.
+    expect(rows.map((r) => r.current)).toEqual(rows.map((r) => contiene(r.range, OGGI)))
+    expect(rows.map((r) => r.current)).toEqual([false, false, false, true])
+    // E non e' nessuna delle tre coincidenze: la riga piu' alta non e' corrente,
+    // quella a zero non lo e', e la corrente e' la piu' corta delle non nulle.
+    const piuAlta = rows.reduce((max, r) => (r.cents > max.cents ? r : max), rows[0]!)
+    expect(piuAlta.current).toBe(false)
+    expect(rows.find((r) => r.cents === 0)?.current).toBe(false)
+  })
+
+  it('coincide con l ultima riga, e il test dice **perche** invece di fotografarlo', () => {
+    // `current` e l'ultima riga coincidono, ed e' una **conseguenza**:
+    // `trendRanges` costruisce la finestra da `input.day`, e la finestra si
+    // taglia dalla testa e mai dal fondo. Asserire la sola coincidenza sarebbe
+    // la fotografia di un accidente, e domani giustificherebbe di leggere la
+    // posizione al posto del campo — che e' l'errore che il componente puo'
+    // fare, dove compilerebbe e passerebbe ogni fixture.
+    const v = ready({ expenses: passoCostante })
+    const rows = v.byPeriod.rows
+    const ultima = rows[rows.length - 1]!
+    expect(ultima.current).toBe(true)
+    // La ragione: l'ultimo intervallo contiene oggi, e **tutti** quelli prima
+    // finiscono prima. Se la finestra scorresse indietro fino a dove i dati ci
+    // sono — la tentazione rifiutata su `inWindow` — questa cadrebbe qui,
+    // invece che a schermo.
+    expect(contiene(ultima.range, OGGI)).toBe(true)
+    for (const riga of rows.slice(0, -1)) expect(riga.range.end < OGGI).toBe(true)
+    // E la conseguenza sui giorni: solo l'ultima puo' averli diversi.
+    for (const riga of rows.slice(0, -1)) expect(riga.daysLived).toBe(riga.daysTotal)
+  })
+
+  it('un dato futuro e un orologio spostato non spostano il fondo della finestra', () => {
+    // **La verifica del paragrafo qui sopra, sugli unici due scrittori che
+    // potrebbero romperlo**: un backup con spese datate in avanti e l'orologio
+    // del dispositivo tornato indietro (vedi `StatsView`, ramo `outside`, che li
+    // enumera). Se uno dei due producesse una finestra che **non** finisce con
+    // oggi, l'ultima riga sarebbe un periodo chiuso e leggere la posizione
+    // invece del campo diventerebbe un difetto a schermo.
+    //
+    // Oggi non succede, e non e' un caso: `trendRanges` costruisce la finestra
+    // da `input.day` e `inWindow` la taglia solo dalla testa. Questo test lo
+    // rende **osservabile** invece che dedotto — e cade il giorno in cui una
+    // delle due cose cambia.
+    const orologioIndietro = ready({
+      day: '2026-08-10',
+      expenses: [
+        makeExpense({ date: '2026-07-20', categoryId: 'c-cibo', amountCents: 1000 }),
+        // Scritta quando l'orologio era avanti: da qui e' nel futuro.
+        makeExpense({ date: '2026-08-26', categoryId: 'c-spesa', amountCents: 9900 }),
+      ],
+    })
+    const righe = orologioIndietro.byPeriod.rows
+    const ultima = righe[righe.length - 1]!
+    expect(ultima.current).toBe(true)
+    expect(ultima.range).toEqual({ start: '2026-08-10', end: '2026-08-16' })
+    expect(contiene(ultima.range, '2026-08-10')).toBe(true)
+    // La spesa futura non e' in nessuna riga: cade oltre il fondo della
+    // finestra, non lo sposta. E i giorni della riga corrente sono quelli
+    // vissuti fino a **quel** giorno, lunedi', cioe' uno.
+    expect(righe.every((r) => r.cents !== 9900)).toBe(true)
+    expect(ultima.daysLived).toBe(1)
+    expect(ultima.daysTotal).toBe(7)
+
+    // E il caso in cui l'unica spesa che B conta e' futura: la finestra non ha
+    // righe affatto, quindi non esiste nessuna "ultima riga" da confondere.
+    const soloFuturo = view({
+      expenses: [makeExpense({ date: '2026-12-01', categoryId: 'c-cibo', amountCents: 4000 })],
+    })
+    expect(soloFuturo.kind).toBe('outside')
+  })
+
+  it('sul mese i giorni sono quelli del mese della riga, e non sono una costante', () => {
+    // Otto mesi, da gennaio ad agosto 2026: 31, 28, 31, 30, 31, 30, 31, 31.
+    // Prendendo i giorni da un periodo diverso da quello della riga — per
+    // esempio dalle metriche correnti — febbraio ne avrebbe 31, che e' la forma
+    // in cui questo errore si vede a occhio nudo.
+    const v = ready({
+      period: 'monthly',
+      expenses: [
+        makeExpense({ date: '2026-01-15', categoryId: 'c-cibo', amountCents: 5000 }),
+        makeExpense({ date: '2026-02-10', categoryId: 'c-cibo', amountCents: 4000 }),
+        makeExpense({ date: OGGI, categoryId: 'c-cibo', amountCents: 3000 }),
+      ],
+    })
+    const rows = v.byPeriod.rows
+    expect(rows).toHaveLength(TREND_PERIODS)
+    expect(rows.map((r) => r.daysTotal)).toEqual([31, 28, 31, 30, 31, 30, 31, 31])
+    // I sette mesi chiusi sono vissuti per intero, ognuno per i **propri**
+    // giorni.
+    expect(rows.slice(0, -1).map((r) => r.daysLived)).toEqual([31, 28, 31, 30, 31, 30, 31])
+    // Agosto: 26 giorni vissuti su 31, oggi compreso.
+    const corrente = rows[rows.length - 1]!
+    expect(corrente.current).toBe(true)
+    expect(corrente.range).toEqual({ start: '2026-08-01', end: '2026-08-31' })
+    expect(corrente.daysLived).toBe(26)
+    expect(corrente.daysTotal).toBe(31)
+    // Febbraio 2026 non e' bisestile, e il numero viene da `periodRange` — non
+    // da un'aritmetica scritta una seconda volta qui accanto.
+    expect(rows[1]?.range).toEqual({ start: '2026-02-01', end: '2026-02-28' })
   })
 })
 
@@ -957,7 +1196,7 @@ describe('dove comincia la finestra di B', () => {
       expect(v.byPeriod.rows).toHaveLength(0)
       // E i dati ci sono davvero: la schermata non e' vuota, e' A a portarli.
       expect(sezione(v, 'variable')?.rows).toHaveLength(1)
-      expect(v.tiles.variableCents).toBe(4000)
+      expect(v.current.spentCents).toBe(4000)
       invariantiDiA(v)
     })
 
@@ -1368,7 +1607,7 @@ describe('C — le due cifre in testa, e le fisse che sono due quantita', () => 
   it('il budget non serve per rispondere a C', () => {
     const v = ready({ expenses: [caffe], budgets: [] })
     // E' l'unica delle tre domande a cui l'app risponde dal primo giorno.
-    expect(v.tiles.variableCents).toBe(400)
+    expect(v.current.spentCents).toBe(400)
   })
 })
 

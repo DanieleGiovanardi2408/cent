@@ -3,7 +3,7 @@
 //
 //   node scripts/dead-surface.mjs        (npm run audit:source)
 //
-// Tre domande, ognuna nata da un difetto vero:
+// Quattro domande, ognuna nata da un difetto vero:
 //
 //   A. Ogni campo dei tipi in `src/core/types.ts` ha una **scrittura** che non
 //      sia `parseBackup`, una migrazione o un test? `RecurringRule.note` aveva
@@ -25,6 +25,15 @@
 //      perche' `updateSettings({ language: next })` passa una variabile e il
 //      letterale al punto di scrittura non c'e'. Precisione al posto della
 //      copertura: quel che segnala e' morto di sicuro, e sul resto tace.
+//
+//   D. Ogni campo di un'interfaccia esportata nei moduli di vista (`*-view.ts`)
+//      ha un lettore di produzione? E' la superficie che A **non** guarda, perche'
+//      A interroga `src/core/types.ts`: fra il dominio e i componenti c'e' uno
+//      strato che dichiara i propri tipi, e in una sola sessione ci sono passate
+//      cinque superfici morte tenute vive dai soli test.
+//
+//      Come C, precisione al posto della copertura — e con un falso negativo
+//      **misurato**, non ipotizzato, scritto accanto alla funzione.
 //
 // ## Perche' un file nuovo e non `scripts/audit.mjs`
 //
@@ -736,6 +745,99 @@ function puntiCiechi(tuttiIFile) {
 }
 
 /* ------------------------------------------------------------------------ *
+ * D. Campi di `src/ui` senza nessun lettore.
+ * ------------------------------------------------------------------------ */
+
+/**
+ * I moduli di vista: dove vive la superficie che A non guarda.
+ *
+ * A interroga `src/core/types.ts`, cioe' il **dominio**. Ma fra il dominio e i
+ * componenti c'e' uno strato — `*-view.ts` — che dichiara i propri tipi, e li'
+ * nessuno guarda: in una sola sessione ci sono passate **cinque** superfici morte,
+ * `accruedCents`, `breakdownTotal`, `fixedInPeriodCents`, `livedFraction` e i tre
+ * `null` del ramo orfano, tutte tenute vive dai soli test.
+ */
+const MODULI_DI_VISTA = [
+  'src/ui/stats-view.ts',
+  'src/ui/budget-view.ts',
+  'src/ui/recurring-view.ts',
+  'src/ui/backup-nudge.ts',
+]
+
+/**
+ * Campi di interfacce esportate nei moduli di vista che **non compaiono in nessun
+ * file di produzione**, il proprio compreso.
+ *
+ * ## Perche' "il proprio compreso", e non "fuori dal proprio file"
+ *
+ * Provata prima la forma larga — *nessun lettore **fuori** dal file che lo
+ * dichiara* — su 52 campi: **due segnalati, uno falso**. `BudgetStart.beforeCents`
+ * ha tre lettori dentro `budget-view.ts` ed e' vivissimo: e' un dettaglio interno
+ * di un tipo di ritorno, non una superficie morta. Un controllo che lo segnala
+ * insegna a ignorarlo.
+ *
+ * La forma stretta — *nessun lettore da nessuna parte* — sugli stessi 52 campi da'
+ * **un solo flag e zero falsi positivi**. E' la stessa scelta di C: **precisione al
+ * posto della copertura.** Cio' che segnala e' morto di sicuro; su un campo letto
+ * una volta sola in casa, tace.
+ *
+ * ## Il punto cieco, dichiarato invece che scoperto
+ *
+ * Un campo dal nome comune (`rows`, `name`, `cents`) **sembra vivo** perche' quella
+ * stringa compare ovunque: questo controllo ha **falsi negativi per costruzione**,
+ * e non e' un difetto da riparare — e' il prezzo di non averne di positivi. Un
+ * controllo che segnalasse `.name` verrebbe spento in una settimana.
+ *
+ * Quindi: **cio' che passa non e' dichiarato vivo.** E' dichiarato "non
+ * riconoscibile come morto da qui".
+ *
+ * ## Il falso negativo misurato al primo giro, sul campo che ha motivato D
+ *
+ * Non e' un'ipotesi: **`PeriodBar.current` passa**, ed era proprio la superficie
+ * che un gate aveva trovato tenuta viva dai soli test. Il nome compare in
+ * produzione **due volte, e nessuna delle due e' quel campo**:
+ *
+ * - `App.tsx` ha `toastTimer.current` e `toastUntil.current` — **l'idioma dei ref
+ *   di Preact**, che in questa base di codice esistera' sempre;
+ * - `Stats.tsx` ha `view.current.range`, dove `view.current` e' un `BudgetMetrics`.
+ *
+ * **Un campo che si chiama `current` in un tipo di vista e' invisibile a questo
+ * controllo per costruzione**, e non c'e' niente da riparare senza sapere i tipi:
+ * distinguerli richiederebbe risolvere a quale dichiarazione appartiene ogni
+ * accesso, cioe' un analizzatore invece di una ricerca.
+ *
+ * Vale la pena scriverlo perche' il controllo **e' verde su un campo morto** dal
+ * giorno in cui e' nato: chi lo legge deve sapere che il silenzio su un nome comune
+ * non significa niente. (`PeriodBar.current` sta per acquistare un lettore vero —
+ * il bordo aperto della riga corrente — quindi il caso si chiude dai fatti, non
+ * dal controllo.)
+ */
+function campiDiVistaSenzaLettore(tuttiIFile) {
+  const produzione = tuttiIFile.filter((p) => !eTest(p) && !NON_PRODUTTORI.has(p))
+  const testi = produzione.map((p) => ({ file: p, code: scan(leggi(p)).text }))
+
+  const morti = []
+  let quanti = 0
+  for (const modulo of MODULI_DI_VISTA) {
+    if (!existsSync(join(ROOT, modulo))) continue
+    const { text } = scan(leggi(modulo))
+    for (const m of text.matchAll(/export interface (\w+) \{([\s\S]*?)\n\}/g)) {
+      for (const c of m[2].matchAll(/readonly (\w+)\??:/g)) {
+        quanti += 1
+        const campo = c[1]
+        const vivo = testi.some(({ file, code }) =>
+          file === modulo
+            ? new RegExp(`[.?]${campo}\\b`).test(code)
+            : new RegExp(`[.?]${campo}\\b|\\b${campo}\\s*[,:}]`).test(code),
+        )
+        if (!vivo) morti.push({ tipo: m[1], campo, modulo })
+      }
+    }
+  }
+  return { moduli: MODULI_DI_VISTA.length, quanti, morti }
+}
+
+/* ------------------------------------------------------------------------ *
  * C. Membri di un'unione di letterali che non compaiono da nessuna parte.
  * ------------------------------------------------------------------------ */
 
@@ -991,5 +1093,22 @@ for (const { chiave, perche } of c.dichiarati) {
   console.log(`     ${chiave} — non compare, ed e' dichiarato: ${perche}`)
 }
 console.log('')
+
+const d = campiDiVistaSenzaLettore(tuttiIFile)
+console.log(
+  `  D. Campi di \`src/ui\` senza lettore — ${d.quanti} campi in ${d.moduli} moduli di vista`,
+)
+if (d.morti.length === 0) {
+  console.log('     nessuno: ogni campo dichiarato ha almeno un lettore di produzione.\n')
+} else {
+  rotto = true
+  for (const { tipo, campo, modulo } of d.morti) {
+    console.log(`\n     ── ${tipo}.${campo} — nessun lettore di produzione (${modulo})`)
+  }
+  console.log(
+    '\n     Una superficie di vista senza lettori e` tenuta viva dai suoi test:\n' +
+      "     e' la famiglia di `expensesInRange` e `planBudgetChange`, gia' cancellate due volte.\n",
+  )
+}
 
 process.exit(rotto ? 1 : 0)

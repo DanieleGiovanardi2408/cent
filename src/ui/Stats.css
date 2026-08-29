@@ -137,6 +137,25 @@
   letter-spacing: 0.06em;
 }
 
+/* Il confine del periodo, in coda al titolo di A: `DOVE SONO FINITI · 17–23 ago`.
+ *
+ * **Non e' maiuscolo e non e' spaziato**, e i due `normal` qui sotto sono la
+ * riparazione e non una rifinitura: il titolo lo e' per tutti e due, e una data
+ * in maiuscolo con 0,06em fra le lettere si legge come un'etichetta di sistema
+ * invece che come il giorno che e'. `AGO` non e' come lo scrive
+ * `Intl.DateTimeFormat`, ed e' `Intl` a decidere come si scrive una data qui
+ * dentro — in tutte e due le lingue.
+ *
+ * Il punto mediano sta nel **markup**, come in ogni altra coppia di questa app
+ * (`Home.tsx`, `App.tsx`, `FixedCosts.tsx`): un `::before` avrebbe messo qui la
+ * prima eccezione a una convenzione che vale in quattro file, in cambio di
+ * niente. Il titolo va a capo da solo se non ci sta: e' un blocco, e a 320
+ * punti `WHAT IT WENT ON · Aug 17–23` sta comodo su una riga. */
+.stats__titleRange {
+  text-transform: none;
+  letter-spacing: normal;
+}
+
 /* --- i titoli di parte: le due parti di A, e la sola parte di B ----------- *
  *
  * **Due scale, quindi due grafici, quindi una separazione vera.**
@@ -422,6 +441,16 @@
  * Il ripiego, se un motore non conoscesse nessuna delle due, e' un'etichetta
  * che va a capo senza tetto: piu' righe, mai lettere perse. */
 .stat__label {
+  min-inline-size: 0;
+}
+
+/* Il nome vero e proprio. **Il clamp sta qui e non sul contenitore**: da quando
+ * la cella puo' ospitare due cose — il nome e, sulla riga del periodo in corso,
+ * i giorni vissuti — un `-webkit-line-clamp` sul padre conterebbe le righe di
+ * tutte e due insieme, e a colonna stretta il nome andato a capo si mangerebbe
+ * la nota. Cioe' toglierebbe dallo schermo proprio la meta' che questa
+ * riparazione e' venuta ad aggiungere. */
+.stat__name {
   display: -webkit-box;
   overflow: hidden;
   -webkit-box-orient: vertical;
@@ -431,6 +460,40 @@
   font-size: var(--fs-200);
   line-height: var(--lh-snug);
   overflow-wrap: anywhere;
+}
+
+/* **I giorni vissuti del periodo in corso**, sotto il suo intervallo.
+ *
+ * ## Perche' e' testo e non una geometria
+ *
+ * Perche' l'asse di questo grafico e' **denaro**. Senza budget non esiste
+ * nessuna conversione fra il tempo che resta e una lunghezza: disegnare
+ * "mancano quattro giorni" come pixel vorrebbe dire inventare un valore in euro
+ * per il futuro, su una schermata che guarda indietro. Il fatto e' un fatto sul
+ * calendario, e i fatti sul calendario si scrivono. Vedi `PeriodBar.daysLived`.
+ *
+ * ## Le due righe stanno dentro `--tap-min`, e questo e' il conto
+ *
+ * `--fs-200` a `--lh-snug` sono 18,75 px, `--fs-100` a `--lh-snug` 16,25:
+ * **35 px** in tutto, sotto i 44 che la riga dichiara. La riga corrente e' alta
+ * come le altre, quindi il ritmo dell'elenco non cambia — e non cambia
+ * **nemmeno** quando la nota compare, che e' la parte che conta: quella riga si
+ * ridisegna ogni giorno.
+ *
+ * Il tetto vale finche' l'intervallo sta su una riga sola. A 320 punti con un
+ * importo a cinque cifre la colonna del nome scende sotto la larghezza di
+ * `31 ago – 6 set` e le righe diventano tre: 53,75 px, cioe' **una riga piu'
+ * alta delle altre**. E' il verso giusto in cui cedere — il nome e la nota si
+ * leggono tutti e due, e a pagare e' l'altezza di una riga sola — ed e' la
+ * stessa scelta gia' fatta per il clamp a due righe del nome.
+ *
+ * Tabulari: sono cifre, e sulla riga sotto l'intervallo ballerebbero. */
+.stat__note {
+  display: block;
+  color: var(--text-muted);
+  font-size: var(--fs-100);
+  line-height: var(--lh-snug);
+  font-variant-numeric: tabular-nums;
 }
 
 /* Le cifre si incolonnano davvero, qui: tabulari.
@@ -485,7 +548,25 @@
  * periodo, anche a periodo in corso": campiona i pixel dipinti prima e dopo il
  * segno e li vuole **dello stesso colore**. Un'asserzione sull'assenza della
  * classe sarebbe passata a qualunque altro modo di ridipingere lo stesso
- * tratto. */
+ * tratto.
+ *
+ * ## E la rotaia non e' piu' il posto in cui l'incompletezza si dichiara
+ *
+ * Anche riducendo la banda a un tratto piu' chiaro invece che al fondo — la
+ * riparazione minima, quella che viene in mente per prima — resterebbe una
+ * marca **che esiste solo dove esiste un budget**. L'incompletezza di un
+ * periodo non ha niente a che vedere con l'avere o non avere un tetto di spesa:
+ * legarla alla rotaia vuol dire dire lo stesso fatto in due modi a seconda di un
+ * campo che con quel fatto non c'entra, ed e' la famiglia della copia che
+ * parafrasa un'altra copia — qui in forma geometrica.
+ *
+ * Adesso a dirlo sono **il bordo aperto della barra** (`.stat__bar[data-open]`)
+ * e **la nota in giorni** (`.stat__note`), e tutti e due valgono con budget e
+ * senza. Quello che la rotaia puo' ancora permettersi e' un'informazione **in
+ * piu'** — quanto budget spetta ai giorni non ancora vissuti — che si legge
+ * gia' oggi dal segno del maturato: dal segno alla fine della rotaia c'e'
+ * esattamente quella quota. E' un di piu' della rotaia, non il portatore del
+ * fatto, ed e' la ragione per cui non serve dipingerlo una seconda volta. */
 .stat__track {
   position: absolute;
   inset-block: 0;
@@ -521,6 +602,74 @@
  * Erasmus col conto corto sono la riga piu' interessante della schermata. */
 .stat__bar[data-zero] {
   border: none;
+}
+
+/* **Il bordo terminale del periodo in corso e' aperto.**
+ *
+ * ## Il difetto: il periodo in corso era disegnato come se fosse finito
+ *
+ * Misurato senza budget, di mercoledi': tre settimane piene da 70,00 € e la
+ * corrente con 30,00 € su **tre giorni su sette**. Barre
+ * `175,98 / 175,98 / 175,98 / 77,20` px, DOM identico, nessuna marca. Il passo
+ * e' lo stesso in tutte e quattro — 10,00 € al giorno — e la forma diceva 44%.
+ * Sul mensile, il 19: agosto 100,00 € dipinto 41 px contro giugno 400,00 € a
+ * 152.
+ *
+ * Una marca c'era, e valeva **solo col budget**: la regione fra il maturato e
+ * la fine della rotaia. Cioe' l'incompletezza del periodo era legata
+ * all'esistenza di un budget, con cui non c'entra niente — e restava invisibile
+ * proprio nello stato piu' probabile di tutti, la prima settimana di chiunque.
+ * Adesso questa marca c'e' **in tutti e due gli stati**, e la rotaia non
+ * dichiara piu' niente: vedi `.stat__track`.
+ *
+ * ## Perche' una sfumatura e non una lunghezza
+ *
+ * Perche' **non e' una misura**. L'asse di questo grafico e' denaro; il tempo
+ * che resta ci si converte solo passando per un budget, e senza budget quella
+ * conversione non esiste. Disegnare "mancano quattro giorni" come pixel
+ * significherebbe inventare un valore in euro per il futuro — una proiezione su
+ * una schermata che guarda indietro, cioe' il difetto della fase riparato con
+ * un difetto della stessa famiglia. Un bordo aperto e' un **attributo della
+ * marca**: dice che il numero sta ancora crescendo e non afferma nessuna
+ * quantita'. Quanto manca lo dice `.stat__note`, in giorni e in parole.
+ *
+ * ## La sfumatura non dipende dalla lunghezza della barra, ed e' voluto
+ *
+ * `min(0.5rem, 50%)`: **otto pixel**, sempre gli stessi, su ogni barra e su
+ * ogni viewport. Una sfumatura in percentuale sarebbe lunga in proporzione al
+ * valore, cioe' tornerebbe a essere una misura — la cosa che questa marca esiste
+ * per non essere. Il `50%` e' solo il freno per le barre cortissime: al
+ * pavimento (2 px) mangerebbe tutto, e una barra corta e' esattamente quella di
+ * un periodo appena cominciato.
+ *
+ * Il contorno terminale se ne va con lo stesso gesto: un bordo netto dentro una
+ * sfumatura direbbe le due cose insieme. Il resto del contorno resta, quindi la
+ * forma continua a vedersi dove il riempimento non si stacca dal fondo. La
+ * larghezza non cambia di un pixel — `box-sizing: border-box`, il bordo sta
+ * dentro — quindi nessuna misura di questa schermata si muove.
+ *
+ * ## Il ripiego, dichiarato
+ *
+ * Dove `mask-image` non esiste (iOS < 15.4) resta il bordo terminale tolto e la
+ * barra e' netta: la marca **si perde**, e il fatto lo porta comunque
+ * `.stat__note`, che e' testo. E' il verso giusto in cui degradare — l'unica
+ * cosa che non si puo' perdere e' l'informazione, e quella e' scritta.
+ *
+ * `to right` e' fisico e questa figura **non** e' simmetrica, a differenza del
+ * segno del maturato: in una lingua che scrive da destra la barra cresce
+ * dall'altra parte e questo gradiente andrebbe girato. Le due lingue dell'app
+ * sono tutte e due LTR; il giorno che ne arriva una RTL, questa riga e il
+ * gradiente di `.stat__accrued` si guardano insieme. */
+.stat__bar[data-open] {
+  --open-fade: min(0.5rem, 50%);
+
+  border-inline-end: none;
+  -webkit-mask-image: linear-gradient(
+    to right,
+    #000 calc(100% - var(--open-fade)),
+    transparent 100%
+  );
+  mask-image: linear-gradient(to right, #000 calc(100% - var(--open-fade)), transparent 100%);
 }
 
 /* Il maturato. Un tratto pieno, mai tratteggiato: il tratteggio aggiunge rumore

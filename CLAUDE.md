@@ -720,6 +720,50 @@ quindi nessuno rimisura leggendo: conteggi dei test, peso del bundle, scala dell
 migrazioni, eta' dei giudizi. **E' la differenza fra una guardia e un rumore**, ed
 e' la stessa scelta della calibrazione dell'hook.
 
+## Una riparazione che cita un argomento altrui ne riscrive la condizione sul posto
+
+Non *"come da ADR X"*, e nemmeno *"come per il contorno"*: **"vale perche' qui
+succede Y"**. Se la condizione non si riesce a scrivere, l'argomento **non vale
+qui** — e lo si scopre mentre si ripara, non due gate dopo.
+
+**Non e' una regola di stile.** La quarta, la quinta e la sesta ricorrenza di "una
+decisione vale dove vale il suo argomento" sono state trovate **dentro riparazioni
+della stessa sessione**, e non e' un caso: una riparazione si scrive **col difetto
+in testa e l'argomento a portata di mano**, che e' la condizione perfetta per
+trapiantarlo senza ri-derivarlo.
+
+I due casi che l'hanno prodotta, tutti e due dentro correzioni appena scritte:
+
+- **Il pavimento a 2 px.** L'argomento di `[data-zero]` diceva *"una barra a 0%
+  restava larga 2 px: un periodo davvero a zero si leggeva «un pochino»"*. Vale
+  identico a 0,01 € e a 9,00 €, ed era stato applicato al solo valore in cui il
+  numero era **letteralmente** zero.
+- **Il segno del maturato.** `--line-strong` era stato scelto per il contorno con
+  l'argomento *"un contorno meno visibile del riempimento che deve soccorrere non
+  soccorre niente"*, misurato **contro `--bg`** a 3,19:1. La riparazione ha
+  spostato il segno **sopra la barra**, dove lo stesso token vale **1,88:1**, e ha
+  portato il token senza ri-derivare il numero.
+
+### Il corollario, che vale anche quando si toglie
+
+Quando una riparazione **rimuove** qualcosa, la domanda e': **quel qualcosa portava
+due fatti, e il secondo ha una casa sua?**
+
+Il caso: la nota sotto la sezione dei periodi e' stata tolta per una ragione giusta
+— affermava il confronto col budget dove la geometria lo rifiuta. Con lei se n'e'
+andato il **secondo** fatto che portava, *"queste barre sono le quotidiane"*, e la
+sezione ha smesso di dire cosa contava. Il gate successivo l'ha ritrovato come ALTO.
+
+### E quando si ripristina, si ri-deriva
+
+Una marca cancellata per una ragione giusta **non si ripristina**: si ri-deriva.
+`.stat__unlived` fu tolta perche' accorciava **la rotaia**, cioe' il budget, di
+esattamente il pro-rata che ADR 010 rifiuta. Ma la stessa marca **senza rotaia**
+non e' il pro-rata di niente — e servirebbe, perche' senza budget il periodo in
+corso si disegna come uno finito. La forma che torna e' un'altra, e la ragione
+per cui torna e' un'altra: **l'oggetto della cancellazione era la rotaia, non
+l'incompletezza.**
+
 ## Dopo una correzione, la verifica si riesegue — non si deduce
 Il posto piu' probabile in cui trovare il prossimo difetto e' **dentro la
 correzione appena fatta**. Una correzione tocca il codice in un punto delicato

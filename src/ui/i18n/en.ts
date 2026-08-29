@@ -506,5 +506,31 @@ export const en: Record<keyof typeof it, string> = {
   'stats.byPeriod.weekly': 'Week by week',
   'stats.byPeriod.monthly': 'Month by month',
 
+  /* **La riga del periodo in corso dice quanti giorni ha vissuto.**
+   *
+   * Sta sotto l'intervallo, sulla stessa riga di B, e vale **solo** per il
+   * periodo corrente: sulle righe chiuse i giorni vissuti sono tutti, e dirlo
+   * sarebbe rumore su sette righe su otto.
+   *
+   * ## Perche' non dice "mancano quattro giorni"
+   *
+   * Perche' il conto alla rovescia e' la stessa affermazione sul futuro che il
+   * modello si rifiuta di disegnare come lunghezza (`PeriodBar.daysLived`): "ne
+   * mancano quattro" invita a proiettare, e su una schermata che guarda indietro
+   * non c'e' niente che sostenga la proiezione. `3 days of 7` e' un fatto
+   * verificabile su un calendario, ed e' cio' che serve per leggere la barra
+   * accanto: e' corta perche' e' corta, o perche' la settimana e' a meta'?
+   *
+   * ## Il numero dei giorni passa da `daysLabel`, il totale no
+   *
+   * Il primo ha un singolare che capita davvero — il lunedi', e il primo del
+   * mese — e leggere `1 days` proprio il giorno in cui la barra e' piu' corta di
+   * tutte sarebbe il refuso nel posto peggiore. Il secondo e' sempre >= 28.
+   *
+   * Corto di proposito: vive nella colonna del nome, che a 320 punti e' la prima
+   * a cedere. Una frase piu' lunga andrebbe a capo li' e farebbe crescere in
+   * altezza **una riga sola** dell'elenco. */
+  'stats.daysSoFar': '{days} of {total}',
+
   'row.fixed': 'fixed cost',
 }

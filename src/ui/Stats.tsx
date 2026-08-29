@@ -2,7 +2,7 @@ import { Fragment } from 'preact'
 import { useMemo } from 'preact/hooks'
 import type { Budget, BudgetPeriod, Category, Expense, RecurringRule } from '../core/types'
 import type { IsoDate } from '../core/date'
-import { money, periodRangeLabel, t } from './i18n'
+import { daysLabel, money, periodRangeLabel, t } from './i18n'
 import { statsView } from './stats-view'
 import type { Breakdown, BreakdownSection, CategorySlice, PeriodBar, Trend } from './stats-view'
 import './Stats.css'
@@ -104,13 +104,24 @@ function sliceLabel(row: CategorySlice): string {
  */
 function Row({
   label,
+  note,
   amount,
   fraction,
   color,
   track,
+  open,
   bar,
 }: {
   readonly label: string
+  /**
+   * La seconda riga dell'etichetta, o `null`. Oggi la scrive solo B, sul
+   * periodo in corso, e dice **quanti giorni su quanti** (`stats.daysSoFar`).
+   *
+   * E' `null` e non opzionale per la stessa ragione di `color`:
+   * `exactOptionalPropertyTypes` rifiuta un `undefined` scritto a mano, e
+   * "questa riga non ha una seconda riga" e' un caso vero di chi chiama.
+   */
+  readonly note: string | null
   readonly amount: string
   readonly fraction: number
   /**
@@ -121,14 +132,39 @@ function Row({
    */
   readonly color: string | null
   readonly track?: PeriodBar['track']
+  /**
+   * **Il periodo che questa riga misura non e' finito**, quindi la barra non ha
+   * un bordo terminale netto (`.stat__bar[data-open]`, `Stats.css`).
+   *
+   * E' un attributo della marca, non una misura: non afferma **quanto** manchi
+   * — quello lo dice `note`, in parole e in giorni — dice soltanto che il
+   * numero sta ancora crescendo. Una lunghezza qui sarebbe una proiezione in
+   * euro del tempo che resta, cioe' il difetto della fase riparato con un
+   * difetto della stessa famiglia (`PeriodBar.daysLived`).
+   *
+   * **La causa e' `current`, mai `track`.** L'incompletezza di un periodo non
+   * ha niente a che vedere con l'esistenza di un budget: legarla alla rotaia e'
+   * esattamente il difetto da cui questa riparazione e' partita, e senza budget
+   * — la prima settimana di chiunque — non si vedrebbe niente.
+   */
+  readonly open: boolean
   readonly bar: boolean
 }) {
   return (
     <li class="stat">
       {/* L'equivalente testuale sta nel markup e non e' una vista in piu': i due
           pezzi che lo compongono — l'etichetta e l'importo formattato — sono
-          gia' a schermo, e la barra accanto e' dichiarata decorativa. */}
-      <span class="stat__label">{label}</span>
+          gia' a schermo, e la barra accanto e' dichiarata decorativa.
+
+          La nota **sta dentro l'etichetta** e non e' una quarta cella: le
+          colonne sono tre e vengono dalla sezione (`subgrid`), quindi un quarto
+          figlio finirebbe nella colonna del grafico. Ed e' il posto giusto
+          anche a leggerlo: dice qualcosa **sul periodo**, che e' quello che
+          l'etichetta nomina. */}
+      <span class="stat__label">
+        <span class="stat__name">{label}</span>
+        {note === null ? null : <span class="stat__note">{note}</span>}
+      </span>
       {bar ? (
         <span class="stat__plot" aria-hidden="true">
           {/* La traccia: **il budget del periodo, intero**. C'e' solo dove il
@@ -170,6 +206,9 @@ function Row({
             // A zero la barra non ha nemmeno il contorno: con `border-box` e un
             // bordo da 1px, `inline-size: 0%` disegnava comunque 2 px.
             data-zero={fraction <= 0 ? '' : undefined}
+            // Il bordo terminale aperto. Vedi `open` qui sopra: e' `current`,
+            // non `track`, e non dipende da dove la riga sta nell'elenco.
+            data-open={open ? '' : undefined}
             style={{ inlineSize: pct(fraction), backgroundColor: color ?? 'var(--brand)' }}
           />
           {/* Il maturato: il segno contro cui si legge se il passo e' alto. Non
@@ -249,7 +288,31 @@ function Row({
  * l'unico su cui si decide. Per questo la chiave di Preact porta anche la
  * natura: `categoryId` da solo non e' piu' unico dentro A.
  */
-function Categories({ breakdown }: { readonly breakdown: Breakdown }) {
+function Categories({
+  breakdown,
+  range,
+}: {
+  readonly breakdown: Breakdown
+  /**
+   * Il confine del periodo che A sta ripartendo, gia' formattato
+   * (`periodRangeLabel`). **Non e' una rifinitura del titolo: e' l'unica cosa
+   * che rende verificabile cio' che le due intestazioni di parte affermano.**
+   *
+   * Stava sotto la scheda `Quotidiane` (`.tile__sub`), che era **l'unico posto
+   * della schermata a nominarlo**. Nei due stati in cui B non esiste — il primo
+   * periodo di chiunque installi l'app, e chi ha solo spese fisse — togliere la
+   * scheda senza spostare questa etichetta lasciava a schermo `Fisse in questo
+   * periodo` sopra un periodo che **niente identificava**: misurato, non
+   * restava una sola data.
+   *
+   * E' alla lettera il difetto appena chiuso sullo stato `outside` — *"ogni
+   * altro stato stampa `periodRangeLabel`; l'unico che parlava del confine era
+   * l'unico che non lo disegnava"* — che stava per riaprirsi in `ready`.
+   * L'argomento con cui la scheda esce (ripete il totale di una sezione trenta
+   * pixel piu' sotto) **non nomina il confine**, quindi non lo copre.
+   */
+  readonly range: string
+}) {
   const sections = breakdown.sections
   if (sections.length === 0) return null
   return (
@@ -259,12 +322,27 @@ function Categories({ breakdown }: { readonly breakdown: Breakdown }) {
     // che e' il modo onesto di dire "qui le barre non ci sono" senza spostare le
     // righe dell'altra.
     <section class="stats__section" data-chart={sections.some((p) => p.asChart) ? '' : undefined}>
-      <h2 class="stats__title">{t('stats.byCategory')}</h2>
+      {/* "Dove sono finiti · 17–23 ago". La domanda del titolo ha bisogno di un
+          "quando", ed e' la stessa etichetta — stessa funzione, stesso locale —
+          che B stampa sulla propria riga corrente e che lo stato `outside`
+          infila nella frase. Non e' una terza copia: e' l'unica, spostata dove
+          non puo' piu' sparire con una scheda. */}
+      <h2 class="stats__title">
+        {t('stats.byCategory')}
+        {' · '}
+        {/* Il confine sta in un elemento suo, e non e' per lo stile: e' l'unico
+            posto in cui questa schermata scrive `periodRangeLabel` quando le
+            righe ci sono, e un test lo legge di li' invece di ritagliarlo dal
+            titolo — dove `text-transform: uppercase` glielo restituirebbe in
+            maiuscolo, cioe' diverso da come lo scrive `Intl`. */}
+        <span class="stats__titleRange">{range}</span>
+      </h2>
       {sections.map((part: BreakdownSection) => (
         <Fragment key={part.kind}>
           {/* Il nome della natura e il suo totale **del periodo**. Le due parole
               **Le due etichette non sono simmetriche, e non e' una svista.** Le
-              variabili riusano la parola della scheda in testa (`stats.variable`),
+              variabili riusano `stats.variable`, la stessa parola che nomina le
+              quotidiane ovunque compaiano,
               perche' li' la scheda e questa riga sono lo stesso numero. Le fisse
               no: la scheda e' una previsione **al mese**, questa e' quanto e'
               uscito **nel periodo**, e con la stessa parola le due si
@@ -310,6 +388,17 @@ function Categories({ breakdown }: { readonly breakdown: Breakdown }) {
               <Row
                 key={`${part.kind}:${row.orphan ? ORPHAN : row.categoryId}`}
                 label={sliceLabel(row)}
+                // **A non ha righe incomplete, e non e' una svista.** Tutte le
+                // sue barre stanno dentro **lo stesso** periodo, quindi i
+                // giorni mancanti sono gli stessi per tutte e le proporzioni
+                // fra le categorie non ne sono distorte: e' esattamente
+                // l'opposto di B, dove la riga corrente e' l'unica incompleta e
+                // sta accanto a sette periodi finiti.
+                //
+                // Il confine di cui A parla e' nel suo titolo, e i giorni non
+                // ci sono perche' qui non servono a leggere nessuna barra.
+                note={null}
+                open={false}
                 amount={money(row.cents)}
                 fraction={row.fraction}
                 color={fill(row)}
@@ -341,7 +430,8 @@ function Categories({ breakdown }: { readonly breakdown: Breakdown }) {
  * togliere un filtro, e qui il filtro e' giusto: quello che va tolto e' il
  * silenzio.
  *
- * L'etichetta e' `stats.variable`, cioe' **la stessa parola della scheda in
+ * L'etichetta e' `stats.variable`, cioe' **la stessa parola che nomina le
+ * quotidiane nell'intestazione di parte di A** — la scheda in
  * testa** e della parte variabile di A. Non e' una frase nuova che dichiara
  * l'esclusione — sarebbe la quarta copia di un fatto che ha gia' la sua casa
  * (DEBITO.md §1.3) — e' il **nome della quantita'**: la stessa parola sopra gli
@@ -353,7 +443,13 @@ function Categories({ breakdown }: { readonly breakdown: Breakdown }) {
  * A quella riga dice *quale dei due tipi di soldi* si sta guardando, e qui dice
  * la stessa identica cosa. Manca solo il totale a destra, perche' B non ne ha
  * uno: la somma di otto periodi non e' una quantita' che qualcuno si stia
- * chiedendo, e quella del periodo corrente e' gia' la scheda in testa.
+ * chiedendo, e quella del periodo corrente **e' l'ultima riga di B stessa**.
+ *
+ * (Fino al taglio della scheda "Quotidiane" questa riga diceva "e' gia' la scheda
+ * in testa", ed e' rimasta vera fino a quel commit e falsa dopo. Il totale del
+ * periodo corrente non e' sparito insieme alla scheda: si legge dove si e' sempre
+ * letto due volte, sull'ultima riga di questa sezione e sul totale della parte
+ * variabile di A — che era poi la ragione per cui la scheda ripeteva.)
  *
  * ## Sotto il titolo non c'e' una nota, ed era una riparazione
  *
@@ -391,6 +487,27 @@ function Periods({ trend, period }: { readonly trend: Trend; readonly period: Bu
           <Row
             key={row.key}
             label={periodRangeLabel(period, row.range)}
+            // I due numeri arrivano **dal modello**, non da una seconda
+            // aritmetica sulle date: `daysTotal` vale 28, 29, 30 o 31 sul mese,
+            // e un secondo conto qui sarebbe una copia da tenere allineata con
+            // `periodRange` (vedi `PeriodBar.daysLived`).
+            //
+            // La condizione e' `row.current`, e **non** `row.daysLived <
+            // row.daysTotal`: l'ultimo giorno del periodo i due sono uguali e il
+            // periodo e' ancora in corso — la domenica di ogni settimana e
+            // l'ultimo di ogni mese, cioe' il giorno in cui questa riga serve di
+            // piu'. E non e' `index === rows.length - 1`: oggi coincidono per
+            // come `trendRanges` costruisce la finestra, ma la posizione e' una
+            // conseguenza e `current` e' un fatto sulle date.
+            note={
+              row.current
+                ? t('stats.daysSoFar', {
+                    days: daysLabel(row.daysLived),
+                    total: row.daysTotal,
+                  })
+                : null
+            }
+            open={row.current}
             amount={money(row.cents)}
             fraction={row.fraction}
             color={null}
@@ -481,24 +598,39 @@ export function Stats({ phase, expenses, categories, rules, budgets, period, day
 
   return (
     <div class="stats">
-      {/* Le due cifre (ADR 016 §3). Sono in testa perche' senza di loro i due
-          grafici sotto escluderebbero le fisse in silenzio. */}
-      <div class="stats__tiles">
-        <div class="tile">
-          <p class="tile__label">{t('stats.variable')}</p>
-          <p class="tile__value">{money(view.tiles.variableCents)}</p>
-          <p class="tile__sub">{periodRangeLabel(view.period, view.current.range)}</p>
-        </div>
-        {view.tiles.hasFixed ? (
+      {/* **Una scheda sola, ed e' la proiezione.**
+
+          Erano due (ADR 016 §3, *"due numeri, non uno"*), e la seconda cifra ha
+          ancora senso solo se si vede la prima: quello che e' cambiato e' **dove
+          si vede la prima**. Da quando A e' divisa in fisse e variabili, il
+          totale delle variabili del periodo e' l'intestazione della sezione, e
+          la scheda `Quotidiane` ripeteva quella stessa cifra trenta pixel piu'
+          sopra. L'esclusione non e' piu' taciuta perche' a dichiararla sono le
+          intestazioni, che stanno **sopra le barre di cui parlano** invece che
+          in cima alla pagina.
+
+          `Spese fisse … ogni mese` resta perche' non e' un totale: e' **una
+          proiezione**, quanto costeranno al mese le regole in vigore. A non puo'
+          mostrarla — e' retrospettiva, e per periodo — e senza di lei la
+          seconda meta' di ADR 016 §3 non sarebbe da nessuna parte.
+
+          Il contenitore e' condizionato con la scheda e non le sta intorno
+          vuoto: `.stats` e' un flex con `gap`, e un `<div>` senza figli
+          varrebbe due spaziature di niente sopra la prima sezione. */}
+      {view.tiles.hasFixed ? (
+        <div class="stats__tiles">
           <div class="tile">
             <p class="tile__label">{t('stats.fixed')}</p>
             <p class="tile__value">{money(view.tiles.fixedMonthlyCents)}</p>
             <p class="tile__sub">{t('stats.perMonth')}</p>
           </div>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
 
-      <Categories breakdown={view.byCategory} />
+      <Categories
+        breakdown={view.byCategory}
+        range={periodRangeLabel(view.period, view.current.range)}
+      />
       <Periods trend={view.byPeriod} period={view.period} />
     </div>
   )

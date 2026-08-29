@@ -54,7 +54,7 @@
  *
  * ### Ogni sezione porta il proprio totale
  *
- * Le due cifre di C sono in **unita' diverse** — `variableCents` e' del periodo,
+ * Le due cifre di C erano in **unita' diverse** — quella variabile del periodo,
  * `fixedMonthlyCents` e' al mese, come impone ADR 016 §3 — quindi affiancate non
  * dicono "507 contro 73,50 questa settimana". Finche' c'era la barra gigante,
  * quel confronto lo faceva l'occhio sul grafico; togliendola lo perderemmo, e
@@ -433,8 +433,117 @@ export interface PeriodBar {
   readonly cents: Cents
   readonly fraction: number
   readonly track: BudgetTrack | null
-  /** Il periodo che contiene oggi. */
+  /**
+   * Il periodo che contiene oggi.
+   *
+   * ## Non si ricava da `daysLived < daysTotal`, e la differenza dura un giorno per periodo
+   *
+   * Sembrano la stessa domanda e non lo sono. **L'ultimo giorno del periodo** —
+   * la domenica, per una settimana — `daysLived === daysTotal` e il periodo e'
+   * **ancora in corso**: la giornata non e' finita e ci si puo' ancora spendere.
+   * Chi togliesse questo campo *"perche' si ricava dai giorni"* romperebbe
+   * esattamente quel giorno: **una volta a settimana** la domenica, e l'ultimo
+   * del mese sul periodo mensile — cioe' proprio quando quanto resta e' la cosa
+   * piu' utile della schermata. C'e' un test su quel giorno, ed e' li' per
+   * questo.
+   *
+   * ## E non e' "l'ultima riga dell'elenco"
+   *
+   * Oggi le due cose **coincidono**, e coincidono per un invariante scritto:
+   * `trendRanges` costruisce la finestra a partire da `input.day`, quindi
+   * l'ultimo periodo e' quello di oggi, e la finestra **si taglia dalla testa e
+   * mai dal fondo** (vedi `inWindow` in `statsView`). Coincidere non e' essere
+   * la stessa cosa: la posizione e' una **conseguenza** della costruzione della
+   * finestra, `current` e' un **fatto sulle date**.
+   *
+   * La distinzione conta in due posti. Nel **componente**, dove leggere
+   * `index === rows.length - 1` invece di questo campo compilerebbe, passerebbe
+   * ogni fixture e diventerebbe falso il giorno in cui la finestra smettesse di
+   * finire con oggi. E **qui**, se un giorno la finestra scorresse indietro fino
+   * a dove i dati ci sono — una tentazione vera, rifiutata con un argomento su
+   * `inWindow`: allora l'ultima riga sarebbe un periodo **chiuso**, e il campo
+   * direbbe la cosa giusta senza che nessuno lo tocchi.
+   *
+   * Il test che sorveglia la coincidenza la asserisce **insieme alla sua
+   * ragione** — l'ultima riga e' corrente *perche'* il suo intervallo contiene
+   * `input.day` — invece che da sola: da sola sarebbe la fotografia di un
+   * accidente, e domani giustificherebbe di leggere la posizione.
+   *
+   * **E va detto, perche' chi lo riprovera' lo scoprira' da solo**: sostituire
+   * qui `current` con `indice === ultimo` e' un **mutante equivalente**, e non
+   * per debolezza dei test. E' un teorema di tre righe: l'ultimo elemento di
+   * `bars` ha per costruzione `range === current.range`, e `inWindow` e' uno
+   * `slice` dalla sola testa, quindi ogni `rows` non vuota finisce con la riga
+   * corrente — nessun input puo' violarlo. Cio' che i test prendono e' la
+   * **premessa**: tagliando la finestra anche dal fondo cadono 24 asserzioni.
+   *
+   * ## Ha smesso di essere una cucitura diventando utile
+   *
+   * Fino a questa riparazione era dichiarato, prodotto dal modello e **letto da
+   * nessuno in produzione**: lo tenevano vivo i soli test. Le altre superfici di
+   * questa famiglia trovate finora — `expensesInRange`, `planBudgetChange`,
+   * `accruedCents`, `breakdownTotal`, `fixedInPeriodCents`, `livedFraction` —
+   * sono state **cancellate**. Questa e' la prima che si chiude in senso
+   * opposto: le mancava il
+   * **lettore**, non la funzione, e il lettore e' arrivato quando il periodo in
+   * corso ha smesso di essere disegnato come se fosse finito.
+   *
+   * Sta scritto accanto al campo perche' cambia la domanda che si fa davanti a
+   * una cucitura: non e' sempre *"si taglia?"*, e' **"manca il lettore o manca
+   * la funzione?"**. Le due hanno la stessa evidenza — zero chiamanti di
+   * produzione — e due rimedi opposti.
+   */
   readonly current: boolean
+  /**
+   * I giorni del periodo **davvero vissuti, oggi compreso**
+   * (`BudgetMetrics.daysLived`). Su una riga chiusa vale `daysTotal`; sulla riga
+   * corrente e' `<= daysTotal`, e li' e' uguale l'ultimo giorno del periodo.
+   *
+   * ## Perche' esce di qui: il periodo in corso era disegnato come se fosse finito
+   *
+   * E' il difetto da cui questa fase e' partita — *"una barra da 112 accanto a
+   * una da 136 dice «sto spendendo meno»: mancano tre giorni"* — e per un giorno
+   * e' stato riparato **solo dove c'e' un budget**. L'unica marca che dichiarava
+   * l'incompletezza era la regione fra `accruedFraction` e `fraction`, che
+   * esiste **solo se esiste la rotaia**: cioe' l'incompletezza era legata a un
+   * campo con cui non c'entra niente, e restava invisibile nello stato **senza
+   * budget** — che e' la prima settimana di chiunque, e uno dei due stati che la
+   * suite stessa dichiara fra i piu' probabili.
+   *
+   * Misurato senza budget, di mercoledi': tre settimane piene da 70,00 € e la
+   * corrente con 30,00 € su tre giorni. Barre `175,98 / 175,98 / 175,98 / 77,20`
+   * px, DOM identico, nessuna marca. **Il passo e' lo stesso in tutte e
+   * quattro** — 10,00 € al giorno — e la forma diceva 44%.
+   *
+   * ## Sono due interi, e **non** una lunghezza
+   *
+   * Qui non nasce nessun `unlivedFraction`, e non e' una dimenticanza: **la
+   * dichiarazione dell'incompletezza non e' una misura sull'asse.** Con il
+   * budget la regione vuota funziona perche' la rotaia e' **denaro**, e il tempo
+   * si converte in denaro passando per il maturato. Senza budget quella
+   * conversione **non esiste**: l'asse e' denaro e basta. Disegnare "mancano
+   * quattro giorni" come una lunghezza li' significherebbe **inventare un valore
+   * in euro per il tempo che resta** — una proiezione, cioe' un'affermazione sul
+   * futuro che i dati non sostengono, sulla schermata che guarda il passato.
+   * Sarebbe il difetto della fase riparato con un difetto della stessa famiglia,
+   * ed e' la stessa ragione per cui `.stat__unlived` e' durato un giorno solo
+   * (vedi `BudgetTrack.accruedFraction` e `BudgetMetrics.daysLived`).
+   *
+   * **Come i due numeri si dichiarino a schermo** — un bordo aperto, un'etichetta
+   * — lo decide il componente, che ha il dizionario. Nessuna delle due cose e'
+   * una frazione, e nessuna delle due sta su questo asse.
+   *
+   * ## Non si ricalcolano
+   *
+   * Vengono dalle `BudgetMetrics` **della riga**, gia' calcolate per avere
+   * `cents` e la traccia: sono esposti, non computati una seconda volta. Una
+   * seconda aritmetica sui giorni sarebbe una copia da tenere allineata con
+   * `periodRange`, e si scoprirebbe sbagliata sul **mese** — dove `daysTotal`
+   * vale 28, 29, 30 o 31 e non una costante.
+   */
+  readonly daysLived: number
+  /** Quanti giorni ha il periodo. Vedi `daysLived`, che porta l'argomento dei due. */
+  readonly daysTotal: number
 }
 
 /**
@@ -474,7 +583,6 @@ export interface PeriodBar {
  */
 export interface StatsTiles {
   /** Speso variabile **del periodo**: la stessa cifra grande della Home. */
-  readonly variableCents: Cents
   /** Il tasso mensile delle regole in vigore oggi. **Al mese**, non del periodo. */
   readonly fixedMonthlyCents: Cents
   /**
@@ -948,6 +1056,15 @@ export function statsView(input: StatsInput): StatsView {
     cents: m.spentCents,
     fraction: barLength(share(m.spentCents, trendScale)),
     current: range.start === current.range.start,
+    // I due giorni vengono dalle metriche **di questa riga**, non da `current`:
+    // `metricsOf(range.start)` risolve il proprio `referenceDay` dentro il
+    // proprio intervallo, quindi una riga chiusa ha `daysLived === daysTotal` e
+    // solo quella di oggi puo' averli diversi. Prenderli da `current` darebbe a
+    // ogni settimana passata i tre settimi di mercoledi', cioe' otto periodi
+    // eternamente incompleti; e sul mese darebbe a febbraio i 31 giorni di
+    // agosto. Vedi `PeriodBar.daysLived`.
+    daysLived: m.daysLived,
+    daysTotal: m.daysTotal,
     track:
       m.comparableToBudget && m.budgetCents !== null
         ? {
@@ -1072,7 +1189,6 @@ export function statsView(input: StatsInput): StatsView {
 
   const fixed = monthlyFixedCosts(input.rules, input.day)
   const tiles: StatsTiles = {
-    variableCents: current.spentCents,
     fixedMonthlyCents: fixed.totalCents,
     // Solo il tasso: la scheda **e'** quella cifra. Il disgiunto che c'era qui
     // — "oppure c'e' una sezione di fisse" — copriva una contraddizione fra due

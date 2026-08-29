@@ -25,15 +25,15 @@ sa gia', e per questo non puo' invecchiare. I giudizi — cosa e' in volo, cosa
 aspetta una persona — stanno sotto, scritti a mano e timbrati con lo SHA a cui
 sono stati rivisti.
 
-- **Ultimo commit**: `0cbc6ac` — test: l'helper interrotto, e il matcher che passava senza interpolazione
-- **Data**: 28/08/2026 21:32
-- **Pushato**: **no: 5 commit non pushati**
+- **Ultimo commit**: `8fdca25` — test: due riparazioni che nessuno difendeva, e un commento che raccomandava il difetto
+- **Data**: 28/08/2026 22:23
+- **Pushato**: **no: 6 commit non pushati**
 - **Albero di lavoro**: **non pulito**, ci sono modifiche non committate
 
-- **Test unitari**: 676 in 23 file, tutti verdi
-- **Test e2e dichiarati**: 303 in 14 file, su 4 progetti (iphone-se, iphone-14, landscape, dark)
-- **Test e2e eseguiti**: 287 passati, 16 saltati, in 2.4 minuti. I saltati sono condizionali (ADR 013): solo un'esecuzione li vede.
-- **Bundle iniziale**: 54.2 KB gzip su 60.0 KB (5.8 KB di margine)
+- **Test unitari**: 683 in 23 file, tutti verdi
+- **Test e2e dichiarati**: 321 in 14 file, su 4 progetti (iphone-se, iphone-14, landscape, dark)
+- **Test e2e eseguiti**: 305 passati, 16 saltati, in 2.5 minuti. I saltati sono condizionali (ADR 013): solo un'esecuzione li vede.
+- **Bundle iniziale**: 54.4 KB gzip su 60.0 KB (5.6 KB di margine)
 
 - **Schema del database**: 4. La scala delle migrazioni:
   - **1** — Schema iniziale: expenses, categories, recurringRules, budgets, settings
@@ -50,7 +50,7 @@ sono stati rivisti.
 ## In volo adesso
 
 <!-- JUDGMENT rivisto=a8fee93 -->
-> Rivisto a `a8fee93`, 2 commit fa.
+> Rivisto a `a8fee93`, 3 commit fa.
 
 **Fase 6 sul ramo `fase-6-wip`.** Main resta a `origin/main` e pubblica su Pages:
 non ci si spinge finche' la schermata non e' stata riletta.
@@ -128,7 +128,7 @@ Sono ferme dal **24 agosto** e vanno fatte **in quest'ordine**, che non e' una
 preferenza: ogni passo distrugge la possibilita' di fare il precedente.
 
 <!-- JUDGMENT rivisto=888699a -->
-> Rivisto a `888699a`, 7 commit fa. **Da riguardare.**
+> Rivisto a `888699a`, 8 commit fa. **Da riguardare.**
 
 1. **Esportare un backup dall'app installata SENZA toccare la banda di
    aggiornamento.** Per ADR 005 l'app aggiorna solo quando l'utente tocca, quindi
@@ -336,13 +336,26 @@ cio' che la griglia unica per sezione doveva chiudere.
 ### 6. La regola sulle riparazioni, in CLAUDE.md
 
 <!-- DECISION
-     present: CLAUDE.md :: riscriverne la condizione sul posto
+     present: CLAUDE.md :: Una riparazione che cita un argomento altrui
 -->
-> **Non applicata**: manca `riscriverne la condizione sul posto` in `CLAUDE.md`.
+> **Applicata**, verificato da: `Una riparazione che cita un argomento altrui`.
 
 **Quando una riparazione cita un argomento scritto altrove, deve riscriverne la
 condizione sul posto.** Non *"come da ADR X"*, ma *"vale perche' qui succede Y"*.
 Se la condizione non si riesce a scrivere, l'argomento non vale qui.
+
+**Nota sul controllo di questa voce, perche' e' il caso piu' debole degli otto.**
+Le altre sette hanno un ago su un **simbolo** — un tipo, una costante, una chiave —
+che esiste o non esiste. Questa e' prosa, e l'unico ago possibile e' un pezzo di
+testo. Il primo che ho scritto cercava *"riscriverne la condizione sul posto"* e
+falliva su una regola **gia' scritta**, perche' l'intestazione la coniuga
+diversamente: il controllo era agganciato a una **flessione**, non a un fatto.
+
+Adesso l'ago e' **l'intestazione**, che e' l'ancora piu' stabile che un documento
+offra — si cambia deliberatamente, non riscrivendo un paragrafo. Resta piu' debole
+degli altri sette, e va detto invece che pareggiato: **dove la decisione e' prosa,
+il controllo puo' solo dire che qualcosa con quel titolo esiste**, non che dica la
+cosa giusta. Quella parte resta a chi legge.
 
 Non e' stile: la quarta, la quinta e la sesta ricorrenza di *"una decisione vale
 dove vale il suo argomento"* sono state trovate **dentro riparazioni della stessa
@@ -352,9 +365,10 @@ di mano, che e' la condizione perfetta per trapiantarlo senza ri-derivarlo.
 ### 7. La scheda "Quotidiane" cade
 
 <!-- DECISION
-     absent: src/ui/Stats.tsx :: tile__label
+     absent:  src/ui/stats-view.ts :: variableCents
+     present: src/ui/Stats.tsx :: stats__titleRange
 -->
-> **Non applicata**: c’e’ ancora `tile__label` in `src/ui/Stats.tsx`.
+> **Applicata**, verificato da: `!variableCents`, `stats__titleRange`.
 
 Decisa il 28 agosto. ADR 016 §2 vuole l'esclusione dichiarata **accanto al numero**:
 con A divisa in Fisse e Variabili quella dichiarazione e' ora nella schermata
@@ -366,16 +380,37 @@ non puo' mostrare, essendo retrospettiva e per periodo. Le due cifre hanno nomi
 diversi proprio perche' sono due quantita' diverse, e quella che sopravvive e'
 quella che nessun'altra parte della schermata dice.
 
-**Da verificare prima di applicare**: che ADR 016 §2 non resti scoperta nello stato
-*"regole attive, nessuna fissa materializzata nel periodo"*. Se resta scoperta, la
-decisione torna aperta invece di essere forzata.
+**Verificato prima di applicare**, e l'esito non era quello atteso: ADR 016 §2
+**regge** — la scheda `Spese fisse` e le due intestazioni di sezione nominano
+ancora la quantita' e la sua esclusione. **A cadere era il confine del periodo**:
+in due stati dove B non c'e' — il primo periodo di chiunque installi l'app, e "solo
+ricorrenti" — dopo il taglio sullo schermo non restava **una sola data**, mentre
+"Fisse in questo periodo" nominava un periodo che nulla identificava. Da qui
+`periodRangeLabel` spostato sul titolo di A **prima** del taglio, non dopo.
+
+**E il controllo di questa voce e' stato riscritto due volte, che e' un dato.**
+Diceva prima *"`tile__label` non compare in `Stats.tsx`"*: falso, perche' quella
+classe sopravvive sulla scheda `Spese fisse`, che resta di proposito.
+
+E' la **terza** condizione troppo grossolana di queste otto, e **tutte e tre erano
+`absent`**. Non e' un caso: un ago su `present` chiede che qualcosa di preciso sia
+stato **costruito**, e c'e' un solo modo di soddisfarlo; un ago su `absent` chiede
+che una parola non ci sia, e **lo soddisfa qualunque cosa la faccia sparire** —
+compreso il cancellare un commento utile o il rinominare una classe che doveva
+restare. Da qui la regola: **preferire `present`, e usare `absent` solo su un
+simbolo che esiste unicamente per la cosa che si sta togliendo.**
+
+Qui `absent` regge perche' `StatsTiles.variableCents` esisteva **solo** per quella
+scheda: il controllo D l'ha trovato senza lettori nel giro stesso in cui e' rimasto
+orfano, ed e' stato cancellato. E il `present` accanto verifica la meta' che conta
+di piu' — che il confine sia arrivato sul titolo di A prima che la scheda uscisse.
 
 ### 8. Il controllo D entra adesso
 
 <!-- DECISION
      present: scripts/dead-surface.mjs :: D. Campi di `src/ui`
 -->
-> **Non applicata**: manca `D. Campi di `src/ui`` in `scripts/dead-surface.mjs`.
+> **Applicata**, verificato da: `D. Campi di `src/ui``.
 
 Non in fase 7. Cio' che trova e non si ripara oggi va nell'**elenco dichiarato**,
 con la ragione e **la condizione che lo rende di nuovo un difetto** — l'idioma di

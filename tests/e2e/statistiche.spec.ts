@@ -56,7 +56,7 @@
  * schermate perche' le enumera invece di elencarle.
  */
 import type { Page } from '@playwright/test'
-import { fissaOrologio } from './clock'
+import { fissaOrologio, giornoDichiarato } from './clock'
 import { chiudiGuida, expect, test } from './installed'
 // Derivata, non ricopiata: un'asserzione che riscrive la copy a mano cade
 // quando qualcuno corregge un refuso, e chi la vede cadere crede di aver rotto
@@ -416,6 +416,34 @@ async function limiteDellEditor(page: Page): Promise<number> {
  * `statistiche.spec.ts` e in `colori.spec.ts`: si da' il token a un elemento e si
  * chiede al browser quanto e' venuto.
  */
+/**
+ * Il confine del periodo **come lo scrive la schermata**, letto dal titolo di A.
+ *
+ * Non e' una stringa costruita qui: e' `periodRangeLabel` dipinta, presa dal
+ * solo posto in cui questa schermata la scrive quando le righe ci sono. Prima
+ * stava sotto la scheda `Quotidiane`, ed e' salita sul titolo quando la scheda
+ * e' uscita — l'ordine conta, ed e' il soggetto di un test qui sotto.
+ *
+ * Si legge da un elemento suo e non si ritaglia dal titolo: `innerText`
+ * restituisce il testo **dipinto**, e il titolo e' `text-transform: uppercase` —
+ * `17–23 AGO` non e' come `Intl` scrive quella data, e un confronto con la Home
+ * cadrebbe per il motivo sbagliato.
+ */
+async function confineDiA(page: Page): Promise<string> {
+  const confine = (await page.locator('.stats__titleRange').innerText()).trim()
+  // **La stringa vuota si ferma qui, non nei chiamanti.** Meta' di loro la usa
+  // dentro un `toContain`, e `toContain('')` e' vero sempre: un titolo che
+  // smettesse di nominare il periodo li lascerebbe **tutti verdi**. Provato
+  // disfacendo — togliendo il confine dal titolo, il test dello stato `outside`
+  // passava ancora. La guardia sta nella funzione perche' la premessa e' sua:
+  // questo helper promette *l'etichetta che la schermata scrive*, e se non ne
+  // scrive nessuna non ha un valore da restituire.
+  if (confine === '') {
+    throw new Error('il titolo di A non nomina nessun periodo: `.stats__titleRange` e\' vuoto')
+  }
+  return confine
+}
+
 async function plotMinPx(page: Page): Promise<number> {
   return page.evaluate(() => {
     const righe = document.querySelector('.stats__rows')
@@ -705,14 +733,21 @@ test('fuori dal periodo: la schermata dice cosa manca, dove sono le spese e cosa
       `frase ne promette uno in: ${promettonoIlConfronto.join(', ')}`,
   ).toEqual([])
 
-  // Il confine che la frase nominava e' **lo stesso** che la scheda stampa
+  // Il confine che la frase nominava e' **lo stesso** che la schermata stampa
   // adesso che le righe ci sono. E' l'invariante vero dietro `{range}`: non una
   // stringa scritta nel test, ma l'etichetta che ogni altro stato di questa
   // schermata gia' usa.
-  const confine = (await page.locator('.tile__sub').first().innerText()).trim()
+  //
+  // **Si legge dal titolo di A e non piu' da `.tile__sub`**, e non e' un
+  // aggiustamento di selettore: la scheda `Quotidiane` non c'e' piu' (ripeteva
+  // il totale della parte variabile trenta pixel piu' sotto) e l'etichetta del
+  // periodo si e' spostata sul titolo di A **prima** che la scheda uscisse.
+  // L'invariante e' lo stesso di prima — c'e' un solo posto in cui questa
+  // schermata scrive il confine, e la frase dello stato `outside` nomina quello.
+  const confine = await confineDiA(page)
   expect(
     frase,
-    `la frase non nomina il periodo che la scheda chiama "${confine}": "${frase}"`,
+    `la frase non nomina il periodo che il titolo chiama "${confine}": "${frase}"`,
   ).toContain(confine)
 })
 
@@ -735,8 +770,20 @@ test('con spese e senza budget: le righe ci sono, le tracce no', async ({ page }
   await expect(page.locator('.stat__track')).toHaveCount(0)
   await expect(page.locator('.stat__accrued')).toHaveCount(0)
 
-  // E la cifra in testa risponde comunque: C non ha bisogno del budget.
-  await expect(page.locator('.tile__value').first()).toHaveText(/70,00|70\.00/)
+  // **E i 70,00 € si leggono una volta sola.** Erano due — la scheda `Quotidiane`
+  // in testa e l'intestazione della parte variabile qui sotto — cioe' la stessa
+  // cifra due volte a trenta pixel di distanza, con la seconda che porta anche
+  // l'invariante ("e' la somma delle righe che le stanno sotto") che la prima
+  // non ha. La scheda e' uscita; questa asserzione e' la guardia perche' non
+  // rientri sotto un altro nome.
+  const settanta = ((await page.locator('.stats').innerText()).match(/70,00/g) ?? []).length
+  expect(
+    settanta,
+    `il totale delle variabili e' scritto ${settanta} volte sulla stessa schermata`,
+  ).toBe(1)
+  // E senza spese fisse non c'e' **nessuna** scheda: il contenitore sparisce con
+  // il suo unico figlio, invece di restare vuoto a spendere due `gap` di niente.
+  await expect(page.locator('.stats__tiles')).toHaveCount(0)
 
   // Senza nemmeno una spesa fissa A ha **una parte sola**, e quella parte porta
   // il proprio totale nell'intestazione. Due parti qui vorrebbero dire una
@@ -960,13 +1007,21 @@ test('un nome che nessun editor accetta non accorcia le barre, e il grafico ha u
   // sull'altezza — il contenuto e' piu' alto di cio' che si vede, cioe' il clamp
   // ha tagliato — ed e' la stessa che il test a 320 punti usa al contrario, per
   // chiedere che le stringhe **nostre** non ci finiscano mai dentro.
+  //
+  // **Si misura `.stat__name` e non `.stat__label`**, ed e' il posto in cui il
+  // clamp vive adesso: la cella dell'etichetta ospita anche la nota sui giorni
+  // del periodo in corso, quindi un `-webkit-line-clamp` sul contenitore
+  // conterebbe le righe di tutte e due insieme e a colonna stretta si mangerebbe
+  // la nota. Cambia l'elemento, non il fatto — e infatti questa asserzione e'
+  // caduta quando il clamp si e' spostato, che e' esattamente cio' che deve
+  // fare.
   const misura = await page.evaluate((parola: string) => {
-    const el = document.querySelector('.stat__label')
-    if (el === null) throw new Error('nessuna etichetta da misurare')
-    const sola = [...document.querySelectorAll('.stat__label')].find(
+    const el = document.querySelector('.stat__name')
+    if (el === null) throw new Error('nessun nome da misurare')
+    const sola = [...document.querySelectorAll('.stat__name')].find(
       (l) => l.textContent === parola,
     )
-    if (sola === undefined) throw new Error(`nessuna etichetta "${parola}" in scena`)
+    if (sola === undefined) throw new Error(`nessun nome "${parola}" in scena`)
     return {
       clampata: el.scrollHeight > el.clientHeight + 0.5,
       // La parola sola: quanto contenuto c'e' in orizzontale, e quanto se ne
@@ -1868,6 +1923,386 @@ test('B dichiara che conta le quotidiane, sopra la settimana in cui e\' uscito s
 })
 
 /**
+ * **Il periodo in corso non e' disegnato come se fosse finito — con budget e senza.**
+ *
+ * ## Il difetto, misurato prima di ripararlo
+ *
+ * Senza budget, di mercoledi': tre settimane piene da 70,00 € e la corrente con
+ * 30,00 € su **tre giorni su sette**. Barre `175,98 / 175,98 / 175,98 / 77,20`
+ * px, DOM identico, **nessuna marca**. Il passo e' lo stesso in tutte e quattro —
+ * 10,00 € al giorno — e la forma diceva 44%.
+ *
+ * L'unica marca che esisteva era la regione fra il maturato e la fine della
+ * rotaia, cioe' una cosa che **c'e' solo se c'e' un budget**: l'incompletezza
+ * era legata a un campo con cui non c'entra niente, e restava invisibile nello
+ * stato piu' probabile di tutti — la prima settimana di chiunque installi
+ * l'app.
+ *
+ * ## Cosa si misura, e perche' i pixel
+ *
+ * Il fatto e' *"questo bordo non e' netto"*, che e' una domanda su cio' che si
+ * vede: un `toHaveAttribute('data-open')` sorveglierebbe **il nome di un
+ * attributo**, e resterebbe verde con la regola CSS cancellata. Si scansiona
+ * quindi una riga di pixel attraverso il bordo terminale e si contano le
+ * colonne **intermedie**: quelle che non sono ne' il riempimento ne' il fondo.
+ *
+ * Misurato a 390 punti, dpr 3, sulle stesse scene di questo test:
+ *
+ *     riga                        colonne intermedie
+ *     chiusa, chiaro                    1,00 px   <- il contorno, 1 px
+ *     chiusa, scuro                     1,00 px
+ *     corrente senza budget, chiaro     7,33 px
+ *     corrente senza budget, scuro      7,33 px
+ *     corrente con budget, chiaro       7,33 px
+ *
+ * Le due soglie — **>= 4** per la corrente, **<= 2** per le chiuse — stanno
+ * dentro quel margine da tutte e due le parti, quindi nessuna delle due e'
+ * tarata su cio' che passa oggi.
+ *
+ * ## Le tre cose che questo test fa cadere
+ *
+ * 1. **La marca legata al budget.** Il caso *senza budget* pretende il bordo
+ *    aperto: chi scrivesse `data-open={row.track !== null}` — cioe' rilegasse
+ *    l'incompletezza a `comparableToBudget`, che e' il difetto di partenza —
+ *    lo vedrebbe cadere li'. Provato disfacendo, non dedotto.
+ * 2. **La marca sull'ultima riga di un elenco qualsiasi.** A non ha nessun bordo
+ *    aperto, **compresa l'ultima riga di ciascuna delle sue parti**: le sue
+ *    barre stanno tutte dentro lo stesso periodo, quindi nessuna e' "piu'
+ *    incompleta" delle altre, e "l'ultima dell'elenco" non e' la regola.
+ * 3. **La marca su un periodo chiuso.** In B ce n'e' **una sola**, ed e' sulla
+ *    riga il cui intervallo e' quello che il titolo di A dichiara essere il
+ *    periodo corrente — cioe' identificata dalle date, non dalla posizione.
+ *
+ * ## Cosa questo test **non** puo' far cadere, e va detto
+ *
+ * `index === rows.length - 1` al posto di `row.current`. **Provato disfacendo:
+ * con la posizione al posto del campo, tutti e 28 i test di questo file restano
+ * verdi.** Non e' una svista del test: oggi le due cose coincidono per un
+ * invariante di `trendRanges` — la finestra finisce con il periodo di oggi e si
+ * taglia dalla testa — quindi **nessuna scena costruibile dal prodotto** le
+ * separa, e nessuna asserzione sul DOM puo' distinguerle.
+ *
+ * Il campo `current` esiste proprio perche' quella coincidenza e' una
+ * conseguenza e non un fatto (vedi `PeriodBar.current`), e `stats-view.test.ts`
+ * la sorveglia **nel modello**. Cio' che resta scoperto e' il gesto di **questo
+ * file**: leggere la posizione invece del campo. Diventerebbe visibile il giorno
+ * in cui la finestra smettesse di finire con oggi — cioe' lo stesso giorno in
+ * cui il difetto comincerebbe a esistere.
+ *
+ * Qui si asserisce la cosa piu' vicina che il DOM sa dire — la riga aperta e'
+ * quella del periodo che il titolo di A dichiara corrente — e il limite si
+ * scrive invece di lasciar credere che il conteggio lo copra.
+ */
+for (const scena of [
+  {
+    nome: 'senza budget',
+    // La settimana piu' vecchia e' la piu' grande: e' lei a riempire il grafico,
+    // cosi' le altre tre — la corrente compresa — hanno del fondo alla propria
+    // destra su cui misurare il bordo. Senza una riga che riempie, la scala
+    // sarebbe quella della corrente e non ci sarebbe niente da scansionare.
+    righe: [
+      { categoria: 'Spesa', cents: 12000, giorniFa: 22 },
+      { categoria: 'Spesa', cents: 7000, giorniFa: 15 },
+      { categoria: 'Spesa', cents: 5000, giorniFa: 8 },
+      { categoria: 'Fuori', cents: 3000, giorniFa: 1 },
+    ] as const,
+    opzioni: {},
+  },
+  {
+    nome: 'con budget',
+    // Il budget e' piu' grande di ogni riga, quindi e' lui la scala: nessuna
+    // barra riempie, e la corrente ha la **rotaia** alla propria destra invece
+    // del fondo. E' l'altra superficie su cui la sfumatura deve vedersi.
+    righe: [
+      { categoria: 'Spesa', cents: 12000, giorniFa: 22 },
+      { categoria: 'Spesa', cents: 7000, giorniFa: 15 },
+      { categoria: 'Spesa', cents: 5000, giorniFa: 8 },
+      { categoria: 'Fuori', cents: 3000, giorniFa: 1 },
+    ] as const,
+    opzioni: { budgetCents: 20000 },
+  },
+] as const) {
+  test(`il periodo in corso ha il bordo terminale aperto, e le chiuse no (${scena.nome})`, async ({
+    page,
+  }) => {
+    await page.goto('/')
+    await chiudiGuida(page)
+    await semina(page, scena.righe, scena.opzioni)
+
+    const periodi = page.locator('.stats__section').nth(1)
+    await expect(
+      periodi.locator('.stats__title'),
+      'la seconda sezione non e\' B: il test starebbe misurando le categorie',
+    ).toHaveText(new RegExp(dizionario['stats.byPeriod.weekly'], 'i'))
+    await expect(periodi.locator('.stat')).toHaveCount(4)
+    await expect(
+      periodi.locator('.stat__track'),
+      `la scena "${scena.nome}" non ha le tracce che dichiara`,
+    ).toHaveCount(scena.opzioni.budgetCents === undefined ? 0 : 4)
+
+    // 2. A non ha bordi aperti, **compresa l'ultima riga di ogni parte**: se la
+    // regola fosse "l'ultima dell'elenco" invece di "il periodo corrente",
+    // cadrebbe qui.
+    const categorie = page.locator('.stats__section').first()
+    await expect(
+      categorie.locator('.stat__bar[data-open]'),
+      'A ha una barra col bordo aperto: le sue righe stanno tutte nello stesso periodo',
+    ).toHaveCount(0)
+    for (const elenco of await categorie.locator('.stats__rows').all()) {
+      await expect(
+        elenco.locator('.stat').last().locator('.stat__bar[data-open]'),
+        'l\'ultima riga di una parte di A ha il bordo aperto: la regola e\' diventata la posizione',
+      ).toHaveCount(0)
+    }
+
+    // 3. In B ce n'e' una sola, ed e' quella del periodo che il titolo di A
+    // dichiara corrente. Il confronto e' fra due etichette che l'app scrive in
+    // due posti diversi, non fra una di loro e una costante del test.
+    const confine = await confineDiA(page)
+    const aperte = periodi.locator('.stat').filter({ has: page.locator('.stat__bar[data-open]') })
+    await expect(aperte, 'le righe col bordo aperto non sono una sola').toHaveCount(1)
+    await expect(
+      aperte.locator('.stat__name'),
+      `la riga col bordo aperto non e' il periodo che il titolo chiama "${confine}"`,
+    ).toHaveText(confine)
+
+    await periodi.locator('.stat').last().scrollIntoViewIfNeeded()
+
+    // E adesso i pixel: quante colonne, in px CSS, non sono ne' il riempimento
+    // ne' cio' che c'e' subito dopo la barra.
+    const righe = await page.evaluate(() =>
+      [...document.querySelectorAll('.stats__section')[1]!.querySelectorAll('.stat')].map(
+        (riga) => {
+          const barra = riga.querySelector('.stat__bar')!.getBoundingClientRect()
+          const plot = riga.querySelector('.stat__plot')!.getBoundingClientRect()
+          return {
+            etichetta: riga.querySelector('.stat__name')?.textContent ?? '',
+            aperta: riga.querySelector('.stat__bar')!.hasAttribute('data-open'),
+            fine: barra.right,
+            plotFine: plot.right,
+            y: plot.top + plot.height / 2,
+          }
+        },
+      ),
+    )
+
+    const guasti: string[] = []
+    const misure: string[] = []
+    for (const riga of righe) {
+      // La premessa: serve del fondo a destra della barra. La riga che riempie
+      // il grafico non ne ha, e non si misura — dichiarato invece che saltato in
+      // silenzio, cosi' un cambio di scena che le facesse riempire tutte si
+      // legge nell'output.
+      if (riga.fine + 3 >= riga.plotFine) {
+        misure.push(`| ${riga.etichetta.padEnd(16)} | riempie il grafico, non misurabile |`)
+        continue
+      }
+      const linea = await scansiona(page, { da: riga.fine - 14, a: riga.fine + 3, y: riga.y })
+      const pieno = linea[0]!.px
+      const fondo = linea[linea.length - 1]!.px
+      const lontano = (a: Px, b: Px): number =>
+        Math.max(Math.abs(a[0] - b[0]), Math.abs(a[1] - b[1]), Math.abs(a[2] - b[2]))
+      // A scale 3 un pixel CSS sono tre colonne del dispositivo.
+      const intermedie =
+        linea.filter((c) => lontano(c.px, pieno) > 8 && lontano(c.px, fondo) > 8).length / 3
+      misure.push(
+        `| ${riga.etichetta.padEnd(16)} | ${riga.aperta ? 'corrente' : 'chiusa  '} | ` +
+          `pieno ${esadecimale(pieno)} | dopo ${esadecimale(fondo)} | ` +
+          `intermedie ${intermedie.toFixed(2)}px |`,
+      )
+      // La premessa che rende la scansione capace di distinguere qualcosa.
+      if (lontano(pieno, fondo) <= 8) {
+        guasti.push(
+          `${riga.etichetta}: riempimento e fondo si dipingono uguali, la scansione non ` +
+            'distinguerebbe un bordo netto da uno sfumato',
+        )
+      } else if (riga.aperta && intermedie < 4) {
+        guasti.push(
+          `${riga.etichetta}: il periodo in corso ha un bordo netto (${intermedie.toFixed(2)}px ` +
+            'di transizione): e\' disegnato come se fosse finito',
+        )
+      } else if (!riga.aperta && intermedie > 2) {
+        guasti.push(
+          `${riga.etichetta}: un periodo chiuso ha il bordo sfumato ` +
+            `(${intermedie.toFixed(2)}px di transizione)`,
+        )
+      }
+    }
+    console.log(`\n${misure.join('\n')}\n`)
+    expect(guasti, `il bordo terminale non dice cosa sta crescendo (${scena.nome})`).toEqual([])
+  })
+}
+
+/**
+ * **La riga del periodo in corso dice quanti giorni ha vissuto, e lo dice in
+ * parole.**
+ *
+ * ## Perche' non basta il bordo aperto
+ *
+ * Perche' il bordo dice *"sta ancora crescendo"* e non dice **quanto**: senza il
+ * fatto esatto, chi guarda una barra corta continua a non sapere se e' corta
+ * perche' ha speso poco o perche' e' martedi'. E il numero non puo' essere una
+ * lunghezza — sull'asse c'e' denaro, e convertire il tempo che resta in euro
+ * sarebbe una proiezione (vedi `PeriodBar.daysLived`). Quindi e' testo.
+ *
+ * ## Le date sono quelle dichiarate, non inventate qui
+ *
+ * L'istante della suite e' **mercoledi' 19 agosto 2026** e la settimana comincia
+ * di lunedi': i giorni vissuti sono **3 su 7**, oggi compreso. I due numeri si
+ * derivano da li' invece di essere scritti a mano, cosi' spostando `ISTANTE` il
+ * test si sposta con lui.
+ *
+ * L'atteso e' **composto dai due dizionari** — `stats.daysSoFar` con dentro
+ * `days.other` — e non ricopiato: un refuso corretto nella copy aggiorna
+ * l'atteso, un refuso introdotto a schermo lo fa cadere. E' la stessa scelta di
+ * `conSegnaposti`, con la differenza che qui i buchi **non** restano liberi:
+ * cosa ci finisca dentro e' esattamente il fatto che questo test verifica.
+ *
+ * ## E vale nei due stati, per la stessa ragione del bordo
+ *
+ * L'incompletezza non ha niente a che vedere con l'avere un budget. Se la nota
+ * comparisse solo dove c'e' la rotaia, sarebbe lo stesso difetto di partenza
+ * spostato dalla geometria al testo.
+ */
+for (const scena of [
+  { nome: 'senza budget', opzioni: {} },
+  { nome: 'con budget', opzioni: { budgetCents: 20000 } },
+] as const) {
+  test(`solo il periodo in corso dice quanti giorni ha vissuto (${scena.nome})`, async ({
+    page,
+  }) => {
+    await page.goto('/')
+    await chiudiGuida(page)
+    await semina(
+      page,
+      [
+        { categoria: 'Spesa', cents: 12000, giorniFa: 22 },
+        { categoria: 'Spesa', cents: 7000, giorniFa: 15 },
+        { categoria: 'Spesa', cents: 5000, giorniFa: 8 },
+        { categoria: 'Fuori', cents: 3000, giorniFa: 1 },
+      ],
+      scena.opzioni,
+    )
+
+    // I due numeri, dall'istante dichiarato: lunedi' e' l'inizio, oggi conta.
+    const oggi = new Date(`${giornoDichiarato()}T12:00:00Z`)
+    const vissuti = ((oggi.getUTCDay() + 6) % 7) + 1
+    expect(
+      vissuti,
+      'l\'istante dichiarato non e\' piu' + ' mercoledi\': la premessa di questo test e\' cambiata',
+    ).toBe(3)
+
+    const attesa = dizionario['stats.daysSoFar']
+      .replace('{days}', dizionario['days.other'].replace('{count}', String(vissuti)))
+      .replace('{total}', '7')
+
+    // Una sola nota su tutta la schermata: e' un fatto del periodo in corso, e i
+    // periodi in corso sono uno.
+    const note = page.locator('.stat__note')
+    await expect(note, 'la nota sui giorni vissuti non e\' una sola').toHaveCount(1)
+    await expect(note).toHaveText(attesa)
+
+    // Ed e' sulla riga giusta: quella del periodo che il titolo di A dichiara
+    // corrente, non "l'ultima". Il confronto e' fra due etichette dell'app.
+    const confine = await confineDiA(page)
+    const conNota = page.locator('.stat').filter({ has: page.locator('.stat__note') })
+    await expect(
+      conNota.locator('.stat__name'),
+      `la nota non e' sulla riga del periodo che il titolo chiama "${confine}"`,
+    ).toHaveText(confine)
+
+    // E la riga resta alta come le altre: la nota non rompe il ritmo
+    // dell'elenco, che si ridisegna ogni giorno.
+    const altezze = await page.evaluate(() =>
+      [...document.querySelectorAll('.stats__section')[1]!.querySelectorAll('.stat')].map(
+        (r) => Math.round(r.getBoundingClientRect().height * 100) / 100,
+      ),
+    )
+    expect(new Set(altezze).size, `le righe di B non sono alte uguali: ${altezze.join(', ')}`).toBe(1)
+  })
+}
+
+/**
+ * **Il confine del periodo resta a schermo anche dove B non c'e'.**
+ *
+ * ## L'ordine, che e' il soggetto di questo test
+ *
+ * La scheda `Quotidiane` e' uscita — ripeteva il totale della parte variabile
+ * trenta pixel piu' sotto — ma il suo sottotitolo era **l'unico posto della
+ * schermata che nominasse il confine del periodo**, e ci sono due stati in cui B
+ * non esiste: il **primo periodo di chiunque installi l'app**, e chi ha solo
+ * spese fisse. Misurato prima della riparazione: in tutti e due, dopo il taglio,
+ * **sullo schermo non restava una sola data**, mentre `Fisse in questo periodo`
+ * nominava un periodo che nulla identificava.
+ *
+ * E' alla lettera il difetto appena chiuso sullo stato `outside` — *"ogni altro
+ * stato stampa `periodRangeLabel`; l'unico che parlava del confine era l'unico
+ * che non lo disegnava"* — che stava per riaprirsi in `ready`. L'argomento con
+ * cui la scheda esce non nomina il confine, quindi non lo copre.
+ *
+ * ## L'atteso non e' una stringa scritta qui: e' quello che stampa la Home
+ *
+ * `periodRangeLabel` e' la stessa funzione con lo stesso locale in tutte e due
+ * le schermate. Confrontare le due e' l'unico modo di verificare che questa
+ * scriva *il confine del periodo corrente* e non una data qualsiasi — un atteso
+ * ricopiato a mano sarebbe verde anche stampando la settimana sbagliata, purche'
+ * fosse quella scritta nel test.
+ */
+for (const scena of [
+  {
+    nome: 'il primo periodo di chi installa l\'app',
+    righe: [
+      { categoria: 'Spesa', cents: 2600 },
+      { categoria: 'Fuori', cents: 1450 },
+      { categoria: 'Trasporti', cents: 900 },
+    ] as const,
+  },
+  {
+    nome: 'solo spese fisse',
+    righe: [
+      { categoria: 'Casa', cents: 90000, fissa: true },
+      { categoria: 'Svago', cents: 1200, fissa: true },
+      { categoria: 'Sigarette', cents: 800, fissa: true },
+    ] as const,
+  },
+] as const) {
+  test(`senza B il confine del periodo e' comunque a schermo (${scena.nome})`, async ({ page }) => {
+    await page.goto('/')
+    await chiudiGuida(page)
+    await semina(page, scena.righe)
+
+    // La premessa: B non c'e'. Se ci fosse, il confine lo scriverebbe la riga
+    // corrente e questo test non starebbe misurando il caso che dice.
+    await expect(
+      page.locator('.stats__section'),
+      'c\'e\' anche B: la scena non e\' quella dichiarata',
+    ).toHaveCount(1)
+    await expect(page.locator('.stats')).not.toContainText(dizionario['stats.byPeriod.weekly'])
+
+    // E la scheda `Quotidiane` non c'e' piu': se tornasse, questo test
+    // continuerebbe a passare per il motivo sbagliato — il confine ci sarebbe
+    // due volte, e non si saprebbe quale dei due lo tiene in vita.
+    await expect(
+      page.locator('.tile__label').filter({ hasText: dizionario['stats.variable'] }),
+      'la scheda delle quotidiane e\' tornata: ripete il totale della parte qui sotto',
+    ).toHaveCount(0)
+
+    // Il fatto: una data c'e', ed e' quella della Home.
+    // `confineDiA` fallisce da sola se il titolo non nomina niente: la guardia
+    // sulla stringa vuota vive li', dove serve a tutti i chiamanti.
+    const confine = await confineDiA(page)
+
+    await page.getByRole('button', { name: /^Home$/ }).click()
+    await expect(page.locator('.home')).toBeVisible()
+    const daHome = (await page.locator('.home').innerText()).trim()
+    expect(
+      daHome,
+      `la Home non nomina il periodo che le Statistiche chiamano "${confine}"`,
+    ).toContain(confine)
+  })
+}
+
+/**
  * **A 320 punti, nelle due lingue, nessuna etichetta scritta dall'app tronca.**
  *
  * ## Perche' questo test non c'era, pur essendoci un test a 320 punti
@@ -1950,6 +2385,19 @@ for (const lingua of [
         // sono interi e la colonna e' larga 93,23, quindi uno scarto di 1 e'
         // arrotondamento. Un troncamento vero qui vale decine di pixel — 128,97
         // di testo in 93,23 di colonna.
+        //
+        // **Si chiedono `.stat__name` e `.stat__note`, non `.stat__label`.**
+        // L'etichetta e' diventata un contenitore di due cose — il nome e, sulla
+        // riga del periodo in corso, i giorni vissuti — e chi ritaglia e' il
+        // primo dei due: il contenitore non ha `overflow: hidden`, quindi
+        // interrogarlo darebbe `false` sempre. **Provato disfacendo**: col
+        // selettore vecchio e `-webkit-line-clamp: 1` sul nome — cioe' con
+        // `Categoria ri…` e `Category rem…` a schermo, che e' il difetto esatto
+        // per cui questo test esiste — le due varianti passavano verdi. Non e'
+        // arrivato da un fallimento: e' arrivato rileggendo il selettore dopo
+        // aver spostato il clamp, ed e' la forma esatta dei test che passano per
+        // il motivo sbagliato. Le due classi sono tutte e due stringhe che l'app
+        // scrive da se', che e' il soggetto del test.
         const clampato = (el: Element): boolean => el.scrollHeight > el.clientHeight + 0.5
         const troncato = (el: Element): boolean => el.scrollWidth > el.clientWidth + 1
         const tagliato = (el: Element): boolean => clampato(el) || troncato(el)
@@ -1957,7 +2405,9 @@ for (const lingua of [
         const stats = document.querySelector('.stats')
         if (stats === null) throw new Error('nessuna schermata delle Statistiche')
         return {
-          etichette: [...document.querySelectorAll('.stat__label')].filter(tagliato).map(testo),
+          etichette: [...document.querySelectorAll('.stat__name, .stat__note')]
+            .filter(tagliato)
+            .map(testo),
           nomiParte: [...document.querySelectorAll('.stats__partName')].filter(troncato).map(testo),
           titoli: [...document.querySelectorAll('.stats__title')].filter(troncato).map(testo),
           valori: [...document.querySelectorAll('.stat__value')].filter(troncato).map(testo),

@@ -306,6 +306,74 @@ punto non e' piu' un caso, e la guardia va resa strutturale invece che ricordata
 per esempio un controllo che cerchi i commit senza la parola nel messaggio quando
 l'hook e' stato saltato.
 
+## 5. Due unita' diverse, numericamente identiche una settimana su quattro
+
+**Stato: aperto**, e resta aperto **anche dopo** la riparazione della scheda,
+perche' la coincidenza tornera' con altri importi.
+
+Misurato sulla configurazione canonica di ADR 016 — una regola mensile da 900,00 €
+con ancora il 18, budget settimanale, il 19 agosto:
+
+    Spese fisse   900,00 €   ogni mese      <- proiezione dalle regole
+    ...
+    Casa          900,00 €                  <- speso in questo periodo
+
+Due quantita' in **unita' diverse** — al mese contro nel periodo — **numericamente
+identiche per costruzione** una settimana su quattro, tutti i mesi.
+
+**Perche' e' l'ambiguita' peggiore che esista**: il lettore non ha **nessun
+indizio** che siano due cose diverse. Due numeri **diversi** che si somigliano si
+notano e si va a controllare; due numeri **identici** che significano cose diverse
+non si notano affatto — la coincidenza li fa leggere come conferma reciproca.
+
+La riparazione delle **etichette** (`stats.fixedInPeriod`, "Fisse in questo
+periodo") ha tolto la contraddizione fra due nomi uguali. Non toglie questa: la
+metrica che in questa fase ha trovato tre difetti guarda **la cifra**, e la cifra
+e' ancora doppia. E' la stessa lezione gia' scritta — *"il titolo diceva «un
+numero», e il numero era solo il caso visto per primo"* — applicata al verso
+opposto: qui i nomi sono giusti e a coincidere sono i valori.
+
+**La condizione che la chiude**: una forma che renda le due unita' distinguibili
+**senza leggere l'etichetta** — perche' e' esattamente l'etichetta che la
+coincidenza fa saltare. Fino ad allora resta scritta.
+
+## 6. "In corso" e "ultima riga" sono indistinguibili da qualunque test
+
+**Stato: aperto**, e non si chiude scrivendo un altro test — nessuno puo' cadere.
+
+`PeriodBar.current` dice *"questo periodo contiene oggi"*. Nel componente lo stesso
+gesto si puo' scrivere `index === rows.length - 1`, che oggi da' lo stesso esito su
+**ogni scena costruibile dal prodotto** — e lo dimostrano due agenti che ci sono
+arrivati per strade diverse e indipendentemente:
+
+- lo **strato puro**: l'ultimo elemento di `bars` e' per costruzione il periodo di
+  oggi, perche' `trendRanges` parte da `input.day` e `inWindow` e' uno slice **dalla
+  sola testa**. Provati i due scrittori che potrebbero romperlo — una spesa datata
+  in avanti (cade *oltre* il fondo e non lo sposta; se e' l'unica, `rows` e' vuota)
+  e un orologio tornato indietro (la finestra si ricostruisce su `input.day`) — e
+  nessuno dei due separa le due cose.
+- il **componente**: sostituendo `row.current` con `index === rows.length - 1`,
+  **tutti e 28 i test del file restano verdi**.
+
+**Perche' resta un debito e non una nota.** I due sono uguali per una proprieta'
+della finestra, non per definizione. Il giorno che B guardasse anche i periodi
+futuri, o che la finestra tagliasse dal fondo, `index === last` diventerebbe falso
+**e niente diventerebbe rosso**: il difetto arriverebbe insieme alla modifica che
+lo rende possibile, cioe' nel momento in cui nessuno lo sta cercando.
+
+E' la forma pura di *"un'asserzione che passa sia col codice giusto sia con quello
+sbagliato"*, con l'aggravante che qui **non e' il test a essere debole**: e' il
+mondo a non contenere il controesempio.
+
+**La cura non e' un test.** E' la stessa mossa che questo progetto fa altrove:
+rendere la scelta sbagliata **inesprimibile** invece che sconsigliata — per esempio
+non passando al componente una lista indicizzabile, o non dandogli l'indice. Fino
+ad allora la difesa e' il tipo e la lettura di chi passa.
+
+**La condizione che la chiude**: il giorno in cui la finestra smette di finire con
+il periodo corrente. A quel punto la coincidenza cade da sola, e questa voce e'
+gia' scritta per chi arrivera' li'.
+
 ## 3. Rischi noti gia' scritti altrove
 
 Non si duplicano qui, per non creare la diciannovesima copia che parafrasa:

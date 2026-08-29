@@ -839,6 +839,16 @@ export const it = {
   'stats.byPeriod.weekly': 'Settimana per settimana',
   'stats.byPeriod.monthly': 'Mese per mese',
 
+  // Vedi en.ts per l'argomento. In una riga: e' un **fatto sul calendario**,
+  // non un conto alla rovescia — "ne mancano quattro" sarebbe un'affermazione
+  // sul futuro sulla schermata che guarda indietro, cioe' la proiezione che il
+  // modello si rifiuta di disegnare come lunghezza.
+  //
+  // `{days}` arriva da `daysLabel`, che ha il singolare: il lunedi' e il primo
+  // del mese si legge `1 giorno su 7`, e sono i giorni in cui la barra e' piu'
+  // corta di tutte, cioe' quelli in cui questa riga serve di piu'.
+  'stats.daysSoFar': '{days} su {total}',
+
   /* --- una spesa che viene da una regola ---------------------------------- */
   // Discreto, non un avviso: e' un'informazione su **da dove arriva** quella
   // riga, e le spese generate restano modificabili e cancellabili come tutte.
