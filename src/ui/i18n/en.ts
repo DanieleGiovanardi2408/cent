@@ -91,6 +91,10 @@ export const en: Record<keyof typeof it, string> = {
   /* --- Home -------------------------------------------------------------- */
   'hero.spent': 'Spent',
   'hero.remaining': 'Left',
+  // Vedi it.ts per l'argomento. `Left −£88.00` e' una contraddizione: il numero
+  // tiene il segno perche' deve restare monotono, quindi e' l'etichetta a
+  // nominare lo stato.
+  'hero.over': 'Over budget',
   'hero.noBudget': 'no budget set for this period',
   'hero.note': 'of {budget} · {spent} spent',
 
@@ -103,27 +107,25 @@ export const en: Record<keyof typeof it, string> = {
   'home.blank.text':
     'Tap the + below, type the amount and pick the category. Two taps: it works at the till, with one hand.',
 
-  'allowance.closed.main': 'This period is over.',
-  'allowance.closed.sub': 'The next one starts from scratch.',
-  'allowance.late.weekly': 'This week had already started.',
-  'allowance.late.monthly': 'This month had already started.',
-  'allowance.late.sub': 'The budget counts in full {from}.',
-  'allowance.over.main': 'The budget for this period is used up.',
-  'allowance.over.sub': '{days} to go: what you spend from here is on top.',
-  'allowance.last.main': 'You can spend {amount} today',
-  'allowance.last.sub': 'Last day of the period: tomorrow it starts from scratch.',
-  'allowance.main': 'You can spend ~{amount} a day',
-  'allowance.sub': 'for the {days} that are left, today included',
+  // Una riga sola dove ce n'erano due: il `sub` riformulava il `main` invece di
+  // aggiungere un fatto. Vedi it.ts.
+  'allowance.closed': 'This period is over: the next one starts from scratch.',
+  'allowance.late.weekly': 'This week had already started: the budget counts in full {from}.',
+  'allowance.late.monthly': 'This month had already started: the budget counts in full {from}.',
+  'allowance.last': 'You can spend {amount} today, the last day of the period',
+  'allowance.main': 'You can spend ~{amount} a day for {days}',
+  // Sforato **il primo giorno**: non c'e' ancora un passo da mostrare accanto ai
+  // giorni. Non dice "Left": quella parola sta sopra il numero grande e li'
+  // sono soldi.
+  'allowance.left': '{days} to the end of the period',
+  // Il verdetto a parole e' uscito: lo dicono i due numeri accostati.
+  'allowance.over': '{days} · {pace} a day against {sustainable} sustainable',
   'startNote': 'Budget active {from} · before that you had already spent {amount}',
 
   'pace.none': 'No spending in this period yet.',
   'pace.firstDay': 'It’s the first day of the period: today’s average is not a pace yet.',
   'pace.soFar.before': 'So far you are spending ',
   'pace.soFar.after': ' a day.',
-  'pace.above': 'Above pace: ',
-  'pace.below': 'Below pace: ',
-  'pace.against': ' a day against ',
-  'pace.sustainable': ' sustainable.',
 
   /* --- Storico ----------------------------------------------------------- */
   'history.blank.title': 'No expenses yet',
@@ -352,7 +354,10 @@ export const en: Record<keyof typeof it, string> = {
   'nudge.action': 'Export',
 
   /* --- spese fisse: le regole ricorrenti ---------------------------------- */
-  'hero.fixed': 'on top of {amount} in fixed costs',
+  // In fondo al riquadro invece che sotto il numero grande, quindi si regge da
+  // sola: `on top of …` non ha piu' un referente a tre righe di distanza. Vedi
+  // it.ts.
+  'hero.fixed': 'Not counted: {amount} in fixed costs',
 
   'fixed.title': 'Fixed costs',
   'fixed.total': '{amount} a month in total.',
@@ -497,7 +502,12 @@ export const en: Record<keyof typeof it, string> = {
 
   'stats.variable': 'Day to day',
   'stats.fixed': 'Fixed costs',
-  'stats.perMonth': 'every month',
+  // L'unita' sulla cifra, non sull'etichetta: e' cio' che chiude DEBITO.md §5.
+  // Vedi it.ts per il conto.
+  'stats.perMonthRate': '{amount}/month',
+  // Acceso a ogni apertura, mai ricordato. Spento, la cifra delle fisse resta
+  // sull'intestazione e nella barra divisa. Vedi it.ts.
+  'stats.showFixed': 'Show fixed costs',
 
   'stats.byCategory': 'What it went on',
   // Vedi it.ts: la scheda in testa e' una previsione al mese, questa e' quanto e'
@@ -505,6 +515,15 @@ export const en: Record<keyof typeof it, string> = {
   'stats.fixedInPeriod': 'Fixed this period',
   'stats.byPeriod.weekly': 'Week by week',
   'stats.byPeriod.monthly': 'Month by month',
+  // Il periodo ha **solo** spese fisse e l'utente le ha spente: A resta senza
+  // righe. Non e' lo stato vuoto — i dati ci sono — e non e' un guasto: e' una
+  // conseguenza di un gesto, quindi la frase **nomina il gesto**, altrimenti
+  // sembra che l'app abbia perso qualcosa.
+  //
+  // Non dice cosa fare adesso perche' l'interruttore che lo disfa e' due righe
+  // sopra, acceso in posizione "spento": un'istruzione qui ripeterebbe a parole
+  // un comando che si vede.
+  'stats.hiddenAll': 'Only fixed costs in this period, and you have hidden them.',
 
   /* **La riga del periodo in corso dice quanti giorni ha vissuto.**
    *

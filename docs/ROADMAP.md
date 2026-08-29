@@ -25,17 +25,17 @@ sa gia', e per questo non puo' invecchiare. I giudizi — cosa e' in volo, cosa
 aspetta una persona — stanno sotto, scritti a mano e timbrati con lo SHA a cui
 sono stati rivisti.
 
-- **Ultimo commit**: `848f417` — docs: dieci rilievi da uno sguardo, e le cinque decisioni di disegno che ne escono
-- **Data**: 29/08/2026 16:08
+- **Ultimo commit**: `01e3247` — fix: il fatto "Pushato" misurava contro un ramo che non era il proprio
+- **Data**: 29/08/2026 16:17
 - **Ramo**: `fase-6-wip`
-- **Pushato**: si, `origin/fase-6-wip` e' allo stesso commit
-- **Rispetto a `origin/main`**: 1 commit avanti
+- **Pushato**: **no: 1 commit non pushati su `origin/fase-6-wip`**
+- **Rispetto a `origin/main`**: 2 commit avanti
 - **Albero di lavoro**: **non pulito**, ci sono modifiche non committate
 
-- **Test unitari**: 683 in 23 file, tutti verdi
+- **Test unitari**: 698 in 23 file, tutti verdi
 - **Test e2e dichiarati**: 321 in 14 file, su 4 progetti (iphone-se, iphone-14, landscape, dark)
-- **Test e2e eseguiti**: 305 passati, 16 saltati, in 2.4 minuti. I saltati sono condizionali (ADR 013): solo un'esecuzione li vede.
-- **Bundle iniziale**: 54.4 KB gzip su 60.0 KB (5.6 KB di margine)
+- **Test e2e eseguiti**: 305 passati, 16 saltati, in 2.5 minuti. I saltati sono condizionali (ADR 013): solo un'esecuzione li vede.
+- **Bundle iniziale**: 55.2 KB gzip su 60.0 KB (4.8 KB di margine)
 
 - **Schema del database**: 4. La scala delle migrazioni:
   - **1** — Schema iniziale: expenses, categories, recurringRules, budgets, settings
@@ -52,7 +52,7 @@ sono stati rivisti.
 ## In volo adesso
 
 <!-- JUDGMENT rivisto=848f417 -->
-> Rivisto a `848f417`, cioe' a questo commit.
+> Rivisto a `848f417`, un commit fa.
 
 **Fase 6 sul ramo `fase-6-wip`.** `origin/main` e' a `d9d6471` — un commit
 indietro, e quel commit e' documentazione — quindi **la fase 6 e' gia' su Pages**,
@@ -139,6 +139,51 @@ geometriche: sono giudizi su cosa domina uno schermo, e un agente che legge
 10. La causa comune del 5: la soglia per sezione incrociata con la scala per
     sezione. Vedi la decisione 0a.
 
+### Cinque in piu' dal secondo sguardo, 29 agosto — e uno corregge il 10
+
+**Derivazione dichiarata**: ventiquattro scatti presi da uno script fuori dal
+repository, sul backup del 26 agosto seminato a runtime, sei scene per due viste e
+due altezze. Guardati da una macchina prima che da una persona — quindi valgono
+come *rilievi da verificare a occhio*, non come i dieci qui sopra.
+
+11. **Il primo giro di scatti era una misura che non poteva fallire.**
+    `screenshot({ fullPage: true })` su questa app **restituisce esattamente il
+    viewport**, in silenzio: `.app` e' alta `100dvh` e scorre dentro di se', quindi
+    non c'e' nessuna pagina da espandere. Dieci immagini alte 844 punti che
+    sembravano intere. E' la quarta forma della lezione di *"l'output di una
+    verifica si filtra quando lo si legge"*: qui non era filtrato, era **troncato
+    da un'opzione che si chiama come il contrario**. Adesso ogni vista ha due
+    scatti con due nomi — `piega` e `intero` — perche' un'immagine che non dichiara
+    quale delle due e' non si puo' giudicare.
+
+12. **Il 9 e' peggio di come e' scritto.** *"Settimana per settimana"* non e'
+    seguito dal vuoto: e' seguito da **una riga sola**, e la seconda cade sotto la
+    piega a 844 punti. B esiste per rispondere a *"sto spendendo piu' o meno delle
+    altre settimane"*, e **la domanda e la risposta non sono mai sullo schermo
+    insieme**. Detto come vuoto, il rilievo suggerisce di riempire; detto cosi',
+    dice che va tolto qualcosa **sopra**.
+
+13. **Tre velocita' al giorno sulla Home, non due**: `~44,00 €` (quello che puoi),
+    `18,66 €` (quello che hai speso), `28,57 €` (sostenibile). Il livello 3 di 0d
+    ne prevede due. Un lettore deve dedurre quale e' quale.
+
+14. **`Restano` compare due volte con due significati** — sopra il numero sono
+    soldi, sotto la barra sono giorni (*"Restano 2 giorni"*). Trovato solo nello
+    stato **sforato**, che nessuno degli altri scatti mostra.
+
+15. **Il 7 sottostima, e 0b lo peggiora.** Oggi `530,00 €` compare **due** volte a
+    300 px di distanza. La barra divisa ne aggiunge una terza a **60 px**, cioe'
+    porta DEBITO §5 dal fondo dello schermo dentro il campo visivo di una sola
+    occhiata. Non e' una ragione per non fare 0b: e' la ragione per cui la scheda
+    diventa un **tasso** — `530,00 €/mese` — che e' la condizione di chiusura di §5
+    presa alla lettera, sul numero invece che sull'etichetta.
+
+**E una cosa che gli scatti hanno reso visibile sul metodo**: il backup vero e'
+**sotto budget**, quindi in cinque scene su sei la contraddizione `Restano −88,00 €`
+— il rilievo 2, la decisione 0e — **non compare affatto**. La fixture di un
+progetto la sceglie chi la esporta, e chi la usa eredita gli stati che quel giorno
+c'erano. La sesta scena e' costruita, e va detto che e' costruita.
+
 Le riparazioni sono decise e non applicate: **sono il primo lavoro della prossima
 sessione**, prima del gate.
 
@@ -211,7 +256,7 @@ Sono ferme dal **24 agosto** e vanno fatte **in quest'ordine**, che non e' una
 preferenza: ogni passo distrugge la possibilita' di fare il precedente.
 
 <!-- JUDGMENT rivisto=58e0880 -->
-> Rivisto a `58e0880`, 4 commit fa.
+> Rivisto a `58e0880`, 5 commit fa.
 
 ### Stato al 29 agosto: **i passi 1 e 2 sono FATTI**
 
@@ -526,7 +571,7 @@ giorno in cui serviva davvero.
 ## Decisioni prese e non ancora applicate
 
 <!-- JUDGMENT rivisto=b289fff -->
-> Rivisto a `b289fff`, 2 commit fa.
+> Rivisto a `b289fff`, 3 commit fa.
 
 **L'esistenza di una decisione e' un giudizio; la sua applicazione e' un fatto
 derivabile.** Erano due cose diverse nella stessa sezione, ed e' per questo che
@@ -553,7 +598,7 @@ dieci rilievi e per cosa questo dice del metodo.
      absent:  src/ui/stats-view.ts :: sulla scala **della sezione**
      present: src/ui/stats-view.ts :: scala unica di A
 -->
-> **Non applicata**: c’e’ ancora `sulla scala **della sezione**` in `src/ui/stats-view.ts`; manca `scala unica di A` in `src/ui/stats-view.ts`.
+> **Applicata**, verificato da: `!sulla scala **della sezione**`, `scala unica di A`.
 
 Tutte le righe di A su **una scala sola**. Le sezioni restano come **intestazioni**
 — raggruppano e ordinano — e **non hanno scale proprie**.
@@ -570,12 +615,33 @@ Quotidiane, con il peso visivo inverso agli importi**: la sezione Fisse ha 530 �
 loro **incrocio**. Nessun gate poteva vederlo, perche' ogni regola presa da sola
 faceva il suo mestiere. **Meno regole, meno incroci.**
 
+##### Da dove vengono i numeri di questa voce, e perche' non sono gli unici
+
+**530 su 818 con la barra piu' lunga a 129 e' il telefono**, letto su uno screenshot
+il 29 agosto. Rifacendo la scena **dall'export del 26** — 390 punti, periodo
+24–30 ago, colonna a 112 px — il periodo vale **642,00 €**, le fisse **530,00 €** e
+la barra piu' lunga **42,00 €**. `data-core` ha visto le due coppie e ha chiesto
+quale valesse, il che e' la domanda giusta.
+
+**Valgono tutte e due, e la forma del difetto e' identica in entrambe**: le fisse
+sono i due terzi, non hanno barra, e la barra piu' lunga vale una frazione della
+voce piu' grossa. Cio' che cambia e' il **corpus** — il telefono ha tre giorni in
+piu' e l'export no — e la voce non lo diceva.
+
+Quindi la riga sopra resta com'e', **col suo corpus dichiarato**, e questa lo
+nomina accanto. E' *"una derivazione vale dove ha guardato, e deve dire dove"*
+applicata non a una conclusione ma alle **cifre che sostengono una decisione**:
+finche' non dichiarano il proprio corpus, due misure vere della stessa cosa si
+leggono come una contraddizione, e chi la incontra deve fermarsi a chiedere invece
+di andare avanti. Qui e' costato una domanda; il giorno in cui nessuno la fa, costa
+una decisione presa contro il numero sbagliato.
+
 #### 0b. Barra divisa in cima
 
 <!-- DECISION
      present: src/ui/Stats.tsx :: stats__split
 -->
-> **Non applicata**: manca `stats__split` in `src/ui/Stats.tsx`.
+> **Applicata**, verificato da: `stats__split`.
 
 Porta la proporzione fisse/quotidiane e **libera A dal doverla raccontare**: due
 terzi sono l'affitto, e oggi non c'e' nessun posto dove si veda.
@@ -586,16 +652,38 @@ l'errore da manuale, e la risposta e' **emphasis**. Con due segmenti serve una
 legenda o **etichette dirette**: i due totali scritti accanto la soddisfano, ma
 vanno scritti.
 
-Forma alternativa ammessa: **ciambella a due segmenti** col totale nel mezzo — due
-angoli si confrontano bene. **La torta a sette fette e' esclusa**: 62% e sei
-spicchi fra 1% e 16% costringono a una legenda e a confrontare angoli.
+**La torta a sette fette e' esclusa**: 62% e sei spicchi fra 1% e 16%
+costringono a una legenda e a confrontare angoli.
+
+**E l'alternativa a ciambella e' caduta il 29 agosto, leggendo `dataviz`.** Qui
+c'era scritto *"forma alternativa ammessa: ciambella a due segmenti col totale nel
+mezzo — due angoli si confrontano bene"*. La skill la vieta due volte e per due
+ragioni diverse: *"una torta a 2 fette -> una stat tile"* fra le forme, e *"niente
+donut per confrontare valori vicini"* fra gli anti-pattern. **Resta la sola barra
+orizzontale divisa**, che la stessa skill prescrive per il part-to-whole con nomi
+lunghi — cioe' esattamente il nostro caso.
+
+L'argomento che avevo scritto — *"due angoli si confrontano bene"* — non era falso:
+era **il criterio sbagliato**. Due angoli si confrontano bene fra loro, e la
+domanda di questa barra non e' *"quale dei due e' piu' grande"* (si sa: e'
+l'affitto) ma *"quanto della mia settimana e' gia' deciso"*, che e' una lunghezza
+su una lunghezza. Una decisione presa col criterio giusto per la domanda sbagliata
+si riconosce solo rileggendo la domanda.
+
+**E come e' finita scritta qui, che vale piu' della forma.** Questa riga e' stata
+cancellata **dopo** essere gia' stata dichiarata cancellata in un brief a
+`ui-craft` — *"ho gia' cancellato l'alternativa da 0b"* — mentre nel documento
+c'era ancora. E' "deriva, non dettare" applicata a se stessa: il brief descriveva
+uno stato che avrei creato invece di uno che esisteva, ed e' esattamente la forma
+per cui quella regola e' stata scritta. Presa perche' il brief chiedeva all'agente
+di segnalare la discrepanza; senza quella riga sarebbe passata.
 
 #### 0c. Selettore fisse si'/no su A
 
 <!-- DECISION
      present: src/ui/i18n/it.ts :: stats.showFixed
 -->
-> **Non applicata**: manca `stats.showFixed` in `src/ui/i18n/it.ts`.
+> **Applicata**, verificato da: `stats.showFixed`.
 
 Sostituisce **una regola di layout con un controllo dell'utente**. Tre vincoli:
 
@@ -611,7 +699,7 @@ Sostituisce **una regola di layout con un controllo dell'utente**. Tre vincoli:
 <!-- DECISION
      absent: src/ui/i18n/it.ts :: 'allowance.over.main'
 -->
-> **Non applicata**: c’e’ ancora `'allowance.over.main'` in `src/ui/i18n/it.ts`.
+> **Applicata**, verificato da: `!'allowance.over.main'`.
 
 Oggi **sei affermazioni dicono lo stesso fatto**: il numero, il colore, la barra,
 *"Il budget del periodo e' finito"*, *"quello che spendi da qui e' in piu'"*,
@@ -643,7 +731,7 @@ regola di dataviz presuppone due cose che abbiamo deliberatamente rimosso.)*
 <!-- DECISION
      present: src/ui/i18n/it.ts :: 'hero.over'
 -->
-> **Non applicata**: manca `'hero.over'` in `src/ui/i18n/it.ts`.
+> **Applicata**, verificato da: `'hero.over'`.
 
 **"Restano −88,00 €" e' una contraddizione, ed e' viva dalla fase 4.** Verificato:
 `heroCopy` restituisce `t('hero.remaining')` **incondizionatamente**, e non esiste
@@ -790,10 +878,10 @@ di mano, che e' la condizione perfetta per trapiantarlo senza ri-derivarlo.
 ### 7. La scheda "Quotidiane" cade
 
 <!-- DECISION
-     absent:  src/ui/stats-view.ts :: variableCents
+     absent:  src/ui/Stats.tsx :: tiles.variableCents
      present: src/ui/Stats.tsx :: stats__titleRange
 -->
-> **Applicata**, verificato da: `!variableCents`, `stats__titleRange`.
+> **Applicata**, verificato da: `!tiles.variableCents`, `stats__titleRange`.
 
 Decisa il 28 agosto. ADR 016 §2 vuole l'esclusione dichiarata **accanto al numero**:
 con A divisa in Fisse e Variabili quella dichiarazione e' ora nella schermata
@@ -825,10 +913,33 @@ compreso il cancellare un commento utile o il rinominare una classe che doveva
 restare. Da qui la regola: **preferire `present`, e usare `absent` solo su un
 simbolo che esiste unicamente per la cosa che si sta togliendo.**
 
-Qui `absent` regge perche' `StatsTiles.variableCents` esisteva **solo** per quella
+Qui `absent` reggeva perche' `StatsTiles.variableCents` esisteva **solo** per quella
 scheda: il controllo D l'ha trovato senza lettori nel giro stesso in cui e' rimasto
 orfano, ed e' stato cancellato. E il `present` accanto verifica la meta' che conta
 di piu' — che il confine sia arrivato sul titolo di A prima che la scheda uscisse.
+
+#### E il 29 agosto ha smesso di reggere, per la ragione opposta a quella prevista
+
+L'ago cercava `variableCents` **in `stats-view.ts`**, ed e' tornato rosso senza che
+la scheda tornasse: `BreakdownSplit.variableCents` — la meta' quotidiana della barra
+divisa di 0b — porta lo **stesso nome** per un'altra quantita', nello stesso file.
+
+La regola scritta qui sopra diceva *"usare `absent` solo su un simbolo che esiste
+unicamente per la cosa che si sta togliendo"*, e la prova che serve era **al momento
+in cui l'ago si scrive**. Non basta: un nome puo' diventare non-unico **dopo**, e
+allora l'ago si accende su un fatto che non e' il suo. Il verso del guasto e' quello
+buono — un falso allarme, non un falso silenzio — ma costa comunque una lettura per
+capire che non era niente, e la terza volta nessuno la fa.
+
+**L'ago adesso guarda il lettore, non il campo**: `tiles.variableCents` in
+`Stats.tsx`, cioe' l'espressione con cui il componente leggerebbe quella scheda se
+tornasse. Un lettore e' piu' stretto di un nome — vive in un file solo, e nessuno lo
+scrive per caso mentre chiama un'altra cosa allo stesso modo.
+
+**La regola generale che ne esce, ed e' piu' forte della precedente**: quando la cosa
+da togliere e' una **superficie**, l'ago va sul **consumo**, non sulla dichiarazione.
+Un campo puo' essere ridichiarato altrove con lo stesso nome per un'altra ragione; un
+uso e' sempre uso *di qualcosa*, e nomina il proprio soggetto.
 
 ### 8. Il controllo D entra adesso
 

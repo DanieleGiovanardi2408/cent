@@ -34,6 +34,28 @@
   flex-direction: column;
   gap: var(--sp-5);
   padding-block-end: var(--sp-3);
+
+  /* **Qui c'era `scroll-snap-type: y proximity`, e non c'e' piu': non poteva
+   * scattare.** Va scritto perche' e' il primo rimedio che viene in mente al
+   * problema vero (l'intestazione di B sopra la piega con una riga sotto), ed e'
+   * il tipo di riga che qualcuno rimette senza misurarla.
+   *
+   * Misurato a 390x844 con sette righe in A: l'area utile e' **708 px**, il
+   * contenuto **1.048**, quindi lo scorrimento massimo e' **340 px**. Il punto
+   * d'aggancio di B — il suo bordo superiore — sta a **568,8**: irraggiungibile
+   * per costruzione, perche' portare l'intestazione di B in cima vorrebbe dire
+   * lasciare 228 px di niente sotto l'ultima riga. Provato con sei scorrimenti
+   * da 400 a 640 px: tutti finiscono a 340, cioe' l'aggancio non e' mai
+   * intervenuto.
+   *
+   * E costava un difetto: al primo disegno la posizione 0 cadeva dentro la
+   * prossimita' del **primo** punto d'aggancio e il contenitore si spostava da
+   * solo, portando la riga della proiezione mensile sopra il proprio bordo
+   * (misurato: `.stats__rate` a `top: 16` con `.stats` a `top: 52`).
+   *
+   * Cio' che resta vero e' piu' semplice: **al fondo dello scorrimento B si vede
+   * intera**, tutti e otto i periodi (misurato). Quello che manca e' il primo
+   * disegno, e la sua aritmetica sta nel rapporto — non si ripara col CSS. */
 }
 
 /* Dentro un contenitore che scorre i blocchi non si comprimono per far entrare
@@ -43,41 +65,48 @@
   flex: none;
 }
 
-/* --- le due cifre in testa (ADR 016 §3) --------------------------------- */
+/* --- la proiezione mensile delle fisse (ADR 016 §3) ---------------------- */
 
-.stats__tiles {
+/* **Una riga, e prima era una scheda alta 109 px.**
+ *
+ * Un quinto dell'altezza utile per una cifra sola, in cima a una schermata che
+ * non riesce a mettere due righe di B sopra la piega: il peso visivo era
+ * l'inverso dell'importanza. La proiezione e' **contesto** — quanto costa stare
+ * qui, al mese — non e' la risposta a nessuna delle due domande della
+ * schermata, e non merita il posto che aveva.
+ *
+ * Resta in testa e non in fondo perche' ADR 016 §3 la vuole **accanto** alla
+ * prima cifra: il totale del periodo, che sta sul titolo di A trenta pixel piu'
+ * sotto. Una nota a pie' di pagina l'avrebbe staccata dall'unica cosa che la
+ * rende leggibile.
+ *
+ * Nessun fondo grigio: la distinzione fra "contesto" e "dati" la fa gia' la
+ * tipografia (13 px, muta, contro il titolo e le barre). Un riquadro qui
+ * chiedeva attenzione per una cifra che non ne vuole. */
+.stats__rate {
   display: flex;
+  align-items: baseline;
+  justify-content: space-between;
   gap: var(--sp-3);
+  color: var(--text-muted);
+  font-size: var(--fs-100);
 }
 
-.tile {
-  flex: 1 1 0;
+.stats__rateLabel {
+  overflow: hidden;
   min-inline-size: 0;
-  padding: var(--sp-3);
-  border-radius: var(--radius-2);
-  background-color: var(--surface-sunken);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.tile__label {
-  color: var(--text-muted);
-  font-size: var(--fs-100);
-  font-weight: var(--fw-semibold);
-}
-
-/* Cifre proporzionali e non tabulari: `tabular-nums` allarga i numeri e su una
- * cifra grande e isolata li fa sembrare slegati. Le tabulari servono dove i
- * numeri si incolonnano, e qui non si incolonnano. */
-.tile__value {
-  margin-block-start: var(--sp-1);
+/* Cifre tabulari: sta sul bordo destro, incolonnata con tutti gli altri importi
+ * della schermata. Le proporzionali servono a un numero grande e isolato — la
+ * scheda che c'era prima — e questo non lo e' piu'. */
+.stats__rateValue {
+  flex: none;
   color: var(--text);
-  font-size: var(--fs-500);
   font-weight: var(--fw-semibold);
-  font-variant-numeric: proportional-nums;
-}
-
-.tile__sub {
-  color: var(--text-muted);
-  font-size: var(--fs-100);
+  font-variant-numeric: tabular-nums;
 }
 
 /* --- le sezioni --------------------------------------------------------- */
@@ -126,8 +155,35 @@
   grid-template-columns: minmax(0, 1fr) max-content;
 }
 
+/* La riga del titolo di A: la domanda a sinistra, la sua risposta a destra.
+ *
+ * **`DOVE SONO FINITI · 24–30 AGO` era monco**: finiti *quanto?* Un titolo che
+ * pone una domanda in cima a una schermata che esiste per rispondere, e non
+ * porta il numero, lascia il lettore a sommare sette righe.
+ *
+ * Il totale sta **fuori dall'`<h2>`** e non dentro: l'intestazione resta la
+ * domanda — un test la legge intera, e `text-transform: uppercase` non deve
+ * arrivare a una cifra — e la cifra e' un dato accanto, incolonnato sul bordo
+ * destro come tutti gli importi della schermata.
+ *
+ * `align-items: baseline` e non `center`: due tipografie diverse sulla stessa
+ * riga si leggono come una riga sola solo se stanno sulla stessa linea di base.
+ *
+ * B non ha questa riga — nessun totale: sarebbe la somma di otto periodi, che
+ * non chiede nessuno — quindi il suo titolo resta un figlio diretto della
+ * griglia. */
+.stats__head {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-3);
+}
+
 /* Un titolo attraversa tutte le colonne: e' un'intestazione, non una cella. Vale
- * anche per i titoli di parte, piu' sotto. */
+ * anche per i titoli di parte, piu' sotto. Dentro `.stats__head` la riga qui
+ * sopra prende il posto della campata, e il titolo diventa la parte che cede
+ * lo spazio: se non ci sta va a capo, e la cifra non si stringe mai. */
 .stats__title {
   grid-column: 1 / -1;
   color: var(--text-muted);
@@ -135,6 +191,36 @@
   font-weight: var(--fw-semibold);
   text-transform: uppercase;
   letter-spacing: 0.06em;
+}
+
+.stats__head > .stats__title,
+.stats__head > .stats__partTitle {
+  grid-column: auto;
+  min-inline-size: 0;
+}
+
+/* Dentro la riga del titolo, il nome di parte non cresce e non porta il filo di
+ * separazione: non c'e' niente sopra da cui separarsi, ed e' il titolo a cedere
+ * lo spazio se non ci sta. */
+.stats__head > .stats__partTitle {
+  flex: none;
+  margin-block-start: 0;
+  padding-block-start: 0;
+  border-block-start: none;
+}
+
+.stats__head > .stats__partTitle .stats__partName {
+  flex: none;
+}
+
+/* Il totale del periodo. Tabulare come gli importi che somma: e' sullo stesso
+ * bordo destro, e le proporzionali lo farebbero ballare al cambio di cifra. */
+.stats__titleTotal {
+  flex: none;
+  color: var(--text);
+  font-size: var(--fs-300);
+  font-weight: var(--fw-semibold);
+  font-variant-numeric: tabular-nums;
 }
 
 /* Il confine del periodo, in coda al titolo di A: `DOVE SONO FINITI · 17–23 ago`.
@@ -208,16 +294,86 @@
   grid-column: 1 / -1;
   display: flex;
   align-items: baseline;
-  justify-content: space-between;
   gap: var(--sp-2);
   color: var(--text);
   font-size: var(--fs-200);
   font-weight: var(--fw-semibold);
 }
 
+/* **L'intestazione delle fisse porta l'interruttore, quindi e' un bersaglio.**
+ *
+ * L'altezza la **dichiara** invece di derivarla dal contenuto: dentro c'e' un
+ * bottone da 44 px, e un'intestazione dimensionata dal proprio testo — 18,75 px
+ * in italiano, meno in inglese — lascerebbe che sia la tipografia a decidere se
+ * il bersaglio ci sta. E' la stessa mossa del pavimento sui bersagli, un piano
+ * piu' su: rendere esatta la cosa misurata invece di tollerare che dipenda dal
+ * font.
+ *
+ * `align-items: center` solo qui: le due linee di base che allineano nome e
+ * totale non hanno senso per un interruttore, che e' una figura e non un testo. */
+.stats__partTitle[data-kind="fixed"] {
+  align-items: center;
+  min-block-size: var(--tap-min);
+}
+
+/* La pastiglia che lega l'intestazione al proprio segmento della barra divisa.
+ *
+ * **E' la legenda**, e sta qui invece che sotto la barra per non ripetere i due
+ * nomi a sessanta pixel di distanza (`Spese fisse` sopra `Fisse in questo
+ * periodo`) e per non costare una riga sopra B. I due colori sono gli stessi
+ * dei segmenti, dichiarati in un posto solo qui sotto.
+ *
+ * `::before` e non un elemento: e' decorazione pura, non ha niente da dire a
+ * chi non la vede — il nome accanto lo dice gia'. */
+.stats__partTitle[data-kind] .stats__partName::before {
+  content: "";
+  display: inline-block;
+  inline-size: 0.5rem;
+  block-size: 0.5rem;
+  margin-inline-end: var(--sp-2);
+  border-radius: 2px;
+  background-color: var(--seg);
+  /* Le due parole restano allineate: la pastiglia e' un blocco dentro una riga
+   * di testo, e senza questo scende sulla linea di base portandosi dietro
+   * l'altezza della riga. */
+  vertical-align: baseline;
+}
+
+/* I due colori del sistema, dichiarati una volta e letti da tre posti: i due
+ * segmenti della barra e le due pastiglie.
+ *
+ * **Un accento e un grigio**, non due tinte di categoria: la storia e' un numero
+ * solo, e otto tinte categoriche per un numero solo e' l'errore da manuale. E
+ * **l'accento sta sulle quotidiane**, non sulle fisse: ADR 016 dice che *"il
+ * budget serve a decidere se prendere quel caffe', e l'affitto non e' una
+ * decisione"*, quindi si accentua cio' su cui si decide. Le fisse restano
+ * dominanti **per area**, che e' il fatto che la barra deve dire.
+ *
+ * `--line-strong` e `--text`, e non `--brand`: quello e' gia' il colore delle
+ * barre di B e del FAB, e un terzo significato sullo stesso token lo
+ * svuoterebbe. Sul fondo valgono 3,19:1 e 16,5:1 (chiaro), 3,3:1 e 16,3:1
+ * (scuro); **fra loro** 5,1:1 in chiaro e 4,8:1 in scuro — cioe' la differenza
+ * e' di luminanza e non di tinta, e la barra si legge anche senza distinguere i
+ * colori. */
+.stats__partTitle[data-kind="fixed"],
+.stats__seg[data-kind="fixed"] {
+  --seg: var(--line-strong);
+}
+
+.stats__partTitle[data-kind="variable"],
+.stats__seg[data-kind="variable"] {
+  --seg: var(--text);
+}
+
 /* Il nome della parte cede per primo: se lo spazio non basta si accorcia lui e
- * non il totale, che e' una cifra e mezza cifra non vuol dire niente. */
+ * non il totale, che e' una cifra e mezza cifra non vuol dire niente.
+ *
+ * `flex: 1` e non piu' `space-between` sul padre: i figli adesso possono essere
+ * tre — nome, totale, interruttore — e `space-between` avrebbe messo il totale
+ * **in mezzo**, cioe' fuori dalla colonna degli importi. Con il nome che cresce,
+ * cio' che segue resta impilato a destra in qualunque ordine. */
 .stats__partName {
+  flex: 1 1 auto;
   overflow: hidden;
   min-inline-size: 0;
   text-overflow: ellipsis;
@@ -229,6 +385,115 @@
 .stats__partTotal {
   flex: none;
   font-variant-numeric: tabular-nums;
+}
+
+/* --- la barra divisa: fisse contro quotidiane ---------------------------- */
+
+/* **Due terzi sono l'affitto, e non si vedeva da nessuna parte.**
+ *
+ * La proporzione fra le due nature e' il fatto dominante del periodo, e con la
+ * scala unica le due sezioni da sole non lo dicono: dicono chi ha la riga piu'
+ * lunga, non quanto pesa una natura sull'altra.
+ *
+ * **I 2 px in mezzo sono un vuoto, non un bordo.** Un contorno fra due marche
+ * che si toccano davvero aggiunge una terza tinta proprio sul confine, cioe'
+ * dove serve leggere dove finisce l'una: il `gap` non colora niente, e' assenza
+ * di marca. (Il contorno da 1 px delle barre di A resta e risolve un altro
+ * problema — quattro degli otto colori delle categorie stanno sotto 3:1 sul
+ * fondo — e quelle barre non si toccano mai fra loro.)
+ *
+ * `flex-basis` e non due larghezze in percentuale: i due segmenti si dividono
+ * cio' che resta **dopo** il vuoto, e `flex-shrink` toglie a ciascuno in
+ * proporzione alla propria base, quindi la proporzione dipinta resta quella del
+ * modello. Con due `inline-size: n%` la riga avrebbe traboccato di 2 px. */
+.stats__split {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 2px;
+  block-size: 0.75rem;
+  overflow: hidden;
+}
+
+.stats__seg {
+  /* `flex-grow: 0`: nessuno dei due deve prendersi lo spazio del vuoto. */
+  flex: 0 1 auto;
+  border-radius: var(--radius-1);
+  background-color: var(--seg);
+}
+
+/* --- l'interruttore delle fisse ----------------------------------------- */
+
+/* **Un bersaglio dichiara le proprie misure, su tutti e due gli assi.**
+ * Qui dentro non c'e' testo — il nome accessibile e' `stats.showFixed`, la
+ * figura e' la pastiglia — quindi senza queste due righe la larghezza sarebbe
+ * quella del disegno, 34 px, e la lingua non c'entrerebbe niente: sarebbe
+ * piccolo in tutte e due. */
+.stats__toggle {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-block-size: var(--tap-min);
+  min-inline-size: var(--tap-min);
+  /* Il rientro negativo riporta la figura sul bordo destro della colonna
+   * lasciando al bersaglio i suoi 44 px pieni — la stessa mossa del bottone del
+   * budget nella Home. */
+  margin-inline-end: calc(var(--sp-2) * -1);
+  padding-inline-end: var(--sp-2);
+}
+
+/* La pastiglia: **lo stato si legge senza toccare niente**, che e' uno dei tre
+ * vincoli del selettore. Acceso e spento differiscono per due cose insieme —
+ * riempimento e posizione del pallino — perche' una sola delle due sarebbe
+ * invisibile a chi non distingue il verde dal grigio. */
+.stats__switch {
+  position: relative;
+  display: block;
+  inline-size: 2.125rem;
+  block-size: 1.25rem;
+  border-radius: var(--radius-full);
+  background-color: var(--line-strong);
+}
+
+.stats__switch::after {
+  content: "";
+  position: absolute;
+  inset-block: 2px;
+  inset-inline-start: 2px;
+  inline-size: 1rem;
+  border-radius: var(--radius-full);
+  background-color: var(--bg);
+}
+
+.stats__toggle[aria-checked="true"] .stats__switch {
+  background-color: var(--brand);
+}
+
+/* Solo `transform`, mai `inset`: la pastiglia scorre senza toccare il layout, e
+ * sotto `prefers-reduced-motion` i token di durata valgono zero — il pallino e'
+ * semplicemente gia' dall'altra parte. */
+.stats__toggle[aria-checked="true"] .stats__switch::after {
+  transform: translateX(0.875rem);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .stats__switch,
+  .stats__switch::after {
+    transition:
+      transform var(--dur-2) var(--ease-out),
+      background-color var(--dur-2) var(--ease-out);
+  }
+}
+
+/* A e' vuota **perche' l'utente l'ha svuotata**: il periodo ha solo spese fisse
+ * e le ha spente. Non e' lo stato vuoto della schermata — quello ha una sua
+ * impaginazione e dice un'altra cosa — e' una riga che spiega uno schermo, sotto
+ * l'interruttore che lo disfa. */
+.stats__hidden {
+  grid-column: 1 / -1;
+  color: var(--text-muted);
+  font-size: var(--fs-200);
+  max-inline-size: 42ch;
 }
 
 /* --- gli elenchi e le righe --------------------------------------------- */

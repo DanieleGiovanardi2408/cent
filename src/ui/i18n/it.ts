@@ -114,6 +114,17 @@ export const it = {
   /* --- Home -------------------------------------------------------------- */
   'hero.spent': 'Spesi',
   'hero.remaining': 'Restano',
+  // **Il residuo negativo ha una parola sua.** `Restano −88,00 €` e' una
+  // contraddizione, ed e' vissuta dalla fase 4: `over` era gia' calcolato
+  // (`remainingCents < 0`) e guidava il **colore**, non la **parola**. Il fatto
+  // c'era, usato per la decorazione.
+  //
+  // Il numero resta **col segno** — `heroCopy` spiega perche': un residuo che
+  // ricomincia a salire mentre si spende e' la cosa sbagliata da mettere davanti
+  // a chi guarda per mezzo secondo — quindi l'etichetta deve nominare **lo
+  // stato**, non ripetere la direzione: `Oltre il budget` sopra `−88,00 €` dice
+  // dove si e' e lascia al numero il quanto.
+  'hero.over': 'Oltre il budget',
   'hero.noBudget': 'nessun budget impostato per questo periodo',
   'hero.note': 'di {budget} · {spent} spesi',
 
@@ -126,27 +137,32 @@ export const it = {
   'home.blank.text':
     'Tocca il + qui sotto, digita l’importo e scegli la categoria. Sono due tap: si fa in cassa, con una mano.',
 
-  'allowance.closed.main': 'Questo periodo è chiuso.',
-  'allowance.closed.sub': 'Il prossimo riparte da capo.',
-  'allowance.late.weekly': 'Questa settimana era già iniziata.',
-  'allowance.late.monthly': 'Questo mese era già iniziato.',
-  'allowance.late.sub': 'Il budget vale pieno {from}.',
-  'allowance.over.main': 'Il budget del periodo è finito.',
-  'allowance.over.sub': 'Restano {days}: quello che spendi da qui è in più.',
-  'allowance.last.main': 'Puoi spendere {amount} oggi',
-  'allowance.last.sub': 'Ultimo giorno del periodo: domani riparte da capo.',
-  'allowance.main': 'Puoi spendere ~{amount} al giorno',
-  'allowance.sub': 'per i {days} che restano, oggi compreso',
+  // **Una riga sola, ed era due.** Ogni voce di questo blocco portava un `main`
+  // e un `sub`: due frasi per un fatto, esattamente cio' che la Home aveva in
+  // sei copie. Il `sub` non aggiungeva un fatto — lo riformulava — quindi non e'
+  // stato tolto: e' stato **cucito dentro** la frase che lo reggeva gia'.
+  'allowance.closed': 'Questo periodo è chiuso: il prossimo riparte da capo.',
+  'allowance.late.weekly': 'Questa settimana era già iniziata: il budget vale pieno {from}.',
+  'allowance.late.monthly': 'Questo mese era già iniziato: il budget vale pieno {from}.',
+  'allowance.last': 'Puoi spendere {amount} oggi, ultimo giorno del periodo',
+  'allowance.main': 'Puoi spendere ~{amount} al giorno per {days}',
+  // I giorni che restano **senza un passo accanto**: il periodo e' sforato ed e'
+  // il primo giorno, quindi `currentPaceCents` e' `null` (una media su un giorno
+  // appena iniziato non e' un passo, vedi `budget.ts`). Non dice "Restano": la
+  // parola sopra il numero grande la usa gia' per i soldi, e la stessa parola
+  // per due unita' nella stessa schermata e' il difetto che questa passata
+  // chiude.
+  'allowance.left': '{days} alla fine del periodo',
+  // **Il verdetto se n'e' andato, i due numeri restano.** `Sopra ritmo:` diceva
+  // a parole cio' che `48,00 € contro 28,57 €` dice da solo, e stava in cima
+  // alla terza di sei affermazioni sullo stesso fatto.
+  'allowance.over': '{days} · {pace} al giorno contro {sustainable} sostenibili',
   'startNote': 'Budget attivo {from} · prima avevi già speso {amount}',
 
   'pace.none': 'Nessuna spesa in questo periodo, per ora.',
   'pace.firstDay': 'È il primo giorno del periodo: la media di oggi non è ancora un passo.',
   'pace.soFar.before': 'Finora stai spendendo ',
   'pace.soFar.after': ' al giorno.',
-  'pace.above': 'Sopra ritmo: ',
-  'pace.below': 'Sotto ritmo: ',
-  'pace.against': ' al giorno contro ',
-  'pace.sustainable': ' sostenibili.',
 
   /* --- Storico ----------------------------------------------------------- */
   'history.blank.title': 'Nessuna spesa, per ora',
@@ -472,8 +488,18 @@ export const it = {
    * non sono una scelta di oggi.
    */
 
-  /* la riga che dichiara l'esclusione, accanto al numero grande (ADR 016 §2) */
-  'hero.fixed': 'oltre a {amount} di spese fisse',
+  /* La riga che dichiara l'esclusione (ADR 016 §2). **Sta in fondo al riquadro,
+   * non piu' sotto il numero grande**: li' erano due didascalie appaiate — il
+   * dettaglio del budget e questa — e la seconda si leggeva come una coda della
+   * prima.
+   *
+   * Spostandola, `oltre a …` ha perso il proprio referente: a tre righe di
+   * distanza non si sa piu' *oltre a cosa*. Quindi la frase si regge da sola e
+   * dice **cosa** non conta invece di appoggiarsi a cio' che le stava sopra. E
+   * resta vera anche **senza budget**, dove il numero grande e' lo speso: anche
+   * quello le fisse le esclude, ed e' proprio chi non ha ancora un tetto ad
+   * avere meno strumenti per accorgersene. */
+  'hero.fixed': 'Fuori dal conto: {amount} di spese fisse',
 
   /* la sezione in Impostazioni: il secondo dei due numeri (ADR 016 §3) */
   'fixed.title': 'Spese fisse',
@@ -821,7 +847,28 @@ export const it = {
 
   'stats.variable': 'Quotidiane',
   'stats.fixed': 'Spese fisse',
-  'stats.perMonth': 'ogni mese',
+  // **L'unita' sta sul numero, e non e' tipografia: e' cio' che chiude
+  // `DEBITO.md` §5.** Questa cifra e' una proiezione *al mese*; trecento pixel
+  // piu' sotto A ne scrive una *nel periodo*, e una settimana su quattro le due
+  // sono **identiche per costruzione** (una regola mensile da 530,00 € nella
+  // settimana in cui scatta). Due numeri diversi che si somigliano si notano;
+  // due numeri identici che significano cose diverse **non si notano affatto**.
+  //
+  // La condizione scritta nel debito chiedeva *"una forma che renda le due
+  // unita' distinguibili senza leggere l'etichetta"* — perche' e' proprio
+  // l'etichetta che la coincidenza fa saltare. `530,00 €/mese` accanto a
+  // `530,00 €` la soddisfa sul numero: la differenza e' dentro la cifra, dove
+  // l'occhio cade comunque.
+  'stats.perMonthRate': '{amount}/mese',
+  // L'interruttore che toglie le fisse dalla **scala** di A, non solo dalle
+  // righe. Nasce acceso a ogni apertura e non si ricorda: un controllo di vista
+  // che tornasse spento nasconderebbe 507,00 € a chi non l'ha mai toccato, cioe'
+  // ADR 016 §1 dalla porta di servizio.
+  //
+  // Spento, la cifra delle fisse **resta a schermo** — sull'intestazione che
+  // porta l'interruttore, e nella barra divisa qui sopra — quindi nascondere le
+  // righe non nasconde il fatto.
+  'stats.showFixed': 'Mostra le spese fisse',
 
   'stats.byCategory': 'Dove sono finiti',
   // **Non e' `stats.fixed`, e la differenza non e' di stile.** La scheda in testa
@@ -838,6 +885,9 @@ export const it = {
   'stats.fixedInPeriod': 'Fisse in questo periodo',
   'stats.byPeriod.weekly': 'Settimana per settimana',
   'stats.byPeriod.monthly': 'Mese per mese',
+  // Vedi en.ts: il periodo ha solo spese fisse e l'utente le ha spente. La frase
+  // nomina il gesto, perche' senza sembra un guasto.
+  'stats.hiddenAll': 'In questo periodo ci sono solo spese fisse, e le hai nascoste.',
 
   // Vedi en.ts per l'argomento. In una riga: e' un **fatto sul calendario**,
   // non un conto alla rovescia — "ne mancano quattro" sarebbe un'affermazione

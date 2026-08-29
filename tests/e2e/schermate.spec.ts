@@ -52,6 +52,17 @@ test.beforeEach(async ({ page }) => {
  * senza almeno due periodi la seconda sezione non e' un grafico, e senza tre
  * categorie non lo e' la prima — ma valgono per tutte: una schermata vuota non
  * ha niente da far traboccare.
+ *
+ * **E una spesa su cinque viene da una regola**, che e' la stessa ragione un
+ * giro piu' avanti. Con sole spese a mano le Statistiche non hanno la sezione
+ * delle fisse, quindi non hanno **l'interruttore** — e l'interruttore e' oggi
+ * l'unico bersaglio toccabile che quella schermata possieda oltre alla barra e
+ * al FAB. Misurato prima di ripararlo: la sonda contava **5 bersagli** su
+ * Statistiche, cioe' i quattro della barra piu' il FAB, e il comando nuovo non
+ * l'ha guardato nessuno su nessuno dei tre viewport.
+ *
+ * E' la stessa forma del difetto che ha prodotto questo file: non un elenco da
+ * aggiornare, ma **una scena troppo povera perche' la cosa da guardare esista**.
  */
 async function semina(page: Page, quante: number): Promise<void> {
   await page.evaluate(async (totale: number) => {
@@ -75,6 +86,7 @@ async function semina(page: Page, quante: number): Promise<void> {
       const store = tx.objectStore('expenses')
       for (let i = 0; i < totale; i += 1) {
         const at = 1_700_000_000_000 + i
+        const fissa = i % 5 === 0
         store.put({
           id: `sch-${i}`,
           createdAt: at,
@@ -82,7 +94,8 @@ async function semina(page: Page, quante: number): Promise<void> {
           amountCents: 150 + (i % 900) * 7,
           categoryId: categories[i % categories.length]?.id ?? 'x',
           date: iso(i % 60),
-          source: 'manual',
+          source: fissa ? 'recurring' : 'manual',
+          ...(fissa ? { recurringId: 'sch-regola' } : {}),
         })
       }
       tx.oncomplete = () => resolve()

@@ -11,6 +11,28 @@
  */
 
 .row {
+  /* **Il riferimento per cio' che sta dentro fuori dal flusso**, ed e' una
+   * riparazione, non uno stile.
+   *
+   * La riga porta un'etichetta `.visually-hidden` — "spesa fissa", il nome
+   * accessibile del simbolo delle ricorrenti — e quella e' `position: absolute`.
+   * Senza un antenato posizionato il suo blocco contenitore e' **la pagina**:
+   * il rettangolo da 1 px esce dal contenitore che scorre invece di essere
+   * ritagliato con lui, e finisce alle coordinate del documento.
+   *
+   * Cosa produce, misurato con quattrocento spese di cui una su cinque
+   * ricorrente: nella Home a 375x667 il documento e' alto **689** contro i 667
+   * dello schermo; nello Storico a 390x844 l'eccedenza e' **4.671 px**. Cioe' la
+   * pagina diventa piu' alta dello schermo, e su iOS quello e' il documento che
+   * si trascina dietro l'intestazione — la classe di difetto per cui
+   * `schermate.spec.ts` esiste, e quella che non ha il tasto Indietro per
+   * rimediare.
+   *
+   * L'ha trovata la sonda solo dopo che il suo seme ha cominciato a scrivere
+   * anche spese fisse: prima nessuna riga aveva quell'etichetta, quindi il
+   * difetto c'era e non era **raggiungibile dalla scena**. */
+  position: relative;
+
   inline-size: 100%;
   display: flex;
   align-items: center;

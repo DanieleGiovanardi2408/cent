@@ -46,6 +46,13 @@ import type { Page } from '@playwright/test'
 import { probe, report } from './probe'
 import type { Target } from './probe'
 import { fissaOrologio, giornoDichiarato, istanteLocale } from './clock'
+// Derivato, non ricopiato. **Questi tre test sono caduti proprio per questo**:
+// cercavano `oltre a 900,00 € di spese fisse`, ricopiata a mano, e la copy e'
+// cambiata per una decisione (la riga e' scesa in fondo al riquadro e li' "oltre
+// a …" non ha piu' un referente). Un atteso che nasce dal dizionario segue una
+// decisione da solo e cade solo su un difetto vero — l'idioma e' gia' quello di
+// `statistiche.spec.ts`.
+import { it as dizionario } from '../../src/ui/i18n/it'
 
 test.beforeEach(async ({ page }) => {
   await fissaOrologio(page)
@@ -130,6 +137,18 @@ async function speseSuDisco(
     return all
   })
 }
+
+/**
+ * La nota che dichiara l'esclusione (ADR 016 §2), **come la scrive il
+ * dizionario**: qui si scrive solo il numero, che e' l'unica cosa che questi
+ * test sanno e la copy no.
+ *
+ * Lo spazio prima del simbolo e' quello **non separabile** che `Intl` mette
+ * (invariante di `money.ts`): scritto qui com'e' perche' il confronto e' su
+ * testo dipinto, e uno spazio normale non sarebbe la stessa stringa.
+ */
+const notaFisse = (importo: string): string =>
+  dizionario['hero.fixed'].replace('{amount}', `${importo}\u00a0€`)
 
 test('il caso del brief: 900 al mese dal 1 gennaio, dichiarato, confermato, e otto spese ai giorni giusti', async ({
   page,
@@ -299,7 +318,7 @@ test('il caso del brief: 900 al mese dal 1 gennaio, dichiarato, confermato, e ot
   await expect(page.locator('.hero__value')).not.toHaveAttribute('data-tone', 'over')
   // **L'esclusione e' dichiarata**: un numero giusto di cui non si sa cosa non
   // conta e' un numero che mente per omissione (ADR 016 §2).
-  await expect(page.locator('.hero__fixed')).toHaveText('oltre a 900,00 € di spese fisse')
+  await expect(page.locator('.slot__fixed')).toHaveText(notaFisse('900,00'))
 
   // --- Impostazioni: i due numeri, uno sotto l'altro.
   await page.locator('.app__action').tap()
@@ -325,11 +344,19 @@ test('senza spese fisse nel periodo la Home non annuncia niente', async ({ page 
   await expect(page.locator('.fab')).toBeEnabled()
   await chiudiGuida(page)
 
-  await expect(page.locator('.hero__fixed')).toHaveText('')
-  // La riga occupa il suo spazio comunque: compare e sparisce con il periodo
-  // (la settimana del canone si', quella dopo no), quindi la riserva evita un
-  // salto ricorrente, non uno all'apertura.
-  const alta = await page.locator('.hero__fixed').evaluate((el) => el.getBoundingClientRect().height)
+  // **"C'e' ed e' vuota" non e' "non c'e'", e sono i due fatti che questo test
+  // tiene separati.** Il primo e' quello voluto: la riga esiste sempre, quindi
+  // non annunciare niente non costa un salto a chi guarda la settimana dopo il
+  // canone. Senza il conteggio, un giorno in cui la riga smettesse di essere
+  // disegnata questo test resterebbe verde — `toHaveText('')` su zero elementi
+  // non e' un'asserzione, e' un'attesa che non trova mai niente da contraddire.
+  const nota = page.locator('.slot__fixed')
+  await expect(nota, 'la riga delle fisse non e\' in pagina affatto').toHaveCount(1)
+  await expect(nota).toHaveText('')
+  // E occupa il suo spazio comunque: compare e sparisce con il periodo (la
+  // settimana del canone si', quella dopo no), quindi la riserva evita un salto
+  // ricorrente, non uno all'apertura.
+  const alta = await nota.evaluate((el) => el.getBoundingClientRect().height)
   expect(alta).toBeGreaterThan(10)
 })
 
@@ -909,7 +936,7 @@ test('correggere l importo di una fissa conserva id e source, e la riga Restano 
   await page.locator('.nav__tab').first().tap()
   await expect(page.locator('.hero__value')).toContainText('200,00')
   const restano = await page.locator('.hero__value').textContent()
-  await expect(page.locator('.hero__fixed')).toHaveText('oltre a 900,00 € di spese fisse')
+  await expect(page.locator('.slot__fixed')).toHaveText(notaFisse('900,00'))
 
   // --- Tre tap: la riga, "Correggi l'importo", "Salva". Le cifre non contano
   //     come attrito (CLAUDE.md): l'importo e' contenuto, non navigazione.
@@ -955,7 +982,7 @@ test('correggere l importo di una fissa conserva id e source, e la riga Restano 
   await page.locator('.nav__tab').first().tap()
   await expect(page.locator('.hero__value')).toHaveText(restano ?? '')
   await expect(page.locator('.hero__value')).toContainText('200,00')
-  await expect(page.locator('.hero__fixed')).toHaveText('oltre a 912,00 € di spese fisse')
+  await expect(page.locator('.slot__fixed')).toHaveText(notaFisse('912,00'))
 
   // --- E la spesa resta una fissa anche a vedersi: il segno discreto e' ancora
   //     sulla riga. Se `source` fosse cambiato, sparirebbe da qui.

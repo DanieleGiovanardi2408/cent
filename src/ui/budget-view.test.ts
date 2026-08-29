@@ -297,8 +297,12 @@ describe('quanto puoi spendere al giorno', () => {
     const copy = frase(
       metrics({ today: MERCOLEDI, budgetCents: 20_000, spese: [spesa(LUNEDI, 5000)] }),
     )
-    expect(copy.main).toContain('30,00')
-    expect(copy.sub).toContain('5 giorni')
+    // **I giorni stanno nella stessa riga del numero**, e non in un
+    // sottotitolo: la riga di dettaglio non c'e' piu' perche' riformulava, e
+    // l'unico fatto che aggiungeva — quanti giorni copre quella media — e'
+    // finito dentro la frase che lo reggeva gia'.
+    expect(copy.text).toContain('30,00')
+    expect(copy.text).toContain('5 giorni')
     expect(copy.over).toBe(false)
   })
 
@@ -311,11 +315,12 @@ describe('quanto puoi spendere al giorno', () => {
    */
   it('l ultimo giorno e un totale, non un ritmo: niente tilde e niente "al giorno"', () => {
     const copy = frase(metrics({ today: DOMENICA, budgetCents: 20_000 }))
-    expect(norm(copy.main)).toBe('Puoi spendere 200,00 € oggi')
-    expect(copy.main).not.toContain('~')
-    expect(copy.main).not.toContain('al giorno')
-    expect(copy.sub).toContain('Ultimo giorno')
-    expect(copy.sub).not.toContain('1 giorni')
+    expect(norm(copy.text)).toBe('Puoi spendere 200,00 € oggi, ultimo giorno del periodo')
+    expect(copy.text).not.toContain('~')
+    expect(copy.text).not.toContain('al giorno')
+    // E il "1 giorni" non compare: con un giorno solo la frase non conta
+    // giorni, dice qual e'.
+    expect(copy.text).not.toContain('1 giorni')
   })
 
   /**
@@ -327,7 +332,7 @@ describe('quanto puoi spendere al giorno', () => {
     const m = metrics({ today: DOMENICA, budgetCents: 20_000, spese: [spesa(LUNEDI, 7145)] })
     expect(m.daysRemaining).toBe(1)
     expect(m.dailyAllowanceCents).toBe(m.remainingCents)
-    expect(norm(frase(m).main)).toBe('Puoi spendere 128,55 € oggi')
+    expect(norm(frase(m).text)).toBe('Puoi spendere 128,55 € oggi, ultimo giorno del periodo')
   })
 
   it('col residuo negativo non promette un tetto negativo: dice che il budget e finito', () => {
@@ -335,12 +340,21 @@ describe('quanto puoi spendere al giorno', () => {
       metrics({ today: MERCOLEDI, budgetCents: 20_000, spese: [spesa(LUNEDI, 25_000)] }),
     )
     expect(copy.over).toBe(true)
-    expect(copy.main).toBe('Il budget del periodo è finito.')
-    expect(copy.sub).toContain('5 giorni')
+    // **Non dice piu' "il budget e' finito": lo dicono il segno e il colore del
+    // numero grande.** Al suo posto ci sono i due numeri che quella frase non
+    // dava — il passo tenuto e quello sostenibile — piu' i giorni che restano.
+    // Sono 250,00 spesi in tre giorni (lunedi'-mercoledi') = 83,33 al giorno,
+    // contro 200,00 su sette = 28,57.
+    expect(copy.text).toContain('5 giorni')
+    expect(copy.text).toContain('83,33')
+    expect(copy.text).toContain('28,57')
     // Niente numeri negativi spacciati per una disponibilita'.
-    expect(copy.main).not.toContain('-')
-    // E nessun rimprovero: il tono e' quello di un'informazione.
-    expect(copy.main + copy.sub).not.toContain('!')
+    expect(copy.text).not.toContain('-')
+    // E nessun rimprovero: il tono e' quello di un'informazione. Nemmeno il
+    // verdetto a parole ("Sopra ritmo"), che diceva cio' che i due numeri
+    // accostati dicono da soli.
+    expect(copy.text).not.toContain('!')
+    expect(copy.text).not.toContain('Sopra ritmo')
   })
 
   /**
@@ -354,8 +368,9 @@ describe('quanto puoi spendere al giorno', () => {
     const copy = frase(
       metrics({ today: MERCOLEDI, budgetCents: 20_000, spese: [spesa(LUNEDI, 19_997)] }),
     )
-    expect(copy.main).toBe('Il budget del periodo è finito.')
-    expect(copy.main).not.toContain('0,00')
+    // Nessuna promessa di `~0,00 € al giorno`: la riga passa al passo, che e'
+    // l'unico numero ancora azionabile.
+    expect(copy.text).not.toContain('Puoi spendere')
     expect(copy.over).toBe(true)
   })
 
@@ -363,7 +378,7 @@ describe('quanto puoi spendere al giorno', () => {
     const copy = frase(
       metrics({ today: MERCOLEDI, budgetCents: 20_000, spese: [spesa(LUNEDI, 20_000)] }),
     )
-    expect(copy.main).toBe('Il budget del periodo è finito.')
+    expect(copy.text).not.toContain('Puoi spendere')
     expect(copy.over).toBe(true)
   })
 
@@ -372,7 +387,7 @@ describe('quanto puoi spendere al giorno', () => {
     const copy = frase(
       metrics({ today: MERCOLEDI, budgetCents: 20_000, spese: [spesa(LUNEDI, 19_995)] }),
     )
-    expect(copy.main).toContain('0,01')
+    expect(copy.text).toContain('0,01')
     expect(copy.over).toBe(false)
   })
 
@@ -389,13 +404,20 @@ describe('quanto puoi spendere al giorno', () => {
     expect(passato.daysRemaining).toBe(0)
     expect(passato.dailyAllowanceCents).toBeNull()
     const copy = frase(passato)
-    expect(copy.main).toBe('Questo periodo è chiuso.')
-    expect(copy.main).not.toContain('—')
+    expect(copy.text).toBe('Questo periodo è chiuso: il prossimo riparte da capo.')
+    expect(copy.text).not.toContain('—')
   })
 })
 
-describe('passo attuale contro passo sostenibile', () => {
-  const testo = (m: BudgetMetrics): string => paceParts(m).map((part) => part.text).join('')
+describe('il passo tenuto finora, dove non c e un budget', () => {
+  // Lo spazio fra numero e simbolo dell'euro e' **non separabile** (invariante
+  // di `money.ts`, sorvegliato da `money.test.ts`): qui non e' il soggetto, e si
+  // normalizza come fa il grosso della suite.
+  const testo = (m: BudgetMetrics): string =>
+    paceParts(m)
+      .map((part) => part.text)
+      .join('')
+      .replace(/\s/g, ' ')
 
   it('senza nessuna spesa non inventa un passo da zero euro al giorno', () => {
     const m = metrics({ today: MERCOLEDI, budgetCents: 20_000 })
@@ -411,31 +433,47 @@ describe('passo attuale contro passo sostenibile', () => {
     expect(paceParts(m).some((part) => part.strong === true)).toBe(false)
   })
 
-  it('sotto ritmo lo dice, e mette in evidenza i due numeri', () => {
-    // Lunedi' e martedi' 20,00 in tutto su 3 giorni vissuti = 6,66 al giorno,
-    // contro 200,00/7 = 28,57 sostenibili.
+  /**
+   * **Il verdetto non c'e' piu', e con lui il terzo numero al giorno.**
+   *
+   * Questi due test dicevano *"sotto ritmo lo dice"* e *"sopra ritmo lo dice con
+   * le stesse parole"*, e sorvegliavano una frase che sulla Home compariva
+   * **solo con un budget** — cioe' accanto alla disponibilita' al giorno. Erano
+   * tre velocita' con la stessa unita' sulla stessa schermata: quanto puoi
+   * spendere, quanto stai spendendo, quanto sarebbe sostenibile. Per sapere
+   * quale fosse quale bisognava rileggere.
+   *
+   * Adesso il confronto vive in `allowanceCopy` e **solo dove la disponibilita'
+   * non esiste**, cioe' sforati: due numeri invece di tre, e mai insieme al
+   * terzo. Qui resta il passo di chi un budget non ce l'ha, che e' l'unico
+   * stato in cui questa funzione arriva a schermo.
+   */
+  it('il passo non porta nessun verdetto: e una frase sola, coi suoi due pezzi muti', () => {
     const m = metrics({
       today: MERCOLEDI,
       budgetCents: 20_000,
       spese: [spesa(LUNEDI, 1000), spesa('2026-08-18', 1000)],
     })
-    expect(testo(m)).toContain('Sotto ritmo')
-    expect(paceParts(m).filter((part) => part.strong === true)).toHaveLength(2)
+    expect(testo(m)).toBe('Finora stai spendendo 6,66 € al giorno.')
+    expect(testo(m)).not.toContain('ritmo')
+    // Un numero solo in evidenza, non due: il termine di paragone non e' piu'
+    // qui.
+    expect(paceParts(m).filter((part) => part.strong === true)).toHaveLength(1)
   })
 
-  it('sopra ritmo lo dice con le stesse parole, cambiando una sola', () => {
-    const sotto = metrics({
-      today: MERCOLEDI,
-      budgetCents: 20_000,
-      spese: [spesa(LUNEDI, 1000), spesa('2026-08-18', 1000)],
-    })
+  it('e il sostenibile non compare piu qui nemmeno quando esiste', () => {
+    // 150,00 in tre giorni = 50,00 al giorno contro 28,57 sostenibili: e' il
+    // caso in cui la vecchia frase diceva "Sopra ritmo". Il numero 28,57 c'e'
+    // nelle metriche e **non** finisce in questa riga.
     const sopra = metrics({ today: MERCOLEDI, budgetCents: 20_000, spese: [spesa(LUNEDI, 15_000)] })
-    expect(testo(sopra)).toContain('Sopra ritmo')
+    expect(sopra.sustainablePaceCents).toBe(2857)
+    expect(testo(sopra)).toBe('Finora stai spendendo 50,00 € al giorno.')
+    expect(testo(sopra)).not.toContain('28,57')
     expect(testo(sopra)).not.toContain('!')
-    // La frase e' la stessa: cambia una parola, non il tono. Essere sopra ritmo
-    // non e' un errore da annunciare diversamente.
-    const forma = (m: BudgetMetrics): string =>
-      testo(m).replace(/^S(otto|opra) ritmo/, 'X').replace(/[\d.,]+/g, 'N')
+    // La forma e' identica a quella di chi sta sotto: essere sopra il passo non
+    // e' un errore da annunciare diversamente.
+    const forma = (m: BudgetMetrics): string => testo(m).replace(/[\d.,]+/g, 'N')
+    const sotto = metrics({ today: MERCOLEDI, budgetCents: 20_000, spese: [spesa(LUNEDI, 1000)] })
     expect(forma(sopra)).toBe(forma(sotto))
   })
 
@@ -501,7 +539,9 @@ describe('il budget nato a meta periodo', () => {
     const start = budgetStart(m, [...primaDue])
     expect(start.late).toBe(false)
     expect(startNote(m, start)).toBeNull()
-    expect(allowanceCopy(m, start).main).toBe('Il budget del periodo è finito.')
+    // La riga dello sforo, che adesso e' i due passi invece della frase.
+    expect(allowanceCopy(m, start)).toMatchObject({ over: true })
+    expect(allowanceCopy(m, start).text).not.toContain('Puoi spendere')
   })
 
   /**
@@ -528,7 +568,7 @@ describe('il budget nato a meta periodo', () => {
     expect(start.beforeCents).toBe(0)
     expect(startNote(m, start)).toBeNull()
     // La riga utile resta quella, e non e' toccata da questa correzione.
-    expect(allowanceCopy(m, start).main).toContain('Puoi spendere')
+    expect(allowanceCopy(m, start).text).toContain('Puoi spendere')
   })
 
   it('col residuo negativo per le sole spese di prima, dice il fatto e non la colpa', () => {
@@ -542,8 +582,10 @@ describe('il budget nato a meta periodo', () => {
     })
     expect(m.remainingCents).toBe(-4000)
     const copy = allowanceCopy(m, budgetStart(m, [...primaDue]))
-    expect(copy.main).toBe('Questa settimana era già iniziata.')
-    expect(copy.sub).toContain('lunedì') // il periodo dopo comincia di lunedi'
+    // **Una riga sola**: il fatto e la data da cui il budget vale pieno erano
+    // due frasi, e la seconda non aggiungeva un fatto — completava il primo.
+    expect(copy.text).toContain('Questa settimana era già iniziata')
+    expect(copy.text).toContain('lunedì') // il periodo dopo comincia di lunedi'
     // Niente ambra: l'ambra dice "hai sforato", e qui nessuno ha sforato.
     expect(copy.over).toBe(false)
   })
@@ -555,7 +597,7 @@ describe('il budget nato a meta periodo', () => {
     const spese = [...primaDue, spesa(MERCOLEDI, 30_000)]
     const m = metrics({ today: MERCOLEDI, budgetCents: 20_000, dal: MERCOLEDI, spese })
     const copy = allowanceCopy(m, budgetStart(m, spese))
-    expect(copy.main).toBe('Il budget del periodo è finito.')
+    expect(copy.text).not.toContain('era già iniziata')
     expect(copy.over).toBe(true)
   })
 

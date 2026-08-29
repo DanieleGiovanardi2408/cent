@@ -592,15 +592,50 @@ test.describe('la Home non salta, con budget e 5.000 spese, sforando', () => {
     expect(m.cls, `spostamenti: ${JSON.stringify(m.shifts)}`).toBe(0)
   })
 
-  test('sforare si vede in tre segnali, e nessuno urla', async ({ page }) => {
+  /**
+   * **Sforare si vede una volta, e il resto della schermata dice altro.**
+   *
+   * Questo test ne pretendeva **tre** — segno, colore, barra — e ne lasciava
+   * passare altre tre senza guardarle: `Il budget del periodo e' finito.`,
+   * `Restano 2 giorni: quello che spendi da qui e' in piu'.` e `Sopra ritmo: …`.
+   * Sei affermazioni per un fatto solo, e un test che ne asseriva metà come se
+   * fossero il conto giusto.
+   *
+   * Adesso il fatto lo dicono **il numero col suo segno, l'etichetta sopra di
+   * lui e il colore** (che qui e' un segnale solo: il colore accompagna il
+   * numero, e la barra piena e' la stessa cosa in geometria). La riga sotto la
+   * barra ha smesso di ripeterlo e porta **i due numeri che nessun altro dava**:
+   * il passo tenuto e quello sostenibile.
+   *
+   * L'asserzione che conta e' quindi diventata **negativa**: nessuna frase
+   * ridice cio' che il numero grande ha gia' detto. Un `toHaveText` su una
+   * stringa nuova sarebbe stato verde anche rimettendo le altre due.
+   */
+  test('sforare si dice una volta, e la riga sotto porta due numeri nuovi', async ({ page }) => {
     await scena5000(page)
 
-    // Il residuo resta col segno e il tono cambia. Tre segnali per lo stesso
-    // fatto — segno, colore, barra piena — nessuno dei tre allarma.
+    // Il residuo resta col segno e il tono cambia; l'etichetta sopra il numero
+    // segue il segno invece di contraddirlo ("Restano -88,00 €" era una
+    // contraddizione, viva dalla fase 4).
     await expect(page.locator('.hero__value')).toHaveAttribute('data-tone', 'over')
     await expect(page.locator('.hero__value')).toContainText('-')
-    await expect(page.locator('.allowance')).toHaveText('Il budget del periodo è finito.')
+    await expect(page.locator('.hero__label')).toHaveText('Oltre il budget')
     await expect(page.locator('.track')).toHaveAttribute('data-tone', 'over')
+
+    // E la riga azionabile non lo ripete: porta i giorni e i due passi.
+    const allowance = page.locator('.allowance')
+    await expect(allowance).toContainText('giorni')
+    await expect(allowance).toContainText('sostenibili')
+
+    // **Nessuna parafrasi del fatto gia' detto**, in nessuna delle righe del
+    // riquadro. Le tre frasi tolte sono nominate una per una: un controllo sul
+    // testo nuovo sarebbe verde anche rimettendole accanto.
+    const riquadro = (await page.locator('.slot').innerText()).replace(/\s+/g, ' ')
+    expect(riquadro).not.toContain('budget del periodo è finito')
+    expect(riquadro).not.toContain('è in più')
+    expect(riquadro).not.toContain('Sopra ritmo')
+    // E nessun rimprovero: sforare e' un'informazione, non un errore.
+    expect(riquadro).not.toContain('!')
   })
 })
 
@@ -772,7 +807,12 @@ test('l ultimo giorno del periodo la Home dice un totale, non un ritmo', async (
   // Le due cose che mentivano: la tilde e "al giorno".
   await expect(allowance).not.toContainText('~')
   await expect(allowance).not.toContainText('al giorno')
-  await expect(page.locator('.allowance__sub')).toContainText('Ultimo giorno del periodo')
+  // **Il dettaglio e' nella stessa riga**, e non in una sotto: erano due frasi
+  // che si contraddicevano a due righe di distanza — "Puoi spendere ~128,55 €
+  // al giorno" e "Ultimo giorno del periodo" — e adesso e' una sola, che non
+  // puo' contraddirsi.
+  await expect(allowance).toContainText('ultimo giorno del periodo')
+  await expect(page.locator('.allowance__sub')).toHaveCount(0)
 })
 
 /**
@@ -923,10 +963,12 @@ test.describe('la Home con un budget nato a meta settimana', () => {
 
     // Il numero non cambia significato: resta il residuo del periodo, col segno.
     await expect(page.locator('.hero__value')).toHaveText('-40,00 €')
-    // Ma la riga che giudicava adesso racconta, e non in ambra.
-    await expect(page.locator('.allowance')).toHaveText('Questa settimana era già iniziata.')
+    // Ma la riga che giudicava adesso racconta, e non in ambra. Il fatto e la
+    // data da cui il budget vale pieno stanno nella **stessa** riga: erano due
+    // frasi, e la seconda completava la prima invece di aggiungere un fatto.
+    await expect(page.locator('.allowance')).toContainText('Questa settimana era già iniziata')
+    await expect(page.locator('.allowance')).toContainText('lunedì')
     await expect(page.locator('.allowance')).not.toHaveAttribute('data-tone', 'over')
-    await expect(page.locator('.allowance__sub')).toContainText('lunedì')
     await expect(page.locator('.since')).toContainText('Budget attivo da mercoledì')
     await expect(page.locator('.since')).toContainText('240,00')
   })
@@ -1260,9 +1302,15 @@ async function misuraRiserva(page: Page): Promise<Riserva> {
       righe,
       dichiarate: {
         '.allowance': conta('--rows-allowance'),
-        '.allowance__sub': conta('--rows-sub'),
         '.since': conta('--rows-since'),
         '.pace': conta('--rows-pace'),
+        '.invite': conta('--rows-invite'),
+        // La nota delle fisse (ADR 016 §2) e' scesa dentro il riquadro: prima
+        // stava nel blocco del numero grande e riservava l'altezza per conto
+        // suo, quindi questa sonda non la vedeva. Adesso e' una delle righe che
+        // `--slot-min` somma, e se un giorno prendesse due righe la riserva
+        // sfonderebbe come qualunque altra.
+        '.slot__fixed': conta('--rows-fixed'),
       },
       // La riga piu' bassa che il riquadro contenga: 13px per 1.25. Se la
       // riserva avanzasse di tanto, assorbirebbe una riga intera di quel testo

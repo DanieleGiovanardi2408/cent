@@ -71,6 +71,13 @@ const COLONNA_MIN_PX = 112
  */
 const COLONNA_PX = 192.73
 
+/**
+ * `showFixed: true` e' il valore con cui l'app apre la schermata (decisione 0c:
+ * **acceso di default**), quindi e' il valore su cui gira quasi tutta la suite.
+ * I casi che lo spengono lo dicono, e sono pochi apposta: uno stato che si
+ * raggiunge con un tap non deve diventare la premessa implicita di un test che
+ * parla d'altro.
+ */
 function view(over: Partial<StatsInput>) {
   return statsView({
     expenses: [],
@@ -79,6 +86,7 @@ function view(over: Partial<StatsInput>) {
     budgets: [] as readonly Budget[],
     period: 'weekly',
     day: OGGI,
+    showFixed: true,
     ...over,
   })
 }
@@ -120,8 +128,8 @@ function unica(s: BreakdownSection | undefined): CategorySlice {
 }
 
 /**
- * **Gli invarianti di A**, e si asseriscono invece di sperarci. Sono tre, e
- * ognuno e' una promessa che il componente usa senza poterla verificare:
+ * **Gli invarianti di A**, e si asseriscono invece di sperarci. Ognuno e' una
+ * promessa che il componente usa senza poterla verificare:
  *
  * 1. **le righe spiegano il totale della propria sezione**, e i due totali
  *    vengono dalle metriche — non da una seconda somma che un giorno divergera'.
@@ -129,27 +137,73 @@ function unica(s: BreakdownSection | undefined): CategorySlice {
  *    `somma(Variabili) === spentCents`. Il totale **dichiarato** c'e' se e solo
  *    se le righe sono piu' di una: con una sola sarebbe la cifra della riga,
  *    scritta una seconda volta sullo stesso bordo destro;
- * 2. **in ogni sezione la barra piu' lunga arriva a fondo colonna** (frazione
- *    esattamente 1). E' l'unica cosa che dichiara all'occhio che le scale sono
- *    due: due barre piene con due importi diversi non si possono leggere come
- *    una scala sola;
- * 3. **nessuna lunghezza sta fra zero e il pavimento.** E' la promessa che
+ * 2. **la barra piu' lunga arriva a fondo colonna una volta sola, su tutta A.**
+ *    Questo invariante e' cambiato, ed e' il cuore della decisione 0a: diceva
+ *    *"in ogni sezione"*, ed era il modo in cui la geometria dichiarava che le
+ *    scale erano due. Adesso e' **la riga con l'importo piu' alto fra tutte
+ *    quelle visibili** ad avere frazione 1, e nessun'altra ce l'ha se non a pari
+ *    importo — che e' il modo in cui la geometria dichiara che la scala e' una.
+ *    Rimettendo una scala per sezione, questo cade;
+ * 3. **`asChart` e' deciso sull'insieme delle righe visibili**, non per sezione:
+ *    la soglia per sezione era la causa misurata del peso visivo inverso agli
+ *    importi;
+ * 4. **`split` c'e' se e solo se tutte e due le meta' sono maggiori di zero**, e
+ *    i suoi due importi sono i due totali del periodo. La divisione di una cosa
+ *    sola non e' una divisione;
+ * 5. **nessuna lunghezza sta fra zero e il pavimento.** E' la promessa che
  *    toglie al CSS ogni ragione di correggere una larghezza.
  *
  * Si chiamano su **tutte** le fixture, orfane e dati ostili compresi: un
  * invariante provato sul caso comodo e' un commento.
+ *
+ * `mostraFisse` non e' una comodita': con il selettore spento la sezione delle
+ * fisse **non c'e'**, quindi l'identita' 1 su `recurringSpentCents` parlerebbe di
+ * righe che nessuno ha chiesto di vedere. Le altre valgono identiche, `split`
+ * compreso — ed e' proprio quello il punto di `split`.
  */
-function invariantiDiA(v: Ready) {
+function invariantiDiA(v: Ready, mostraFisse = true) {
   const fisse = sezione(v, 'fixed')
   const variabili = sezione(v, 'variable')
 
-  expect(sumCents((fisse?.rows ?? []).map((r) => r.cents))).toBe(v.current.recurringSpentCents)
-  expect(sumCents((variabili?.rows ?? []).map((r) => r.cents))).toBe(v.current.spentCents)
-  if (fisse !== undefined && !fisse.single) {
-    expect(fisse.totalCents).toBe(v.current.recurringSpentCents)
+  if (mostraFisse) {
+    expect(sumCents((fisse?.rows ?? []).map((r) => r.cents))).toBe(v.current.recurringSpentCents)
+    if (fisse !== undefined && !fisse.single) {
+      expect(fisse.totalCents).toBe(v.current.recurringSpentCents)
+    }
+  } else {
+    // Spente, non svuotate: la sezione non esiste, e non e' una sezione con zero
+    // righe. La cifra che portava non e' persa — sta in `split`.
+    expect(fisse).toBeUndefined()
   }
+  expect(sumCents((variabili?.rows ?? []).map((r) => r.cents))).toBe(v.current.spentCents)
   if (variabili !== undefined && !variabili.single) {
     expect(variabili.totalCents).toBe(v.current.spentCents)
+  }
+
+  const tutte = v.byCategory.sections.flatMap((s) => s.rows)
+  // **La scala e' una.** Il massimo di A vale esattamente 1; tutte le altre righe
+  // stanno sotto, comprese quelle piu' grandi della propria sezione. Con due
+  // scale questa cade su ogni fixture che abbia due sezioni con importi diversi.
+  const massimo = Math.max(0, ...tutte.map((r) => r.cents))
+  for (const r of tutte) expect(r.fraction === 1).toBe(massimo > 0 && r.cents === massimo)
+  // La soglia guarda cio' che si vede, tutto insieme.
+  expect(v.byCategory.asChart).toBe(tutte.length >= BREAKDOWN_MIN_ROWS)
+
+  const { split } = v.byCategory
+  const fisseCents = v.current.recurringSpentCents
+  const variabiliCents = v.current.spentCents
+  if (fisseCents > 0 && variabiliCents > 0) {
+    expect(split).not.toBeNull()
+    expect(split?.fixedCents).toBe(fisseCents)
+    expect(split?.variableCents).toBe(variabiliCents)
+    // Una meta' sola: l'altra e' `1 - questa`, e non c'e' modo di scriverle in
+    // disaccordo. E sta in `[0,1]` perche' e' una quota di una somma di addendi
+    // non negativi, non perche' qualcuno la ritagli.
+    expect(split?.fixedFraction).toBeCloseTo(fisseCents / (fisseCents + variabiliCents), 12)
+    expect(split!.fixedFraction).toBeGreaterThan(0)
+    expect(split!.fixedFraction).toBeLessThan(1)
+  } else {
+    expect(split).toBeNull()
   }
 
   for (const s of v.byCategory.sections) {
@@ -162,10 +216,9 @@ function invariantiDiA(v: Ready) {
     expect(s.single).toBe(s.rows.length === 1)
     expect(totale(s)).toBe(s.single ? undefined : sumCents(s.rows.map((r) => r.cents)))
     const importi = s.rows.map((r) => r.cents)
-    // Dalla piu' grande, sempre: la prima riga e' anche quella che porta la scala.
+    // Dalla piu' grande, sempre — dentro la sezione. Che sia anche la piu' grande
+    // dello schermo lo decide la scala, non l'ordinamento.
     expect(importi).toEqual([...importi].sort((a, b) => b - a))
-    const massima = Math.max(...s.rows.map((r) => r.fraction))
-    expect(massima).toBe(Math.max(...importi) > 0 ? 1 : 0)
     for (const r of s.rows) {
       if (r.cents > 0) expect(r.fraction).toBeGreaterThanOrEqual(BAR_MIN_FRACTION)
       else expect(r.fraction).toBe(0)
@@ -226,7 +279,7 @@ describe('lo stato vuoto', () => {
   })
 })
 
-describe('A — due sezioni, due scale', () => {
+describe('A — due sezioni, una scala', () => {
   /* Fisse: 507,00 di Casa + 23,00 di Trasporti. Variabili: 42,00 + 26,00 +
    * 10,00 di Trasporti. Sono i numeri del disegno, non inventati qui. */
   const spese: readonly Expense[] = [
@@ -249,23 +302,33 @@ describe('A — due sezioni, due scale', () => {
     invariantiDiA(v)
   })
 
-  it('la scala e per sezione: la piu grande di ognuna arriva a fondo colonna', () => {
+  it('la scala e una: solo la riga piu grande di A arriva a fondo colonna', () => {
     const v = ready({ expenses: spese })
     const fisse = sezione(v, 'fixed')!
     const variabili = sezione(v, 'variable')!
-    // 507,00 e 42,00 sono due importi diversi disegnati entrambi pieni: e'
-    // **cosi'** che la geometria dichiara che le scale sono due. Con una scala
-    // sola la riga da 42,00 varrebbe 0,083 e le sei righe sotto starebbero
-    // dentro dieci pixel — la misura che ha prodotto questa divisione.
+    // **Questo test asseriva l'opposto**, e l'opposto era la decisione di prima:
+    // 507,00 e 42,00 disegnati entrambi pieni, perche' due barre piene con due
+    // importi diversi dichiaravano che le scale erano due. Adesso la scala e'
+    // una, e la dichiara la stessa geometria letta al contrario: **una** barra
+    // piena in tutta la schermata.
     expect(fisse.rows[0]?.cents).toBe(50700)
     expect(fisse.rows[0]?.fraction).toBe(1)
     expect(variabili.rows[0]?.cents).toBe(4200)
-    expect(variabili.rows[0]?.fraction).toBe(1)
-    // E le righe variabili tornano confrontabili fra loro: 26,00 contro 42,00 e'
-    // piu' di meta' colonna, non il 5%.
+    expect(variabili.rows[0]?.fraction).toBeLessThan(1)
+    // E la lunghezza della riga variabile piu' grande e' esattamente la sua quota
+    // sulla scala di A, pavimento compreso: 42,00 su 507,00.
+    expect(variabili.rows[0]?.fraction).toBeCloseTo(
+      BAR_MIN_FRACTION + (1 - BAR_MIN_FRACTION) * (4200 / 50700),
+      12,
+    )
+    // **Il prezzo, asserito invece che taciuto**: 26,00 contro 42,00 non e' piu'
+    // meta' colonna, e' il 5% della scala. Le sei righe sotto l'affitto stanno di
+    // nuovo in una manciata di pixel — la misura che aveva prodotto le due scale
+    // non e' scaduta. Cio' che cambia e' che adesso c'e' un modo di riaprirle
+    // (`showFixed`), e un posto dove il fatto dominante e' scritto (`split`).
     const casaAMano = variabili.rows.find((r) => r.name === 'Casa')
     expect(casaAMano?.cents).toBe(2600)
-    expect(casaAMano?.fraction).toBeGreaterThan(0.6)
+    expect(casaAMano!.fraction * COLONNA_MIN_PX).toBeLessThan(10)
   })
 
   it('una categoria puo stare in tutte e due, e le due righe non si sommano', () => {
@@ -278,12 +341,21 @@ describe('A — due sezioni, due scale', () => {
     // esattamente il fatto che si voleva mostrare, cancellato.
     expect(fissa?.cents).toBe(2300)
     expect(variabile?.cents).toBe(1000)
-    // E la conseguenza dichiarata delle due scale: **la riga piu' corta e'
-    // disegnata piu' lunga**. 10,00 su 42,00 batte 23,00 su 507,00, e non e' un
-    // difetto: sono due colonne con due scale, e la geometria lo dice perche' in
-    // cima a ognuna c'e' una barra piena.
+    // **E adesso le due righe sono confrontabili fra loro.** Qui c'era
+    // l'asserzione opposta — `variabile.fraction > fissa.fraction` — con accanto
+    // un commento che spiegava perche' andasse bene: 10,00 disegnati piu' lunghi
+    // di 23,00 era la conseguenza dichiarata delle due scale. Era difendibile e
+    // non era leggibile: la stessa categoria, due righe a quaranta pixel di
+    // distanza, e la piu' piccola piu' lunga.
     expect(variabile!.cents).toBeLessThan(fissa!.cents)
-    expect(variabile!.fraction).toBeGreaterThan(fissa!.fraction)
+    expect(variabile!.fraction).toBeLessThan(fissa!.fraction)
+    // La differenza fra le due lunghezze e' esattamente la differenza fra i due
+    // importi sulla scala di A: e' la meta' della lettura che il pavimento lascia
+    // esatta, e con due scale non era nemmeno definita.
+    expect(fissa!.fraction - variabile!.fraction).toBeCloseTo(
+      (1 - BAR_MIN_FRACTION) * (1300 / 50700),
+      12,
+    )
   })
 
   it('senza fisse resta una sezione sola, e non una vuota', () => {
@@ -331,7 +403,19 @@ describe('A — due sezioni, due scale', () => {
   })
 })
 
-describe('la soglia del grafico vale per sezione', () => {
+/*
+ * **La soglia si applica ad A, non a una sezione**, e questo blocco asseriva
+ * l'opposto in ogni riga. Non e' churn: la soglia per sezione era la **causa
+ * misurata** del difetto piu' grosso della fase — la sezione che pesava 530,00 €
+ * su 642,00 € restava senza barre perche' le sue righe erano due, e la barra piu'
+ * lunga della schermata ne valeva 42,00. Il peso visivo era l'inverso degli
+ * importi, e nessun gate poteva vederlo perche' ogni regola, presa da sola,
+ * faceva il suo mestiere.
+ *
+ * Quel che la soglia dice resta identico — *"due categorie non sono una
+ * ripartizione"* — e cambia solo **su cosa** lo dice: sulle righe a schermo.
+ */
+describe('la soglia del grafico vale sull insieme delle righe visibili', () => {
   const tre: readonly Expense[] = [
     makeExpense({ date: OGGI, categoryId: 'c-cibo', amountCents: 4000 }),
     makeExpense({ date: OGGI, categoryId: 'c-spesa', amountCents: 2000 }),
@@ -342,20 +426,22 @@ describe('la soglia del grafico vale per sezione', () => {
     makeExpense({ date: OGGI, categoryId: 'c-casa', amountCents: 50000, source: 'recurring' }),
   ]
 
-  it('due fisse perdono le barre anche se sotto ci sono tre variabili', () => {
+  it('due fisse non perdono le barre perche sono due: A ne ha cinque', () => {
     const v = ready({ expenses: [...dueFisse, ...tre] })
-    // Cinque righe in tutto: con la soglia applicata all'insieme sarebbero
-    // barre dappertutto, e la sezione delle fisse deciderebbe della propria
-    // forma guardando l'altra — cioe' proprio la mescolanza che dividere in due
-    // serviva a togliere.
+    // Qui c'era `asChart: false` sulle fisse, con accanto la ragione per cui
+    // andava bene. Andava bene finche' ogni sezione aveva la propria scala e
+    // faceva la propria domanda; da quando la scala e' una, la ripartizione che
+    // A mostra e' **una** — e cinque righe sono una ripartizione.
     expect(sezione(v, 'fixed')?.rows).toHaveLength(2)
-    expect(sezione(v, 'fixed')?.asChart).toBe(false)
     expect(sezione(v, 'variable')?.rows).toHaveLength(BREAKDOWN_MIN_ROWS)
-    expect(sezione(v, 'variable')?.asChart).toBe(true)
+    expect(v.byCategory.asChart).toBe(true)
+    // E la riga da 500,00 € ha la barra che le tocca: e' la piu' grande di A.
+    expect(sezione(v, 'fixed')?.rows[0]?.cents).toBe(50000)
+    expect(sezione(v, 'fixed')?.rows[0]?.fraction).toBe(1)
     invariantiDiA(v)
   })
 
-  it('e vale anche a parti invertite', () => {
+  it('e vale anche a parti invertite: due variabili sotto tre fisse tengono le barre', () => {
     const v = ready({
       expenses: [
         ...tre.map((e) => ({ ...e, source: 'recurring' as const })),
@@ -363,20 +449,319 @@ describe('la soglia del grafico vale per sezione', () => {
         makeExpense({ date: OGGI, categoryId: 'c-spesa', amountCents: 300 }),
       ],
     })
-    expect(sezione(v, 'fixed')?.asChart).toBe(true)
     expect(sezione(v, 'variable')?.rows).toHaveLength(2)
-    // Due categorie non sono una ripartizione. E' l'argomento di A, e non e'
-    // quello di B: se le due soglie fossero un numero solo, uno dei due test
+    expect(v.byCategory.asChart).toBe(true)
+    invariantiDiA(v)
+  })
+
+  it('con due righe in tutto A non e un grafico, e le due sezioni non ne fanno tre', () => {
+    const v = ready({
+      expenses: [
+        makeExpense({ date: OGGI, categoryId: 'c-casa', amountCents: 50000, source: 'recurring' }),
+        makeExpense({ date: OGGI, categoryId: 'c-cibo', amountCents: 4000 }),
+      ],
+    })
+    // La soglia non e' sparita insieme alla sua versione per sezione: due
+    // categorie non sono una ripartizione, e due intestazioni sopra due righe non
+    // ne fanno diventare tre. E' anche il caso piu' comune del primo giorno —
+    // l'affitto e un caffe'.
+    expect(v.byCategory.sections).toHaveLength(2)
+    expect(v.byCategory.asChart).toBe(false)
+    // Due categorie non sono una ripartizione, ma **due periodi sono** un
+    // confronto: se le due soglie fossero un numero solo, uno dei due test
     // sulle soglie cadrebbe.
-    expect(sezione(v, 'variable')?.asChart).toBe(false)
+    expect(BREAKDOWN_MIN_ROWS).toBeGreaterThan(TREND_MIN_ROWS)
     invariantiDiA(v)
   })
 
   it('le righe restano anche dove le barre non ci sono', () => {
-    const v = ready({ expenses: [...dueFisse, ...tre] })
+    const v = ready({
+      expenses: [
+        makeExpense({ date: OGGI, categoryId: 'c-casa', amountCents: 50000, source: 'recurring' }),
+        makeExpense({ date: OGGI, categoryId: 'c-cibo', amountCents: 4000 }),
+      ],
+    })
     // Sotto la soglia si legge nome e importo: la riga non sparisce, o il
     // totale della sezione smetterebbe di essere la somma di cio' che si vede.
-    expect(sezione(v, 'fixed')?.rows.map((r) => r.cents)).toEqual([50000, 9000])
+    // **E le lunghezze restano calcolate**: `asChart` dice al componente di non
+    // dipingerle, non a questo modulo di non produrle — sono la stessa cosa a
+    // schermo e due cose diverse nei test, e la seconda e' quella che permette a
+    // un solo campo di governare la forma.
+    expect(unica(sezione(v, 'fixed')).cents).toBe(50000)
+    expect(unica(sezione(v, 'fixed')).fraction).toBe(1)
+    expect(unica(sezione(v, 'variable')).cents).toBe(4000)
+  })
+})
+
+/*
+ * **0a, detta come proprieta' invece che come implementazione.**
+ *
+ * Un test che asserisse `fraction === cents / massimo` ricopierebbe la formula:
+ * sarebbe verde anche riscrivendo il modulo con lo stesso errore. Questi tre
+ * asseriscono cose che si vedono a schermo e che **cadono** se qualcuno rimette
+ * una scala per sezione — che e' l'unica regressione plausibile, perche' la
+ * misura che aveva prodotto le due scale e' ancora vera e ancora scritta in cima
+ * al file.
+ */
+describe('0a — la scala di A e una sola', () => {
+  /*
+   * I due 26,00 sono la coppia che decide: uno fisso e uno variabile, e
+   * **nessuno dei due e' il piu' grande della propria sezione**. Se lo fossero,
+   * varrebbero 1 tutti e due anche con due scale, e il test passerebbe per il
+   * motivo sbagliato.
+   */
+  const coppia: readonly Expense[] = [
+    makeExpense({ date: '2026-08-24', categoryId: 'c-casa', amountCents: 90000, source: 'recurring' }),
+    makeExpense({ date: '2026-08-25', categoryId: 'c-cibo', amountCents: 2600, source: 'recurring' }),
+    makeExpense({ date: '2026-08-25', categoryId: 'c-spesa', amountCents: 4200 }),
+    makeExpense({ date: '2026-08-26', categoryId: 'c-casa', amountCents: 2600 }),
+  ]
+
+  it('due righe di sezioni diverse con lo stesso importo hanno la stessa lunghezza', () => {
+    const v = ready({ expenses: coppia })
+    const fissa = sezione(v, 'fixed')!.rows.find((r) => r.cents === 2600)!
+    const variabile = sezione(v, 'variable')!.rows.find((r) => r.cents === 2600)!
+    // Con due scale: 2600/90000 di qua, 2600/4200 di la' — 0,046 contro 0,62,
+    // cioe' 5 px contro 70. Stesso importo, tredici volte piu' lungo, e nessuna
+    // etichetta a dirlo. Adesso e' la stessa lunghezza perche' e' lo stesso
+    // numero di euro, che e' l'unica cosa che una barra dovrebbe dire.
+    expect(fissa.fraction).toBe(variabile.fraction)
+    invariantiDiA(v)
+  })
+
+  it('la piu grande di una sezione non arriva a fondo colonna se non e la piu grande di A', () => {
+    const v = ready({ expenses: coppia })
+    // L'invariante di prima — *"in ogni sezione la barra piu' lunga arriva a
+    // fondo colonna"* — qui direbbe che 42,00 vale 1. Vale 1 solo l'affitto.
+    expect(sezione(v, 'variable')!.rows[0]?.cents).toBe(4200)
+    expect(sezione(v, 'variable')!.rows[0]?.fraction).toBeLessThan(1)
+    expect(sezione(v, 'fixed')!.rows[0]?.fraction).toBe(1)
+  })
+
+  it('a pari importo massimo le barre piene sono due, e non e la scala a essere due', () => {
+    const v = ready({
+      expenses: [
+        makeExpense({ date: OGGI, categoryId: 'c-casa', amountCents: 5000, source: 'recurring' }),
+        makeExpense({ date: OGGI, categoryId: 'c-cibo', amountCents: 5000 }),
+        makeExpense({ date: OGGI, categoryId: 'c-spesa', amountCents: 1000 }),
+      ],
+    })
+    // Il caso che rende non-banale l'invariante scritto come `fraction === 1 se e
+    // solo se cents === massimo`: due barre piene **si possono** vedere, e non
+    // dicono che le scale sono due — dicono che i due importi sono uguali. Con
+    // due scale invece sarebbero piene anche a 50,00 contro 10,00.
+    expect(unica(sezione(v, 'fixed')).fraction).toBe(1)
+    expect(sezione(v, 'variable')!.rows[0]?.fraction).toBe(1)
+    expect(sezione(v, 'variable')!.rows[1]?.fraction).toBeLessThan(1)
+    invariantiDiA(v)
+  })
+})
+
+/*
+ * **0c — il selettore delle fisse.**
+ *
+ * Il vincolo che questi test difendono e' che il selettore **non e' un filtro**:
+ * togliere le righe lasciando la scala dov'era lascerebbe le quotidiane
+ * schiacciate esattamente come prima, cioe' sarebbe un interruttore che accorcia
+ * un elenco e non risponde a niente. E' la ragione per cui `showFixed` sta nel
+ * modello invece che in `Stats.tsx`, e la seconda prova qui sotto e' l'unica che
+ * distingue le due implementazioni.
+ */
+describe('0c — spegnere le fisse ricalcola la scala', () => {
+  const spese: readonly Expense[] = [
+    makeExpense({ date: '2026-08-24', categoryId: 'c-casa', amountCents: 90000, source: 'recurring' }),
+    makeExpense({ date: '2026-08-25', categoryId: 'c-spesa', amountCents: 4200 }),
+    makeExpense({ date: '2026-08-26', categoryId: 'c-cibo', amountCents: 2600 }),
+  ]
+
+  it('le righe rimaste sono le stesse, con gli stessi importi', () => {
+    const con = sezione(ready({ expenses: spese }), 'variable')!
+    const senza = ready({ expenses: spese, showFixed: false })
+    // Resta una sezione sola, e non una vuota: la sezione delle fisse **non
+    // c'e'**, esattamente come quando nel periodo non ne e' uscita nessuna. La
+    // differenza fra i due vuoti non sta qui — sta in `split`, che nel primo caso
+    // resta e nel secondo e' `null`.
+    expect(senza.byCategory.sections.map((s) => s.kind)).toEqual(['variable'])
+    expect(sezione(senza, 'variable')!.rows.map((r) => r.cents)).toEqual(
+      con.rows.map((r) => r.cents),
+    )
+    expect(sezione(senza, 'variable')!.rows.map((r) => r.name)).toEqual(con.rows.map((r) => r.name))
+  })
+
+  it('e cambiano di lunghezza, che e la sola cosa utile che il selettore fa', () => {
+    const con = sezione(ready({ expenses: spese }), 'variable')!
+    const senza = sezione(ready({ expenses: spese, showFixed: false }), 'variable')!
+    // **Questa e' l'asserzione che distingue il selettore da un filtro.** Con un
+    // filtro applicato a valle le due righe uscirebbero identiche — stessi
+    // importi, stesse frazioni — e la schermata mostrerebbe due barre da 7 e 5
+    // px su una colonna vuota per il 94%.
+    expect(con.rows[0]?.fraction).toBeCloseTo(
+      BAR_MIN_FRACTION + (1 - BAR_MIN_FRACTION) * (4200 / 90000),
+      12,
+    )
+    expect(senza.rows[0]?.fraction).toBe(1)
+    expect(senza.rows[1]?.fraction).toBeCloseTo(
+      BAR_MIN_FRACTION + (1 - BAR_MIN_FRACTION) * (2600 / 4200),
+      12,
+    )
+    // In pixel, sulla colonna piu' stretta: da 5,2 px a 70,4. E' la misura da cui
+    // erano nate le due scale, restituita da un tap.
+    expect(senza.rows[1]!.fraction * COLONNA_MIN_PX).toBeGreaterThan(
+      con.rows[1]!.fraction * COLONNA_MIN_PX * 10,
+    )
+    invariantiDiA(ready({ expenses: spese, showFixed: false }), false)
+  })
+
+  it('la proporzione resta: e cio che dice cosa si sta nascondendo', () => {
+    const v = ready({ expenses: spese, showFixed: false })
+    // ADR 016 §1 vieta di nascondere le fisse; 0c lo ripete perche' un selettore
+    // e' esattamente il modo in cui l'esclusione rientrerebbe dalla porta di
+    // servizio. `split` e' cio' che lo impedisce: 900,00 € restano scritti anche
+    // quando le loro righe non ci sono.
+    expect(v.byCategory.sections.map((s) => s.kind)).toEqual(['variable'])
+    expect(v.byCategory.split?.fixedCents).toBe(90000)
+    expect(v.byCategory.split?.variableCents).toBe(6800)
+    expect(v.current.recurringSpentCents).toBe(90000)
+  })
+
+  it('la soglia guarda le righe rimaste, non quelle che c erano', () => {
+    // Tre righe con le fisse — A e' un grafico — e due senza: due categorie non
+    // sono una ripartizione, e non lo diventano perche' prima ce n'erano tre.
+    expect(ready({ expenses: spese }).byCategory.asChart).toBe(true)
+    expect(ready({ expenses: spese, showFixed: false }).byCategory.asChart).toBe(false)
+  })
+
+  it('B non lo guarda: la traccia del budget e il confronto che esclude le fisse', () => {
+    const conStorico: readonly Expense[] = [
+      ...spese,
+      makeExpense({ date: '2026-08-17', categoryId: 'c-spesa', amountCents: 7000 }),
+    ]
+    const con = ready({ expenses: conStorico })
+    const senza = ready({ expenses: conStorico, showFixed: false })
+    // Byte per byte: se un giorno `showFixed` toccasse B, le barre si
+    // misurerebbero contro una traccia che le fisse non comprende — due unita' di
+    // misura sullo stesso asse, che e' il difetto per cui ADR 016 esiste.
+    expect(senza.byPeriod).toEqual(con.byPeriod)
+    expect(con.byPeriod.rows.length).toBeGreaterThan(0)
+  })
+
+  it('spegnendo le fisse in un periodo di sole fisse la schermata resta ready', () => {
+    const v = view({
+      expenses: [
+        makeExpense({ date: '2026-08-25', categoryId: 'c-casa', amountCents: 90000, source: 'recurring' }),
+      ],
+      showFixed: false,
+    })
+    // **Il vicolo cieco che questo test tiene chiuso.** `outside` non porta ne'
+    // sezioni ne' `split`, quindi non ha niente su cui appendere il selettore:
+    // arrivandoci con le fisse spente, l'utente resterebbe chiuso fuori dai propri
+    // dati con l'unico interruttore che li riaccende dentro il ramo che non si
+    // disegna. Un controllo che puo' cancellare se stesso non e' un controllo.
+    //
+    // E prima ancora sarebbe una frase falsa: `outside` dice *"niente cade dove
+    // questa schermata guarda"*, e li' cadono 900,00 €.
+    expect(v.kind).toBe('ready')
+    if (v.kind !== 'ready') return
+    expect(v.byCategory.sections).toHaveLength(0)
+    // A e' vuota **e non c'e' niente da dividere**: `split` non e' il rimedio a
+    // questo stato, e il modello non finge che lo sia. Cosa si scrive sopra
+    // un'unica sezione nascosta e' del componente, che ha il dizionario — qui c'e'
+    // il fatto che ci sia un posto dove scriverlo.
+    expect(v.byCategory.split).toBeNull()
+    invariantiDiA(v, false)
+  })
+
+  it('accese, la schermata di prima e la stessa di sempre', () => {
+    // La controprova del test qui sopra: non e' `outside` perche' le fisse ci
+    // sono, non perche' `outside` sia sparito. Gli altri suoi casi hanno i loro
+    // test, e sono rimasti verdi.
+    const v = ready({
+      expenses: [
+        makeExpense({ date: '2026-08-25', categoryId: 'c-casa', amountCents: 90000, source: 'recurring' }),
+      ],
+    })
+    expect(unica(sezione(v, 'fixed')).cents).toBe(90000)
+    expect(v.byCategory.split).toBeNull()
+  })
+})
+
+/*
+ * **0b — la proporzione in cima**, cioe' il posto in cui il fatto dominante e'
+ * scritto invece che dedotto da una lunghezza. Qui si prova che i due importi
+ * sono i due totali del periodo, che la quota e' una sola, e che dove non c'e'
+ * niente da dividere non c'e' nemmeno l'oggetto.
+ */
+describe('0b — la barra divisa', () => {
+  it('i due importi sono i due totali del periodo, e la quota e la loro proporzione', () => {
+    const v = ready({
+      expenses: [
+        makeExpense({ date: '2026-08-24', categoryId: 'c-casa', amountCents: 60000, source: 'recurring' }),
+        makeExpense({ date: '2026-08-25', categoryId: 'c-spesa', amountCents: 30000 }),
+        makeExpense({ date: '2026-08-26', categoryId: 'c-cibo', amountCents: 10000 }),
+      ],
+    })
+    const split = v.byCategory.split!
+    expect(split.fixedCents).toBe(60000)
+    expect(split.variableCents).toBe(40000)
+    expect(split.fixedCents + split.variableCents).toBe(
+      v.current.recurringSpentCents + v.current.spentCents,
+    )
+    expect(split.fixedFraction).toBeCloseTo(0.6, 12)
+    // **Una quota sola.** L'altra meta' e' `1 - questa`: due numeri scritti
+    // accanto sarebbero uno stato che si puo' scrivere in disaccordo, e due
+    // segmenti che non chiudono a 1 e' un difetto che si vede solo su certi dati.
+    expect(1 - split.fixedFraction).toBeCloseTo(0.4, 12)
+    // E i due importi non sono una seconda somma: sono le stesse cifre dei totali
+    // di sezione, quindi non possono divergere da cio' che sta scritto sotto.
+    expect(split.fixedCents).toBe(v.current.recurringSpentCents)
+    expect(split.variableCents).toBe(v.current.spentCents)
+    invariantiDiA(v)
+  })
+
+  it('senza fisse non c e niente da dividere', () => {
+    const v = ready({
+      expenses: [
+        makeExpense({ date: OGGI, categoryId: 'c-spesa', amountCents: 3000 }),
+        makeExpense({ date: OGGI, categoryId: 'c-cibo', amountCents: 1000 }),
+      ],
+    })
+    // Un cerchio pieno con una legenda a due voci di cui una a `0,00 €` afferma
+    // *"ecco come si divide"* dove non c'e' niente da dividere. E' la stessa
+    // forma per cui la sezione con una riga sola non porta un totale.
+    expect(v.byCategory.split).toBeNull()
+    expect(v.current.recurringSpentCents).toBe(0)
+    invariantiDiA(v)
+  })
+
+  it('e vale anche dall altra parte: sole fisse, nessuna divisione', () => {
+    const v = ready({
+      expenses: [
+        makeExpense({ date: '2026-08-24', categoryId: 'c-casa', amountCents: 90000, source: 'recurring' }),
+        makeExpense({ date: '2026-08-25', categoryId: 'c-cibo', amountCents: 2300, source: 'recurring' }),
+      ],
+    })
+    // La condizione non nomina quale delle due meta' e' zero, quindi vale per
+    // tutte e due: la settimana in cui e' uscito solo l'affitto e quella in cui
+    // non e' uscita nessuna fissa sono lo stesso caso.
+    expect(v.byCategory.split).toBeNull()
+    expect(totale(sezione(v, 'fixed'))).toBe(92300)
+    invariantiDiA(v)
+  })
+
+  it('una ricorrente da zero centesimi non e una meta: non c e divisione', () => {
+    const v = ready({
+      expenses: [
+        makeExpense({ date: OGGI, categoryId: 'c-casa', amountCents: 0, source: 'recurring' }),
+        makeExpense({ date: OGGI, categoryId: 'c-spesa', amountCents: 3000 }),
+      ],
+    })
+    // Il caso degenere che gia' fa tacere la scheda in testa: una sezione di
+    // fisse c'e' e vale `0,00 €`. Una proporzione `0 / 3000` sarebbe un segmento
+    // invisibile con un'etichetta a zero — la stessa affermazione senza niente da
+    // affermare, e per giunta divisa per un totale che e' tutto dell'altra meta'.
+    expect(sezione(v, 'fixed')?.rows).toHaveLength(1)
+    expect(v.byCategory.split).toBeNull()
+    invariantiDiA(v)
   })
 })
 
@@ -522,8 +907,8 @@ describe('il pavimento della barra', () => {
     // numero sia una potenza di due, che era la ragione scritta finche' il
     // pavimento e' stato `2/64` e che con `2/112` sarebbe scaduta. Se la
     // rimappatura cambiasse forma (traslare senza comprimere, per dire) la barra
-    // piu' lunga smetterebbe di arrivare a fondo colonna, e cadrebbe con lei la
-    // cosa che dichiara le due scale.
+    // piu' lunga smetterebbe di arrivare a fondo colonna — e con lei cadrebbe la
+    // sola cosa che, guardando lo schermo, dice dov'e' il fondo della scala.
     expect(rows[0]?.cents).toBe(50700)
     expect(rows[0]?.fraction).toBe(1)
   })
@@ -539,15 +924,27 @@ describe('il pavimento della barra', () => {
     // allargare la colonna sposta questo confine, non lo toglie.
     expect(nove.fraction).toBeGreaterThan(setteEmezzo.fraction)
     expect((nove.fraction - setteEmezzo.fraction) * COLONNA_PX).toBeLessThan(1)
-    // Cio' che le distingue li' e' l'importo scritto accanto — e il fatto che
-    // A e' divisa in due: sulla scala delle sole variabili, senza l'affitto,
-    // quelle stesse due righe distano 31,5 px.
-    const senzaAffitto = sezione(
-      ready({ expenses: affittoEBriciole.filter((e) => e.amountCents !== 50700) }),
+    // Cio' che le distingue li' e' l'importo scritto accanto — **e il selettore
+    // delle fisse**, quando l'affitto e' una fissa: spente, la scala si ricalcola
+    // sulle briciole e quelle stesse due righe distano 31,5 px.
+    //
+    // Qui c'era scritto *"e il fatto che A e' divisa in due sezioni"*, e la prova
+    // era una fixture **con l'affitto tolto dai dati**: due scale rendevano la
+    // divisione automatica, e il test la otteneva cancellando la spesa piu'
+    // grande. Cancellarla non e' cio' che fa l'utente, e da oggi non e' nemmeno
+    // cio' che fa il modello. La via d'uscita e' rimasta la stessa larghezza —
+    // e' la stessa scala di prima — ma adesso e' un tap, non una regola.
+    const senzaFisse = sezione(
+      ready({
+        expenses: affittoEBriciole.map((e) =>
+          e.amountCents === 50700 ? { ...e, source: 'recurring' as const } : e,
+        ),
+        showFixed: false,
+      }),
       'variable',
     )!.rows
-    const a = senzaAffitto.find((r) => r.cents === 900)!
-    const b = senzaAffitto.find((r) => r.cents === 750)!
+    const a = senzaFisse.find((r) => r.cents === 900)!
+    const b = senzaFisse.find((r) => r.cents === 750)!
     expect((a.fraction - b.fraction) * COLONNA_PX).toBeGreaterThan(30)
   })
 })
@@ -668,8 +1065,11 @@ describe('le spese la cui categoria non esiste piu', () => {
     expect(orfaneVariabili[0]?.cents).toBe(4000)
     // **Ma due sono due fatti diversi**: canoni che non si sa piu' a cosa erano,
     // e spese a mano che non si sa piu' a cosa erano. Fondendole si
-    // rimetterebbero insieme le due nature che A divide, in una riga che non
-    // potrebbe stare in nessuna delle due scale.
+    // rimetterebbero insieme le due nature che A divide. **Il secondo argomento
+    // che stava qui e' scaduto con le due scale** — diceva che la riga fusa "non
+    // potrebbe stare in nessuna delle due scale", cioe' che fonderle era
+    // impossibile; con una scala sola e' possibile, e restano divise perche' sono
+    // due fatti, che era gia' l'argomento buono.
     expect(orfaneFisse).toHaveLength(1)
     expect(orfaneFisse[0]?.cents).toBe(1000)
     // E non si sono attaccate a una categoria che esiste: se confluissero in
@@ -713,7 +1113,9 @@ describe('le spese la cui categoria non esiste piu', () => {
       ],
     })
     expect(sezione(v, 'variable')?.rows).toHaveLength(BREAKDOWN_MIN_ROWS)
-    expect(sezione(v, 'variable')?.asChart).toBe(true)
+    // La soglia conta le righe **visibili**, e l'aggregato delle orfane e' una di
+    // quelle: sono spesa vera, e senza di loro il totale non tornerebbe.
+    expect(v.byCategory.asChart).toBe(true)
   })
 
   it('un aggregato da zero centesimi non divide per zero', () => {
@@ -765,6 +1167,7 @@ describe('dati ostili', () => {
       budgets: [] as readonly Budget[],
       period: 'weekly',
       day: OGGI,
+      showFixed: true,
     })
     if (v.kind !== 'ready') throw new Error('atteso ready')
     return v
@@ -802,18 +1205,24 @@ describe('dati ostili', () => {
     invariantiDiA(v)
   })
 
-  it('un centesimo contro quarantaquattro euro non e piu un centesimo, ed e dichiarato', () => {
+  it('un centesimo contro novecento euro non e piu un centesimo, ed e dichiarato', () => {
     const briciola = ostile().byCategory.sections
       .find((s) => s.kind === 'variable')!
       .rows.find((r) => r.categoryId === 'h-bricio')!
-    // Prima questa riga asseriva `1 / 90000` e si chiamava "resta un centesimo,
-    // non un minimo". Non poteva cadere: il minimo non era nel modello, era nel
-    // CSS, e quella barra si dipingeva 2 px come tutte le altre briciole.
-    // Adesso il minimo e' qui e si vede: la barra vale il pavimento piu' un
-    // pelo, e il pelo e' proporzionale.
+    // Il denominatore e' **90000 e non 4400**, ed e' la scala unica: la briciola
+    // non si misura piu' contro la piu' grande della propria sezione ma contro la
+    // piu' grande della schermata, che e' l'affitto. Il nome del test dice ora il
+    // rapporto vero — quattro ordini di grandezza — che e' anche quello che
+    // l'intestazione di questo file promette da sempre ("un centesimo contro
+    // novecento euro") e che con due scale non era mai stato provato.
+    //
+    // Prima ancora questa riga asseriva `1 / 90000` per un'altra ragione e si
+    // chiamava "resta un centesimo, non un minimo": non poteva cadere, perche' il
+    // minimo era nel CSS. Adesso il minimo e' nel modello e si vede: la barra
+    // vale il pavimento piu' un pelo, e il pelo e' proporzionale.
     expect(briciola.fraction).toBeGreaterThanOrEqual(BAR_MIN_FRACTION)
     expect(briciola.fraction).toBeCloseTo(
-      BAR_MIN_FRACTION + (1 - BAR_MIN_FRACTION) * (1 / 4400),
+      BAR_MIN_FRACTION + (1 - BAR_MIN_FRACTION) * (1 / 90000),
       12,
     )
     // E resta piu' corta della riga a zero? No: la riga a zero e' **zero**, e
@@ -825,18 +1234,21 @@ describe('dati ostili', () => {
     expect(briciola.fraction).toBeGreaterThan(zero.fraction)
   })
 
-  it('la riga che sta in tutte e due non si somma, e le due scale lo dichiarano', () => {
+  it('la riga che sta in tutte e due non si somma, e la scala unica le rende confrontabili', () => {
     const v = ostile()
     const fissa = sezione(v, 'fixed')!.rows.find((r) => r.categoryId === 'h-trasp')!
     const variabile = sezione(v, 'variable')!.rows.find((r) => r.categoryId === 'h-trasp')!
     expect(fissa.cents).toBe(2300)
     expect(variabile.cents).toBe(1000)
-    // 23,00 su una scala da 900,00 e' piu' corta di 10,00 su una scala da 44,00.
-    // La geometria che lo dichiara e' in cima a ogni sezione: due barre piene
-    // con due importi diversi.
-    expect(variabile.fraction).toBeGreaterThan(fissa.fraction)
-    expect(sezione(v, 'fixed')!.rows[0]?.fraction).toBe(1)
-    expect(sezione(v, 'variable')!.rows[0]?.fraction).toBe(1)
+    // Qui c'era l'asserzione opposta — `variabile > fissa` — perche' 23,00 su una
+    // scala da 900,00 era piu' corta di 10,00 su una scala da 44,00. Era la
+    // conseguenza dichiarata delle due scale, e la conseguenza era illeggibile.
+    expect(variabile.fraction).toBeLessThan(fissa.fraction)
+    // **Una barra piena sola in tutta A**, e sta dove sta l'importo piu' grande.
+    // Con due scale ce n'erano due, ed era quello a dichiararle.
+    const piene = v.byCategory.sections.flatMap((s) => s.rows).filter((r) => r.fraction === 1)
+    expect(piene.map((r) => r.cents)).toEqual([90000])
+    expect(sezione(v, 'variable')!.rows[0]?.fraction).toBeLessThan(1)
   })
 })
 

@@ -11,8 +11,9 @@
  *
  * - **A — "dove sono finiti i soldi?"** Ripartizione per categoria del periodo
  *   corrente, **ricorrenti comprese** (ADR 016 §1: le fisse sono uscite davvero,
- *   ed e' *solo il budget* a escluderle), in **due sezioni con due scale**:
- *   fisse e variabili. Perche' due e non una: sotto.
+ *   ed e' *solo il budget* a escluderle), in **due sezioni su una scala sola**:
+ *   fisse e variabili. Le sezioni raggruppano e ordinano; l'unita' di misura e'
+ *   una. Perche' una, dopo essere stata due: sotto.
  * - **B — "sto spendendo piu' o meno degli altri periodi?"** Una riga per
  *   periodo, **solo variabile**, con la traccia del budget **dove il confronto
  *   ha una risposta**. Qui l'esclusione non contraddice §1: **B *e'* il
@@ -25,41 +26,97 @@
  *   ADR 016 §3 ("due numeri, non uno"), ed e' cio' che rende leggibile B — che
  *   le fisse le esclude — senza che l'esclusione resti taciuta.
  *
- * ## Perche' A e' in due sezioni
+ * ## Perche' A e' in due sezioni, e perche' la scala e' comunque una sola
+ *
+ * Sembrano la stessa decisione e sono due: **la sezione e' un raggruppamento,
+ * la scala e' un'unita' di misura.** Per qualche giorno sono state legate — ogni
+ * sezione con la propria scala — e questa nota esiste per chi arriva qui con in
+ * mano la misura che le aveva legate e la voglia di rimetterle insieme.
+ *
+ * ### La misura che aveva prodotto le due scale non e' scaduta
  *
  * Con l'affitto dentro e una scala sola, una settimana vera a 390 punti dava:
  * Casa 192,73 px · Trasporti 12,53 · Spesa 9,88 · Fuori 5,50 · Coffeeshop 3,41 ·
- * Sigarette 2,84. **Sei righe su sette dentro dieci pixel**: la forma smetteva
- * di rispondere alla domanda che il titolo pone.
+ * Sigarette 2,84. **Sei righe su sette dentro dieci pixel.** Chi rifa' il conto
+ * oggi ottiene gli stessi numeri: la scala unica **schiaccia davvero**, e non e'
+ * per un difetto di quella misura che le due scale sono uscite.
  *
- * La riparazione non e' togliere la barra dell'affitto ne' nasconderlo — §1
- * resta rispettato per intero, la voce piu' grossa si vede e porta la sua
- * categoria — ma **dare a ogni natura la propria scala**. Non e' un espediente
- * grafico: e' la stessa distinzione per cui esistono ADR 016 e la schermata
- * Spese fisse, cioe' il modello mentale che l'app usa gia' dappertutto.
+ * ### Cio' che le ha tolte e' l'incrocio con la soglia, che nessuna delle due regole poteva mostrare da sola
  *
- * Ne segue che **una categoria puo' comparire in tutte e due** — Trasporti
- * 23,00 di abbonamento e 10,00 di taxi — ed e' informativo: dice quanto di
- * quella spesa e' deciso e quanto e' occasionale.
+ * La scala per sezione viveva accanto a `BREAKDOWN_MIN_ROWS` applicata **per
+ * sezione**. Misurato a schermo sul periodo 24–30 agosto, con la colonna a
+ * `--plot-min` (112 px):
  *
- * ### Due scale con la stessa marca, e come si dichiarano
+ *     Casa      (fisse)  507,00 €   nessuna barra
+ *     Trasporti (fisse)   23,00 €   nessuna barra
+ *     Spesa     (var)     42,00 €   112 px — la piu' lunga della schermata
+ *     Svago     (var)     26,00 €    70 px
+ *     Coffeeshop(var)     24,00 €    65 px
+ *     Fuori     (var)     10,00 €    28 px
+ *     Trasporti (var)     10,00 €    28 px
  *
- * Due scale diverse sotto la stessa forma sono un difetto quando sono
- * **involontarie**. Qui sono dichiarate, e si dichiarano **nella geometria**:
- * in ogni sezione la barra piu' lunga arriva a fondo colonna, quindi due barre
- * piene con due importi diversi dicono da sole che le scale sono due. E' un
- * invariante di questo modulo, non una speranza sul CSS: **in ogni sezione con
- * almeno una riga di importo > 0 la frazione massima vale esattamente 1**
- * (`BreakdownSection.fraction`).
+ * Le fisse erano **due** righe, cioe' sotto la soglia, quindi la sezione che
+ * conteneva 530,00 € su 642,00 € non aveva **nessuna** barra, e la barra piu'
+ * lunga dello schermo ne valeva 42,00. **Il peso visivo era l'inverso degli
+ * importi.** Ogni regola, presa da sola, faceva il suo mestiere; il difetto
+ * stava nel loro incrocio — e un incrocio non lo guarda nessun gate. Cadono
+ * tutte e due: la scala per sezione **e** il minimo per sezione. Meno regole,
+ * meno incroci.
+ *
+ * ### Cosa compensa lo schiacciamento, visto che la misura resta vera
+ *
+ * Non "niente", e va scritto qui perche' il compenso arriva da **altri due
+ * pezzi**: chi legge solo questo file vedrebbe una regressione dove c'e' uno
+ * scambio.
+ *
+ * - **La proporzione sale in cima** (`Breakdown.split`). Il fatto dominante —
+ *   due terzi sono l'affitto — non ha piu' bisogno che a portarlo sia la
+ *   lunghezza di una barra fra sette. Non e' che la barra lo portasse: lo
+ *   portava male, ed e' per non farglielo portare che erano nate le due scale.
+ * - **Il confronto fra le quotidiane torna a richiesta** (`StatsInput.showFixed`).
+ *   Spente le fisse, la scala **si ricalcola** sulle righe rimaste: le stesse sei
+ *   righe che stavano in dieci pixel si riaprono su tutta la colonna, cioe'
+ *   esattamente cio' che la scala per sezione dava — ma quando l'utente lo
+ *   chiede, e senza mai avere due unita' di misura contemporaneamente a schermo.
+ *   E' un **ricalcolo**, non un filtro: filtrare lasciando la scala dov'era
+ *   lascerebbe quelle sei righe schiacciate come prima, cioe' sarebbe un
+ *   selettore che non serve a niente.
+ *
+ * Ne segue che **la sezione dichiara la natura, non l'unita' di misura**: due
+ * righe di sezioni diverse con lo stesso importo hanno la stessa lunghezza, ed e'
+ * questo che rende leggibile *"l'affitto pesa quanto tutto il resto messo
+ * insieme"* — una frase che con due scale non si poteva ne' leggere ne' scrivere.
+ *
+ * Resta vero che **una categoria puo' comparire in tutte e due** — Trasporti
+ * 23,00 di abbonamento e 10,00 di taxi — ed e' informativo: dice quanto di quella
+ * spesa e' deciso e quanto e' occasionale. Con la scala unica le due righe sono
+ * anche **confrontabili fra loro**, cosa che prima non erano: con due scale i
+ * 10,00 occasionali si disegnavano **piu' lunghi** dei 23,00 decisi.
+ *
+ * ### L'invariante che dichiarava le due scale, e quello che lo sostituisce
+ *
+ * Diceva: *"in ogni sezione la barra piu' lunga arriva a fondo colonna"*, ed era
+ * il modo in cui la geometria dichiarava da sola che le scale erano due. Adesso
+ * vale **una volta sola su tutta A**: fra tutte le righe visibili, quella con
+ * l'importo piu' alto ha frazione esattamente 1, e nessun'altra ce l'ha se non a
+ * pari importo. Due barre piene con due importi diversi sono tornate a essere il
+ * difetto che erano prima di diventare una dichiarazione.
  *
  * ### Ogni sezione porta il proprio totale
  *
- * Le due cifre di C erano in **unita' diverse** — quella variabile del periodo,
+ * Le due cifre di C sono in **unita' diverse** — quella variabile e' del periodo,
  * `fixedMonthlyCents` e' al mese, come impone ADR 016 §3 — quindi affiancate non
- * dicono "507 contro 73,50 questa settimana". Finche' c'era la barra gigante,
- * quel confronto lo faceva l'occhio sul grafico; togliendola lo perderemmo, e
- * non sarebbe detto da nessuna parte. Percio' ogni sezione porta il proprio
- * `totalCents`, **entrambi del periodo** e quindi confrontabili fra loro.
+ * dicono "530,00 contro 112,00 questa settimana". Percio' ogni sezione porta il
+ * proprio `totalCents`, **entrambi del periodo** e quindi confrontabili fra loro.
+ *
+ * **La ragione e' stata ri-derivata, non ricopiata**, perche' quella scritta qui
+ * prima e' scaduta con la scala unica: diceva *"finche' c'era la barra gigante
+ * quel confronto lo faceva l'occhio sul grafico, togliendola lo perderemmo"* — e
+ * la barra gigante e' tornata. Ma l'occhio sul grafico confronta **la riga piu'
+ * grande di qua con la riga piu' grande di la'**, che e' un'altra domanda:
+ * `507,00 contro 42,00` non e' `530,00 contro 112,00`. E con le fisse spente
+ * (`StatsInput.showFixed`) di qua non c'e' nessuna riga da guardare. Il totale di
+ * sezione resta l'unico posto in cui si confrontano i due **insiemi**.
  *
  * Con **una riga sola** quel totale non c'e', ed e' la stessa ragione letta al
  * contrario: il confronto che la cifra serviva a permettere lo fa gia' la riga,
@@ -115,8 +172,7 @@ import type { Cents } from '../core/money'
 export const TREND_PERIODS = 8
 
 /**
- * Sotto quante categorie con spesa **una sezione di A** smette di essere un
- * grafico.
+ * Sotto quante categorie con spesa **A** smette di essere un grafico.
  *
  * **Tre, e l'argomento e' la domanda di A: "come si ripartisce".** Due
  * categorie non sono una ripartizione — sono due importi, e la barra piu' corta
@@ -128,13 +184,22 @@ export const TREND_PERIODS = 8
  * dai dati pieni, questo stato sarebbe arrivato come un grafico degenere invece
  * che come una forma sua.
  *
- * **Si applica per sezione, e la ragione e' la stessa che vale per la scala.**
- * Ogni sezione fa la domanda "come si ripartisce" sui propri soldi e con la
- * propria scala, quindi ognuna ha il proprio minimo: due righe di fisse non
- * diventano una ripartizione perche' sotto ci sono sei righe di variabili, e
- * sei righe di variabili non smettono di esserlo perche' sopra le fisse sono
- * due. Applicata all'insieme, la soglia deciderebbe di una sezione guardando
- * l'altra — cioe' proprio la mescolanza che dividere in due serviva a togliere.
+ * **Si applica all'insieme delle righe visibili, non per sezione — e questo e'
+ * cambiato.** L'argomento di prima era simmetrico a quello della scala: ogni
+ * sezione fa la domanda sui propri soldi con la propria scala, quindi ha il
+ * proprio minimo. Caduta la scala per sezione, quell'argomento non ha piu' la
+ * premessa: le righe stanno tutte sulla **stessa** unita' di misura, quindi la
+ * ripartizione che A mostra e' **una**, ed e' quella che va contata.
+ *
+ * **E la soglia per sezione non era solo priva di premessa: era la causa
+ * misurata del difetto.** Due righe di fisse cadevano sotto il minimo e restavano
+ * senza barra mentre valevano 530,00 € su 642,00 €, e la barra piu' lunga della
+ * schermata ne valeva 42,00 — il peso visivo inverso agli importi. La tabella
+ * misurata sta in cima al file.
+ *
+ * Ne segue che sotto soglia **A intera** perde le barre, non una meta': con due
+ * righe in croce non c'e' nessuna ripartizione da leggere, e dividerle in due
+ * intestazioni non ne fa nascere una.
  *
  * **Non e' la stessa soglia di `TREND_MIN_ROWS`, e le due non si unificano.**
  * Qui c'era scritto *"due barre non sono un confronto"*, che e' falso quindici
@@ -220,7 +285,7 @@ export const TREND_MIN_ROWS = 2
  * Su una colonna piu' larga la barra minima e' proporzionalmente piu' larga: a
  * 390 punti, dove il plot vale 192,73 px, la barra minima si dipinge **3,44 px**
  * invece di 2. E' una sovrastima innocua — l'inchiostro minimo resta il piu'
- * piccolo che la sezione produce, e nessuna barra viva sparisce — ma va detta
+ * piccolo che A produce, e nessuna barra viva sparisce — ma va detta
  * qui: chi legge "2 px" senza questa riga crede che il numero valga a ogni
  * viewport, e la garanzia e' `>= 2 px`, non `= 2 px`. L'unico verso in cui
  * romperla sarebbe un `rem` piu' piccolo di 16 px: Dynamic Type allarga, non
@@ -286,19 +351,26 @@ export const TREND_MIN_ROWS = 2
  * ## Cosa si perde, e il limite che va detto qui invece che scoperto
  *
  * Il **rapporto** fra due lunghezze non e' piu' il rapporto fra due importi: c'e'
- * una traslazione costante, uguale per tutte le barre della sezione. Resta
- * esatta la **differenza**, che e' l'altra meta' della lettura: due lunghezze
- * differiscono di `(1 - MIN) · (differenza degli importi) / scala`.
+ * una traslazione costante, uguale per **tutte** le barre di A — che da quando la
+ * scala e' una sola vuol dire davvero tutte, comprese quelle di sezioni diverse.
+ * Resta esatta la **differenza**, che e' l'altra meta' della lettura: due
+ * lunghezze differiscono di `(1 - MIN) · (differenza degli importi) / scala`.
  *
  * E il limite: sotto una certa scala **l'ordine sopravvive nel modello e non nei
  * pixel**. 9,00 € e 7,50 € su una scala da 507,00 € distano 0,0029, cioe' **0,56
  * px** sul plot da 192,73 di un 390: diversi qui, indistinguibili li'. Allargare
  * la colonna sposta il confine e non lo toglie — e' esattamente il conto con cui
  * `--plot-min` e' passato a 7rem, e vale la pena leggerlo in Stats.css invece di
- * ricopiarlo qui. Cio' che li separa oltre quel punto e' l'importo scritto
- * accanto — e, per il caso che ha prodotto la misura, il fatto che A e' divisa
- * in due sezioni e quelle due righe cadono su una scala che non contiene
- * l'affitto.
+ * ricopiarlo qui.
+ *
+ * **La scala unica allarga questa zona, ed e' il prezzo dichiarato dello
+ * scambio.** Finche' le scale erano due, quelle due righe cadevano su una scala
+ * che l'affitto non conteneva e si separavano di 31,5 px; oggi cadono sulla scala
+ * che lo contiene, e restano dentro il pixel. Cio' che le separa li' e' l'importo
+ * scritto accanto — e, quando servono separate davvero, il selettore delle fisse
+ * (`StatsInput.showFixed`), che ricalcolando la scala sulle sole quotidiane
+ * rimette quelle stesse due righe a 31,5 px l'una dall'altra. Non e' un caso che
+ * sia lo stesso numero: e' la stessa scala di prima, chiesta invece che imposta.
  */
 export const BAR_MIN_FRACTION = 2 / 112
 
@@ -337,8 +409,14 @@ export type SliceIdentity =
        * essere ricorrente o manuale, quindi le orfane sono due fatti diversi:
        * "canoni che non si sa piu' a cosa erano" e "spese a mano che non si sa
        * piu' a cosa erano". Fonderle rimetterebbe insieme le due nature che A
-       * divide, e per giunta in una riga che non potrebbe stare in nessuna delle
-       * due scale.
+       * divide.
+       *
+       * **Il secondo argomento che c'era qui e' scaduto, e va detto**: diceva
+       * *"per giunta sarebbe una riga che non potrebbe stare in nessuna delle due
+       * scale"*, cioe' fondere le due orfane era **impossibile**. Con la scala
+       * unica e' diventato possibile, e la riga resta divisa per il primo
+       * argomento soltanto — che regge da solo, ma adesso deve reggere davvero:
+       * sono due fatti, e la sezione e' il posto in cui si dice quale.
        */
       readonly orphan: true
       /** Non c'e' un id: qui dentro ci sono categorie diverse, tutte sparite. */
@@ -349,7 +427,8 @@ export type SliceIdentity =
 
 /**
  * Una riga di A: una categoria dentro una sezione del periodo corrente, o
- * l'aggregato delle orfane di quella sezione.
+ * l'aggregato delle orfane di quella sezione. **La sezione decide dove sta e
+ * accanto a chi si ordina, non quanto e' lunga.**
  *
  * **Non porta piu' `recurringCents` ne' `recurringShare`.** Servivano a
  * distinguere la parte fissa *dentro* la barra quando la sezione era una sola;
@@ -363,7 +442,15 @@ export type CategorySlice = SliceIdentity & {
   /** Quanto e' uscito su questa categoria, in questa sezione, nel periodo. */
   readonly cents: Cents
   /**
-   * Lunghezza della barra, 0..1 sulla scala **della sezione**.
+   * Lunghezza della barra, 0..1 sulla **scala unica di A**: il massimo fra tutte
+   * le righe **visibili**, non fra quelle della propria sezione.
+   *
+   * "Visibili" e non "esistenti", ed e' la meta' che conta del selettore: con
+   * `StatsInput.showFixed` a `false` la scala si ricalcola sulle sole quotidiane,
+   * quindi **la stessa riga con lo stesso importo cambia lunghezza**. Un filtro
+   * che togliesse le righe lasciando la scala dov'era non farebbe niente di
+   * utile, ed e' per questo che il selettore sta nel modello e non nel
+   * componente.
    *
    * Zero, oppure almeno `BAR_MIN_FRACTION`: mai una via di mezzo che il CSS
    * dovrebbe correggere.
@@ -582,7 +669,6 @@ export interface PeriodBar {
  * viene dalle metriche e spiega le righe che sono a schermo.
  */
 export interface StatsTiles {
-  /** Speso variabile **del periodo**: la stessa cifra grande della Home. */
   /** Il tasso mensile delle regole in vigore oggi. **Al mese**, non del periodo. */
   readonly fixedMonthlyCents: Cents
   /**
@@ -629,22 +715,21 @@ export interface StatsTiles {
 export type BreakdownKind = 'fixed' | 'variable'
 
 /**
- * Cio' che una sezione di A ha **sempre**: una natura, una scala, delle righe.
- * Il totale no — vive nel ramo a piu' righe, qui sotto.
+ * Cio' che una sezione di A ha **sempre**: una natura e delle righe. Il totale
+ * no — vive nel ramo a piu' righe, qui sotto.
+ *
+ * **La scala non c'e' mai stata come campo, e adesso non c'e' nemmeno come
+ * fatto**: e' di A (`CategorySlice.fraction`). E **`asChart` e' salito su
+ * `Breakdown`**, perche' la soglia si applica all'insieme delle righe visibili —
+ * l'argomento sta su `BREAKDOWN_MIN_ROWS`, e la misura che l'ha spostato in cima
+ * al file.
+ *
+ * Ne resta una natura sola, e il tipo resta lo stesso perche' e' cio' che
+ * impedisce a `kind` di essere scritto due volte in due rami dell'unione qui
+ * sotto — dove niente garantirebbe che siano lo stesso campo.
  */
 interface SectionShape {
   readonly kind: BreakdownKind
-  /**
-   * Sotto `BREAKDOWN_MIN_ROWS` le righe restano e le barre no, **sezione per
-   * sezione**. Il campo sta qui e non nel componente perche' la soglia e' una
-   * decisione, e una decisione scritta dentro un `&&` in JSX non si trova piu'.
-   *
-   * **Qui il campo ha due valori veri, in B no.** Una sezione di A sotto soglia
-   * esiste lo stesso — nome e importo si leggono senza barra — quindi `false`
-   * e' uno stato che si dipinge. B sotto la propria soglia non esiste, quindi
-   * `Trend` un campo cosi' non ce l'ha.
-   */
-  readonly asChart: boolean
 }
 
 /**
@@ -686,9 +771,11 @@ export type BreakdownSection = SectionShape &
     | {
         readonly single: false
         /**
-         * Dalla piu' grande. `rows[0]` e' anche la riga che porta la scala: la
-         * sua `fraction` vale 1 se ha un importo, ed e' cosi' che la sezione
-         * dichiara di avere una scala propria.
+         * Dalla piu' grande. `rows[0]` e' la riga piu' grande **di questa
+         * sezione**, e non porta piu' nessuna scala: la sua `fraction` vale 1
+         * solo se e' anche la piu' grande di A. In una schermata con le fisse
+         * accese vale 1 in **una** sezione sola, ed e' cosi' che la geometria
+         * dichiara che la scala e' una.
          */
         readonly rows: readonly CategorySlice[]
         /**
@@ -711,6 +798,63 @@ export type BreakdownSection = SectionShape &
       }
   )
 
+/**
+ * La proporzione fra le due nature del periodo: **il fatto dominante di A,
+ * portato da un numero invece che da una lunghezza** (decisione 0b).
+ *
+ * ## Perche' esiste
+ *
+ * Due terzi di un periodo sono l'affitto, e finora non c'era **nessun posto**
+ * della schermata in cui quel fatto fosse scritto. Lo portava — male — la barra
+ * piu' lunga di A: male perche' una barra fra sette risponde a "quale voce e' la
+ * piu' grossa", non a "come si spartisce il totale", e perche' per non fargli
+ * schiacciare le altre sei erano nate due scale, cioe' due unita' di misura sulla
+ * stessa schermata. Portandolo qui, A torna a rispondere alla propria domanda con
+ * una scala sola.
+ *
+ * ## Le due meta' sono **un** numero, non due che devono accordarsi
+ *
+ * `fixedFraction` sta in `[0, 1]` e l'altra meta' e' `1 - fixedFraction`: due
+ * frazioni scritte accanto sono uno stato che si puo' scrivere in disaccordo, e
+ * un grafico a due segmenti che non chiude a 1 e' un difetto che si vede solo su
+ * certi dati.
+ *
+ * ## `null` quando una delle due meta' e' zero
+ *
+ * **La divisione di una cosa sola non e' una divisione.** Con zero fisse la
+ * ciambella sarebbe un cerchio pieno con una legenda a due voci di cui una a
+ * `0,00 €`, cioe' un'affermazione — *"ecco come si divide"* — dove non c'e'
+ * niente da dividere. E' la stessa forma per cui la sezione con una riga sola non
+ * porta un totale, e per cui `hasFixed` tace dove il tasso e' zero: **annunciare
+ * dove non c'e' niente da annunciare insegna a non leggere l'annuncio.**
+ *
+ * ## I due importi sono gli stessi delle due sezioni, e la cosa va detta
+ *
+ * `fixedCents` e `variableCents` vengono dalle **stesse** metriche da cui viene
+ * `BreakdownSection.totalCents` (`recurringSpentCents` e `spentCents`), quindi
+ * non possono divergere — non e' una copia da tenere allineata, e' lo stesso
+ * numero letto una seconda volta.
+ *
+ * Ma **se il componente scrive tutti e due**, la stessa cifra compare due volte
+ * sulla stessa schermata: accanto alla barra divisa e sopra la sezione. E' la
+ * metrica con cui questo progetto ha gia' trovato tre difetti, e qui non e' un
+ * difetto **del modello** — e' una decisione di chi dipinge, nominata qui perche'
+ * si veda prima dello schermo e non dopo. Il modello non ha modo di prenderla:
+ * con le fisse spente la sezione non c'e' e il totale nemmeno, quindi togliere il
+ * campo lascerebbe senza numero proprio il caso in cui serve.
+ */
+export interface BreakdownSplit {
+  /** Le ricorrenti uscite nel periodo. `> 0`, o questo oggetto non esiste. */
+  readonly fixedCents: Cents
+  /** Le quotidiane del periodo. `> 0`, o questo oggetto non esiste. */
+  readonly variableCents: Cents
+  /**
+   * Quota delle fisse sul totale del periodo, in `(0, 1)`. L'altra meta' si
+   * ricava, e per questo non si scrive.
+   */
+  readonly fixedFraction: number
+}
+
 export interface Breakdown {
   /**
    * Le sezioni con almeno una riga, nell'ordine: fisse, poi variabili.
@@ -729,8 +873,47 @@ export interface Breakdown {
    * una distinzione di natura, non una classifica: una schermata che riordina le
    * proprie sezioni a seconda del mese fa cercare due volte la stessa riga. E'
    * la stessa ragione per cui la griglia delle categorie non si riordina mai.
+   *
+   * **Con `StatsInput.showFixed` a `false` la sezione delle fisse non c'e'.**
+   * Non e' lo stesso vuoto di "nessuna fissa nel periodo" — quello e' un fatto
+   * sui dati, questo e' una scelta di lettura — e la differenza si vede in due
+   * posti: `split` resta — dice cosa si sta nascondendo, ed e' l'argomento di
+   * ADR 016 §2, *"un'esclusione taciuta e' un numero che mente per omissione"*,
+   * che nella sua ragione non nomina la Home — e lo stato `outside` non arriva
+   * mai per questa via (vedi `statsView`).
    */
   readonly sections: readonly BreakdownSection[]
+  /**
+   * **A e' un grafico, oppure e' un elenco di righe** — nome e importo, senza
+   * barre — e la decisione e' presa **sull'insieme delle righe visibili**, non
+   * per sezione.
+   *
+   * La soglia e' `BREAKDOWN_MIN_ROWS` e porta il proprio argomento; qui sta il
+   * campo, e sta su `Breakdown` e non su `BreakdownSection` perche' e' li' che
+   * era la causa misurata del difetto piu' grosso della fase: due righe di fisse
+   * sotto soglia restavano senza barra mentre valevano 530,00 € su 642,00 €.
+   *
+   * "Visibili" comprende il selettore: spegnendo le fisse restano solo le
+   * quotidiane, e se sono meno di tre A smette di essere un grafico. E' la stessa
+   * regola, applicata a cio' che c'e' a schermo — l'unica cosa di cui la soglia
+   * ha mai parlato.
+   *
+   * **Ha due valori veri, in B no**: A sotto soglia esiste lo stesso — nome e
+   * importo si leggono senza barra — mentre B sotto la propria soglia non esiste
+   * affatto, e infatti `Trend` un campo cosi' non ce l'ha.
+   */
+  readonly asChart: boolean
+  /**
+   * La proporzione fisse/quotidiane del periodo, o `null` dove non c'e' niente
+   * da dividere. L'argomento sta su `BreakdownSplit`.
+   *
+   * **Non dipende da `showFixed`**: e' cio' che dice all'utente *cosa* sta
+   * nascondendo. Nasconderlo insieme alle righe sarebbe ADR 016 §1 dalla porta di
+   * servizio — 530,00 € che spariscono dallo schermo senza lasciare traccia —
+   * cioe' esattamente il difetto che il selettore ha il divieto esplicito di
+   * reintrodurre.
+   */
+  readonly split: BreakdownSplit | null
 }
 
 /**
@@ -851,12 +1034,36 @@ export interface StatsInput {
   readonly budgets: readonly Budget[]
   readonly period: BudgetPeriod
   readonly day: IsoDate
+  /**
+   * **Le fisse si vedono in A** (decisione 0c). Il valore che l'app passa
+   * all'apertura e' `true`: partire da `false` nasconderebbe 530,00 € dietro un
+   * controllo, che e' ADR 016 §1 dalla porta di servizio.
+   *
+   * ## Perche' e' un ingresso del modello e non stato del componente
+   *
+   * Perche' non toglie righe: **ricalcola la scala.** Le lunghezze di A sono
+   * frazioni del massimo fra le righe visibili, quindi nascondere l'affitto
+   * riapre le sei righe che stavano in dieci pixel — ed e' l'unica cosa che il
+   * selettore fa di utile. Un filtro applicato in `Stats.tsx` a un modello gia'
+   * calcolato lascerebbe quelle sei righe **esattamente dov'erano**: un
+   * interruttore che accorcia l'elenco e non risponde a nessuna domanda.
+   *
+   * ## Non tocca B, e la ragione e' geometrica
+   *
+   * `byPeriod` non lo guarda. B **e'** il confronto col budget, e il budget le
+   * fisse le esclude: una barra che comprendesse l'affitto contro una traccia che
+   * non lo comprende metterebbe due unita' di misura sullo stesso asse. Non c'e'
+   * niente da accendere di la', quindi non c'e' nessun ramo — e questa riga
+   * esiste perche' chi legge il campo non vada a cercarlo.
+   */
+  readonly showFixed: boolean
 }
 
 /**
  * Una riga di A mentre si accumula: l'identita', che non cambia piu', e il
  * contatore. La frazione non c'e' perche' si calcola quando la scala e' nota,
- * cioe' dopo l'ultima spesa della sezione.
+ * cioe' — da quando la scala e' una sola — dopo l'ultima spesa di **tutte** le
+ * sezioni visibili, non dopo l'ultima della propria.
  *
  * L'identita' e' **la stessa** `SliceIdentity` della riga finita, non una copia
  * dei suoi campi: un membro aggiunto la' non puo' restare indietro qui.
@@ -909,24 +1116,26 @@ function barLength(quota: number): number {
 }
 
 /**
- * Una sezione di A: aggrega per categoria, ordina, e mette in scala **sulla
- * propria riga piu' grande**.
+ * Le righe di una sezione **prima che la scala esista**: aggregate per
+ * categoria e ordinate. La frazione non c'e' perche' la scala non e' nota — e
+ * adesso non lo e' finche' non si sono viste **tutte** le righe visibili di A,
+ * non solo quelle di questa sezione. E' l'unica differenza strutturale che la
+ * scala unica ha prodotto in questo file: prima una sezione si finiva da sola,
+ * adesso passa da due tempi.
  *
- * `null` quando non c'e' nessuna riga: una sezione vuota non e' una sezione con
- * zero righe da dipingere, e' una sezione che non c'e' — senza fisse la
+ * Elenco vuoto quando non c'e' nessuna riga: una sezione senza righe non e' una
+ * sezione da dipingere vuota, e' una sezione che non c'e' — senza fisse la
  * schermata ne mostra una sola, e non un titolo sopra il nulla.
  */
-function breakdownSection(
-  kind: BreakdownKind,
+function tallyRows(
   expenses: readonly Expense[],
   named: ReadonlyMap<string, Category>,
-  totalCents: Cents,
-): BreakdownSection | null {
+): readonly Tally[] {
   // La chiave `null` e' il secchio delle orfane: un `categoryId` vero non e' mai
   // `null`, quindi non serve una stringa magica che un giorno collidera' con un
   // id vero. E' per sezione, quindi le orfane fisse e quelle manuali restano due
-  // righe: sono due fatti diversi, e nessuna delle due scale potrebbe ospitare
-  // la loro somma.
+  // righe: sono due fatti diversi, e fonderle rimetterebbe insieme le due nature
+  // che le sezioni dividono.
   const tallies = new Map<string | null, Tally>()
   for (const expense of expenses) {
     const category = named.get(expense.categoryId)
@@ -952,8 +1161,6 @@ function breakdownSection(
     tallies.set(key, tally)
   }
 
-  if (tallies.size === 0) return null
-
   const slices = [...tallies.values()]
   // Dalla piu' grande: la domanda e' "dove sono finiti i soldi", e la risposta si
   // legge dall'alto. **Non** per ordine di griglia, che serve al pollice in cassa.
@@ -967,21 +1174,57 @@ function breakdownSection(
       Number(a.orphan) - Number(b.orphan) ||
       (a.name ?? '').localeCompare(b.name ?? ''),
   )
+  return slices
+}
 
-  // La scala e' la riga piu' grande **di questa sezione**: e' cio' che manda la
-  // barra piu' lunga a fondo colonna, e cioe' cio' che dichiara nella geometria
-  // che le scale sono due. Con tutte le righe a zero non c'e' niente da mettere
-  // in scala e restano tutte a zero: dipingere una barra piena per zero euro
-  // sarebbe la scala a dire una cosa che i dati non dicono.
-  const scale = slices.reduce((max, s) => Math.max(max, s.cents), 0)
-  const rows = slices.map((s) => ({ ...s, fraction: barLength(share(s.cents, scale)) }))
-  const shape: SectionShape = { kind, asChart: rows.length >= BREAKDOWN_MIN_ROWS }
+/** Una sezione prima della scala: cio' che serve per finirla quando la scala c'e'. */
+interface SectionSource {
+  readonly kind: BreakdownKind
+  readonly tallies: readonly Tally[]
+  readonly totalCents: Cents
+}
+
+/**
+ * Una sezione finita: le stesse righe, messe in scala su un numero che **arriva
+ * da fuori**. Che sia il massimo di A e non il proprio e' precisamente cio' che
+ * questa funzione non decide piu'.
+ *
+ * Con `tallies` vuoto uscirebbe una sezione a zero righe, che romperebbe
+ * `single === (rows.length === 1)`. **Non e' una dichiarazione di
+ * irraggiungibilita' a parole**: il chiamante e' uno solo — `statsView` — e
+ * `shown` e' un sottoinsieme di `present`, che e' `parts` filtrato proprio su
+ * `tallies.length > 0`. Chi aggiungesse un secondo chiamante legge questa riga
+ * insieme alla firma.
+ */
+function sectionOf(source: SectionSource, scale: Cents): BreakdownSection {
+  const rows = source.tallies.map((t) => ({ ...t, fraction: barLength(share(t.cents, scale)) }))
   // Con una riga sola il totale **non esiste**: sarebbe la stessa cifra della
   // riga, scritta due volte sullo stesso bordo destro. L'argomento per esteso
   // sta su `BreakdownSection`.
   const only = rows[0]
-  if (rows.length === 1 && only !== undefined) return { ...shape, single: true, rows: [only] }
-  return { ...shape, single: false, rows, totalCents }
+  if (rows.length === 1 && only !== undefined) {
+    return { kind: source.kind, single: true, rows: [only] }
+  }
+  return { kind: source.kind, single: false, rows, totalCents: source.totalCents }
+}
+
+/**
+ * La proporzione fra le due nature, o `null` dove non c'e' niente da dividere.
+ *
+ * I due importi arrivano dalle **metriche**, cioe' dalla stessa sorgente dei
+ * totali di sezione: non e' una seconda somma sulle spese, ed e' per questo che
+ * `split.fixedCents` e il totale della sezione fisse non possono divergere.
+ *
+ * `<= 0` e non `=== 0`: lo zero e' il caso vero — un periodo senza fisse, che e'
+ * la prima settimana di chiunque — e il confronto largo copre anche un totale
+ * negativo **senza dover dichiarare che nessuno lo scrive**. Una dichiarazione
+ * cosi' varrebbe solo enumerando ogni scrittore di `amountCents`, e qui la difesa
+ * costa un carattere: sopra un totale negativo `fixedFraction` uscirebbe fuori da
+ * `[0, 1]`, cioe' due segmenti che non chiudono.
+ */
+function breakdownSplit(fixedCents: Cents, variableCents: Cents): BreakdownSplit | null {
+  if (fixedCents <= 0 || variableCents <= 0) return null
+  return { fixedCents, variableCents, fixedFraction: fixedCents / (fixedCents + variableCents) }
 }
 
 export function statsView(input: StatsInput): StatsView {
@@ -1000,7 +1243,7 @@ export function statsView(input: StatsInput): StatsView {
   const current = metricsOf(input.day)
   const named = new Map(input.categories.map((c) => [c.id, c]))
 
-  /* --- A: le due sezioni del periodo corrente ----------------------------- */
+  /* --- A: due sezioni, una scala ------------------------------------------ */
 
   // **Tutte** le spese vive del periodo, ricorrenti comprese: ADR 016 §1 dice
   // che a escluderle e' *solo* il budget. Il filtro che c'era qui faceva
@@ -1016,21 +1259,57 @@ export function statsView(input: StatsInput): StatsView {
   // Se qui si filtrasse per qualcos'altro, i totali smetterebbero di essere la
   // somma delle righe e nessuno se ne accorgerebbe finche' non se ne accorge un
   // utente.
-  const byCategory: Breakdown = {
-    sections: [
-      breakdownSection(
-        'fixed',
+  const parts: readonly SectionSource[] = [
+    {
+      kind: 'fixed',
+      tallies: tallyRows(
         inPeriod.filter((e) => e.source === 'recurring'),
         named,
-        current.recurringSpentCents,
       ),
-      breakdownSection(
-        'variable',
+      totalCents: current.recurringSpentCents,
+    },
+    {
+      kind: 'variable',
+      tallies: tallyRows(
         inPeriod.filter((e) => e.source !== 'recurring'),
         named,
-        current.spentCents,
       ),
-    ].filter((section): section is BreakdownSection => section !== null),
+      totalCents: current.spentCents,
+    },
+  ]
+  // Una sezione senza righe non c'e'. E' un fatto **sui dati**, e resta separato
+  // dal selettore qui sotto, che e' una scelta di lettura: `present` e' cio' che
+  // il periodo contiene, `shown` e' cio' che si guarda. Confonderli e' il modo in
+  // cui il selettore diventerebbe un vicolo cieco — vedi `outside`, sotto.
+  const present = parts.filter((part) => part.tallies.length > 0)
+  const shown = present.filter((part) => input.showFixed || part.kind !== 'fixed')
+
+  // **La scala unica di A**: il massimo fra tutte le righe **visibili**, non fra
+  // quelle di una sezione. Le sezioni raggruppano e ordinano; l'unita' di misura
+  // e' una, e con `showFixed` a `false` si ricalcola sulle sole quotidiane — che
+  // e' l'unica cosa utile che il selettore fa, e la ragione per cui non e' un
+  // filtro in `Stats.tsx`. Con tutte le righe a zero la scala e' zero e restano
+  // tutte a zero: dipingere una barra piena per zero euro sarebbe la scala a dire
+  // una cosa che i dati non dicono.
+  const scale = shown.reduce(
+    (max, part) => part.tallies.reduce((m, t) => Math.max(m, t.cents), max),
+    0,
+  )
+
+  const byCategory: Breakdown = {
+    sections: shown.map((part) => sectionOf(part, scale)),
+    // La soglia conta le righe **a schermo**, tutte insieme: applicata per
+    // sezione lasciava senza barre la meta' che pesava 530,00 € su 642,00 €.
+    // L'argomento sta su `BREAKDOWN_MIN_ROWS`, la tabella misurata in cima al
+    // file.
+    asChart: shown.reduce((n, part) => n + part.tallies.length, 0) >= BREAKDOWN_MIN_ROWS,
+    // **Dalle metriche, e fuori dal selettore.** Fuori perche' e' cio' che dice
+    // all'utente cosa sta nascondendo: sparendo con le righe, spegnere le fisse
+    // toglierebbe 530,00 € dallo schermo senza lasciare traccia, che e' ADR 016
+    // §1 dalla porta di servizio. Dalle metriche perche' sono gli stessi due
+    // numeri dei totali di sezione, e due espressioni per lo stesso numero sono
+    // una copia da tenere allineata.
+    split: breakdownSplit(current.recurringSpentCents, current.spentCents),
   }
 
   /* --- B: i periodi ------------------------------------------------------- */
@@ -1181,7 +1460,25 @@ export function statsView(input: StatsInput): StatsView {
   //
   // Il periodo si porta dietro: e' l'unica cosa che rende verificabile la frase
   // che il componente ci scrive sopra. Vedi `StatsView`, ramo `outside`.
-  if (byCategory.sections.length === 0 && rows.length === 0) {
+  //
+  // **Si guarda `present`, non `byCategory.sections`, e la differenza e' il
+  // selettore.** Con le fisse spente e un periodo di sole fisse — la settimana in
+  // cui e' uscito solo l'affitto, che ADR 016 da' per scontata — le sezioni sono
+  // zero e B non ha righe: leggendo le sezioni la schermata direbbe *"niente cade
+  // dove guardo"* mentre 900,00 € ci cadono eccome, e l'utente li' ha appena
+  // deciso di non guardarli. Sarebbe un'affermazione falsa, e per giunta
+  // **inverificabile dallo schermo** — che e' la regola per cui questa vista
+  // porta il proprio `range`.
+  //
+  // E sarebbe peggio di una frase sbagliata: `outside` non porta ne' `split` ne'
+  // sezioni, quindi il componente non avrebbe piu' niente su cui appendere il
+  // selettore. **L'utente resterebbe chiuso fuori dai propri dati con l'unico
+  // interruttore che li riaccende dentro il ramo che non si disegna.** Un
+  // controllo che puo' cancellare se stesso non e' un controllo.
+  //
+  // `present` e' un fatto sul periodo e non lo tocca nessuna scelta di lettura:
+  // `outside` resta cio' che dice, cioe' che li' non e' caduto niente.
+  if (present.length === 0 && rows.length === 0) {
     return { kind: 'outside', period: input.period, range: current.range }
   }
 

@@ -241,6 +241,34 @@ async function semina(
   await apriStatistiche(page)
 }
 
+/**
+ * Cancella **tutte** le spese, per le scene che ne provano due nella stessa
+ * pagina.
+ *
+ * `semina` scrive con chiavi `stat-{indice}`, quindi una seconda chiamata piu'
+ * corta **sovrascrive le prime e lascia vive le altre**: seminare due righe dopo
+ * cinque ne lascia quattro a schermo. Non e' un difetto di `semina` — la
+ * riscrittura per indice e' cio' che la rende leggibile — ma un secondo seme
+ * senza questa chiamata misura una scena che nessuno ha dichiarato, ed e' cosi'
+ * che questo helper e' nato: con un `toBe(2)` che leggeva 4.
+ */
+async function svuota(page: Page): Promise<void> {
+  await page.evaluate(async () => {
+    const db: IDBDatabase = await new Promise((resolve, reject) => {
+      const request = indexedDB.open('cent')
+      request.onsuccess = () => resolve(request.result)
+      request.onerror = () => reject(request.error)
+    })
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction('expenses', 'readwrite')
+      tx.objectStore('expenses').clear()
+      tx.oncomplete = () => resolve()
+      tx.onerror = () => reject(tx.error)
+    })
+    db.close()
+  })
+}
+
 async function apriStatistiche(page: Page): Promise<void> {
   await page.getByRole('button', { name: /Statistiche|Stats/ }).click()
   await expect(page.locator('.stats')).toBeVisible()
@@ -471,7 +499,11 @@ test('a schermo vuoto le Statistiche dicono cosa comparira, non "nessun dato"', 
   // E soprattutto: **nessuna barra**, nemmeno lunga zero. Otto righe da zero
   // sarebbero un grafico degenere spacciato per schermata vuota.
   await expect(page.locator('.stat__bar')).toHaveCount(0)
-  await expect(page.locator('.tile')).toHaveCount(0)
+  // E nessuna cifra in testa: la proiezione mensile delle fisse c'e' solo dove
+  // una regola esiste, e qui non esiste niente. (Era `.tile`, la scheda grigia:
+  // il selettore segue la forma nuova perche' un'asserzione su una classe morta
+  // e' vera per sempre e non sorveglia piu' niente.)
+  await expect(page.locator('.stats__rate')).toHaveCount(0)
 })
 
 /**
@@ -781,18 +813,23 @@ test('con spese e senza budget: le righe ci sono, le tracce no', async ({ page }
     settanta,
     `il totale delle variabili e' scritto ${settanta} volte sulla stessa schermata`,
   ).toBe(1)
-  // E senza spese fisse non c'e' **nessuna** scheda: il contenitore sparisce con
-  // il suo unico figlio, invece di restare vuoto a spendere due `gap` di niente.
-  await expect(page.locator('.stats__tiles')).toHaveCount(0)
+  // E senza spese fisse non c'e' **nessuna** riga della proiezione mensile: la
+  // cifra non esiste, e una riga che dicesse `0,00 €/mese` sarebbe un fatto
+  // inventato in cima alla schermata.
+  await expect(page.locator('.stats__rate')).toHaveCount(0)
 
-  // Senza nemmeno una spesa fissa A ha **una parte sola**, e quella parte porta
-  // il proprio totale nell'intestazione. Due parti qui vorrebbero dire una
-  // sezione delle fisse vuota, cioe' un titolo sopra il niente.
+  // Senza nemmeno una spesa fissa A ha **una parte sola**. Due parti qui
+  // vorrebbero dire una sezione delle fisse vuota, cioe' un titolo sopra il
+  // niente.
   const parti = page.locator('.stats__section').first().locator('.stats__partTitle')
   await expect(parti).toHaveCount(1)
-  await expect(parti.first()).toHaveText(
-    new RegExp(`${dizionario['stats.variable']}.*70,00`),
-  )
+  await expect(parti.first()).toHaveText(dizionario['stats.variable'])
+  // **E l'intestazione non porta il totale, perche' lo porta gia' il titolo.**
+  // Con una sezione sola il totale della sezione *e'* quello del periodo: e' il
+  // conteggio qui sopra visto dall'altro verso — dei due posti in cui `70,00 €`
+  // potrebbe stare, quello giusto e' il titolo, che risponde alla domanda che
+  // pone.
+  await expect(page.locator('.stats__titleTotal')).toHaveText(/70,00/)
 
   // E **nessuna nota** sotto i due titoli. Quella di B affermava il confronto col
   // budget anche dove la geometria lo rifiuta; qui il budget non c'e' proprio, e
@@ -1089,9 +1126,16 @@ test('le spese senza categoria sono una riga sola, e non spostano le colonne', a
   // 30,00 + 20,00 sommate in una riga sola.
   await expect(sezione.locator('.stat').nth(2).locator('.stat__value')).toHaveText(/50,00/)
 
-  // Il totale della parte **torna** con le righe: 200 + 100 + 50. Se le orfane
-  // venissero saltate, quel totale sarebbe un numero che le righe non spiegano.
-  await expect(sezione.locator('.stats__partTotal')).toHaveText(/350,00/)
+  // Il totale **torna** con le righe: 200 + 100 + 50. Se le orfane venissero
+  // saltate, sarebbe un numero che le righe non spiegano.
+  //
+  // Si legge dal **titolo** e non dall'intestazione di parte: con una sezione
+  // sola — qui non c'e' nessuna spesa fissa — il totale della sezione *e'* il
+  // totale del periodo, quindi lo scrive il titolo e l'intestazione tace. Cambia
+  // il posto, non il fatto: quella cifra resta l'unica cosa che dichiara che le
+  // orfane sono dentro.
+  await expect(page.locator('.stats__titleTotal')).toHaveText(/350,00/)
+  await expect(sezione.locator('.stats__partTotal')).toHaveCount(0)
 
   const righe = await righeDi(page, 0)
   const plot = [...new Set(righe.map((r) => r.plot))]
@@ -1142,9 +1186,11 @@ test('sotto tre categorie restano le righe e spariscono le barre', async ({ page
   // alla barra perche' il grafico **e'** la tabella.
   await expect(sezione.locator('.stat__value').first()).toHaveText(/40,00|40\.00/)
 
-  // Il totale della parte resta, perche' le righe ci sono sempre: senza barre
-  // questa e' una tabella, e una tabella con un totale e' ancora una risposta.
-  await expect(sezione.locator('.stats__partTotal')).toHaveText(/60,00/)
+  // Il totale resta, perche' le righe ci sono sempre: senza barre questa e' una
+  // tabella, e una tabella con un totale e' ancora una risposta. Sta sul titolo
+  // perche' la sezione e' una sola (vedi il test delle orfane, sopra).
+  await expect(page.locator('.stats__titleTotal')).toHaveText(/60,00/)
+  await expect(sezione.locator('.stats__partTotal')).toHaveCount(0)
 
   // E **nessuna frase** su cosa sia in scala: senza barre parlerebbe di una cosa
   // che non e' a schermo, e con le barre lo dice gia' la prima, lunga il 100%.
@@ -1172,7 +1218,36 @@ test('sotto tre categorie restano le righe e spariscono le barre', async ({ page
  * - **i due totali sono confrontabili**, perche' sono tutti e due del periodo —
  *   che e' cio' che le due schede in testa non sono (una e' al mese).
  */
-test('A si divide in fisse e variabili, ognuna con la propria scala e il proprio totale', async ({
+/**
+ * **Una scala sola per tutta A, e le sezioni restano intestazioni.**
+ *
+ * ## Il nome di questo test era la decisione vecchia
+ *
+ * Si chiamava *"ognuna con la propria scala"*, e sorvegliava che la riga piu'
+ * grande di **ciascuna** parte riempisse la colonna. Quella regola e' caduta, e
+ * il test che la difendeva e' la cosa piu' pericolosa che potesse restare in
+ * giro: un artefatto che domani giustifica la reintroduzione del difetto.
+ *
+ * Il difetto era l'**incrocio** fra la scala per sezione e la soglia per
+ * sezione, e si misurava cosi': le uniche barre erano nelle quotidiane, la
+ * sezione fisse aveva 530 € su 818 e **nessuna barra**, e la barra piu' lunga
+ * dello schermo ne valeva 129. Peso visivo inverso agli importi, sotto un titolo
+ * che chiede dove sono finiti i soldi.
+ *
+ * ## Cosa prova adesso, che e' piu' forte
+ *
+ * **La stessa proporzione fra due righe qualunque di A, senza guardare la
+ * sezione.** Non "la piu' grande di ognuna riempie" — che era la firma delle due
+ * scale — ma: prese due righe a caso, il rapporto fra le loro barre e' il
+ * rapporto fra i loro importi, anche se stanno in sezioni diverse.
+ *
+ * E' un invariante che **una scala per sezione non puo' soddisfare**: con due
+ * scale, 280,00 € di abbonamento e 120,00 € di biglietti sarebbero disegnati con
+ * rapporti calcolati su due massimi diversi. Provato disfacendo: con la scala per
+ * sezione questo confronto cade, mentre il vecchio ("la piu' grande riempie")
+ * passava con tutte e due.
+ */
+test('A ha una scala sola: due righe qualunque stanno fra loro come i loro importi', async ({
   page,
 }) => {
   await page.goto('/')
@@ -1222,9 +1297,10 @@ test('A si divide in fisse e variabili, ognuna con la propria scala e il proprio
   // stato nascosto: e' sparita la sua causa.
   await expect(page.locator('.stat__fixed')).toHaveCount(0)
 
-  // **Due scale.** In ciascuna parte la barra piu' lunga riempie la colonna, e
-  // le due colonne sono larghe uguali — quindi due barre piene con 507,00 € e
-  // 120,00 € accanto dicono da sole che le scale sono due.
+  // **Una scala sola.** Le sei righe si leggono tutte contro lo stesso massimo —
+  // Casa, 507,00 € — quindi il rapporto fra due barre e' il rapporto fra due
+  // importi **anche a cavallo delle due sezioni**, che e' precisamente cio' che
+  // due scale non possono dare.
   const misure = await page.evaluate(() =>
     [...document.querySelectorAll('.stats__section')[0]!.querySelectorAll('.stats__rows')].map(
       (elenco) => {
@@ -1240,12 +1316,37 @@ test('A si divide in fisse e variabili, ognuna con la propria scala e il proprio
   )
   expect(misure).toHaveLength(2)
   expect(misure[0]!.plot, 'le due parti hanno colonne di larghezza diversa').toBe(misure[1]!.plot)
-  expect(misure[0]!.barre[0], 'la barra piu\' grande delle fisse non riempie').toBeCloseTo(1, 2)
-  expect(misure[1]!.barre[0], 'la barra piu\' grande delle variabili non riempie').toBeCloseTo(1, 2)
-  // E dentro ciascuna parte le proporzioni restano quelle: 280 su 507 e 62 su 120.
+
+  // La riga piu' grande **di A** riempie, e non ce n'e' una seconda: due barre
+  // piene sarebbero la firma delle due scale.
   const atteso = (f: number): number => BAR_MIN_FRACTION + (1 - BAR_MIN_FRACTION) * f
-  expect(misure[0]!.barre[1]).toBeCloseTo(atteso(28000 / 50700), 2)
-  expect(misure[1]!.barre[1]).toBeCloseTo(atteso(6200 / 12000), 2)
+  const tutte = [...misure[0]!.barre, ...misure[1]!.barre]
+  expect(
+    tutte.filter((f) => f > 0.99),
+    `piu' di una barra riempie la colonna: ${JSON.stringify(tutte)}`,
+  ).toHaveLength(1)
+  expect(misure[0]!.barre[0], 'la barra piu\' grande di A non riempie').toBeCloseTo(1, 2)
+
+  // E ogni riga sta sul massimo di A, non su quello della propria parte.
+  // Trasporti fisso 280 su 507; Trasporti a mano 120 su 507; Spesa 62 su 507.
+  expect(misure[0]!.barre[1], 'le fisse non sono sulla scala di A').toBeCloseTo(
+    atteso(28000 / 50700),
+    2,
+  )
+  expect(misure[1]!.barre[0], 'le variabili hanno una scala loro').toBeCloseTo(
+    atteso(12000 / 50700),
+    2,
+  )
+  expect(misure[1]!.barre[1]).toBeCloseTo(atteso(6200 / 50700), 2)
+
+  // **L'asserzione che nessuna delle due scale poteva soddisfare**: due righe di
+  // sezioni diverse stanno fra loro come i loro importi. Le frazioni portano la
+  // traslazione costante del pavimento, che si toglie prima di dividere.
+  const nudo = (f: number): number => (f - BAR_MIN_FRACTION) / (1 - BAR_MIN_FRACTION)
+  expect(
+    nudo(misure[0]!.barre[1]!) / nudo(misure[1]!.barre[0]!),
+    'una riga fissa e una variabile non sono confrontabili fra loro',
+  ).toBeCloseTo(28000 / 12000, 1)
 })
 
 /**
@@ -1365,9 +1466,11 @@ test('con le sole spese a mano A ha una parte sola e nessuna riga di separazione
 
   const parti = page.locator('.stats__section').first().locator('.stats__partTitle')
   await expect(parti).toHaveCount(1)
-  await expect(parti.first()).toHaveText(
-    new RegExp(`${dizionario['stats.variable']}.*70,00`),
-  )
+  // Il nome della natura, senza cifra: con una sezione sola il totale e' quello
+  // del titolo, e riscriverlo qui sarebbe la stessa cifra due volte a quaranta
+  // pixel — il difetto che il totale nel titolo e' venuto a togliere.
+  await expect(parti.first()).toHaveText(dizionario['stats.variable'])
+  await expect(page.locator('.stats__titleTotal')).toHaveText(/70,00/)
   await expect(page.locator('.stats')).not.toContainText(dizionario['stats.fixedInPeriod'])
 
   // La separazione e' `.stats__rows + .stats__partTitle`: con una parte sola non
@@ -1381,46 +1484,90 @@ test('con le sole spese a mano A ha una parte sola e nessuna riga di separazione
 })
 
 /**
- * **Una parte sotto soglia dentro una sezione che ha barre.**
+ * **Dentro A o tutte le righe hanno la barra, o nessuna.**
  *
- * La soglia si applica **a ciascuna parte**: tre categorie fisse e due variabili
- * danno un grafico sopra e una tabella sotto, nella stessa sezione e sulle stesse
- * colonne. E' il caso misto, ed e' quello per cui `.stat__value` dichiara
- * `grid-column: -2`: senza, le righe da due celle metterebbero l'importo nella
- * colonna del grafico — cioe' **in mezzo**, incolonnato con niente.
+ * ## Il caso misto non esiste piu', e questo test lo dichiara
  *
- * Si asserisce sul **bordo destro dipinto**, non sulla colonna calcolata: e' cio'
- * che l'occhio incolonna, ed e' vero anche se un giorno le colonne cambiassero
- * numero.
+ * Qui c'era *"nella stessa sezione una parte a barre e una a tabella restano
+ * incolonnate"*, e provava una scena che il modello **non sa piu' costruire**: la
+ * soglia guardava ciascuna parte, quindi tre fisse davano un grafico e due
+ * variabili una tabella, nella stessa schermata. Da quando la soglia guarda
+ * **l'insieme delle righe visibili**, quello stato e' irrappresentabile.
+ *
+ * Un test che lo pretende non e' un test che fallisce: e' un test che chiede al
+ * prodotto di rifare il difetto. Al suo posto c'e' l'invariante nuovo, che e'
+ * **piu' forte** perche' non dipende dalla scena: preso qualunque schermo di A,
+ * il numero di barre e' zero oppure e' il numero di righe.
+ *
+ * ## E la parte che valeva la pena tenere: l'incolonnamento
+ *
+ * L'argomento di `.stat__value { grid-column: -2 }` era il caso misto — le righe
+ * da due celle mettevano l'importo nella colonna del grafico, cioe' **in mezzo**.
+ * Quel caso e' sparito, ma la regola no: **A senza barre e' ancora una sezione a
+ * due colonne**, e quello e' lo stato che la produce. Qui si prova quello, con la
+ * scena che lo raggiunge davvero (due sole categorie in tutto), e si guarda il
+ * **bordo destro dipinto** invece della colonna calcolata: e' cio' che l'occhio
+ * incolonna, ed e' vero anche se un giorno le colonne cambiassero numero.
  */
-test('nella stessa sezione una parte a barre e una a tabella restano incolonnate', async ({
+test('dentro A o tutte le righe hanno la barra o nessuna, e gli importi restano incolonnati', async ({
   page,
 }) => {
   await page.goto('/')
   await chiudiGuida(page)
+  // La scena che al vecchio test dava il caso misto: tre fisse e due variabili.
+  // Cinque righe in tutto, cioe' **sopra** la soglia dell'insieme — quindi
+  // adesso le barre ci sono su tutte e cinque, comprese le due che prima erano
+  // una tabella.
   await semina(page, [
     { categoria: 'Casa', cents: 50700, fissa: true },
     { categoria: 'Trasporti', cents: 28000, fissa: true },
     { categoria: 'Sigarette', cents: 9000, fissa: true },
-    // Due sole categorie a mano: sotto soglia, quindi righe senza barra.
     { categoria: 'Spesa', cents: 6200 },
     { categoria: 'Fuori', cents: 3000 },
   ])
 
   const sezione = page.locator('.stats__section').first()
   await expect(sezione.locator('.stats__partTitle')).toHaveCount(2)
-  const elenchi = sezione.locator('.stats__rows')
-  // Il grafico sopra, la tabella sotto: la soglia e' per parte, non per sezione.
-  await expect(elenchi.nth(0).locator('.stat__bar')).toHaveCount(3)
-  await expect(elenchi.nth(1).locator('.stat__bar')).toHaveCount(0)
+  const conta = async (): Promise<{ righe: number; barre: number }> =>
+    sezione.evaluate((el) => ({
+      righe: el.querySelectorAll('.stat').length,
+      barre: el.querySelectorAll('.stat__bar').length,
+    }))
 
+  const pieno = await conta()
+  expect(pieno.righe, 'la scena a cinque righe non e\' in pagina').toBe(5)
+  expect(
+    pieno.barre,
+    `A ha ${pieno.barre} barre su ${pieno.righe} righe: la soglia e' tornata a guardare la parte`,
+  ).toBe(pieno.righe)
+
+  // E le due fisse sotto le tre righe di soglia adesso hanno la barra: e' il
+  // difetto misurato che 0a chiude — 530 € su 818 senza nessuna barra, sotto un
+  // titolo che chiede dove sono finiti i soldi.
+  const elenchi = sezione.locator('.stats__rows')
+  await expect(elenchi.nth(1).locator('.stat__bar')).toHaveCount(2)
+
+  // **L'altro verso dell'invariante**, e senza di lui il primo passerebbe anche
+  // se le barre non sparissero mai: due sole categorie in tutto stanno sotto la
+  // soglia dell'insieme, e allora le barre non ci sono da nessuna parte.
+  await svuota(page)
+  await semina(page, [
+    { categoria: 'Casa', cents: 50700, fissa: true },
+    { categoria: 'Spesa', cents: 6200 },
+  ])
+  const vuoto = await conta()
+  expect(vuoto.righe, 'la scena a due righe non e\' in pagina').toBe(2)
+  expect(vuoto.barre, 'sotto soglia A disegna ancora delle barre').toBe(0)
+
+  // Senza barre A e' una sezione a due colonne, ed e' lo stato per cui
+  // `.stat__value` dichiara `grid-column: -2`: gli importi restano sul bordo
+  // destro invece di cadere nella colonna del grafico.
   const bordi = await page.evaluate(() => {
     const valori = [
       ...document.querySelectorAll('.stats__section')[0]!.querySelectorAll('.stat__value'),
     ]
     return valori.map((v) => Math.round(v.getBoundingClientRect().right * 100) / 100)
   })
-  expect(bordi.length, 'meno di cinque righe: il caso misto non e\' in scena').toBe(5)
   expect(
     [...new Set(bordi)],
     `gli importi delle due parti non sono incolonnati: ${JSON.stringify(bordi)}`,
@@ -2279,18 +2426,24 @@ for (const scena of [
     ).toHaveCount(1)
     await expect(page.locator('.stats')).not.toContainText(dizionario['stats.byPeriod.weekly'])
 
-    // E la scheda `Quotidiane` non c'e' piu': se tornasse, questo test
-    // continuerebbe a passare per il motivo sbagliato — il confine ci sarebbe
-    // due volte, e non si saprebbe quale dei due lo tiene in vita.
-    await expect(
-      page.locator('.tile__label').filter({ hasText: dizionario['stats.variable'] }),
-      'la scheda delle quotidiane e\' tornata: ripete il totale della parte qui sotto',
-    ).toHaveCount(0)
-
     // Il fatto: una data c'e', ed e' quella della Home.
     // `confineDiA` fallisce da sola se il titolo non nomina niente: la guardia
     // sulla stringa vuota vive li', dove serve a tutti i chiamanti.
     const confine = await confineDiA(page)
+
+    // **E ce n'e' una sola.** Qui c'era un controllo sul ritorno della scheda
+    // `Quotidiane` (`.tile__label`), che era il secondo posto in cui il confine
+    // veniva scritto. Quella classe non esiste piu', quindi quel controllo era
+    // diventato vero per sempre — un'asserzione su un selettore morto non
+    // sorveglia niente. Il fatto che difendeva pero' vale ancora, e si scrive
+    // meglio: **il confine del periodo compare una volta sola**, chiunque lo
+    // scriva. Cosi' non nomina la forma che sta osservando, e vale anche per la
+    // prossima.
+    const volte = ((await page.locator('.stats').innerText()).split(confine).length) - 1
+    expect(
+      volte,
+      `il confine del periodo e' scritto ${volte} volte: non si sa quale dei due lo tenga in vita`,
+    ).toBe(1)
 
     await page.getByRole('button', { name: /^Home$/ }).click()
     await expect(page.locator('.home')).toBeVisible()

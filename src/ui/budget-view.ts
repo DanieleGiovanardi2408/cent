@@ -162,12 +162,21 @@ export function heroCopy(m: BudgetMetrics): HeroCopy {
       over: false,
     }
   }
+  const over = m.remainingCents < 0
   return {
-    label: t('hero.remaining'),
+    // **La parola segue il segno.** `over` era gia' calcolato e guidava il
+    // colore (`data-tone`) senza toccare l'etichetta: "Restano −88,00 €" e' una
+    // contraddizione, ed e' vissuta dalla fase 4 perche' il fatto c'era ed era
+    // usato per la decorazione invece che per la frase.
+    //
+    // Il numero **non** perde il segno per farlo: l'argomento sopra questa
+    // funzione — un residuo che ricomincia a salire mentre si spende — vale
+    // identico adesso. Cambia solo cio' che lo nomina.
+    label: t(over ? 'hero.over' : 'hero.remaining'),
     value: money(m.remainingCents),
     note: t('hero.note', { budget: money(m.budgetCents), spent: money(m.spentCents) }),
     fixed,
-    over: m.remainingCents < 0,
+    over,
   }
 }
 
@@ -255,22 +264,45 @@ export function startNote(m: BudgetMetrics, start: BudgetStart): string | null {
 }
 
 export interface AllowanceCopy {
-  /** La riga piu' utile della schermata. */
-  readonly main: string
-  readonly sub: string
+  /**
+   * **Il livello 3 della Home: una riga sola, e l'unica azionabile.**
+   *
+   * Erano due — `main` in 20px e `sub` in 13px — e la seconda non aggiungeva un
+   * fatto: lo riformulava. `Il budget del periodo e' finito.` sopra
+   * `Restano 2 giorni: quello che spendi da qui e' in piu'.` sono due frasi per
+   * cio' che il numero grande, negativo e ambra, ha gia' detto due volte.
+   *
+   * **Una stringa e non pezzi**, a differenza di `paceParts`: li' il grassetto
+   * serve perche' la frase e' muta e i numeri devono staccarsi da lei. Qui la
+   * riga e' gia' tutta in 20px semibold sul colore del testo — e' *la* riga
+   * della schermata dopo il numero grande — quindi un grassetto dentro un
+   * grassetto non distinguerebbe niente, e spezzare la frase in quattro chiavi
+   * per ottenerlo la renderebbe solo piu' difficile da tradurre.
+   */
+  readonly text: string
   readonly over: boolean
 }
 
 /**
+ * Quanto si puo' spendere, in **una riga**.
+ *
  * "Puoi spendere ~X al giorno": rimanente diviso i giorni che restano, **gia'
  * calcolato**. E' il numero per cui si apre l'app quando non si sta pagando.
+ *
+ * ## Perche' i giorni sono dentro questa riga e non sotto
+ *
+ * Perche' erano l'unica cosa che il sottotitolo aggiungeva davvero (*"per i 2
+ * che restano, oggi compreso"*), e un fatto che serve non si toglie: si cuce
+ * dentro la frase che lo reggeva. Il resto del sottotitolo — *"domani riparte
+ * da capo"*, *"quello che spendi da qui e' in piu'"* — era parafrasi.
  *
  * I due casi in cui `dailyAllowanceCents` e' `null` non diventano un trattino:
  *
  * - **residuo negativo** (`divideCents` arrotonda verso il basso, quindi qui
  *   darebbe un numero negativo "da recuperare": ma le spese non si disfano, e
- *   un tetto giornaliero negativo non e' una cosa che si possa fare). Si dice
- *   che il budget e' finito e quanti giorni mancano, senza aggiungere altro;
+ *   un tetto giornaliero negativo non e' una cosa che si possa fare). Al suo
+ *   posto va il **passo**, che e' l'unico numero ancora azionabile quando non
+ *   c'e' piu' niente da spendere;
  * - **periodo finito** (`daysRemaining === 0`): dalla Home non e' raggiungibile,
  *   perche' il periodo si calcola sempre intorno a oggi e oggi e' sempre dentro.
  *   Resta scritto lo stesso: e' un ramo che una schermata futura (un periodo
@@ -294,10 +326,29 @@ export interface AllowanceCopy {
  * prossimo. Tono neutro, quindi `over: false`: l'ambra dice "hai sforato", e qui
  * nessuno ha sforato. Il numero grande resta col segno e resta ambra, perche'
  * quello e' il residuo del periodo e ADR 010 non lo tocca.
+ *
+ * ## Perche' qui ci sono al massimo **due** velocita' al giorno, e non tre
+ *
+ * La schermata ne aveva tre insieme: la disponibilita' (`~44,00 €`), il passo
+ * tenuto (`18,66 €`) e il passo sostenibile (`28,57 €`). Tre numeri con la
+ * stessa unita' e tre significati diversi, a due righe di distanza: per sapere
+ * quale sia quale bisogna rileggere, e chi guarda per mezzo secondo non
+ * rilegge.
+ *
+ * La divisione e' per **stato**, non per gusto:
+ *
+ * - finche' resta qualcosa, l'unico numero che serve e' **quanto si puo'
+ *   spendere**. Il passo tenuto e quello sostenibile rispondono a una domanda
+ *   che la disponibilita' ha gia' chiuso;
+ * - quando non resta niente, la disponibilita' **non esiste** (sarebbe
+ *   negativa), e allora i due numeri utili sono il passo tenuto e quello
+ *   sostenibile — che dicono di quanto si sta andando oltre.
+ *
+ * In nessuno dei due stati ce ne sono tre.
  */
 export function allowanceCopy(m: BudgetMetrics, start: BudgetStart): AllowanceCopy {
   if (m.daysRemaining === 0) {
-    return { main: t('allowance.closed.main'), sub: t('allowance.closed.sub'), over: false }
+    return { text: t('allowance.closed'), over: false }
   }
   const daily = m.dailyAllowanceCents
   const exhausted = daily === null || daily === 0 || m.remainingCents === null || m.remainingCents < 0
@@ -311,15 +362,33 @@ export function allowanceCopy(m: BudgetMetrics, start: BudgetStart): AllowanceCo
     m.remainingCents + start.beforeCents > 0
   ) {
     return {
-      main: t(m.period === 'weekly' ? 'allowance.late.weekly' : 'allowance.late.monthly'),
-      sub: t('allowance.late.sub', { from: fromDayLabel(m.period, addDays(m.range.end, 1)) }),
+      text: t(m.period === 'weekly' ? 'allowance.late.weekly' : 'allowance.late.monthly', {
+        from: fromDayLabel(m.period, addDays(m.range.end, 1)),
+      }),
       over: false,
     }
   }
   if (exhausted) {
+    const days = daysLabel(m.daysRemaining)
+    // Il primo giorno del periodo non c'e' nessun passo da confrontare
+    // (`currentPaceCents` e' `null`: una media su un giorno appena iniziato e'
+    // l'ultima spesa, non un passo — vedi `budget.ts`). Restano i giorni, da
+    // soli. **E' uno stato raggiungibile**, non un ramo teorico: basta spendere
+    // in un giorno piu' del budget dell'intera settimana.
+    if (m.currentPaceCents === null || m.sustainablePaceCents === null) {
+      return { text: t('allowance.left', { days }), over: true }
+    }
+    // I giorni **davanti**, perche' sono la cosa su cui si puo' ancora
+    // decidere; i due passi dietro, perche' dicono di quanto si sta andando
+    // oltre. Non c'e' nessun verdetto in testa ("Sopra ritmo:"): lo dicono i
+    // due numeri accostati, e lo hanno gia' detto il segno e il colore del
+    // numero grande.
     return {
-      main: t('allowance.over.main'),
-      sub: t('allowance.over.sub', { days: daysLabel(m.daysRemaining) }),
+      text: t('allowance.over', {
+        days,
+        pace: money(m.currentPaceCents),
+        sustainable: money(m.sustainablePaceCents),
+      }),
       over: true,
     }
   }
@@ -332,23 +401,18 @@ export function allowanceCopy(m: BudgetMetrics, start: BudgetStart): AllowanceCo
   // Visto sul dispositivo nella sua forma peggiore: la riga grande diceva
   // "Puoi spendere ~128,55 € al giorno" e il sottotitolo la smentiva subito con
   // "per oggi, che e' l'ultimo giorno". Due frasi che si contraddicono nello
-  // spazio di due righe.
+  // spazio di due righe. Adesso la riga e' una sola e il caso ha una frase sua.
   if (m.daysRemaining === 1) {
-    return {
-      main: t('allowance.last.main', { amount: money(daily) }),
-      sub: t('allowance.last.sub'),
-      over: false,
-    }
+    return { text: t('allowance.last', { amount: money(daily) }), over: false }
   }
   return {
-    main: t('allowance.main', { amount: money(daily) }),
-    sub: t('allowance.sub', { days: daysLabel(m.daysRemaining) }),
+    text: t('allowance.main', { amount: money(daily), days: daysLabel(m.daysRemaining) }),
     over: false,
   }
 }
 
 /**
- * Passo attuale contro passo sostenibile.
+ * Il passo tenuto finora, **e solo dove non c'e' un budget**.
  *
  * `currentPaceCents` e' `null` il primo giorno del periodo, e la ragione la dice
  * `budget.ts`: una media su un giorno appena iniziato non e' un passo, e'
@@ -358,6 +422,20 @@ export function allowanceCopy(m: BudgetMetrics, start: BudgetStart): AllowanceCo
  * Senza budget il passo esiste comunque, e si dice: e' l'unica cosa vera che si
  * puo' dire a chi non ha ancora un budget, ed e' anche l'argomento migliore per
  * impostarne uno.
+ *
+ * ## Il confronto col sostenibile non e' piu' qui, e non e' un taglio
+ *
+ * `sustainablePaceCents` e' `budget / giorni`, quindi **e' `null` esattamente
+ * quando questa funzione e' l'unica cosa a schermo**: il ramo del verdetto
+ * ("Sopra ritmo: X contro Y sostenibili") era raggiungibile **solo** con un
+ * budget, cioe' nell'unico stato in cui la Home mostrava gia' la
+ * disponibilita' al giorno. Erano tre velocita' insieme.
+ *
+ * Adesso quel confronto vive in `allowanceCopy`, nello stato in cui e' l'unico
+ * numero rimasto — sforato — e qui resta cio' che serve a chi un tetto non ce
+ * l'ha. La condizione e' scritta nel tipo: con `sustainablePaceCents === null`
+ * il verdetto non aveva niente contro cui misurare, e senza budget non ce l'ha
+ * mai.
  */
 export function paceParts(m: BudgetMetrics): readonly Segment[] {
   // Prima ancora del primo giorno: senza spese il passo sarebbe `0,00 € al
@@ -368,19 +446,9 @@ export function paceParts(m: BudgetMetrics): readonly Segment[] {
   if (m.currentPaceCents === null) {
     return [{ text: t('pace.firstDay') }]
   }
-  const now: Segment = { text: money(m.currentPaceCents), strong: true }
-  if (m.sustainablePaceCents === null) {
-    return [{ text: t('pace.soFar.before') }, now, { text: t('pace.soFar.after') }]
-  }
-  // Il verdetto in testa, non in fondo: e' la prima parola che si legge, e su
-  // due righe di testo grigio e' l'unica che si legge sempre. "Sopra ritmo" non
-  // e' un rimprovero, e' dove sei — infatti la frase che segue e' identica.
-  const verdict = m.currentPaceCents > m.sustainablePaceCents ? t('pace.above') : t('pace.below')
   return [
-    { text: verdict },
-    now,
-    { text: t('pace.against') },
-    { text: money(m.sustainablePaceCents), strong: true },
-    { text: t('pace.sustainable') },
+    { text: t('pace.soFar.before') },
+    { text: money(m.currentPaceCents), strong: true },
+    { text: t('pace.soFar.after') },
   ]
 }

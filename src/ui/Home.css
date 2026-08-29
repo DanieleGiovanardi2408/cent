@@ -63,43 +63,69 @@
    * stesso ripiego che `.sheet__hint` tiene accanto al suo `1lh`, per lo stesso
    * motivo: lo stesso numero, scritto a mano. */
   --line-allowance: calc(var(--fs-400) * var(--lh-snug)); /* .allowance */
-  --line-note: calc(var(--fs-100) * var(--lh-snug)); /* .allowance__sub, .since */
+  --line-note: calc(var(--fs-100) * var(--lh-snug)); /* .since, .fixed */
   --line-pace: calc(var(--fs-200) * var(--lh-body)); /* .pace, .invite */
 
   /* **Quante** righe ciascuna puo' prendere. Sono i numeri misurati, in
    * italiano e in inglese, su tutti gli stati del riquadro:
    *
-   * - `.allowance` due, e non e' un margine di sicurezza: "The budget for this
-   *   period is used up." va a capo a 375 punti, e "Puoi spendere ~18.000,00 €
-   *   al giorno" pure. A una riga sola questa e' la prima cosa che sfonda;
-   * - `.allowance__sub` una: e' 13px, e la piu' lunga ("Ultimo giorno del
-   *   periodo: domani riparte da capo.") sta in una riga sopra i 360 punti;
+   * - `.allowance` due, e non e' un margine di sicurezza: a 20px la riga dello
+   *   sforo ("2 giorni alla fine del periodo · 48,00 € al giorno contro 28,57 €
+   *   sostenibili") e "Puoi spendere ~18.000,00 € al giorno per 6 giorni" vanno
+   *   a capo. A una riga sola questa e' la prima cosa che sfonda;
    * - `.since` due: la frase di ADR 010 e' la piu' lunga del riquadro in
    *   entrambe le lingue, e a `42ch` prende sempre due righe;
-   * - `.pace` due: al massimo "Sopra ritmo: X al giorno contro Y sostenibili."
-   *   con due importi a cinque cifre.
+   * - `.fixed` una: e' 13px con `nowrap`, quindi una per costruzione;
+   * - `.pace` **una** sopra i 360 punti: "Finora stai spendendo 18.000,00 € al
+   *   giorno." ci sta, misurato in tutte e due le lingue. Sotto ne prende due, e
+   *   la media query lo dice;
+   * - `.invite` tre, ed e' l'inglese a deciderlo: "With a budget this line
+   *   becomes how much you can spend today, instead of how much you have
+   *   already spent." va a capo due volte.
    *
-   * Lo stato senza budget non compare qui perche' e' piu' basso: invito (tre
-   * righe in inglese) piu' passo fanno 132,5px contro i 197,75 di questo. */
+   * **`--rows-sub` non c'e' piu'** perche' non c'e' piu' la riga: la
+   * disponibilita' e il suo dettaglio erano due frasi per un fatto, e i giorni
+   * — l'unica cosa che il dettaglio aggiungeva — sono finiti dentro la frase
+   * che li reggeva gia'. */
   --rows-allowance: 2;
-  --rows-sub: 1;
   --rows-since: 2;
-  --rows-pace: 2;
+  --rows-fixed: 1;
+  --rows-pace: 1;
+  --rows-invite: 3;
 
   /* Il riquadro sotto il numero grande. **E' l'unica altezza riservata di
    * questa parte**, e le righe dentro non ne hanno una loro: cosi' lo spazio
    * che avanza si raccoglie tutto in fondo al riquadro — prima del bottone del
    * budget, dove non si nota — invece di aprire un buco fra una riga e l'altra.
    *
-   * La somma e' la colonna vera, gap per gap: aria sopra, barra, e poi le
-   * quattro frasi con lo spazio che le separa. A 375 e 390 punti fa 197,75px,
-   * ed e' **esattamente** l'altezza dello stato piu' alto misurato — non un
-   * pixel di piu', altrimenti la riserva comincerebbe a nascondere le righe di
-   * troppo invece di lasciarle vedere al gate. */
-  --slot-min: calc(
-    var(--sp-3) + var(--track-h) + var(--sp-2) + var(--rows-allowance) * var(--line-allowance) +
-      var(--sp-2) + var(--rows-sub) * var(--line-note) + var(--sp-2) + var(--rows-since) *
-      var(--line-note) + var(--sp-2) + var(--rows-pace) * var(--line-pace)
+   * **Adesso sono due somme e un `max()`, e prima era una sola.** Il commento
+   * diceva *"lo stato senza budget non compare qui perche' e' piu' basso"*, e
+   * ha smesso di essere vero quando la colonna col budget e' dimagrita di tre
+   * righe: 144,75px contro i 156,75 dello stato senza. Scrivere la sola somma
+   * piu' alta avrebbe lasciato un numero giusto **per caso** e falso al
+   * prossimo taglio — che e' esattamente il difetto per cui questa riserva ha
+   * smesso di essere un `rem` tondo. Le due somme stanno scritte tutte e due, e
+   * quale vinca lo decide `max()` invece di un commento.
+   *
+   * La somma e' la colonna vera, gap per gap. Col budget: aria sopra, barra,
+   * la riga della disponibilita', la nota di ADR 010, la nota delle fisse.
+   * Senza: aria, invito, passo, nota delle fisse.
+   *
+   * Da 197,75px a 156,75: **41px in meno**, e sono lo spazio morto fra l'ultima
+   * riga e il bottone del budget che si vedeva a schermo. Cio' che resta e' la
+   * riserva di `.since` — due righe che compaiono per un periodo solo nella
+   * vita di un utente — e non si puo' togliere: senza, l'arrivo dei dati
+   * sposterebbe le spese di oggi, cioe' CLS sulla prima schermata dell'app. */
+  --slot-min: max(
+    calc(
+      var(--sp-3) + var(--track-h) + var(--sp-2) + var(--rows-allowance) * var(--line-allowance) +
+        var(--sp-2) + var(--rows-since) * var(--line-note) + var(--sp-2) + var(--rows-fixed) *
+        var(--line-note)
+    ),
+    calc(
+      var(--sp-3) + var(--rows-invite) * var(--line-pace) + var(--sp-2) + var(--rows-pace) *
+        var(--line-pace) + var(--sp-2) + var(--rows-fixed) * var(--line-note)
+    )
   );
   /* Lo stato vuoto di oggi non e' mezza schermata come nello Storico: sopra c'e'
    * gia' tutto il periodo. */
@@ -176,24 +202,35 @@
   text-overflow: ellipsis;
 }
 
-/* Le spese fisse che il numero grande non conta (ADR 016 §2).
+/* Le spese fisse che il numero grande non conta (ADR 016 §2): il livello 4.
+ *
+ * **Il nome e' `slot__fixed` e non `fixed`, e la differenza si e' vista a
+ * schermo**: `FixedCosts.css` ha gia' una `.fixed` — l'elenco delle regole in
+ * Impostazioni — con bordo, raggio e margine. Con il nome corto questa riga li
+ * ereditava tutti: misurata 18,3 px invece dei 16,25 che la riserva dichiara,
+ * cioe' un bordo da 1 px per lato intorno a una didascalia. Non l'ha preso
+ * nessuna verifica; l'ha preso la misura fatta dopo la correzione.
+ *
+ * **Sta in fondo al riquadro e non piu' sotto il numero grande.** Li' erano due
+ * didascalie appaiate — il dettaglio del budget e questa — e la seconda si
+ * leggeva come la coda della prima invece che come un fatto suo. In fondo e'
+ * una nota, che e' quello che e'.
  *
  * Stessa voce del dettaglio sopra — muta, non allarmata: non e' un avviso, e'
  * la dichiarazione di cosa quel numero misura. Niente `--over` e niente
  * grassetto: chi ha l'affitto in mezzo al mese non ha fatto niente di strano.
  *
- * L'altezza e' riservata **sempre**, anche quando la riga e' vuota. Non e' lo
- * spazio buttato che sembra: questa riga compare e sparisce con il periodo (la
- * settimana in cui scatta il canone si', la successiva no), quindi senza
- * riserva sarebbe un salto **ricorrente**, non uno all'apertura. E' la stessa
- * scelta di `.since` dentro `--slot-min`, per la stessa ragione: qualche pixel
- * vuoto costa meno di un salto.
+ * L'altezza e' riservata **sempre**, anche quando la riga e' vuota — dentro
+ * `--slot-min`, adesso, invece che qui. Non e' lo spazio buttato che sembra:
+ * questa riga compare e sparisce con il periodo (la settimana in cui scatta il
+ * canone si', la successiva no), quindi senza riserva sarebbe un salto
+ * **ricorrente**, non uno all'apertura.
  *
- * `nowrap` come `.hero__note`: la frase e' corta in entrambe le lingue
- * ("oltre a 1.040,00 € di spese fisse", "on top of €1,040.00 in fixed costs")
- * ma l'importo puo' arrivare a nove caratteri, e a 320 punti va troncato invece
- * di prendersi una seconda riga che la riserva non ha. */
-.hero__fixed {
+ * `nowrap` come `.hero__note`: la frase e' corta in entrambe le lingue ("Fuori
+ * dal conto: 1.040,00 € di spese fisse", "Not counted: €1,040.00 in fixed
+ * costs") ma l'importo puo' arrivare a nove caratteri, e a 320 punti va
+ * troncato invece di prendersi una seconda riga che la riserva non ha. */
+.slot__fixed {
   min-block-size: calc(1em * var(--lh-snug));
   font-size: var(--fs-100);
   line-height: var(--lh-snug);
@@ -255,12 +292,6 @@
  * fatto (numero col segno, questa riga, barra piena). */
 .allowance[data-tone="over"] {
   color: var(--over);
-}
-
-.allowance__sub {
-  font-size: var(--fs-100);
-  line-height: var(--lh-snug);
-  color: var(--text-muted);
 }
 
 /* Da quando vale il budget, quando e' nato a periodo gia' cominciato (ADR 010).
@@ -348,20 +379,21 @@
  * riserva dipende dalla larghezza perche' il **numero di righe** dipende dalla
  * larghezza — e a parita' di larghezza guscio e dati riservano lo stesso.
  *
- * Qui cambia una cosa sola, ed e' quella misurata: il dettaglio sotto la
- * disponibilita' va a capo ("Ultimo giorno del periodo: domani riparte da
- * capo.", "Restano 5 giorni: quello che spendi da qui e' in piu'"). Tutte le
- * altre righe prendono lo stesso numero di righe di prima — a 320 punti la
- * disponibilita' ne prende gia' due anche sopra i 360, ed e' per questo che ne
- * dichiara due dappertutto.
+ * Qui cambia una cosa sola, ed e' quella misurata: **la riga della
+ * disponibilita' prende tre righe invece di due**. A 20px e 288px di colonna,
+ * lo stato sforato — "2 giorni alla fine del periodo · 48,00 € al giorno contro
+ * 28,57 € sostenibili" — non ci sta in due, e con importi a quattro cifre non ci
+ * sta nemmeno a 375. Tutte le altre righe prendono lo stesso numero di prima.
  *
- * Prima qui c'era `14.5rem`, cioe' 232px: 18 in piu' del necessario, presi per
- * un passo a tre righe che a questa larghezza non si e' mai misurato. La
- * differenza fra le due scritture non e' il valore, sono i 18px che nessuno
- * sapeva di stare pagando. */
+ * Qui c'era `--rows-sub: 2`, per la riga di dettaglio che adesso non esiste
+ * piu': il caso che copriva — "Restano 5 giorni: quello che spendi da qui e' in
+ * piu'" a 13px — e' finito dentro la riga sopra, a 20px, cioe' esattamente dove
+ * costa di piu'. La riserva non e' stata tolta: si e' spostata su chi ha preso
+ * il posto. */
 @media (max-width: 359px) {
   .home {
-    --rows-sub: 2;
+    --rows-allowance: 3;
+    --rows-pace: 2;
   }
 }
 

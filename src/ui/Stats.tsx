@@ -1,10 +1,17 @@
 import { Fragment } from 'preact'
-import { useMemo } from 'preact/hooks'
+import { useMemo, useState } from 'preact/hooks'
 import type { Budget, BudgetPeriod, Category, Expense, RecurringRule } from '../core/types'
 import type { IsoDate } from '../core/date'
 import { daysLabel, money, periodRangeLabel, t } from './i18n'
 import { statsView } from './stats-view'
-import type { Breakdown, BreakdownSection, CategorySlice, PeriodBar, Trend } from './stats-view'
+import type {
+  Breakdown,
+  BreakdownSection,
+  BreakdownSplit,
+  CategorySlice,
+  PeriodBar,
+  Trend,
+} from './stats-view'
 import './Stats.css'
 
 /**
@@ -291,6 +298,8 @@ function Row({
 function Categories({
   breakdown,
   range,
+  showFixed,
+  onToggleFixed,
 }: {
   readonly breakdown: Breakdown
   /**
@@ -312,73 +321,132 @@ function Categories({
    * pixel piu' sotto) **non nomina il confine**, quindi non lo copre.
    */
   readonly range: string
+  readonly showFixed: boolean
+  readonly onToggleFixed: () => void
 }) {
-  const sections = breakdown.sections
-  if (sections.length === 0) return null
+  const { sections, split, asChart } = breakdown
+
+  // **A si disegna anche senza sezioni, se a svuotarla e' stato l'utente.**
+  //
+  // Con il selettore spento in un periodo di sole spese fisse — la settimana in
+  // cui esce solo l'affitto, cioe' il caso che ADR 016 da' per scontato — il
+  // modello consegna zero sezioni e nessuna divisione (una meta' e' zero). Se
+  // questo componente uscisse su `sections.length === 0` come faceva prima,
+  // **sparirebbe anche il selettore**: l'utente resterebbe chiuso fuori dai
+  // propri dati esattamente dentro il ramo in cui l'unico interruttore che li
+  // riaccende non si disegna piu'.
+  //
+  // La condizione quindi non guarda le righe: guarda **chi le ha tolte**.
+  if (sections.length === 0 && showFixed) return null
+
+  // Il totale del periodo, che e' cio' che rendeva monco `DOVE SONO FINITI ·
+  // 24–30 AGO`: finiti *quanto?* Viene dalla divisione quando c'e', perche' li'
+  // e' gia' calcolato sulle due meta'; altrimenti dalle sezioni, che ne hanno
+  // una sola — e la somma di una sezione sola e' la sezione.
+  //
+  // **Non cambia quando si spengono le fisse**, ed e' voluto: e' il totale del
+  // periodo, non il totale di cio' che si sta guardando. Resta verificabile
+  // perche' le due meta' che lo compongono sono scritte sulle due intestazioni,
+  // e quella nascosta porta comunque la sua cifra.
+  const totalCents = split === null ? sectionsTotal(sections) : split.fixedCents + split.variableCents
+
+  const fixedSection = sections.find((part) => part.kind === 'fixed')
+
   return (
     // `data-chart` sta sulla **sezione** e non sull'elenco perche' le colonne
-    // sono della sezione: e' li' che si decide se ce ne sono tre o due. Basta
-    // che una parte abbia barre — l'altra tiene la colonna del grafico vuota,
-    // che e' il modo onesto di dire "qui le barre non ci sono" senza spostare le
-    // righe dell'altra.
-    <section class="stats__section" data-chart={sections.some((p) => p.asChart) ? '' : undefined}>
-      {/* "Dove sono finiti · 17–23 ago". La domanda del titolo ha bisogno di un
-          "quando", ed e' la stessa etichetta — stessa funzione, stesso locale —
-          che B stampa sulla propria riga corrente e che lo stato `outside`
-          infila nella frase. Non e' una terza copia: e' l'unica, spostata dove
-          non puo' piu' sparire con una scheda. */}
-      <h2 class="stats__title">
-        {t('stats.byCategory')}
-        {' · '}
-        {/* Il confine sta in un elemento suo, e non e' per lo stile: e' l'unico
-            posto in cui questa schermata scrive `periodRangeLabel` quando le
-            righe ci sono, e un test lo legge di li' invece di ritagliarlo dal
-            titolo — dove `text-transform: uppercase` glielo restituirebbe in
-            maiuscolo, cioe' diverso da come lo scrive `Intl`. */}
-        <span class="stats__titleRange">{range}</span>
-      </h2>
+    // sono della sezione: e' li' che si decide se ce ne sono tre o due. E la
+    // decisione arriva dal modello gia' presa **sull'insieme**: da quando la
+    // scala e' una sola, "questa parte ha poche righe" non e' piu' una domanda
+    // che qualcuno possa fare a una parte per volta.
+    <section class="stats__section" data-chart={asChart ? '' : undefined}>
+      {/* "Dove sono finiti · 17–23 ago  642,00 €". La domanda del titolo ha
+          bisogno di un "quando" e di un "quanto": senza il secondo era una
+          domanda senza risposta in cima a una schermata che esiste per
+          rispondere.
+
+          Il totale sta in un elemento suo dentro la riga del titolo e non
+          dentro l'`<h2>`: l'intestazione resta la domanda — un test la legge
+          intera — e la cifra e' un dato che le sta accanto, incolonnato sul
+          bordo destro come tutti gli importi di questa schermata. */}
+      <div class="stats__head">
+        <h2 class="stats__title">
+          {t('stats.byCategory')}
+          {' · '}
+          {/* Il confine sta in un elemento suo, e non e' per lo stile: e' l'unico
+              posto in cui questa schermata scrive `periodRangeLabel` quando le
+              righe ci sono, e un test lo legge di li' invece di ritagliarlo dal
+              titolo — dove `text-transform: uppercase` glielo restituirebbe in
+              maiuscolo, cioe' diverso da come lo scrive `Intl`. */}
+          <span class="stats__titleRange">{range}</span>
+        </h2>
+        {totalCents === null ? null : (
+          <span class="stats__titleTotal">{money(totalCents)}</span>
+        )}
+      </div>
+
+      {split === null ? null : <Split split={split} />}
+
+      {/* **L'intestazione delle fisse si disegna anche quando la sezione non
+          c'e'**, e non e' una duplicazione: e' l'unico posto in cui vive il
+          selettore, e un selettore che sparisce insieme a cio' che nasconde e'
+          un vicolo cieco. Porta con se' la cifra nascosta, cosi' spegnere le
+          righe non spegne il fatto (ADR 016 §1). */}
+      {fixedSection === undefined && (split !== null || !showFixed) ? (
+        <PartHead
+          kind="fixed"
+          amount={split === null ? null : money(split.fixedCents)}
+          showFixed={showFixed}
+          onToggleFixed={onToggleFixed}
+        />
+      ) : null}
+
       {sections.map((part: BreakdownSection) => (
         <Fragment key={part.kind}>
-          {/* Il nome della natura e il suo totale **del periodo**. Le due parole
-              **Le due etichette non sono simmetriche, e non e' una svista.** Le
-              variabili riusano `stats.variable`, la stessa parola che nomina le
-              quotidiane ovunque compaiano,
-              perche' li' la scheda e questa riga sono lo stesso numero. Le fisse
-              no: la scheda e' una previsione **al mese**, questa e' quanto e'
-              uscito **nel periodo**, e con la stessa parola le due si
-              contraddicono a schermo — misurato, la scheda leggeva `0,00 € ogni
-              mese` sopra un `Spese fisse 620,00 €`, che e' il caso di una regola
-              disattivata dopo aver generato la spesa. Cioe' quello che l'app
-              stessa consiglia di fare (`toast.ruleInUse`).
-
-              Non c'e' un `<div>` a raccogliere titolo ed elenco: sarebbe un box
-              in mezzo fra la sezione e le sue colonne, e `subgrid` non
-              attraversa un box che non sia lui stesso una griglia. La
-              separazione fra le due parti sta quindi sul titolo della seconda
-              (`.stats__rows + .stats__partTitle`). */}
-          <h3 class="stats__partTitle">
-            <span class="stats__partName">
-              {t(part.kind === 'fixed' ? 'stats.fixedInPeriod' : 'stats.variable')}
-            </span>
-            {/* **Il totale c'e' solo se le righe sono piu' di una**, e non e' un
-                `?? 0` mancato: sul ramo `single` il campo `totalCents`
-                **non esiste** (`BreakdownSection`), quindi disegnarlo non
-                compila. Il discriminante e' l'unico modo di leggerlo.
-
-                La ragione, scritta qui perche' e' qui che si vede: con una riga
-                sola il totale **e'** quella riga, incolonnato sullo stesso bordo
-                destro. Misurato, la parte fisse con una regola sola — cioe' il
-                canone, il caso modale — dava `Fisse in questo periodo 900,00 €`
-                e ventotto pixel sotto `Casa 900,00 €`: la stessa stringa due
-                volte. L'invariante che giustifica quella cifra (*"e' sempre la
-                somma delle righe"*) con una riga e' vacuo, e cio' che serviva
-                davvero — confrontare fisse e variabili fra loro, che le due
-                schede in testa non possono fare perche' una e' al mese — con una
-                riga lo fa gia' la riga. */}
-            {part.single ? null : (
-              <span class="stats__partTotal">{money(part.totalCents)}</span>
-            )}
-          </h3>
+          <PartHead
+            kind={part.kind}
+            // **Il totale di sezione esiste solo quando le sezioni sono due**,
+            // e la condizione va derivata qui perche' qui e' cambiata la stanza.
+            //
+            // Da quando il titolo di A porta il totale del periodo, quel numero
+            // e' gia' a schermo quaranta pixel piu' su. Con **una sezione sola**
+            // il totale della sezione **e'** quello del periodo — non ci sono
+            // altre righe da cui differire — quindi riscriverlo qui e' scriverlo
+            // due volte: misurato su una settimana di sole spese a mano,
+            // `70,00 €` sul titolo e `70,00 €` sull'intestazione. E' lo stesso
+            // argomento che `part.single` fa una riga piu' in basso — *"con una
+            // riga sola il totale e' quella riga"* — applicato un livello sopra,
+            // con "riga" che diventa "sezione".
+            //
+            // Con **due sezioni** il totale del titolo e' la loro somma, e
+            // nessuna delle due la si puo' ricavare guardando: la quota di
+            // ciascuna e' un numero suo, e senza di lei la barra divisa qui sopra
+            // resterebbe una forma senza cifre — cioe' l'etichetta diretta che
+            // `0b` chiede espressamente di scrivere.
+            //
+            // La sorgente e' `split` e non `part.totalCents`: sono la stessa
+            // cifra dalla stessa sorgente (il modello lo dichiara), e leggere
+            // quella che esiste **solo** nel ramo a due sezioni fa fallire la
+            // compilazione se un domani questa condizione tornasse larga.
+            //
+            // Che l'etichetta diretta della barra sia **questa intestazione** e
+            // non una riga sotto la barra e' l'altra meta' della stessa scelta:
+            // una riga in piu' avrebbe ripetuto anche i due **nomi** — `Spese
+            // fisse` sopra `Fisse in questo periodo` a sessanta pixel — e sarebbe
+            // costata una riga sopra B, che e' esattamente cio' che manca al
+            // confronto settimanale per stare sopra la piega. La pastiglia
+            // (`.stats__partName::before`) fa il legame con il segmento.
+            //
+            // Il ramo `single` vince su tutto e per la sua ragione: con una riga
+            // sola il totale **e'** quella riga, ventotto pixel sotto e
+            // incolonnata sullo stesso bordo destro.
+            amount={
+              part.single || split === null
+                ? null
+                : money(part.kind === 'fixed' ? split.fixedCents : split.variableCents)
+            }
+            showFixed={showFixed}
+            onToggleFixed={onToggleFixed}
+          />
           <ul class="stats__rows">
             {part.rows.map((row: CategorySlice) => (
               // L'aggregato delle orfane e' uno per parte, e le due non si
@@ -402,13 +470,180 @@ function Categories({
                 amount={money(row.cents)}
                 fraction={row.fraction}
                 color={fill(row)}
-                bar={part.asChart}
+                bar={asChart}
               />
             ))}
           </ul>
         </Fragment>
       ))}
+
+      {/* **Non e' "non c'e' niente": e' "l'hai nascosto tu".**
+          Le due frasi descrivono lo stesso schermo vuoto e mandano a fare due
+          cose opposte — la prima a segnare una spesa, la seconda a riaccendere
+          l'interruttore che sta due righe sopra. Dirlo com'e' e' anche l'unico
+          modo perche' non sembri un guasto. */}
+      {sections.length === 0 ? <p class="stats__hidden">{t('stats.hiddenAll')}</p> : null}
     </section>
+  )
+}
+
+/**
+ * Il totale delle sezioni a schermo, o `null` se non ce ne sono.
+ *
+ * Somma i **totali gia' calcolati** invece di ripassare sulle righe: sul ramo a
+ * piu' righe il modello promette che `totalCents` e' la somma delle sue righe
+ * (`BreakdownSection`), e sul ramo `single` la riga sola **e'** il totale. Due
+ * espressioni per lo stesso numero sarebbero una copia da tenere allineata.
+ *
+ * Si usa solo dove `split` e' `null`, cioe' dove una delle due meta' e' zero e
+ * quindi le sezioni sono al massimo una: e' la somma di un addendo, scritta
+ * come somma perche' il tipo non sa che ce n'e' uno solo.
+ */
+function sectionsTotal(sections: readonly BreakdownSection[]): number | null {
+  if (sections.length === 0) return null
+  return sections.reduce(
+    (sum, part) => sum + (part.single ? part.rows[0].cents : part.totalCents),
+    0,
+  )
+}
+
+/**
+ * **La barra divisa: due terzi sono l'affitto, e prima non si vedeva da nessuna
+ * parte.**
+ *
+ * Porta la proporzione fisse/quotidiane del periodo e libera A dal doverla
+ * raccontare riga per riga: e' il fatto dominante della schermata, e con la
+ * scala unica le due sezioni da sole non lo dicono — dicono chi e' piu' lungo,
+ * non quanto pesa una natura sull'altra.
+ *
+ * ## Un accento e un grigio, non due tinte di categoria
+ *
+ * Otto tinte categoriche quando la storia e' **un numero solo** e' l'errore da
+ * manuale; la risposta e' *emphasis*: una marca sola in evidenza, il resto
+ * neutro. E qui l'evidenza non e' una scelta grafica — **l'accento sta sulle
+ * quotidiane e il grigio sulle fisse** perche' ADR 016 dice che *"il budget
+ * serve a decidere se prendere quel caffe', e l'affitto non e' una decisione"*:
+ * si accentua cio' su cui si decide. Le fisse restano dominanti **per area**,
+ * che e' precisamente il fatto che questa barra deve dire.
+ *
+ * **Non `--brand`**: e' gia' il colore delle barre di B e del FAB, e un terzo
+ * significato sullo stesso token lo svuoterebbe. I due colori sono
+ * `--line-strong` (3,19:1 sul fondo, il token dei "bordi che contano") e
+ * `--text`. Fra loro valgono 5,1:1 in chiaro e 4,8:1 in scuro, misurati sui
+ * token: la barra si legge anche da chi non distingue le tinte, perche' la
+ * differenza e' di **luminanza**, non di colore.
+ *
+ * ## Perche' non e' una ciambella
+ *
+ * Due fette sono due angoli, e due angoli si confrontano peggio di due
+ * lunghezze affiancate; con nomi lunghi (`Fisse in questo periodo`) chiederebbe
+ * per giunta una legenda staccata. La barra orizzontale divisa e' la forma che
+ * il part-to-whole a due voci vuole.
+ *
+ * ## I 2 px in mezzo sono un **vuoto**, non un bordo
+ *
+ * Un contorno fra due marche che si toccano davvero aggiunge una terza tinta sul
+ * confine, cioe' la cosa che rende difficile leggere dove finisce l'una. Il
+ * `gap` e' nel colore della superficie: e' assenza di marca, e non colora
+ * niente. (Il contorno da 1 px delle barre di A resta, e risolve un altro
+ * problema: quattro degli otto colori delle categorie stanno sotto 3:1 sul
+ * fondo, e quelle barre non si toccano mai fra loro.)
+ *
+ * ## Le etichette dirette stanno sulle due intestazioni
+ *
+ * Con due segmenti serve una legenda o le etichette scritte accanto. Qui le
+ * portano le **intestazioni di parte**, ciascuna con la pastiglia del proprio
+ * segmento: sono gia' a schermo, dicono gia' il nome della natura, e cosi' i due
+ * totali restano scritti **una volta sola** invece di comparire sia accanto alla
+ * barra sia sotto di essa.
+ *
+ * La barra e' quindi `aria-hidden`: e' la forma di due numeri che stanno scritti
+ * trenta pixel piu' sotto, non un'informazione in piu'.
+ */
+function Split({ split }: { readonly split: BreakdownSplit }) {
+  return (
+    <div class="stats__split" aria-hidden="true">
+      {/* `flex-basis` e non `inline-size`: i due segmenti si dividono cio' che
+          resta **dopo** il vuoto da 2 px, e con `flex-shrink` proporzionale alla
+          base le due quote restano esatte l'una rispetto all'altra. Con due
+          larghezze in percentuale il vuoto avrebbe fatto traboccare la riga. */}
+      <span class="stats__seg" data-kind="fixed" style={{ flexBasis: pct(split.fixedFraction) }} />
+      <span
+        class="stats__seg"
+        data-kind="variable"
+        style={{ flexBasis: pct(1 - split.fixedFraction) }}
+      />
+    </div>
+  )
+}
+
+/**
+ * L'intestazione di una parte di A: **quale dei due tipi di soldi** conta
+ * l'elenco qui sotto, la pastiglia che la lega al proprio segmento della barra
+ * divisa, e — sulle fisse — l'interruttore.
+ *
+ * ## Le due etichette non sono simmetriche, e non e' una svista
+ *
+ * Le variabili riusano `stats.variable`, la stessa parola che nomina le
+ * quotidiane ovunque compaiano. Le fisse no: la cifra in testa alla schermata e'
+ * una previsione **al mese**, questa e' quanto e' uscito **nel periodo**, e con
+ * la stessa parola le due si contraddicono a schermo — misurato, la cifra in
+ * testa leggeva `0,00 € ogni mese` sopra un `Spese fisse 620,00 €`, che e' il
+ * caso di una regola disattivata dopo aver generato la spesa. Cioe' quello che
+ * l'app stessa consiglia di fare (`toast.ruleInUse`).
+ *
+ * ## L'interruttore sta qui e non in una riga sua
+ *
+ * Perche' e' **la cosa che nasconde**, e un comando sul proprio oggetto non ha
+ * bisogno di dire su cosa agisce. Ed e' anche il conto dei pixel: una riga
+ * dedicata sarebbe costata 44 px pieni sopra B, cioe' avrebbe allontanato di
+ * un'altra riga il confronto settimanale che gia' non ci sta.
+ *
+ * `role="switch"` e non un `aria-expanded`: non e' una divulgazione — le righe
+ * non ricompaiono uguali, **la scala si rifa'** sulle sole quotidiane — ed e'
+ * cio' che un interruttore e' per definizione, uno stato acceso/spento.
+ *
+ * L'etichetta accessibile e' quella dell'interruttore (`stats.showFixed`) e non
+ * il testo dell'intestazione: il nome di un comando dice cosa fa, e il nome
+ * della sezione lo dice gia' l'intestazione a cui e' dentro.
+ *
+ * Non c'e' un `<div>` a raccogliere titolo ed elenco: sarebbe un box in mezzo
+ * fra la sezione e le sue colonne, e `subgrid` non attraversa un box che non sia
+ * lui stesso una griglia. La separazione fra le due parti sta quindi sul titolo
+ * della seconda (`.stats__rows + .stats__partTitle`).
+ */
+function PartHead({
+  kind,
+  amount,
+  showFixed,
+  onToggleFixed,
+}: {
+  readonly kind: BreakdownSection['kind']
+  /** Il totale della parte, o `null` quando lo porta gia' qualcos'altro. */
+  readonly amount: string | null
+  readonly showFixed: boolean
+  readonly onToggleFixed: () => void
+}) {
+  const fixed = kind === 'fixed'
+  return (
+    <h3 class="stats__partTitle" data-kind={kind}>
+      <span class="stats__partName">
+        {t(fixed ? 'stats.fixedInPeriod' : 'stats.variable')}
+      </span>
+      {amount === null ? null : <span class="stats__partTotal">{amount}</span>}
+      {fixed ? (
+        <button
+          type="button"
+          class="stats__toggle"
+          role="switch"
+          aria-checked={showFixed}
+          aria-label={t('stats.showFixed')}
+          onClick={onToggleFixed}
+        >
+          <span class="stats__switch" aria-hidden="true" />
+        </button>
+      ) : null}
+    </h3>
   )
 }
 
@@ -476,12 +711,27 @@ function Periods({ trend, period }: { readonly trend: Trend; readonly period: Bu
   if (trend.rows.length === 0) return null
   return (
     <section class="stats__section" data-chart="">
-      <h2 class="stats__title">
-        {t(period === 'weekly' ? 'stats.byPeriod.weekly' : 'stats.byPeriod.monthly')}
-      </h2>
-      <h3 class="stats__partTitle">
-        <span class="stats__partName">{t('stats.variable')}</span>
-      </h3>
+      {/* **Il titolo e cio' che conta stanno sulla stessa riga**, e non e'
+          compattamento fine a se stesso: erano due blocchi impilati per due
+          pezzi della stessa frase — *"settimana per settimana"* e *"delle
+          quotidiane"* — e ognuno dei 26 px che costavano e' un pixel che
+          allontana dalla piega la seconda riga di questo grafico, cioe' **il
+          confronto**, cioe' l'unica ragione per cui questa sezione esiste.
+
+          Restano due elementi e non uno: il titolo e' la sezione, il nome di
+          parte dice **di che soldi** si tratta, e un test legge ciascuno dal
+          proprio. Qui il nome di parte non porta un totale — sarebbe la somma
+          di otto periodi, che non chiede nessuno — ne' una pastiglia: non c'e'
+          nessuna barra divisa a cui legarsi, e le barre di B hanno un colore
+          solo. */}
+      <div class="stats__head">
+        <h2 class="stats__title">
+          {t(period === 'weekly' ? 'stats.byPeriod.weekly' : 'stats.byPeriod.monthly')}
+        </h2>
+        <h3 class="stats__partTitle">
+          <span class="stats__partName">{t('stats.variable')}</span>
+        </h3>
+      </div>
       <ul class="stats__rows">
         {trend.rows.map((row: PeriodBar) => (
           <Row
@@ -522,9 +772,25 @@ function Periods({ trend, period }: { readonly trend: Trend; readonly period: Bu
 
 export function Stats({ phase, expenses, categories, rules, budgets, period, day }: Props) {
   const ready = phase === 'ready'
+
+  /**
+   * **Il selettore delle fisse: stato del componente, acceso, non persistito.**
+   *
+   * Non e' un campo di `Settings` e non deve diventarlo. Un interruttore di
+   * vista che si ricordasse di essere spento nasconderebbe 507,00 € a chi non
+   * lo ha piu' in mente — cioe' ADR 016 §1 dalla porta di servizio, che e' il
+   * difetto che questo selettore ha il divieto esplicito di reintrodurre.
+   * Tornando acceso a ogni apertura, il valore sicuro e' quello di partenza e
+   * l'unico modo di non vedere le fisse e' averlo appena deciso.
+   *
+   * E il costo di non persisterlo e' un tap per chi lo spegne spesso, contro
+   * una migrazione di schema su dati veri per chi non lo spegne mai.
+   */
+  const [showFixed, setShowFixed] = useState(true)
+
   const view = useMemo(
-    () => statsView({ expenses, categories, rules, budgets, period, day }),
-    [expenses, categories, rules, budgets, period, day],
+    () => statsView({ expenses, categories, rules, budgets, period, day, showFixed }),
+    [expenses, categories, rules, budgets, period, day, showFixed],
   )
 
   // Il guscio si dipinge prima dei dati ("Ordine di pittura"): finche' non sono
@@ -598,38 +864,39 @@ export function Stats({ phase, expenses, categories, rules, budgets, period, day
 
   return (
     <div class="stats">
-      {/* **Una scheda sola, ed e' la proiezione.**
+      {/* **La proiezione mensile delle fisse, e adesso e' una riga.**
+          (ADR 016 §3, *"due numeri, non uno"*: la seconda cifra ha senso solo se
+          si vede la prima, e la prima e' il totale del periodo sul titolo di A.)
 
-          Erano due (ADR 016 §3, *"due numeri, non uno"*), e la seconda cifra ha
-          ancora senso solo se si vede la prima: quello che e' cambiato e' **dove
-          si vede la prima**. Da quando A e' divisa in fisse e variabili, il
-          totale delle variabili del periodo e' l'intestazione della sezione, e
-          la scheda `Quotidiane` ripeteva quella stessa cifra trenta pixel piu'
-          sopra. L'esclusione non e' piu' taciuta perche' a dichiararla sono le
-          intestazioni, che stanno **sopra le barre di cui parlano** invece che
-          in cima alla pagina.
+          Era una scheda grigia alta 109 px — **un quinto dello schermo utile** —
+          per una cifra sola, sopra una schermata che non riesce a mettere due
+          righe di B sopra la piega. Il peso visivo era l'inverso
+          dell'importanza: la proiezione e' contesto, non e' la risposta a
+          nessuna delle due domande della schermata.
 
-          `Spese fisse … ogni mese` resta perche' non e' un totale: e' **una
-          proiezione**, quanto costeranno al mese le regole in vigore. A non puo'
-          mostrarla — e' retrospettiva, e per periodo — e senza di lei la
-          seconda meta' di ADR 016 §3 non sarebbe da nessuna parte.
+          **E la cifra porta la propria unita'**, che e' cio' che chiude
+          `DEBITO.md` §5: `530,00 €/mese` qui e `530,00 €` in A sono due
+          quantita' diverse che una settimana su quattro coincidono per
+          costruzione, e finora niente le distingueva **se non l'etichetta** —
+          cioe' proprio la cosa che la coincidenza fa saltare. Adesso la
+          differenza sta dentro il numero, dove l'occhio cade comunque.
 
-          Il contenitore e' condizionato con la scheda e non le sta intorno
-          vuoto: `.stats` e' un flex con `gap`, e un `<div>` senza figli
-          varrebbe due spaziature di niente sopra la prima sezione. */}
+          Resta una cifra che A non puo' dare: A e' retrospettiva e per periodo,
+          questa e' quanto costeranno al mese le regole in vigore. */}
       {view.tiles.hasFixed ? (
-        <div class="stats__tiles">
-          <div class="tile">
-            <p class="tile__label">{t('stats.fixed')}</p>
-            <p class="tile__value">{money(view.tiles.fixedMonthlyCents)}</p>
-            <p class="tile__sub">{t('stats.perMonth')}</p>
-          </div>
-        </div>
+        <p class="stats__rate">
+          <span class="stats__rateLabel">{t('stats.fixed')}</span>
+          <span class="stats__rateValue">
+            {t('stats.perMonthRate', { amount: money(view.tiles.fixedMonthlyCents) })}
+          </span>
+        </p>
       ) : null}
 
       <Categories
         breakdown={view.byCategory}
         range={periodRangeLabel(view.period, view.current.range)}
+        showFixed={showFixed}
+        onToggleFixed={() => setShowFixed((on) => !on)}
       />
       <Periods trend={view.byPeriod} period={view.period} />
     </div>
