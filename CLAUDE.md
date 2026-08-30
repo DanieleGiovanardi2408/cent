@@ -369,6 +369,29 @@ verificabile, come `<a download>` che in PWA standalone puo' non fare nulla senz
 errore.
 Migrazioni di schema versionate, senza perdita di record.
 
+## Il pavimento e' 375x667, e non e' il telefono di nessuno
+
+**Il viewport minimo supportato e' 375x667** (iPhone SE). Ogni misura di geometria si
+rifa' anche li', non solo sul viewport di riferimento.
+
+**Non si progetta sul telefono di chi scrive l'app.** Il telefono dell'autore e'
+390x844, e progettare su quello vuol dire non scoprire mai i difetti che stanno
+altrove — perche' chi potrebbe vederli non ha il telefono, e chi ha il telefono non
+guarda il codice.
+
+**Il caso che l'ha prodotta, misurato il 30 agosto**: a 375x667 `.blank__text` —
+l'invito dello stato vuoto, *"Tocca il + qui sotto, digita l'importo…"* — cade
+**sotto la piega**: fondo a 663,8 contro una piega a 583. A 390x844 e a 393x852 ci
+sta per intero.
+
+E la ragione per cui quel difetto specifico e' il piu' caro possibile: **lo stato
+vuoto e' la prima schermata che vede un amico su un'installazione pulita**, e il test
+degli amici e' il criterio di chiusura della fase 3, ancora aperto. Il primo contatto
+con l'app sarebbe un testo tagliato, su un telefono che nessuno di noi ha in mano.
+
+**Non e' un'attenzione: e' un invariante verificabile.** Un test fallisce se un
+elemento dello stato vuoto esce dalla piega a 375x667.
+
 ## Trappole iOS / Safari PWA
 - `viewport-fit=cover` + padding con `env(safe-area-inset-*)`.
 - `100dvh`, mai `100vh`. Input con `font-size >= 16px` o Safari zooma.

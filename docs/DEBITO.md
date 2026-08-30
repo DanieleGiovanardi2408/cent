@@ -579,6 +579,40 @@ E la prova che serviva davvero: la cancellazione non e' stata ricordata, e' stat
 condizione scritta e' una decisione; lo stesso difetto tenuto a mente e' una
 scommessa sul fatto che qualcuno se ne ricordi.
 
+## 9. Le fisse sono mensili e nessuna schermata ha un orizzonte mensile
+
+**Stato: aperto.** Non e' un difetto della fase 6: e' una **lacuna di prodotto**
+emersa misurando M1 e M2 il 30 agosto.
+
+**Cosa.** Le spese fisse sono mensili — 530,00 € al mese, di cui **507,00 € di
+affitto**. La Home e le Statistiche rispondono entrambe **alla settimana**: l'eroe
+dice *"Questa settimana · 24–30 ago"*, il budget e' settimanale, B confronta
+settimane. **Non esiste il posto dove leggere "come sta andando il mese"**, cioe'
+l'orizzonte su cui la voce di spesa piu' grande della vita dell'utente e' definita.
+
+**Come e' emersa, ed e' la parte che vale.** La richiesta di misurare le categorie
+diceva *"mese corrente"*. L'app ragiona a settimana ovunque, quindi la misura e'
+stata fatta su tutte e due le finestre — e le due danno **numeri diversi**: nel mese
+`Coffeeshop` vale il 39,0% e nella settimana il 21,4%. Nessuno dei due e' sbagliato:
+sono due domande, e l'app ne risponde una sola.
+
+Non l'ha trovata un gate ne' un controllo: l'ha trovata **una parola in un brief che
+non corrispondeva al codice**, e che e' stata misurata invece che corretta in
+silenzio.
+
+**Perche' non si tampona.** Una riga in Home che dica *"questo mese: X"* sarebbe un
+secondo eroe su una schermata che ne ha uno solo per decisione (0d), e risponderebbe
+a meta' della domanda: *"come sta andando il mese"* non e' un totale, e' un totale
+**contro un'aspettativa**, e l'aspettativa mensile non esiste da nessuna parte —
+il budget e' settimanale.
+
+**La condizione di riapertura**: si decide in **fase 7**, oppure **prima se il test
+degli amici lo fa emergere** — cioe' se qualcuno che non ha scritto l'app chiede
+*"quanto ho speso questo mese?"* e non trova dove guardare. Fino ad allora l'eroe
+**deve continuare a dire "Questa settimana · <intervallo>"**: e' l'unica frase che
+impedisce di leggere quel numero come mensile, ed e' quindi parte di questa voce e
+non una rifinitura del copy.
+
 ## 3. Rischi noti gia' scritti altrove
 
 Non si duplicano qui, per non creare la diciannovesima copia che parafrasa:
