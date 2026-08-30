@@ -1,10 +1,6 @@
 import { Fragment } from 'preact'
 import { useMemo, useState } from 'preact/hooks'
 import type { Budget, BudgetPeriod, Category, Expense, RecurringRule } from '../core/types'
-// L'ordine della griglia, non un secondo ordinamento scritto qui: le fette e la
-// legenda seguono `Category.order`, che e' la stessa sequenza che il pollice ha
-// imparato sul tastierino. Vedi `ordineDiGriglia`.
-import { compareCategories } from '../core/categories'
 import type { IsoDate } from '../core/date'
 import { daysLabel, money, periodRangeLabel, t } from './i18n'
 import { statsView } from './stats-view'
@@ -247,44 +243,41 @@ interface Quote {
 }
 
 /**
- * **L'ordine di griglia**, come funzione da riga a posizione.
+ * **Le fette seguono l'ordine delle righe, che e' l'importo decrescente.**
  *
- * ## Perche' le fette non sono ordinate per importo
+ * ## Qui c'era `ordineDiGriglia`, e la sua motivazione era refutata
  *
- * Perche' l'adiacenza fra due fette **dipenderebbe dai dati dell'utente**, e
- * l'adiacenza e' esattamente cio' che il sistema di colori deve reggere:
- * `CLAUDE.md` chiede otto tinte *"leggibili anche come aree adiacenti in un
- * grafico"*. Con l'ordine per importo, misurato sui dati veri, `Spesa` e
- * `Coffeeshop` non si toccano nella settimana e si toccano nel mese, e la
- * distanza fra le due tinte cade da ΔE 20,3 a **9,4**: una coppia che nessuna CI
- * puo' verificare, perche' la CI non ha i dati di nessuno. Con l'ordine di
- * categoria le coppie adiacenti sono **sempre le stesse otto**, e si controllano
- * una volta per tutte.
+ * Le fette venivano riordinate per `Category.order`, con due argomenti scritti
+ * accanto. Il primo — *"con l'ordine di categoria le coppie adiacenti sono
+ * sempre le stesse otto, e si controllano una volta per tutte"* — e' **falso**,
+ * e lo era gia' quando fu scritto: ADR 025 lo refuta con tre fatti dell'albero
+ * (la ciambella disegna solo le categorie con spese nella finestra, quindi su un
+ * sottoinsieme di due qualunque coppia diventa adiacente; `Category.order` lo
+ * cambia l'utente; e quali otto siano le attive lo decide chi archivia e
+ * sostituisce).
  *
- * ## Ed e' l'argomento della griglia stabile, applicato al grafico
+ * Il secondo — la memoria muscolare del pollice sulla griglia dei chip — e'
+ * **vero, ma di un'altra stanza**. E' stato trapiantato qui senza ri-derivarlo,
+ * e nel trapianto ha scavalcato un argomento **esplicito e contrario** che in
+ * questo albero c'era gia', scritto prima, in `00d849b`:
  *
- * *"Non si riordina mai in base all'ora, al giorno o all'uso recente. Dopo pochi
- * giorni l'utente tocca per posizione senza leggere l'etichetta."* Una ciambella
- * che si rimescola ogni settimana chiede di rileggere la legenda ogni volta; una
- * che porta le categorie nell'ordine del tastierino si riconosce con la stessa
- * memoria muscolare che gia' esiste.
+ * > *"Dalla piu' grande: la domanda e' 'dove sono finiti i soldi', e la
+ * > risposta si legge dall'alto. **Non** per ordine di griglia, che serve al
+ * > pollice in cassa."* (`stats-view.ts`)
  *
- * **La classifica non si perde**: e' l'altra vista, ed e' a un tap.
+ * ## E il difetto vero non era l'ordine: era che le due viste ne avevano due
  *
- * L'aggregato delle spese senza categoria non ha un id e va **in fondo**: non e'
- * una categoria, quindi non ha un posto in griglia da rispettare.
+ * Le barre sono sempre state per importo. Con la ciambella per ordine di
+ * griglia **il tap rimescolava le righe**: stesse categorie, posizioni diverse,
+ * e la legenda che cambiava sequenza sotto il dito. Il tap deve cambiare la
+ * domanda, non la mappa.
+ *
+ * Adesso `part.rows` arriva gia' ordinato per importo decrescente da
+ * `stats-view.ts` e **non si tocca**: un ordinamento solo in tutta la schermata,
+ * e l'identita' di sequenza fra barre, fette e legenda e' vera per costruzione
+ * invece che per coincidenza. Il test che la sorveglia sta in
+ * `statistiche.spec.ts`.
  */
-function ordineDiGriglia(categories: readonly Category[]): (row: CategorySlice) => number {
-  const posizione = new Map<string, number>()
-  ;[...categories].sort(compareCategories).forEach((c, i) => posizione.set(c.id, i))
-  // Due ripieghi distinti, e non e' pignoleria: le orfane vanno **dopo** una
-  // categoria che il modello conoscesse senza che questa mappa la veda — un caso
-  // che oggi non esiste (le righe con un nome vengono da `named`) ma che, se
-  // esistesse, non deve produrre un ordine deciso da come sono arrivati i record.
-  const inFondo = categories.length + 1
-  return (row) =>
-    row.orphan ? inFondo : (posizione.get(row.categoryId) ?? categories.length)
-}
 
 /**
  * Le fette e la legenda di una sezione, oppure `null` se qui la ciambella non si
@@ -336,16 +329,13 @@ function ordineDiGriglia(categories: readonly Category[]): (row: CategorySlice) 
  * proprio dove la quota e' l'unica cosa che la ciambella aggiunge, e il dato non
  * si perde comunque — sta nella legenda, con il suo importo.
  */
-function quoteOf(
-  part: BreakdownSection,
-  ordine: (row: CategorySlice) => number,
-): Quote | null {
+function quoteOf(part: BreakdownSection): Quote | null {
   if (part.single) return null
   if (part.rows.length < PIE_MIN_SLICES) return null
   if (part.totalCents <= 0) return null
 
   const totalCents = part.totalCents
-  const rows = [...part.rows].sort((a, b) => ordine(a) - ordine(b))
+  const rows = part.rows
   let cumulata = 0
   const slices = rows.map((row) => {
     const start = cumulata * PIE_C
@@ -577,21 +567,13 @@ function Row({
  */
 function Categories({
   breakdown,
-  categories,
   range,
 }: {
   readonly breakdown: Breakdown
-  /**
-   * Le categorie, e servono per **una cosa sola**: l'ordine delle fette e della
-   * legenda. Non entrano in nessun conto — nomi, colori e importi arrivano gia'
-   * dal modello — e infatti quello che se ne ricava e' una funzione da riga a
-   * posizione, non un secondo elenco da tenere allineato.
-   *
-   * L'ordine sta qui e non in `stats-view.ts` perche' e' **una scelta di
-   * lettura**: la vista `ordine` guarda le stesse righe dalla piu' grande, e il
-   * modello non deve sapere quale delle due si sta guardando.
-   */
-  readonly categories: readonly Category[]
+  /* `categories` stava qui, e serviva a **una cosa sola**: riordinare le fette
+   * per `Category.order`. Quell'ordinamento non c'e' piu' (vedi il commento su
+   * `quoteOf`), e il prop se n'e' andato con lui invece di restare come elenco
+   * che nessuno legge: nomi, colori e importi arrivano gia' dal modello. */
   /**
    * Il confine del periodo che A sta ripartendo, gia' formattato
    * (`periodRangeLabel`). **Non e' una rifinitura del titolo: e' l'unica cosa
@@ -663,7 +645,6 @@ function Categories({
     setMosse((precedenti) => ({ ...precedenti, [kind]: true }))
   }
 
-  const ordine = ordineDiGriglia(categories)
   // **Nessuna sezione vuol dire che nel periodo non e' uscito niente**, e allora
   // A non si disegna.
   //
@@ -776,7 +757,7 @@ function Categories({
         // La vista `quote` si disegna solo dove esiste; dove non esiste la
         // sezione **e' a barre**, e il comando non compare. Non e' un ripiego
         // silenzioso: e' l'unico stato che quella sezione ha.
-        const quote = quoteOf(part, ordine)
+        const quote = quoteOf(part)
         const vista: Vista = quote === null ? 'ordine' : viste[part.kind]
         return (
           <Fragment key={part.kind}>
@@ -1728,7 +1709,6 @@ export function Stats({ phase, expenses, categories, rules, budgets, period, day
           `audit:source`, che e' esattamente la guardia scritta per questo. */}
       <Categories
         breakdown={view.byCategory}
-        categories={categories}
         range={periodRangeLabel(view.period, view.current.range)}
       />
       {/* **L'assenza di B si legge qui, e non dentro `Periods`.**

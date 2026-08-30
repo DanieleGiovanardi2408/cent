@@ -497,6 +497,34 @@ contenuto in stage, perche' fare `git stash` mentre un agente scrive sarebbe
 distruttivo. Prende il caso che conta — si committa mentre l'albero e' a meta' —
 e non prende lo staging parziale di un albero sano.
 
+## Le varianti da guardare si iniettano, non si applicano
+
+Quando una scelta si decide **a occhio** — due disegni affiancati, e sceglie una
+persona — le varianti si costruiscono come **override sopra l'app gia' costruita**
+(`page.addStyleTag`), non modificando i sorgenti.
+
+Non e' un trucco per andare piu' veloci: e' cio' che rende vero *"non applicare
+niente prima della scelta"*. Con i sorgenti toccati, l'albero e' in uno stato che
+nessuno ha scelto mentre si aspetta una risposta — e se la sessione muore li',
+quello che resta e' meta' di una variante scartata. Con gli override, l'albero
+durante l'attesa e' **esattamente** quello dell'ultimo commit.
+
+Regole pratiche che l'hanno fatta funzionare la prima volta (le tre varianti
+della pastiglia, 30 agosto):
+
+- l'override **non cambia la geometria** — un anello si mette `inset`, non come
+  bordo — altrimenti il confronto e' fra due layout invece che fra due colori;
+- lo scatto passa dalle stesse cuciture della suite: `navigator.standalone`
+  dichiarato come in `tests/e2e/installed.ts`, la guida attraversata col suo
+  bottone. Una tavola presa su un'app in uno stato che i test non conoscono
+  mostra una schermata che nessuno vedra';
+- **il server di anteprima si spegne dopo.** `vite preview` rimasto vivo serve un
+  `dist/` vecchio alla e2e successiva, che partirebbe verde su un artefatto che
+  non e' l'albero — la stessa trappola che `playwright.config.ts` documenta nel
+  suo `webServer`, ed e' gia' successa una volta in questo progetto.
+
+Vale per ogni prossima scelta a occhio, non solo per i colori.
+
 ## Verifiche che passano perche' la macchina non e' il bersaglio
 I test girano su Chromium con i font di sistema; l'app gira su Safari con SF Pro.
 Una verifica puo' essere verde qui e falsa li', e non e' un caso: sono tre cose
@@ -673,6 +701,45 @@ test, con un commento che spiegava perche' la discrepanza andasse bene. Un test 
 codifica un difetto non lo nasconde soltanto: e' **l'artefatto che domani ne
 giustifica la reintroduzione**. Si ripara il test **prima** del codice, e il
 commento si toglie.
+
+## Prima di scrivere una motivazione, cerca quella contraria
+
+Prima di scrivere la motivazione di una decisione, **cerca nell'albero se ne
+esiste gia' una contraria sullo stesso oggetto. Se c'e', o le rispondi o non
+decidi.**
+
+> Una motivazione nuova che non sa di averne contro una vecchia non e' una
+> decisione: e' una svista con le virgolette.
+
+**Il caso che l'ha prodotta, il 30 agosto.** La ciambella ordinava le fette per
+`Category.order`, con due argomenti scritti accanto. Il primo — *"cosi' le coppie
+adiacenti sono sempre le stesse otto"* — era falso, e ADR 025 lo refuta con tre
+fatti dell'albero. Il secondo — la memoria muscolare del pollice sulla griglia
+dei chip — era **vero, ma di un'altra stanza**, trapiantato senza ri-derivarlo.
+
+E nel trapianto ha scavalcato **un argomento esplicito e contrario che
+nell'albero c'era gia', scritto prima**, in `00d849b`, dentro `stats-view.ts`:
+
+> *"Dalla piu' grande: la domanda e' 'dove sono finiti i soldi', e la risposta si
+> legge dall'alto. **Non** per ordine di griglia, che serve al pollice in cassa."*
+
+Il risultato non era un ordinamento discutibile: erano **due** ordinamenti nella
+stessa schermata. Le barre per importo, le fette e la legenda per griglia, e il
+tap che rimescolava le righe — stesse categorie, posizioni diverse — quando il
+tap deve cambiare la domanda, non la mappa.
+
+**Perche' e' una regola nuova e non un corollario.** *"Un argomento spostato di
+contesto va ri-derivato"* dice cosa fare **con l'argomento che si ha in mano**.
+Questa dice di andare a cercare **quello che non si ha in mano**, ed e' un gesto
+diverso: si esegue prima di scrivere, con un `grep`, e non richiede di sospettare
+niente. Il costo di saltarla e' il solito — un difetto che si crede gia' corretto
+— piu' uno peggiore: **un test che lo difende**. `statistiche.spec.ts` asseriva
+l'ordine di griglia citando la motivazione refutata.
+
+E la contromisura, dove la si puo' costruire: quando due viste mostrano le stesse
+cose, l'invariante da sorvegliare non e' *"l'ordine e' quello giusto"* ma
+**l'identita' fra le viste** — che resta vera anche il giorno in cui si cambia
+idea sull'ordine, e cade solo sul difetto vero.
 
 ## Un campo e' prodotto quando un valore entra da fuori
 La prima formulazione era *"un campo si spedisce insieme al suo produttore, o non

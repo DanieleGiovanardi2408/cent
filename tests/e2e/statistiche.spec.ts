@@ -3715,17 +3715,23 @@ test('l\'ordine delle sezioni e\' quello dei segmenti della barra divisa', async
  * davvero, il colore della pastiglia dev'essere quello della fetta e l'ordine
  * dev'essere lo stesso.
  *
- * ## L'ordine e' quello delle categorie, e la scena lo separa dagli importi
+ * ## L'ordine e' l'importo decrescente, ed e' lo stesso delle barre
  *
- * Con l'ordine per importo, l'adiacenza fra due fette **dipende dai dati
- * dell'utente**: misurato, `Spesa` e `Coffeeshop` non si toccano nella settimana
- * e si toccano nel mese, con la distanza fra le due tinte che cade da ΔE 20,3 a
- * **9,4**. Nessuna CI puo' verificare una coppia che dipende dai dati di
- * qualcuno. Con l'ordine di categoria le coppie adiacenti sono sempre le stesse.
+ * Qui c'era scritto che l'ordine era quello delle categorie, *"cosi' le coppie
+ * adiacenti sono sempre le stesse"*. Era la motivazione refutata da ADR 025 — la
+ * ciambella disegna solo le categorie con spese nella finestra, quindi su un
+ * sottoinsieme qualunque coppia diventa adiacente — e **questo test la
+ * difendeva**: un test che codifica una premessa falsa non la nasconde soltanto,
+ * e' l'artefatto che domani ne giustifica la reintroduzione.
  *
- * Gli importi qui sono scelti perche' le **due sequenze siano diverse**, e la
- * differenza e' una premessa asserita: senza, questo test sarebbe verde anche
- * sull'ordinamento che rifiuta.
+ * L'ordine e' l'importo decrescente, che e' **lo stesso delle barre**. Non e'
+ * una preferenza fra due ordinamenti: e' che ce ne sia **uno solo**. Con due, il
+ * tap rimescolava le righe — stesse categorie, posizioni diverse — e il tap deve
+ * cambiare la domanda, non la mappa.
+ *
+ * Gli importi qui restano scelti perche' l'ordine per importo e quello di
+ * griglia **diano sequenze diverse**, e la differenza e' una premessa asserita:
+ * senza, questo test sarebbe verde anche sull'ordinamento che rifiuta.
  *
  * ## Il vuoto entra nel conto, e per questo il conto e' su due cifre
  *
@@ -3739,6 +3745,96 @@ test('l\'ordine delle sezioni e\' quello dei segmenti della barra divisa', async
  * legge dalla pagina**: cosi' cambiare il lato della ciambella non fa cadere
  * questa riga, e toglierle il vuoto si'.
  */
+/**
+ * **Il tap cambia la domanda, non la mappa.**
+ *
+ * Nessuno sorvegliava che le stesse categorie restassero nello stesso posto
+ * attraversando il comando. Il test accanto — *"l'ordine delle sezioni e' quello
+ * dei segmenti della barra divisa"* — guarda l'ordine delle **sezioni**, non
+ * quello delle **righe**, e per un giorno le due viste ne hanno avuto due
+ * diversi: le barre per importo (`stats-view.ts`, dal primo giorno delle
+ * Statistiche) e le fette per `Category.order`. Stesse categorie, posizioni
+ * diverse, e la legenda che cambiava sequenza sotto il dito.
+ *
+ * Non e' un test sull'ordine *giusto* — quello lo prova il test qui sotto, che
+ * asserisce l'importo decrescente. E' un test sull'**identita'**: qualunque
+ * ordine si scelga, le tre viste devono portarlo tutte e tre. Se un domani
+ * l'ordine cambiasse, questo test resterebbe verde e sarebbe giusto che lo
+ * restasse; cade solo se le viste **divergono**, che e' il difetto vero.
+ *
+ * La scena e' quella del test accanto, e per la stessa ragione: gli importi sono
+ * scelti perche' l'ordine per importo e quello di griglia diano sequenze
+ * diverse. Senza quella premessa, tre viste allineate per coincidenza non
+ * proverebbero niente.
+ */
+test('la sequenza delle categorie e\' la stessa in ciambella, legenda e barre', async ({
+  page,
+}) => {
+  await page.goto('/')
+  await chiudiGuida(page)
+  const scena: readonly (readonly [string, number])[] = [
+    ['Spesa', 1000],
+    ['Fuori', 4200],
+    ['Coffeeshop', 2400],
+    ['Sigarette', 2600],
+    ['Svago', 1000],
+  ]
+  await semina(
+    page,
+    scena.map(([categoria, cents]) => ({ categoria, cents })),
+  )
+  await apriStatistiche(page)
+
+  const sezione = page.locator('.stats__partHead[data-kind="variable"] + .stats__viz')
+  await expect(sezione.locator('.legend')).toHaveCount(scena.length)
+
+  // 1. La legenda, nella vista a quote.
+  const inLegenda = (await sezione.locator('.legend__name').allInnerTexts()).map((n) => n.trim())
+
+  // 2. Le fette, nello stesso ordine della legenda: si prende il **colore** di
+  //    ogni arco e lo si rimappa sul nome con la pastiglia che lo porta. Non si
+  //    confronta la legenda con se stessa: il capo fra arco e nome e' proprio
+  //    cio' che deve reggere, visto che le fette non hanno etichetta.
+  const pastiglie = await sezione.locator('.legend__dot').evaluateAll((nodi) =>
+    nodi.map((n) => getComputedStyle(n).backgroundColor),
+  )
+  const archi = await sezione.locator('.stats__pie circle').evaluateAll((nodi) =>
+    nodi.map((n) => getComputedStyle(n).stroke),
+  )
+  const inFette = archi.map((colore) => {
+    const i = pastiglie.indexOf(colore)
+    return i === -1 ? `?${colore}` : (inLegenda[i] ?? '?')
+  })
+  expect(
+    inFette,
+    'le fette non sono nella sequenza della legenda: l\'arco e il nome non si corrispondono',
+  ).toEqual(inLegenda)
+
+  // 3. Le barre, nell'altra vista. Si commuta col comando, come farebbe chiunque.
+  await page.locator('.stats__partHead[data-kind="variable"] .stats__view[data-vista="ordine"]')
+    .first()
+    .tap()
+  const righe = page.locator('.stats__rows[data-vista="ordine"], .stats__rows').last()
+  const inBarre = (await righe.locator('.stat__name').allInnerTexts()).map((n) => n.trim())
+
+  console.log(
+    `\n| legenda ${inLegenda.join(' > ')} |\n| fette   ${inFette.join(' > ')} |\n` +
+      `| barre   ${inBarre.join(' > ')} |\n`,
+  )
+  expect(
+    inBarre,
+    'il tap rimescola le righe: le stesse categorie cambiano posizione fra le due viste',
+  ).toEqual(inLegenda)
+
+  // **La premessa.** Con sequenze che coincidono per costruzione questo test
+  // sarebbe verde anche su due viste divergenti.
+  const perGriglia = scena.map(([nome]) => nome)
+  expect(
+    inLegenda,
+    'la scena ha i due ordini uguali: l\'identita\' fra le viste non e\' provata',
+  ).not.toEqual(perGriglia)
+})
+
 test('gli angoli della ciambella sono le quote, nell\'ordine e nei colori della legenda', async ({
   page,
 }) => {
@@ -3766,23 +3862,25 @@ test('gli angoli della ciambella sono le quote, nell\'ordine e nei colori della 
   await expect(page.locator('.stats__pie'), 'due ciambelle: il giro campiona la sbagliata')
     .toHaveCount(1)
 
-  // I nomi in legenda, nell'ordine dipinto.
+  // I nomi in legenda, nell'ordine dipinto: **importo decrescente**, che e' lo
+  // stesso ordine delle barre.
   const nomi = (await legenda.locator('.legend__name').allInnerTexts()).map((n) => n.trim())
-  expect(
-    nomi,
-    'la legenda non segue l\'ordine di griglia: le fette e i nomi non si corrispondono piu\'',
-  ).toEqual(perCategoria.map(([nome]) => nome))
-
-  // **La premessa che rende il test una prova.** Se le due sequenze coincidessero
-  // — come succede con gli otto importi di default — questa misura sarebbe verde
-  // anche sull'ordinamento per importo, cioe' su quello che rifiuta.
   const perImporto = [...perCategoria]
     .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
     .map(([nome]) => nome)
   expect(
     nomi,
+    'la legenda non e\' per importo decrescente: le fette e le barre hanno due ordini',
+  ).toEqual(perImporto)
+
+  // **La premessa che rende il test una prova.** Se le due sequenze
+  // coincidessero — come succede con gli otto importi di default — questa misura
+  // sarebbe verde anche sull'ordine di griglia, cioe' su quello che questa
+  // schermata ha smesso di usare.
+  expect(
+    nomi,
     'la scena ha gli stessi due ordini: non prova niente sull\'ordine delle fette',
-  ).not.toEqual(perImporto)
+  ).not.toEqual(perCategoria.map(([nome]) => nome))
 
   // I colori delle pastiglie, **dipinti**: e' il capo della legenda che sta sulle
   // righe. Si derivano dalla pagina e non si scrivono qui — le otto tinte delle
@@ -3834,8 +3932,14 @@ test('gli angoli della ciambella sono le quote, nell\'ordine e nei colori della 
     (c) => (c as SVGCircleElement).r.baseVal.value,
   )
   const vuotoInGradi = (2 / raggio) * (180 / Math.PI)
+  // L'importo si prende **dal nome**, non dalla posizione nell'array della
+  // scena: quello e' in ordine di griglia e le fette sono per importo, quindi
+  // indicizzarlo per posizione confronterebbe la fetta di `Fuori` con i
+  // centesimi di `Spesa`. E' esattamente il difetto che questo giro ha corretto,
+  // rifatto dentro la sua stessa verifica.
+  const centesimiDi = new Map(perCategoria)
   fette.forEach((fetta, i) => {
-    const cents = perCategoria[i]?.[1] ?? 0
+    const cents = centesimiDi.get(nomi[i] ?? '') ?? 0
     const atteso = (cents / totale) * 360 - vuotoInGradi
     expect(
       fetta.gradi,
