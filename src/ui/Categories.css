@@ -101,8 +101,14 @@
   block-size: 1.75rem;
   border-radius: var(--radius-full);
   /* Il colore resta superficie e non tinge mai il testo: nessun esadecimale
-   * puo' stare in AA sia sul chiaro sia sullo scuro. */
-  background-color: color-mix(in srgb, var(--cat) 40%, var(--surface));
+   * puo' stare in AA sia sul chiaro sia sullo scuro.
+   *
+   * Tinta piena, e la ragione sta per esteso in `AddSheet.css` su
+   * `.cat__emoji`. **Vale qui perche' qui succede la stessa cosa**: l'elenco
+   * delle categorie e quello dell'archivio mostrano piu' pastiglie insieme, e
+   * l'unica cosa che le distingue e' il colore — non c'e' nemmeno la posizione
+   * in griglia ad aiutare, perche' e' un elenco che scorre. */
+  background-color: var(--cat);
   font-size: 0.9375rem;
   line-height: 1;
 }
@@ -236,17 +242,37 @@
   grid-template-columns: repeat(4, 1fr);
 }
 
+/* Tinta piena, come le pastiglie: otto chiavi affiancate sono il caso piu' puro
+ * di "otto colori compresenti che devono essere distinti" di tutta l'app —
+ * distinguerle **e' il compito** di questa griglia, non un suo effetto
+ * collaterale. Mescolate al 55% cadevano a ΔE00 7,07 (chiaro), il valore
+ * peggiore misurato su qualunque superficie.
+ *
+ * Il bordo resta e cambia mestiere: non porta piu' identita' (la porta la
+ * campitura), fa il **contorno** che stacca la chiave dal fondo. */
 .picker__key--color {
-  background-color: color-mix(in srgb, var(--cat) 55%, var(--surface));
+  background-color: var(--cat);
   border: 1px solid color-mix(in srgb, var(--cat) 70%, var(--text));
 }
 
 .picker__key--color svg {
   visibility: hidden;
   fill: none;
-  /* La spunta e' del colore del testo, non del brand: deve leggersi sopra otto
-   * superfici diverse, e --text sta in AA su tutte e otto in entrambi i temi. */
-  stroke: var(--text);
+  /* **La spunta cambia inchiostro con la tinta, e non e' piu' `--text`.**
+   *
+   * Con la chiave mescolata al fondo, `--text` reggeva su tutte e otto perche'
+   * meta' della superficie *era* il fondo del tema. Sulla tinta piena non piu':
+   * `--text` chiaro sta a **2,81:1 su Svago** e **2,77:1 su Extra**, sotto il
+   * 3:1 che WCAG 1.4.11 chiede a un glifo che porta uno stato.
+   *
+   * `--tick` lo calcola `inkOn()` in `src/ui/ink.ts` e arriva inline accanto a
+   * `--cat`: bianco o quasi-nero, quello dei due che si legge meglio su quella
+   * tinta. Peggiore delle otto: **4,31:1** (Casa). Il ripiego su `--text` vale
+   * se qualcuno disegnasse questa chiave senza passare da li'.
+   *
+   * Otto casi e non sedici: la tinta e' la stessa nei due temi (ADR 025,
+   * colonna sola), quindi la scelta non dipende dal tema. */
+  stroke: var(--tick, var(--text));
   stroke-width: 2.6;
   stroke-linecap: round;
   stroke-linejoin: round;

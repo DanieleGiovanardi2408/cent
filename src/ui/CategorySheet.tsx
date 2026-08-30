@@ -5,6 +5,7 @@ import { DEFAULT_CATEGORY_SEEDS } from '../core/defaults'
 import type { Category } from '../core/types'
 import { t } from './i18n'
 import type { Key } from './i18n'
+import { inkOn } from './ink'
 import './sheet.css'
 import './AddSheet.css'
 import './Categories.css'
@@ -339,7 +340,10 @@ export function CategorySheet({
                       key={one}
                       type="button"
                       class="picker__key picker__key--color"
-                      style={`--cat:${one}`}
+                      /* `--tick` accanto a `--cat`: la chiave e' a tinta piena e
+                         la spunta ci sta sopra, quindi il suo inchiostro e'
+                         funzione della tinta e non del tema. Vedi `ink.ts`. */
+                      style={`--cat:${one};--tick:${inkOn(one)}`}
                       data-outside={outside || undefined}
                       aria-pressed={one === color}
                       aria-label={

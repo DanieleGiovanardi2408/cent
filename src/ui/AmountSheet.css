@@ -33,8 +33,16 @@
   block-size: 1.75rem;
   border-radius: var(--radius-full);
   /* Il colore resta superficie e non tinge mai il testo: nessun esadecimale
-   * puo' stare in AA sia sul chiaro sia sullo scuro. */
-  background-color: color-mix(in srgb, var(--cat) 40%, var(--surface));
+   * puo' stare in AA sia sul chiaro sia sullo scuro.
+   *
+   * Tinta piena. **E qui la ragione non e' il pavimento**: in questo foglio la
+   * pastiglia e' una sola — quella della spesa che si sta correggendo — quindi
+   * non c'e' nessuna coppia da distinguere e il controllo "compresente ⇒ tinta
+   * piena" non la tocca. Cambia perche' e' **lo stesso oggetto** della pastiglia
+   * della griglia, e un oggetto che si presenta in due modi in due schermate
+   * chiede all'utente di imparare due volte la stessa cosa. La coerenza
+   * dell'oggetto, non la soglia. */
+  background-color: var(--cat);
   font-size: 0.9375rem;
   line-height: 1;
 }
