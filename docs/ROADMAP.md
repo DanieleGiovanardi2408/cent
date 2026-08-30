@@ -25,16 +25,16 @@ sa gia', e per questo non puo' invecchiare. I giudizi — cosa e' in volo, cosa
 aspetta una persona — stanno sotto, scritti a mano e timbrati con lo SHA a cui
 sono stati rivisti.
 
-- **Ultimo commit**: `3cbe0fe` — feat: la striscia dei sette giorni, e la linea passa per la stessa mappa
-- **Data**: 30/08/2026 13:00
+- **Ultimo commit**: `8161b89` — feat: la Home ha tre livelli, e sette colonne al posto del vuoto
+- **Data**: 30/08/2026 13:37
 - **Ramo**: `fase-6-wip`
 - **Pushato**: si, `origin/fase-6-wip` e' allo stesso commit
-- **Rispetto a `origin/main`**: 2 commit avanti
+- **Rispetto a `origin/main`**: 3 commit avanti
 - **Albero di lavoro**: **non pulito**, ci sono modifiche non committate
 
 - **Test unitari**: 720 in 23 file, tutti verdi
 - **Test e2e dichiarati**: 338 in 14 file, su 4 progetti (iphone-se, iphone-14, landscape, dark)
-- **Test e2e eseguiti**: 320 passati, 18 saltati, in 2.6 minuti. I saltati sono condizionali (ADR 013): solo un'esecuzione li vede.
+- **Test e2e eseguiti**: non misurato — l'ultima esecuzione e' piu' vecchia dei sorgenti — va rilanciata
 - **Bundle iniziale**: 55.8 KB gzip su 60.0 KB (4.2 KB di margine)
 
 - **Schema del database**: 4. La scala delle migrazioni:
@@ -52,7 +52,7 @@ sono stati rivisti.
 ## In volo adesso
 
 <!-- JUDGMENT rivisto=35c54f0 -->
-> Rivisto a `35c54f0`, 6 commit fa. **Da riguardare.**
+> Rivisto a `35c54f0`, 7 commit fa. **Da riguardare.**
 
 **Fase 6 sul ramo `fase-6-wip`, cinque commit sopra `origin/main`.** Il ramo e'
 spinto; `main` non e' stato toccato, quindi **cio' che sta su Pages e' ancora
@@ -761,6 +761,25 @@ vanno scritti.
 **La torta a sette fette e' esclusa**: 62% e sei spicchi fra 1% e 16%
 costringono a una legenda e a confrontare angoli.
 
+##### L'alternativa a ciambella in cima e' chiusa con DUE argomenti, non uno
+
+**Un argomento solo si riapre, due no**, ed e' la ragione per cui questa voce porta
+tutte e due invece della sola disciplina.
+
+**Il primo e' della skill**: due fette sono una cifra, e una torta a due spicchi va
+sostituita da una stat tile.
+
+**Il secondo e' una misura, presa costruendo la variante e guardandola.** La
+ciambella al posto del numero grande costa **979 px di contenuto contro 862** su 708
+visibili, e la differenza cade tutta su cio' che sta sotto: *"Settimana per
+settimana"* torna a mostrare **una riga tagliata a meta'**. E' il rilievo 12 — la
+domanda di B e la sua risposta mai sullo schermo insieme — che avevamo chiuso
+guadagnando 62 px. La ciambella in cima ne spende **117** per riaprirlo.
+
+E' il caso in cui una disciplina e una misura dicono la stessa cosa per due strade
+diverse. Quando succede vanno scritte tutte e due: la disciplina puo' essere
+contestata da chi non la condivide, la misura no.
+
 **E l'alternativa a ciambella e' caduta il 29 agosto, leggendo `dataviz`.** Qui
 c'era scritto *"forma alternativa ammessa: ciambella a due segmenti col totale nel
 mezzo — due angoli si confrontano bene"*. La skill la vieta due volte e per due
@@ -894,6 +913,75 @@ nessuna chiave per il negativo.
 (`remainingCents < 0`) e guida il **colore** (`data-tone`), non la **parola**. Il
 fatto era li', usato per la decorazione e non per la frase — il "peso visivo
 inverso all'importanza", in miniatura e in una riga di codice.
+
+#### 0g. La ciambella nelle Quotidiane — e **solo** li'
+
+<!-- DECISION
+     present: src/ui/Stats.tsx :: stats__pie
+     present: src/ui/i18n/it.ts :: stats.pie
+-->
+> **Non applicata**: manca `stats__pie` in `src/ui/Stats.tsx`; manca `stats.pie` in `src/ui/i18n/it.ts`.
+
+Le Quotidiane portano **una ciambella sopra le proprie righe**. Le Fisse no. La
+barra divisa in cima resta.
+
+##### La decisione precedente e' caduta col caso che la sosteneva
+
+Il no alla torta era scritto in 0b, e diceva: *"62% e sei spicchi fra l'1% e il 16%
+costringono a una legenda e a confrontare angoli"*. Era vero, e riguardava **sette
+categorie con l'affitto dentro lo stesso grafico**.
+
+**Separando A in due sezioni quel caso non esiste piu'**, e i numeri lo dicono. Sui
+dati veri del 24–30 agosto:
+
+| | distribuzione | verdetto |
+|---|---|---|
+| **Quotidiane** | 42 / 26 / 24 / 10 / 10 su 112 -> **37% · 23% · 21% · 9% · 9%** | cinque fette, la piu' grande **sotto il 40%**, la piu' piccola **sopra l'8%** |
+| **Fisse** | 507 / 23 su 530 -> **95,7% · 4,3%** | un cerchio con una scheggia |
+
+La prima e' **esattamente** la distribuzione in cui una torta funziona: nessuna
+domina, nessuna diventa una scheggia. La seconda e' il caso su cui `dataviz` ha
+ragione — due fette sono una cifra, e la cifra e' gia' scritta.
+
+**Non e' "la torta si puo' fare".** E' *"la torta si puo' fare su questa
+distribuzione, ed ecco perche' quella di prima no"*. Un'obiezione che cade va scritta
+insieme al caso che la reggeva, altrimenti la volta dopo si riapre l'intera
+questione invece della parte che e' cambiata.
+
+##### Tre trattamenti, tre ragioni — e la schermata smette di sembrare tutta uguale
+
+- la **barra divisa** in cima -> due quantita';
+- le **barre** nelle Fisse -> due o tre impegni noti, che si **controllano**;
+- la **ciambella** nelle Quotidiane -> cinque voci confrontabili, che si **esplorano**.
+
+**Ognuno con la propria condizione scritta**, altrimenti fra un mese sembrera'
+varieta' decorativa — e qualcuno la uniformera' per coerenza, togliendo tre risposte
+a tre domande diverse.
+
+##### Il vincolo che tiene in piedi tutto
+
+> **La ciambella si AGGIUNGE alle righe, non le sostituisce.**
+
+Gli angoli danno la forma a colpo d'occhio, le righe danno i valori. Se una settimana
+c'e' una spesa enorme che schiaccia le altre in schegge, **il dato resta leggibile
+sotto**: la ciambella puo' fallire senza portarsi via l'informazione.
+
+Senza questo vincolo non si fa. E' anche cio' che rende accettabile una forma che la
+disciplina sconsiglia: non e' l'unico portatore di niente.
+
+##### Le altre condizioni
+
+- **Sotto le tre voci non si disegna.** E' `BREAKDOWN_MIN_ROWS` come numero, e **non
+  e' la stessa decisione**: quella governa le barre sull'insieme di A, questa governa
+  la ciambella dentro una sezione. L'argomento e' un altro — due fette sono una
+  cifra, non una ripartizione — e vale anche se le barre ci sono.
+- **I colori sono quelli delle categorie**, che hanno separazione per daltonismo
+  **8,7** misurata col validatore. Nessuna tinta nuova.
+- **Le fette non portano etichette dentro.** Le portano le righe sotto, che sono la
+  legenda naturale e **esistono gia'** — e' la ragione per cui questa forma non costa
+  una legenda, che era meta' dell'obiezione originale.
+- **Niente ciambella nelle Fisse**, col **95,7%** scritto accanto alla decisione
+  perche' chi la rilegge non debba ricalcolarlo.
 
 ### 0f. Da valutare, con la condizione scritta
 
