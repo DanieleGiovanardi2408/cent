@@ -468,37 +468,73 @@ questo progetto ha visto cadere tre volte.
 se un giorno la finestra smettesse di finire col periodo corrente — la coincidenza
 cade da sola e la voce si chiude per altra via.
 
-## 7. La riserva della Home avanza di 76,75 px nello stato piu' comune
+## 7. La riserva della Home avanza di 61,75 px nello stato piu' comune
 
-**Cosa.** `--slot-min` in `Home.css` copre lo stato **senza** budget (198,25 px a
-390 punti). Lo stato con budget tipico — una riga di disponibilita', nessuna nota
-di ADR 010, nessuna spesa fissa scattata nel periodo — ne prende 121,5. Avanzano
-**76,75 px di spazio vuoto**, sempre, nella schermata che si apre piu' spesso.
+**Stato: aperto, e sceso da 76,75 a 61,75.** La condizione che questa voce si era
+data si e' avverata il 30 agosto ed e' stata applicata; quello che resta ha una
+causa diversa, quindi la voce non si chiude — si riscrive su cio' che la regge
+adesso.
 
-**Perche' non e' riparabile con un altro `max()`.** Il guscio si dipinge prima di
-sapere se un budget esiste (regola "Ordine di pittura"), quindi deve riservare il
-piu' alto dei due stati; e il gate `home.spec.ts`, "la Home non salta / passando da
-senza budget a con budget", pretende — giustamente — che impostare un budget non
-sposti la coda. Le due cose insieme obbligano a un solo numero, e quel numero e' il
-massimo.
+**Cosa.** `--slot-min` in `Home.css` copre lo stato piu' alto del riquadro. Lo
+stato con budget **tipico** — una riga di disponibilita', nessuna nota di ADR 010,
+nessuna spesa fissa scattata nel periodo — ne prende 121,5 a 390 punti, e 142,75 a
+320. Misurato in entrambe le lingue:
 
-**Cosa e' stato fatto invece.** Si e' scelto **dove** cade lo spazio, che e'
-l'unica leva rimasta. Cade in fondo al blocco, fra il bottone del budget e il filo
-che chiude la sezione, dove si legge come l'aria di una sezione prima del suo
-divisore. La forma provata prima — piede ancorato in basso — lasciava il bottone
-120 px sotto la riga a cui appartiene, cioe' il difetto "il bottone galleggia"
-spostato invece che chiuso. Guardato a schermo, non dedotto.
+| | prima | adesso |
+|---|---|---|
+| `--slot-min` a 390 pt | 198,25 px | **183,25** |
+| `--slot-min` a 320 pt | 220,75 px | **204,5** |
+| avanzo nello stato comune, 390 pt | 76,75 px | **61,75** |
+| avanzo nello stato comune, 320 pt | 78 px | **61,75** |
 
-**La condizione che chiude questa voce**: lo stato senza budget dimagrisce fino a
-non essere piu' il massimo — oggi e' 15 px sopra lo stato con budget piu' alto, e
-il suo peso e' `home.invite` a tre righe in inglese. Il giorno in cui quella copy
-sta in due righe, il massimo torna alla colonna col budget e l'avanzo scende a
-quello che la riserva della disponibilita' e di `.since` gia' comportano.
+**Cosa e' stato tolto.** L'invito dello stato senza budget e' passato da tre righe
+a due (`--rows-invite`), togliendo la coda *", invece di quanto hai già speso"* —
+che non portava un fatto suo: diceva cosa mostra il numero grande adesso, cioe'
+`hero.spent`, scritto trenta pixel piu' su come etichetta di quel numero. Con
+quello, il `max()` di `--body-min` **cambia vincitore**: la colonna piu' alta non
+e' piu' quella senza budget (98 px) ma quella con budget (83).
 
-**E la sentinella c'e' gia'**: `home.spec.ts`, "una riga di troppo sfonda la
-riserva", pretende che sullo stato piu' alto la riserva avanzi **meno di una riga
-minima** (16,25 px). Oggi avanza 15. Se lo scarto fra i due stati crescesse ancora,
-quel test cade — cioe' questa voce non puo' peggiorare in silenzio.
+Misurato dentro `.invite` vero, nelle due lingue: 3 righe -> 2 a 358, 343 e 288 px
+di colonna. La forma intermedia — *"…not what you have spent."*, 86 caratteri — sta
+in due righe a 390 e 375 e ne prende **tre a 320**: scartata sulla misura, perche'
+la riserva regge alla larghezza piu' stretta o non regge.
+
+**Perche' i 61,75 che restano non si tolgono accorciando altro.** Sono la somma
+delle due righe che la colonna col budget deve riservare **insieme** — un budget
+grande nato a periodo iniziato le ha tutte e due:
+
+- **`--rows-allowance: 2`** — "Puoi spendere ~18.000,00 € al giorno per 5 giorni" va
+  a capo a 390 punti;
+- **`--rows-since: 2`** — la frase di ADR 010 e' 64 caratteri in italiano e 75 in
+  inglese contro un tetto di 42ch. Per stare in una riga dovrebbe perdere o il
+  giorno o l'importo, cioe' i due fatti per cui esiste. E **togliere il
+  `max-inline-size` non basta**, che era la strada che sembrava gratis: a 390 punti
+  la colonna vale ~54 caratteri e a 320 ~43. Va a capo comunque.
+
+Restano perche' il guscio si dipinge prima di sapere se un budget esiste (regola
+"Ordine di pittura") e perche' il gate `home.spec.ts`, "la Home non salta / passando
+da senza budget a con budget", pretende — giustamente — che impostare un budget non
+sposti la coda.
+
+**Dove cade lo spazio** non e' cambiato, e l'argomento sta su `--slot-min` in
+`Home.css`: corpo ancorato in basso, avanzo fra il blocco del numero e quello del
+budget. Le altre due posizioni erano state provate a schermo — una lasciava il
+bottone a 120 px dalla sua riga, l'altra faceva cadere il gate anti-CLS di 75-83 px
+su un bersaglio toccabile.
+
+**La condizione che chiude questa voce**, riscritta su cio' che la regge adesso:
+`.since` smette di essere una riga riservata **sempre** per un fatto che compare in
+**un periodo solo** nella vita di un utente. Non accorciandola — quella strada e'
+misurata e chiusa qui sopra — ma cambiando cio' che il guscio sa: il giorno in cui
+esistesse una forma di guscio che sappia gia' se il budget e' nato a periodo
+iniziato, la riserva scenderebbe a 42,5 + 8 + 16,25 = 66,75 px e l'avanzo tipico a
+45,5.
+
+**E la sentinella c'e' gia', ed e' diventata piu' stretta**: `home.spec.ts`, "una
+riga di troppo sfonda la riserva", pretende che sullo stato piu' alto la riserva
+avanzi **meno di una riga minima** (16,25 px). Avanzava 15; adesso avanza **0** —
+la riserva e' esattamente il contenuto dello stato piu' alto. Se lo scarto tornasse
+a crescere, quel test cade prima che questa voce peggiori in silenzio.
 
 ## 8. `spentRatio` in `budget-view.ts` non ha piu' lettori di produzione — **CHIUSA**
 

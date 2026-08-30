@@ -128,9 +128,27 @@ export const it = {
   'hero.noBudget': 'nessun budget impostato per questo periodo',
   'hero.note': 'di {budget} · {spent} spesi',
 
+  // L'invito dello stato senza budget, e **la sua lunghezza e' una misura di
+  // layout**, non una questione di gusto.
+  //
+  // La coda che c'era — `, invece di quanto hai già speso.` — portava la frase a
+  // tre righe in inglese a 390 e 375 punti, e a tre anche in italiano a 320.
+  // Tre righe qui vuol dire `--rows-invite: 3` in Home.css, cioe' la colonna
+  // senza budget che vince il `max()` della riserva: 98 px contro gli 83 della
+  // colonna col budget, con l'avanzo che ne segue **nello stato piu' comune
+  // dell'app**. E' il debito 7, e la sua condizione di chiusura era esattamente
+  // questa copy a due righe.
+  //
+  // **E la coda non pagava quel prezzo con un fatto suo.** Diceva cosa il numero
+  // grande sta mostrando adesso — lo speso — che e' scritto trenta pixel piu'
+  // su, in `hero.spent`, come etichetta di quel numero. Una parafrasi (DEBITO 1)
+  // che costava una riga di riserva permanente.
+  //
+  // Il punto finale sta **dentro** `strong` e non in una terza chiave: una
+  // chiave il cui unico contenuto e' un punto e' una chiave che nessuno sa
+  // tradurre. Il grassetto su un punto fermo non si vede.
   'home.invite.before': 'Con un budget questa riga diventa ',
-  'home.invite.strong': 'quanto puoi spendere oggi',
-  'home.invite.after': ', invece di quanto hai già speso.',
+  'home.invite.strong': 'quanto puoi spendere oggi.',
   'home.budget.set': 'Imposta un budget',
   'home.budget.change': 'Cambia il budget',
   'home.blank.title': 'Oggi non hai segnato niente',

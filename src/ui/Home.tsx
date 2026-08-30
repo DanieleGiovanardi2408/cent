@@ -195,10 +195,13 @@ export function Home({ phase, expenses, categories, budgets, day, onPick, onEdit
             </>
           ) : (
             <>
+              {/* Due pezzi e non tre: la coda che diceva *"invece di quanto hai
+                  gia' speso"* e' uscita, e con lei la terza riga che la riserva
+                  del riquadro doveva coprire in inglese. L'argomento sta in
+                  `i18n/it.ts`, sopra la chiave. */}
               <p class="invite">
                 {t('home.invite.before')}
                 <b>{t('home.invite.strong')}</b>
-                {t('home.invite.after')}
               </p>
               <Pace metrics={metrics} />
             </>
@@ -251,14 +254,20 @@ export function Home({ phase, expenses, categories, budgets, day, onPick, onEdit
           // Lo stato vuoto invece **non si tocca**: e' l'esempio giusto della
           // regola *dove ci sono dati si mostrano numeri, dove non ce ne sono si
           // parla*. Cade l'intestazione, resta il copy.
+          //
+          // **E il guscio non disegna piu' un `.blank` vuoto.** Quel div esisteva
+          // per tenere in piedi `--blank-min`, cioe' per riservare l'altezza di
+          // un messaggio che il guscio non sa se ci sara'. La riserva e' uscita
+          // (l'argomento sta su `--blank-min` in Home.css: sotto la coda non c'e'
+          // niente da spingere, e infatti toglierla non sposta un pixel), quindi
+          // il segnaposto non tiene piu' niente in piedi: e' un nodo vuoto con
+          // dentro solo il proprio padding.
           ready ? (
             <div class="blank">
               <p class="blank__title">{t('home.blank.title')}</p>
               <p class="blank__text">{t('home.blank.text')}</p>
             </div>
-          ) : (
-            <div class="blank" aria-hidden="true" />
-          )
+          ) : null
         ) : (
           <>
             <h2 class="today__head">

@@ -122,9 +122,15 @@ interface Mark {
  * **coda** della Home — l'unico blocco senza altezza riservata, e l'ultimo:
  * sotto di lei non c'e' niente. Cio' che il guscio deve garantire di una coda
  * e' **dove comincia**, non cosa contiene; il numero di righe di oggi non e'
- * riservabile per costruzione (sono cinquemila nel caso peggiore), e la
- * `.blank` del guscio e' un segnaposto della coda, non la riserva di un blocco
- * preciso.
+ * riservabile per costruzione (sono cinquemila nel caso peggiore).
+ *
+ * Qui la frase finiva con *"e la `.blank` del guscio e' un segnaposto della coda,
+ * non la riserva di un blocco preciso"*. Quel segnaposto **non c'e' piu'**, e la
+ * ragione e' la stessa riga che lo assolveva: se era un segnaposto e non una
+ * riserva, allora non teneva su niente. Misurato disfacendo — `--blank-min` a 0,
+ * tre scene per tre viewport — `.days` restava allo stesso pixel e il CLS a zero
+ * con e senza. Nel guscio adesso la coda e' vuota, che e' cio' che il guscio sa:
+ * se oggi abbia righe o no non lo sa ancora nessuno.
  *
  * `.today__head` invece **esiste solo quando la giornata ha righe**, che e' un
  * fatto che il guscio non puo' conoscere. Con la regola precedente — un blocco
@@ -1711,6 +1717,29 @@ test('la striscia non c\'e\' finche\' non c\'e\' niente da disegnare, e la coda 
  * Le due asserzioni stanno insieme perche' la seconda e' quella che tiene onesta
  * la prima: un `toHaveCount(0)` da solo passerebbe anche se l'intestazione
  * sparisse per sempre.
+ *
+ * ## E il messaggio comincia dove comincerebbero le righe
+ *
+ * Le ultime due asserzioni sono nuove e sorvegliano cio' che `--blank-min` aveva
+ * lasciato indietro. Quel token dichiarava una riserva (22dvh, 185,67 px a 844)
+ * per un blocco che sta **nella coda**, cioe' dove non c'e' niente sotto da
+ * spostare: misurato disfacendolo, guscio contro dati, `.days` restava allo
+ * stesso pixel e il CLS a zero con e senza. Una riserva che non protegge niente
+ * produce un solo effetto, ed era aria sotto un messaggio di due frasi.
+ *
+ * Con la riserva se n'e' andata anche la geometria dello Storico che il blocco
+ * si portava dietro — contenuto centrato, 32 px sopra e sotto. Li' e' giusta,
+ * perche' li' il messaggio **e' la pagina**; qui il messaggio e' cio' che si
+ * legge **al posto delle righe di oggi**, e quindi comincia dove comincerebbero
+ * loro.
+ *
+ * Le due asserzioni provano le due meta' separatamente, perche' sono due difetti
+ * diversi e si possono reintrodurre uno alla volta:
+ *
+ * 1. **niente riserva**: il blocco e' alto quanto il suo contenuto, e la prova e'
+ *    azzerare il `min-block-size` e vedere che l'altezza non cambia;
+ * 2. **stesso stacco**: la prima riga del messaggio parte dal bordo del proprio
+ *    blocco alla stessa distanza a cui parte quella di `.today__head`.
  */
 test('l\'intestazione di oggi esiste solo dove c\'e\' qualcosa da intestare', async ({ page }) => {
   await fissaOrologio(page)
@@ -1721,9 +1750,50 @@ test('l\'intestazione di oggi esiste solo dove c\'e\' qualcosa da intestare', as
   await expect(page.locator('.today__head')).toHaveCount(0)
   await expect(page.locator('.blank__title')).toBeVisible()
 
+  // Lo stato vuoto della coda non riserva niente: togliergli il `min-block-size`
+  // non lo fa cambiare di un pixel. Se un giorno tornasse un `--blank-min`, qui
+  // le due misure divergerebbero **esattamente** della riserva reintrodotta.
+  const vuoto = await page.evaluate(() => {
+    const blank = document.querySelector('.blank')
+    const titolo = document.querySelector('.blank__title')
+    if (!(blank instanceof HTMLElement) || titolo === null) throw new Error('scena sbagliata')
+    const px = (v: number): number => Math.round(v * 100) / 100
+    const conRiserva = px(blank.getBoundingClientRect().height)
+    const prima = blank.style.minBlockSize
+    blank.style.minBlockSize = '0px'
+    const senzaRiserva = px(blank.getBoundingClientRect().height)
+    blank.style.minBlockSize = prima
+    return {
+      conRiserva,
+      senzaRiserva,
+      stacco: px(titolo.getBoundingClientRect().top - blank.getBoundingClientRect().top),
+    }
+  })
+  expect(
+    vuoto.conRiserva,
+    `il blocco vuoto della coda e' alto ${vuoto.conRiserva}px e il suo contenuto ne vuole ${vuoto.senzaRiserva}: e' tornata una riserva, e nella coda una riserva non protegge niente`,
+  ).toBe(vuoto.senzaRiserva)
+
   await seedOn(page, [[todayIso(), 1250]])
   await page.reload()
   await expect(page.locator('.row').first()).toBeVisible()
   await expect(page.locator('.today__head')).toBeVisible()
   await expect(page.locator('.today__total')).toHaveText('12,50 €')
+
+  // Lo stacco della prima riga dal bordo del proprio blocco: uguale nei due
+  // stati, perche' il messaggio sta al posto delle righe e non altrove.
+  const conRighe = await page.evaluate(() => {
+    const head = document.querySelector('.today__head')
+    const nome = document.querySelector('.today__name')
+    if (head === null || nome === null) throw new Error('scena sbagliata')
+    return (
+      Math.round(
+        (nome.getBoundingClientRect().top - head.getBoundingClientRect().top) * 100,
+      ) / 100
+    )
+  })
+  expect(
+    vuoto.stacco,
+    `il messaggio di giornata vuota parte a ${vuoto.stacco}px dal bordo del suo blocco e le righe di oggi a ${conRighe}: il vuoto e' tornato a stare in un posto suo invece che al posto delle righe`,
+  ).toBe(conRighe)
 })

@@ -76,9 +76,34 @@
    * - `.pace` **una** sopra i 360 punti: "Finora stai spendendo 18.000,00 € al
    *   giorno." ci sta, misurato in tutte e due le lingue. Sotto ne prende due, e
    *   la media query lo dice;
-   * - `.invite` tre, ed e' l'inglese a deciderlo: "With a budget this line
-   *   becomes how much you can spend today, instead of how much you have
-   *   already spent." va a capo due volte.
+   * - `.invite` **due**, ed e' ancora l'inglese a deciderlo — erano tre.
+   *
+   * ## Le tre righe dell'invito erano il termine piu' caro della riserva
+   *
+   * `--rows-invite: 3` non era un numero sbagliato: era la misura giusta di una
+   * frase che si poteva accorciare. Con la coda *", instead of how much you have
+   * already spent."* l'inglese prendeva tre righe a 390 e a 375 punti, e
+   * l'italiano tre a 320. Tre righe qui vogliono dire che la colonna **senza
+   * budget** vince il `max()` di `--body-min` — 98 px contro gli 83 della
+   * colonna col budget — e che l'avanzo di quel `max()` si scarica sullo stato
+   * piu' comune dell'app.
+   *
+   * La coda e' uscita perche' **non portava un fatto suo**: diceva cosa mostra
+   * adesso il numero grande, cioe' lo speso, che e' scritto trenta pixel piu' su
+   * come etichetta di quel numero (`hero.spent`). Una parafrasi che costava una
+   * riga di riserva permanente.
+   *
+   * Misurato dentro `.invite` vero, nelle due lingue, alle tre larghezze:
+   *
+   *     larghezza colonna    prima (105 car. en)   adesso (61 car. en)
+   *     358 px (390 pt)      3 righe               2
+   *     343 px (375 pt)      3 righe               2
+   *     288 px (320 pt)      3 righe               2
+   *
+   * Anche la forma intermedia e' stata provata e **scartata sulla misura**:
+   * *"…how much you can spend today, not what you have spent."* (86 car.) sta in
+   * due righe a 390 e 375 e ne prende **tre a 320**, cioe' non chiude niente —
+   * la riserva deve reggere alla larghezza piu' stretta, non a quella comoda.
    *
    * **`--rows-sub` non c'e' piu'** perche' non c'e' piu' la riga: la
    * disponibilita' e il suo dettaglio erano due frasi per un fatto, e i giorni
@@ -88,13 +113,13 @@
   --rows-since: 2;
   --rows-fixed: 1;
   --rows-pace: 1;
-  --rows-invite: 3;
+  --rows-invite: 2;
 
   /* **Il corpo del blocco del budget**: la parte che cambia contenuto fra i due
    * stati. La riserva sta qui, ed e' un `max()` delle due colonne, gap per gap:
    *
    *     con budget:  disponibilita' (2 righe) + gap + nota di ADR 010 (2 righe)
-   *     senza:       invito (3 righe)          + gap + passo (1 riga)
+   *     senza:       invito (2 righe)          + gap + passo (1 riga)
    *
    * Scrivere la sola somma piu' alta lascerebbe un numero giusto **per caso** e
    * falso al prossimo taglio — e' il difetto per cui questa riserva ha smesso di
@@ -102,7 +127,10 @@
    * numero. Le due somme stanno scritte tutte e due; quale vinca lo decide
    * `max()` invece di un commento.
    *
-   * A 390 punti vince la seconda: **98 px contro 83**. */
+   * **E adesso vince la prima**: a 390 punti 83 px contro 75,5. Fino
+   * all'accorciamento dell'invito vinceva la seconda con 98, ed e' esattamente
+   * per questo che il `max()` sta scritto per esteso: il vincitore e' cambiato
+   * senza che nessuno dovesse ricordarsi di girare una somma. */
   --body-min: max(
     calc(
       var(--rows-allowance) * var(--line-allowance) + var(--sp-2) + var(--rows-since) *
@@ -126,17 +154,38 @@
    * blocco di 24 px, cioe' inutile: e' il tipo di errore che non si vede finche'
    * il contenuto non arriva al limite.
    *
-   * Misurato a 390 punti: **198,25 px**, contro i 204,75 che riquadro e bottone
-   * occupavano insieme prima.
+   * Misurato a 390 punti: **183,25 px** (erano 198,25 finche' l'invito prendeva
+   * tre righe, e 204,75 quando riquadro e bottone erano due blocchi separati).
+   * A 320 punti: **204,5**, erano 220,75.
    *
    * ## Lo spazio che avanza, e dove cade — che e' la parte che si sbaglia
    *
-   * La riserva del corpo copre lo stato **senza** budget (98 px). Lo stato con
-   * budget tipico — una riga di disponibilita', nessuna nota di ADR 010 — ne
-   * prende 21,25. **Avanzano 76,75 px, sempre, in quello che e' lo stato piu'
-   * comune dell'app**, e non c'e' modo di non averli: il guscio si dipinge prima
-   * di sapere se un budget esiste, quindi deve riservare il piu' alto dei due
-   * stati, e l'altro e' piu' basso di quasi ottanta pixel.
+   * La riserva del corpo copre adesso lo stato **con** budget piu' alto —
+   * disponibilita' a due righe e nota di ADR 010, 83 px a 390 punti. Lo stato con
+   * budget **tipico** — una riga di disponibilita', nessuna nota — ne prende
+   * 21,25. **Avanzano 61,75 px, sempre, in quello che e' lo stato piu' comune
+   * dell'app.**
+   *
+   * Erano 76,75, e i 15 recuperati sono venuti dall'unica strada che li fa
+   * scendere davvero: **ridurre cio' che va riservato** (l'invito da tre righe a
+   * due, vedi `--rows-invite`). Non da un `max()` diverso, che sposta il numero
+   * senza toccare il fatto.
+   *
+   * Quelli che restano non sono riparabili spostando niente, e le due voci che li
+   * producono sono state rimisurate una per una:
+   *
+   * - **`--rows-allowance: 2`** — "Puoi spendere ~18.000,00 € al giorno per 5
+   *   giorni" va a capo a 390 punti. Misurato, non stimato;
+   * - **`--rows-since: 2`** — la frase di ADR 010 e' 64 caratteri in italiano
+   *   ("Budget attivo da lunedì 17 ago · prima avevi già speso 9.999,98 €") e 75
+   *   in inglese, contro un tetto di 42ch. Per starci in una riga dovrebbe
+   *   perdere o il giorno o l'importo, cioe' i due fatti per cui esiste — e
+   *   togliere il `max-inline-size` non basta: a 390 punti la colonna vale ~54
+   *   caratteri, a 320 ~43. Va a capo comunque.
+   *
+   * Le due si presentano **insieme** — un budget grande nato a periodo iniziato le
+   * ha tutte e due — quindi la riserva le somma, e 83 e' il pavimento onesto.
+   * Resta debito (`docs/DEBITO.md`, voce 7) con la sua condizione riscritta.
    *
    * Quello che si puo' decidere e' **dove cadono**, e le tre possibilita' sono
    * state provate a schermo, non dedotte:
@@ -159,15 +208,58 @@
    *   disponibilita', la nota di ADR 010 — cresce verso l'alto senza spostare
    *   niente.
    *
-   * Il difetto resta un difetto e sta in `docs/DEBITO.md` (voce 7): si chiude il
-   * giorno in cui lo stato senza budget dimagrisce, non con un altro `max()`. */
+   * La meta' del difetto che si poteva chiudere e' chiusa; l'altra meta' resta in
+   * `docs/DEBITO.md` (voce 7), con la condizione riscritta su cio' che oggi la
+   * regge davvero. */
   --slot-min: calc(
     var(--sp-3) + var(--body-min) + var(--sp-2) + var(--rows-fixed) * var(--line-note) +
       var(--sp-2) + var(--tap-min) + var(--sp-3)
   );
-  /* Lo stato vuoto di oggi non e' mezza schermata come nello Storico: sopra c'e'
-   * gia' tutto il periodo. */
-  --blank-min: 22dvh;
+
+  /* **Lo stato vuoto della coda non riserva niente, e la riserva che c'era non
+   * proteggeva nessuno.**
+   *
+   * Qui c'era `--blank-min: 22dvh` (185,67 px a 844 di altezza) con questa
+   * ragione scritta accanto: *"non e' mezza schermata come nello Storico, sopra
+   * c'e' gia' tutto il periodo"*. La ragione parlava di **quanto**; il numero
+   * pero' non era una misura tipografica, era una **riserva**, e una riserva ha
+   * un mestiere solo: impedire che cio' che sta sotto si sposti quando arrivano i
+   * dati.
+   *
+   * Sotto di lei non c'e' niente. `.days` e' la coda — l'ultimo blocco della
+   * Home, l'unico senza altezza riservata (vedi il suo commento), e cio' che
+   * contiene non e' riservabile per costruzione: le righe di oggi sono cinquemila
+   * nel caso peggiore. Di una coda il guscio garantisce **dove comincia**, non
+   * cosa contiene.
+   *
+   * **Verificato disfacendo, non dedotto.** Con `--blank-min` forzato a 0, in tre
+   * scene (senza budget / budget con oggi vuoto / budget con oggi pieno) e a tre
+   * viewport (390x844, 320x844, 800x327), guscio contro dati:
+   *
+   *     .days.top  361,94 -> 361,94    375,73 -> 375,73    356,69 -> 356,69
+   *     CLS 0, zero voci `layout-shift`, in tutte e nove
+   *
+   * Identico a prima. Niente si sposta perche' non c'e' niente da spostare: nel
+   * guscio il messaggio non esiste, quindi non e' un elemento che si muove — e'
+   * un elemento che compare.
+   *
+   * E c'era un secondo indizio che la riserva non riservava: **a 667 e a 327 punti
+   * di altezza era gia' inerte**. Con la geometria di allora il messaggio occupava
+   * 173,75 px da solo, e 22dvh a 667 valgono 146,7, 30dvh a 327 ne valgono 98,1:
+   * tutti e due **sotto** il contenuto. Su due dei tre viewport di prova quel
+   * numero non decideva niente gia' prima, e nessuno se n'era accorto.
+   *
+   * Quello che decideva, dove decideva, era l'unica cosa che poteva decidere:
+   * 11,92 px di aria in piu' a 844, spartiti sopra e sotto un messaggio di due
+   * frasi. **Non i 75 che sembravano**: quei 75 erano il confronto fra il testo
+   * nudo (109,75) e la riserva (185,67), e mettevano in conto alla riserva anche i
+   * 64 px di padding, che sono della scatola e stanno in fondo a questo file.
+   *
+   * `0` e non la rimozione della riga: `Blank.css` ha `var(--blank-min, 60dvh)`, e
+   * senza dichiarazione il ripiego dello Storico — **mezza schermata** — si
+   * prenderebbe la coda della Home. La dichiarazione e' il modo di dire "qui
+   * zero", che e' una scelta; l'assenza direbbe 60dvh, che e' un incidente. */
+  --blank-min: 0;
 }
 
 /* --- il periodo e il numero grande --------------------------------------- */
@@ -866,6 +958,39 @@
   letter-spacing: normal;
 }
 
+/* **Lo stesso argomento, applicato alla scatola invece che alla tipografia.**
+ *
+ * La regola qui sopra e' vecchia di una fase e dice *"e' un vuoto secondario,
+ * quindi non prende la misura dello Storico"*. Non nomina il corpo del carattere:
+ * lo nomina solo la riga che la applica. Applicata alla scatola dice la stessa
+ * cosa e cade in un posto diverso — **la geometria dello Storico era rimasta**,
+ * cioe' 32 px di padding sopra e sotto, il contenuto centrato dentro la riserva,
+ * e il messaggio che comincia a 38 px dal filo della sezione.
+ *
+ * Lo Storico ha ragione di essere fatto cosi': li' il messaggio e' **la pagina**,
+ * e una cosa che e' la pagina si centra. Qui il messaggio e' **cio' che si legge
+ * al posto delle righe di oggi**, quindi comincia dove comincerebbero le righe:
+ * `.today__head` stacca dal filo di `var(--sp-3)`, e questo stacca uguale.
+ *
+ * I numeri, misurati a 390 punti e presi **dal filo della sezione** invece che
+ * dalla cima della pagina — l'altra meta' di questa passata alza `.days` di 15
+ * px, e sommare due effetti in una cifra sola e' il modo di non poter piu' dire
+ * quale dei due ha fatto cosa:
+ *
+ *     distanza del titolo dal filo di `.days`    38,95 px  ->  13
+ *     altezza del blocco                        185,67 px  ->  145,75
+ *
+ * I 13 px non sono un numero scelto: sono `var(--sp-3)` piu' il filo, cioe' **lo
+ * stesso stacco di `.today__head`**. Il messaggio e le righe che sostituisce
+ * cominciano allo stesso pixel.
+ *
+ * `padding-block-end` piu' generoso del principio perche' sotto non c'e' un filo
+ * che chiuda: c'e' la fine della colonna e poi la corsia del FAB. Un messaggio
+ * appoggiato al bordo inferiore del contenuto si legge come troncato. */
+.days .blank {
+  padding-block: var(--sp-3) var(--sp-5);
+}
+
 /* --- il telefono girato --------------------------------------------------- */
 /* A 327 punti di altezza la colonna non ci sta e la Home scorre: e' il
  * comportamento giusto, non una rottura. Qui si toglie solo l'eccesso: un
@@ -884,10 +1009,13 @@
  * una finestra alta 327 — che scorre gia' — al prezzo di portare il pavimento
  * sul filo non e' uno scambio: la striscia si legge in orizzontale quanto in
  * verticale, e questa e' l'unica misura di questo file che un altro file usa
- * come premessa. */
+ * come premessa.
+ *
+ * **E `--blank-min: 30dvh` non c'e' piu'**, insieme a quello in verticale. Qui
+ * valeva 98,1 px contro i 173,75 che il messaggio occupa da solo: era gia'
+ * inerte, cioe' una riga che dichiarava una riserva senza produrne una. */
 @media (max-height: 480px) and (orientation: landscape) {
   .home {
     --fs-hero: 2.5rem;
-    --blank-min: 30dvh;
   }
 }

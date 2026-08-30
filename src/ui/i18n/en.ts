@@ -98,9 +98,12 @@ export const en: Record<keyof typeof it, string> = {
   'hero.noBudget': 'no budget set for this period',
   'hero.note': 'of {budget} · {spent} spent',
 
+  // Due righe, e la ragione sta in it.ts: **e' l'inglese a decidere la riserva**
+  // del riquadro, quindi e' questa frase che va misurata prima di allungarla.
+  // A 390 e 375 punti la versione con la coda `, instead of how much you have
+  // already spent.` ne prendeva tre.
   'home.invite.before': 'With a budget this line becomes ',
-  'home.invite.strong': 'how much you can spend today',
-  'home.invite.after': ', instead of how much you have already spent.',
+  'home.invite.strong': 'how much you can spend today.',
   'home.budget.set': 'Set a budget',
   'home.budget.change': 'Change the budget',
   'home.blank.title': 'Nothing written down today',
