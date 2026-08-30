@@ -54,6 +54,21 @@ jobs:
       - name: Campi e chiavi senza controparte
         run: npm run audit:source
 
+      # I quattro pavimenti della palette delle categorie, su tutte le 28 coppie
+      # e in tutti e due i temi. Sta qui accanto ad `audit:source` perche' e' la
+      # stessa famiglia: un difetto che una suite verde non vede per definizione.
+      #
+      # Dalla fase 6 il colore di una fetta **e'** il dato, non l'ornamento: due
+      # tinte troppo vicine non producono un test rosso da nessuna parte, e sullo
+      # schermo non producono due categorie — producono una fetta piu' grande.
+      # Costa poche decine di millisecondi e non legge niente dalla rete.
+      #
+      # Ferma la pipeline, e per la riga di calibrazione di questo repo: la
+      # riparazione e' meccanica (si cambia un esadecimale finche' il referto
+      # torna verde), quindi bloccare non costa un giudizio a nessuno. `npm run
+      # audit:palette -- --palette "#..."` valuta un candidato senza scriverlo.
+      - name: Pavimenti della palette
+        run: npm run audit:palette
 
       - name: Test
         run: npm test

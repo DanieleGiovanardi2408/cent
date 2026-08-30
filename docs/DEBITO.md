@@ -613,6 +613,47 @@ degli amici lo fa emergere** — cioe' se qualcuno che non ha scritto l'app chie
 impedisce di leggere quel numero come mensile, ed e' quindi parte di questa voce e
 non una rifinitura del copy.
 
+## 10. Le otto tinte nuove non hanno un nome parlato, e la ottava non ce l'ha per costruzione
+
+**Stato: aperto.** Nato il 30 agosto, insieme alla palette che passa i quattro
+pavimenti di `scripts/palette.mjs`.
+
+**Cosa.** `COLOR_NAMES`, in `src/ui/CategorySheet.tsx`, associa un nome parlato a
+ogni tinta della tavolozza ed e' indicizzata sull'**esadecimale**. Gli otto
+esadecimali sono cambiati, quella mappa no: chi esplora la tavolozza con la voce
+sente adesso otto volte *"Colore"* invece di *"Verde"*, *"Arancio"*, e cosi' via.
+La mappa non e' rotta — le sue otto voci restano vere per le categorie di chi ha
+gia' l'app, che tengono i colori vecchi — ma non copre piu' cio' che si offre a
+chi installa oggi.
+
+**Perche' non l'ha riparata chi ha cambiato le tinte.** `CategorySheet.tsx` e
+`src/ui/i18n/*` erano in mano a un altro agente nello stesso momento, ed e' la
+ragione gia' scritta nella voce 8: cancellare o riscrivere dentro un file che
+qualcuno sta scrivendo non produce un conflitto, produce lavoro perso.
+
+**La parte che non e' un rinvio ma una decisione da prendere.** Le chiavi di
+colore nei due dizionari sono **otto**, una per famiglia, e una di esse e'
+`color.grey`. La palette nuova **non ha un grigio**: Extra e' un blu d'acciaio
+(`#2a6198`), perche' un grigio ha croma 0,015 e in una ciambella si legge come
+*resto* e non come categoria. Quindi non esiste una chiave che descriva la nuova
+ottava tinta, e le due candidate hanno costi diversi:
+
+- **rinominare `color.grey`** in qualcosa come `color.navy` — tre righe (i due
+  dizionari e la mappa), ed e' la sola che non lascia due voci con lo stesso
+  nome. `color.grey` **non si puo' semplicemente cancellare**: perderebbe il suo
+  unico lettore e `npm run audit:source`, controllo B, fallirebbe;
+- **riusare `color.blue` per tutte e due** le tinte fredde — nessuna modifica ai
+  dizionari, ma due pastiglie che si annunciano *"Blu"* in una tavolozza dove
+  servono a distinguersi. E' la scelta che sembra piu' piccola e non lo e'.
+
+**La condizione che lo rende non piu' accettabile**: al primo giro in cui
+`CategorySheet.tsx` e i dizionari sono liberi. Non oltre la chiusura della fase 6
+— la palette e' visibile da subito, e questa e' l'unica schermata in cui la si
+tocca. Fino ad allora vale la nota gia' scritta accanto a `COLOR_NAMES`: *"una
+tinta che non fosse in tavolozza resta senza nome proprio e si annuncia come
+'Colore': una bugia sarebbe peggio"*. Qui il ripiego e' quello, ed e' onesto —
+solo, non e' piu' il caso raro per cui era stato scritto.
+
 ## 3. Rischi noti gia' scritti altrove
 
 Non si duplicano qui, per non creare la diciannovesima copia che parafrasa:

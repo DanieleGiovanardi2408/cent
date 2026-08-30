@@ -66,29 +66,58 @@ export interface CategorySeed {
  * cioe' con zero tap, e un chip che non si tocca mai occuperebbe un posto in
  * griglia togliendolo a uno che si tocca ogni giorno.
  *
- * I `color` qui sotto sono **definitivi**, e sono un sistema unico: non otto
- * scelte separate. Sono stati ricavati per ricerca su OKLCH massimizzando il
- * ΔE00 minimo fra tutte le 28 coppie, valutato anche sulle viste simulate per
- * deuteranopia, protanopia e tritanopia — non a occhio. Dalla fase 6 sono la
- * palette dei grafici, quindi devono restare distinguibili anche come aree
- * adiacenti, non solo come chip distanziati.
+ * I `color` qui sotto sono un sistema unico, non otto scelte separate, e **il
+ * loro guardiano e' `scripts/palette.mjs`** (`npm run audit:palette`, in CI):
+ * quattro pavimenti — vista piena, tre simulazioni CVD, croma, banda di
+ * luminosita' nei due temi — misurati su **tutte le 28 coppie**. Le fonti dei
+ * quattro numeri stanno nell'intestazione di quello script. Chi cambia una di
+ * queste righe lo scopre li' in quaranta secondi, non in una schermata.
+ *
+ * ## Perche' sono cambiati il 30 agosto, e cosa non e' cambiato
+ *
+ * Con le barre il colore era ornamento: la lunghezza portava il dato. Dalla
+ * fase 6 c'e' una **ciambella**, e li' il colore **e'** il dato — due fette che
+ * non si distinguono non sono due categorie, sono una fetta piu' grande. La
+ * palette precedente cadeva su tutti e quattro i pavimenti: ΔE 9,4 fra Spesa e
+ * Coffeeshop a vista piena (pavimento 15), ΔE 4,3 fra Svago ed Extra in
+ * deuteranopia (pavimento 8), tre tinte sotto la croma minima e quattro fuori
+ * dalla banda del tema scuro.
+ *
+ * **Extra non e' piu' un grigio.** `#676c75` aveva croma 0,015: il grigio e' il
+ * colore con cui l'interfaccia dice *"qui non c'e' un dato"* — disabilitato,
+ * segnaposto, l'aggregato delle orfane nelle Statistiche. Una fetta grigia in
+ * una ciambella si legge come **resto**, non come categoria. Ed era anche la
+ * meta' della coppia peggiore sotto CVD, il che non e' una coincidenza: una
+ * tinta senza croma non ha niente da perdere in una simulazione.
+ *
+ * **Cambiano i default, non le categorie esistenti.** Sono dati dell'utente:
+ * chi ha gia' l'app tiene i propri colori, e nessuna migrazione li tocca. Vale
+ * finche' il parco installato e' piccolo abbastanza da poterlo dire.
+ *
+ * ## Una sola colonna, e la conseguenza
+ *
+ * La disciplina dei grafici vorrebbe **due** colonne, una per fondo. Qui non si
+ * puo': `Category.color` e' un campo solo e il suo valore lo sceglie l'utente,
+ * quindi un secondo campo sarebbe una superficie che nessuno produce. Queste
+ * otto tinte stanno percio' nell'**intersezione** delle due bande di
+ * luminosita', L fra 0,48 e 0,67: una tinta, due fondi, nessuna derivazione a
+ * runtime.
  *
  * Il colore **non tinge mai il testo** del chip: nessun singolo esadecimale puo'
  * stare in contrasto AA sia sul fondo chiaro sia su quello scuro. Il colore vive
- * come superficie, l'etichetta usa `--text`. Chi cambia questi valori cambia
- * anche i grafici della fase 6: non e' una scelta estetica locale.
+ * come superficie, l'etichetta usa `--text`.
  */
 export const DEFAULT_CATEGORY_SEEDS: readonly CategorySeed[] = [
   // Riga 1
-  { key: 'groceries', emoji: '🛒', color: '#81a369' },
-  { key: 'eatingOut', emoji: '🍽️', color: '#f26b00' },
-  { key: 'coffeeshop', emoji: '🌿', color: '#06b0a0' },
-  { key: 'cigarettes', emoji: '🚬', color: '#845e23' },
+  { key: 'groceries', emoji: '🛒', color: '#709951' },
+  { key: 'eatingOut', emoji: '🍽️', color: '#fc5401' },
+  { key: 'coffeeshop', emoji: '🌿', color: '#00a6c6' },
+  { key: 'cigarettes', emoji: '🚬', color: '#895c02' },
   // Riga 2
-  { key: 'transport', emoji: '🚇', color: '#3f5db6' },
-  { key: 'leisure', emoji: '🎬', color: '#b90e5c' },
-  { key: 'home', emoji: '🏠', color: '#bc85ec' },
-  { key: 'extra', emoji: '🔖', color: '#676c75' },
+  { key: 'transport', emoji: '🚇', color: '#3157fa' },
+  { key: 'leisure', emoji: '🎬', color: '#b90f60' },
+  { key: 'home', emoji: '🏠', color: '#9861c7' },
+  { key: 'extra', emoji: '🔖', color: '#2a6198' },
 ]
 
 /**
