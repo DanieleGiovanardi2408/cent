@@ -468,6 +468,81 @@ questo progetto ha visto cadere tre volte.
 se un giorno la finestra smettesse di finire col periodo corrente — la coincidenza
 cade da sola e la voce si chiude per altra via.
 
+## 7. La riserva della Home avanza di 76,75 px nello stato piu' comune
+
+**Cosa.** `--slot-min` in `Home.css` copre lo stato **senza** budget (198,25 px a
+390 punti). Lo stato con budget tipico — una riga di disponibilita', nessuna nota
+di ADR 010, nessuna spesa fissa scattata nel periodo — ne prende 121,5. Avanzano
+**76,75 px di spazio vuoto**, sempre, nella schermata che si apre piu' spesso.
+
+**Perche' non e' riparabile con un altro `max()`.** Il guscio si dipinge prima di
+sapere se un budget esiste (regola "Ordine di pittura"), quindi deve riservare il
+piu' alto dei due stati; e il gate `home.spec.ts`, "la Home non salta / passando da
+senza budget a con budget", pretende — giustamente — che impostare un budget non
+sposti la coda. Le due cose insieme obbligano a un solo numero, e quel numero e' il
+massimo.
+
+**Cosa e' stato fatto invece.** Si e' scelto **dove** cade lo spazio, che e'
+l'unica leva rimasta. Cade in fondo al blocco, fra il bottone del budget e il filo
+che chiude la sezione, dove si legge come l'aria di una sezione prima del suo
+divisore. La forma provata prima — piede ancorato in basso — lasciava il bottone
+120 px sotto la riga a cui appartiene, cioe' il difetto "il bottone galleggia"
+spostato invece che chiuso. Guardato a schermo, non dedotto.
+
+**La condizione che chiude questa voce**: lo stato senza budget dimagrisce fino a
+non essere piu' il massimo — oggi e' 15 px sopra lo stato con budget piu' alto, e
+il suo peso e' `home.invite` a tre righe in inglese. Il giorno in cui quella copy
+sta in due righe, il massimo torna alla colonna col budget e l'avanzo scende a
+quello che la riserva della disponibilita' e di `.since` gia' comportano.
+
+**E la sentinella c'e' gia'**: `home.spec.ts`, "una riga di troppo sfonda la
+riserva", pretende che sullo stato piu' alto la riserva avanzi **meno di una riga
+minima** (16,25 px). Oggi avanza 15. Se lo scarto fra i due stati crescesse ancora,
+quel test cade — cioe' questa voce non puo' peggiorare in silenzio.
+
+## 8. `spentRatio` in `budget-view.ts` non ha piu' lettori di produzione — **CHIUSA**
+
+**Cosa.** La barra del periodo e' uscita dalla Home (l'argomento sta in testa a
+`Home.tsx`). `spentRatio` era la sua unica chiamante di produzione: adesso e'
+tenuta viva soltanto dai quattro `expect` che la esercitano in
+`budget-view.test.ts`.
+
+E' la forma esatta di `expensesInRange` e di `planBudgetChange`, cancellate in
+questo repo per questa ragione: **un'API pubblica senza chiamanti, mantenuta viva
+dai test che la chiamano.** Il controllo `audit:source` non la vede — guarda i
+campi dei tipi e le chiavi i18n, non le funzioni esportate.
+
+**Perche' e' ancora li'.** `budget-view.ts` era in mano a un altro agente nel
+momento in cui la barra e' uscita, e cancellare una funzione dentro un file che
+qualcun altro sta scrivendo produce il conflitto peggiore: non un merge, un pezzo
+di lavoro perso.
+
+**La condizione che chiude questa voce**: `spentRatio` e i suoi test si cancellano
+alla prima sessione in cui `budget-view.ts` e' fermo. Se invece la barra tornasse
+in qualche forma, la funzione riacquista un lettore e la voce si chiude da sola —
+ma allora torna anche il vincolo dei 3:1 su `--over` come superficie, che
+`colori.spec.ts` non sorveglia piu'.
+
+### CHIUSA il 30 agosto: la condizione si e' avverata nello stesso giro
+
+`budget-view.ts` si e' fermato — `data-core` aveva finito la striscia e `ui-craft`
+non lo tocca — e la funzione e' stata cancellata con le sue quattro asserzioni.
+**La prima meta' della condizione, non la seconda**: la barra non e' tornata, quindi
+il vincolo dei 3:1 su `--over` come superficie resta fuori da `colori.spec.ts`, e
+resta scritto dove rimetterlo.
+
+**Questa voce e' vissuta poche ore, e va detto perche' e' il caso buono.** Non e'
+stata scritta per rimandare: e' stata scritta perche' nel momento in cui il difetto
+e' nato **il file era in mano a un altro agente**, e cancellare dentro un file che
+qualcuno sta scrivendo produce il conflitto peggiore — non un merge, un pezzo di
+lavoro perso. La voce ha fatto esattamente il suo mestiere: **ha tenuto il difetto
+fuori dalla memoria di una sessione**, che e' il posto dove muore.
+
+E la prova che serviva davvero: la cancellazione non e' stata ricordata, e' stata
+**letta da qui** da chi ha coordinato il giro dopo. Un difetto accettato con la sua
+condizione scritta e' una decisione; lo stesso difetto tenuto a mente e' una
+scommessa sul fatto che qualcuno se ne ricordi.
+
 ## 3. Rischi noti gia' scritti altrove
 
 Non si duplicano qui, per non creare la diciannovesima copia che parafrasa:

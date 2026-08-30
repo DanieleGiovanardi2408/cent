@@ -50,6 +50,12 @@ import { chiudiGuida, expect, test } from './installed'
 import { fontPronto, TEST_FONT } from './font'
 import { fissaOrologio, giornoDichiarato } from './clock'
 import type { Page } from '@playwright/test'
+// Il pavimento della colonna vive nel modello e il suo denominatore e' un
+// **contratto su `--strip-h`**, che sta in `Home.css`. I due file non si vedono,
+// quindi il legame non puo' essere affidato a due commenti: si importa la
+// costante e si risolve il token dalla pagina. E' il gemello di cio' che
+// `statistiche.spec.ts` fa con `BAR_MIN_FRACTION` e `--plot-min`.
+import { COLUMN_MIN_FRACTION } from '../../src/ui/budget-view'
 
 interface Shift {
   readonly value: number
@@ -104,6 +110,33 @@ interface Mark {
  * bastasse, l'altezza cambierebbe con i dati e tutto quello che sta sotto
  * scenderebbe. Guardarla li' dice **quale** riserva ha ceduto invece di dire
  * soltanto che qualcosa e' sceso.
+ *
+ * ## Cosa non e' piu' un blocco del guscio, e perche' non e' un indebolimento
+ *
+ * Qui c'erano `.today` e `.today__head`. Adesso c'e' `.days`, che e' la stessa
+ * sezione con dentro anche la striscia dei sette giorni, e **l'intestazione non
+ * c'e' piu'**.
+ *
+ * La ragione non e' che il difetto sia diventato tollerabile: e' che
+ * l'invariante era scritto piu' stretto del fatto che difendeva. `.days` e' la
+ * **coda** della Home — l'unico blocco senza altezza riservata, e l'ultimo:
+ * sotto di lei non c'e' niente. Cio' che il guscio deve garantire di una coda
+ * e' **dove comincia**, non cosa contiene; il numero di righe di oggi non e'
+ * riservabile per costruzione (sono cinquemila nel caso peggiore), e la
+ * `.blank` del guscio e' un segnaposto della coda, non la riserva di un blocco
+ * preciso.
+ *
+ * `.today__head` invece **esiste solo quando la giornata ha righe**, che e' un
+ * fatto che il guscio non puo' conoscere. Con la regola precedente — un blocco
+ * che manca nel guscio e' un difetto — quell'intestazione era obbligata a
+ * esistere anche a giornata vuota, dove non ha niente da intestare: la regola
+ * del gate stava **decidendo un pezzo di prodotto**, e lo decideva male.
+ *
+ * Cio' che resta sorvegliato e' il fatto vero: `.days` comincia allo stesso
+ * pixel prima e dopo i dati. Se un giorno la striscia o l'intestazione
+ * spostassero qualcosa **sopra** di loro, cadrebbe li'. E la rete del CLS
+ * continua a guardare tutto il resto, compreso cio' che si muove dentro la
+ * coda.
  */
 const LANDMARKS: readonly Mark[] = [
   { sel: '.app__bar', box: true, height: false },
@@ -118,8 +151,7 @@ const LANDMARKS: readonly Mark[] = [
   { sel: '.hero__note', box: false, height: false },
   { sel: '.slot', box: true, height: true },
   { sel: '.budget', box: false, height: false },
-  { sel: '.today', box: true, height: false },
-  { sel: '.today__head', box: false, height: false },
+  { sel: '.days', box: true, height: false },
   { sel: '.fab', box: true, height: false },
 ]
 
@@ -602,10 +634,10 @@ test.describe('la Home non salta, con budget e 5.000 spese, sforando', () => {
    * fossero il conto giusto.
    *
    * Adesso il fatto lo dicono **il numero col suo segno, l'etichetta sopra di
-   * lui e il colore** (che qui e' un segnale solo: il colore accompagna il
-   * numero, e la barra piena e' la stessa cosa in geometria). La riga sotto la
-   * barra ha smesso di ripeterlo e porta **i due numeri che nessun altro dava**:
-   * il passo tenuto e quello sostenibile.
+   * lui e il colore**, e sono tre affermazioni in un posto solo: la barra piena
+   * era la quarta, la stessa cosa detta in geometria, ed e' uscita. La riga
+   * sotto porta **i due numeri che nessun altro dava**: il passo tenuto e quello
+   * sostenibile.
    *
    * L'asserzione che conta e' quindi diventata **negativa**: nessuna frase
    * ridice cio' che il numero grande ha gia' detto. Un `toHaveText` su una
@@ -620,7 +652,15 @@ test.describe('la Home non salta, con budget e 5.000 spese, sforando', () => {
     await expect(page.locator('.hero__value')).toHaveAttribute('data-tone', 'over')
     await expect(page.locator('.hero__value')).toContainText('-')
     await expect(page.locator('.hero__label')).toHaveText('Oltre il budget')
-    await expect(page.locator('.track')).toHaveAttribute('data-tone', 'over')
+
+    // **E la barra del periodo non c'e' piu'**, ne' sforata ne' altrove.
+    // L'asserzione e' negativa di proposito: e' l'unica forma che cade se
+    // qualcuno la rimette. Oltre il budget era al 100% sempre — identica a 1,01
+    // volte il budget e a quattro — cioe' una marca con lo stesso aspetto in
+    // tutto un ramo; sotto il budget misurava `speso / budget`, che questa
+    // schermata dice gia' col numero, con l'etichetta e con la nota. Il conto
+    // completo sta in testa a `Home.tsx`.
+    await expect(page.locator('.track')).toHaveCount(0)
 
     // E la riga azionabile non lo ripete: porta i giorni e i due passi.
     const allowance = page.locator('.allowance')
@@ -655,7 +695,7 @@ test.describe('la Home non salta', () => {
      */
     const headTop = (): Promise<number> =>
       page.evaluate(() => {
-        const el = document.querySelector('.today__head')
+        const el = document.querySelector('.days')
         const home = document.querySelector('.home')
         if (el === null || home === null) return -1
         return Math.round(
@@ -670,7 +710,7 @@ test.describe('la Home non salta', () => {
     const after = await headTop()
 
     expect(before).toBeGreaterThan(0)
-    expect(after, 'impostare un budget ha spostato le spese di oggi').toBe(before)
+    expect(after, 'impostare un budget ha spostato la coda della Home').toBe(before)
   })
 })
 
@@ -1270,13 +1310,37 @@ async function misuraRiserva(page: Page): Promise<Riserva> {
     // La riserva si toglie per un istante, si legge quanto il contenuto vuole
     // davvero e si rimette: e' l'unico modo di sapere **quanto avanza**, che e'
     // la meta' interessante della domanda.
-    const prima = slot.style.minBlockSize
+    //
+    // **Le riserve sono due, e toglierne una sola falsificava la misura.** Dalla
+    // striscia in poi anche `.slot__body` ha il suo `min-block-size` — e' quello
+    // che tiene fermo il bottone del budget fra guscio e dati — quindi azzerando
+    // solo quella del riquadro il "naturale" tornava identico al "riservato" e
+    // tutte e due le asserzioni diventavano tautologie: l'avanzo sempre zero, e
+    // la controprova che allunga `.since` sempre verde perche' la riga in piu'
+    // veniva assorbita dalla riserva interna. Trovato rileggendo, non da un
+    // rosso: e' precisamente la classe di difetto che questo file esiste per
+    // sorvegliare, comparsa dentro il file stesso.
+    const body = slot.querySelector('.slot__body')
+    if (!(body instanceof HTMLElement)) {
+      throw new Error('il corpo del riquadro non e\' in pagina: la misura sarebbe falsa')
+    }
+    const primaSlot = slot.style.minBlockSize
+    const primaBody = body.style.minBlockSize
     slot.style.minBlockSize = '0px'
+    body.style.minBlockSize = '0px'
     const naturale = px(slot.getBoundingClientRect().height)
-    slot.style.minBlockSize = prima
+    slot.style.minBlockSize = primaSlot
+    body.style.minBlockSize = primaBody
 
     const righe: Record<string, number> = {}
-    for (const el of [...slot.children]) {
+    // **I nipoti, non i figli.** Il riquadro adesso ha due contenitori — il
+    // corpo e il piede — e le frasi che la riserva somma stanno dentro di loro.
+    // Con `slot.children` le chiavi diventavano `.slot__body` e `.slot__foot`,
+    // che `dichiarate` non conosce: il ciclo delle asserzioni sui conteggi
+    // faceva `continue` su tutto e il test restava verde **senza misurare piu'
+    // niente**. E' la forma esatta del difetto che questo file esiste per non
+    // avere.
+    for (const el of [...slot.children].flatMap((figlio) => [...figlio.children])) {
       const range = document.createRange()
       range.selectNodeContents(el)
       const tops = new Set([...range.getClientRects()].map((r) => Math.round(r.top * 10) / 10))
@@ -1496,4 +1560,170 @@ test('una riga di troppo sfonda la riserva, cioe\' il gate cade ancora', async (
     dopo.altezza,
     'con una riga in piu\' il riquadro e\' rimasto identico: la riserva assorbe, quindi il gate non guarda piu\' niente',
   ).toBeGreaterThan(prima.riservato)
+})
+
+
+/* ------------------------------------------------------------------------- *
+ * La striscia dei sette giorni.
+ * ------------------------------------------------------------------------- */
+
+/** L'altezza della striscia **risolta in pixel dalla pagina**, non riletta dal foglio. */
+async function stripHPx(page: Page): Promise<number> {
+  return page.evaluate(() => {
+    const week = document.querySelector('.week')
+    if (week === null) throw new Error('nessuna striscia da cui leggere --strip-h')
+    const sonda = document.createElement('div')
+    sonda.style.cssText = 'position:absolute;visibility:hidden;block-size:var(--strip-h)'
+    week.appendChild(sonda)
+    const altezza = sonda.getBoundingClientRect().height
+    sonda.remove()
+    return altezza
+  })
+}
+
+/** Le colonne dipinte davvero: l'altezza in pixel dell'inchiostro, in ordine. */
+async function colonne(page: Page): Promise<readonly number[]> {
+  return page.evaluate(() =>
+    [...document.querySelectorAll('.week__ink')].map(
+      (el) => Math.round(el.getBoundingClientRect().height * 100) / 100,
+    ),
+  )
+}
+
+/**
+ * **Il numero che il modello non puo' verificare da solo.**
+ *
+ * `COLUMN_MIN_FRACTION` e' `COLUMN_MIN_INK_PX / STRIP_MIN_PX`, cioe' `2 / 48`:
+ * due pixel di inchiostro minimo, divisi per un'altezza della striscia che
+ * `budget-view.ts` **assume** invece di leggere. Se `--strip-h` scendesse sotto
+ * quei 48 px, la colonna piu' corta prenderebbe meno di due pixel e un giorno in
+ * cui si e' speso si dipingerebbe come un giorno vuoto — cioe' la striscia
+ * direbbe il falso proprio sulla domanda per cui esiste. Nessun test del modello
+ * potrebbe vederlo: quel modulo non sa cosa valga il token.
+ *
+ * Le asserzioni sono due, e dicono due cose diverse:
+ *
+ * 1. **il contratto regge**: `--strip-h × COLUMN_MIN_FRACTION >= 2`. Il `2` e'
+ *    scritto qui perche' qui e' il **requisito** — una colonna che porta un
+ *    importo positivo deve prendere abbastanza inchiostro da distinguersi dalla
+ *    base — mentre nel modello e' una delle sue implementazioni. Importare la
+ *    costante e riasserire la costante sarebbe una tautologia;
+ * 2. **il CSS usa la frazione del modello**: la colonna piu' corta dipinta vale
+ *    almeno `--strip-h × COLUMN_MIN_FRACTION`. Un `cents / scaleCents` scritto
+ *    nel foglio invece della `fraction` salterebbe la traslazione, e questa
+ *    riga cadrebbe.
+ *
+ * Gira su tutti e tre i progetti geometrici, orizzontale compreso: e' li' che
+ * l'altezza e' il vincolo vero, ed e' li' che qualcuno sarebbe tentato di
+ * abbassare `--strip-h` per guadagnare spazio.
+ */
+test('il pavimento della colonna: --strip-h regge il contratto del modello', async ({
+  page,
+}, testInfo) => {
+  await fissaOrologio(page)
+  await page.goto('./')
+  await expect(page.locator('.budget')).toBeEnabled()
+  await chiudiGuida(page)
+
+  // Un centesimo contro cinquemila euro: il rapporto piu' schiacciato che si
+  // possa seminare, cioe' la colonna piu' corta che la mappa sappia produrre.
+  // Senza il pavimento sarebbe alta 0,0000016 px.
+  await seedOn(page, [
+    ['2026-08-17', 1],
+    ['2026-08-18', 500_000],
+  ])
+  await page.reload()
+  await expect(page.locator('.week')).toBeVisible()
+
+  const strip = await stripHPx(page)
+  const dipinte = await colonne(page)
+  const pavimento = strip * COLUMN_MIN_FRACTION
+  const piuCorta = Math.min(...dipinte.filter((h) => h > 0))
+  console.log(
+    `\n  [${testInfo.project.name}] striscia: --strip-h ${strip}px · pavimento ${
+      Math.round(pavimento * 100) / 100
+    }px · colonne ${JSON.stringify(dipinte)}`,
+  )
+
+  expect(
+    pavimento,
+    `--strip-h vale ${strip}px: la colonna piu' corta prenderebbe ${
+      Math.round(pavimento * 100) / 100
+    }px di inchiostro, e sotto i 2 un giorno in cui si e' speso si legge come un giorno vuoto. ` +
+      'O si rialza --strip-h in Home.css, o si cambia COLUMN_MIN_FRACTION in budget-view.ts: ' +
+      'i due numeri non possono divergere in silenzio.',
+  ).toBeGreaterThanOrEqual(2)
+
+  expect(
+    piuCorta,
+    'la colonna piu\' corta e\' sotto il pavimento: il foglio non sta usando `DayBar.fraction`',
+  ).toBeGreaterThanOrEqual(pavimento - 0.01)
+})
+
+/**
+ * **Con niente da disegnare la striscia non c'e'**, e non e' un dettaglio: sette
+ * colonne a zero sono il telaio di un grafico senza dati, che occupa senza
+ * informare.
+ *
+ * E il fatto che possa mancare **senza spostare niente** e' la ragione per cui
+ * vive dentro la coda: e' l'altra meta' dell'invariante che `LANDMARKS`
+ * dichiara. Il test lo prova nel modo che cade se la coda smettesse di essere
+ * l'ultima: misura dove comincia `.days` con e senza striscia.
+ */
+test('la striscia non c\'e\' finche\' non c\'e\' niente da disegnare, e la coda non si muove', async ({
+  page,
+}) => {
+  await fissaOrologio(page)
+  await page.goto('./')
+  await expect(page.locator('.budget')).toBeEnabled()
+  await chiudiGuida(page)
+
+  const codaTop = (): Promise<number> =>
+    page.evaluate(() => {
+      const el = document.querySelector('.days')
+      const home = document.querySelector('.home')
+      if (el === null || home === null) return -1
+      return Math.round(
+        (el.getBoundingClientRect().top - home.getBoundingClientRect().top + home.scrollTop) * 100,
+      ) / 100
+    })
+
+  await expect(page.locator('.week')).toHaveCount(0)
+  const senza = await codaTop()
+
+  await seedOn(page, [[todayIso(), 1250]])
+  await page.reload()
+  await expect(page.locator('.week')).toBeVisible()
+  const con = await codaTop()
+
+  expect(senza).toBeGreaterThan(0)
+  expect(con, 'la striscia che arriva ha spostato la coda: allora non e\' nella coda').toBe(senza)
+})
+
+/**
+ * **A giornata vuota l'intestazione "Oggi" non c'e'.**
+ *
+ * Era seguita dal nulla, con `Oggi non hai segnato niente` otto righe sotto: lo
+ * stesso fatto due volte, con un buco in mezzo. Il copy resta — e' l'esempio
+ * giusto della regola *dove ci sono dati si mostrano numeri, dove non ce ne sono
+ * si parla* — e cade l'intestazione.
+ *
+ * Le due asserzioni stanno insieme perche' la seconda e' quella che tiene onesta
+ * la prima: un `toHaveCount(0)` da solo passerebbe anche se l'intestazione
+ * sparisse per sempre.
+ */
+test('l\'intestazione di oggi esiste solo dove c\'e\' qualcosa da intestare', async ({ page }) => {
+  await fissaOrologio(page)
+  await page.goto('./')
+  await expect(page.locator('.budget')).toBeEnabled()
+  await chiudiGuida(page)
+
+  await expect(page.locator('.today__head')).toHaveCount(0)
+  await expect(page.locator('.blank__title')).toBeVisible()
+
+  await seedOn(page, [[todayIso(), 1250]])
+  await page.reload()
+  await expect(page.locator('.row').first()).toBeVisible()
+  await expect(page.locator('.today__head')).toBeVisible()
+  await expect(page.locator('.today__total')).toHaveText('12,50 €')
 })

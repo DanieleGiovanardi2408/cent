@@ -181,12 +181,35 @@ export function heroCopy(m: BudgetMetrics): HeroCopy {
   }
 }
 
-/** Quanto e' pieno il periodo, 0..1. Oltre il budget: pieno, non oltre il bordo. */
-export function spentRatio(m: BudgetMetrics): number {
-  if (m.budgetCents === null) return 0
-  if (m.budgetCents <= 0) return m.spentCents > 0 ? 1 : 0
-  return Math.max(0, Math.min(1, m.spentCents / m.budgetCents))
-}
+/*
+ * **`spentRatio` non c'e' piu', ed e' uscita col suo ultimo lettore.**
+ *
+ * Diceva *"quanto e' pieno il periodo, 0..1; oltre il budget pieno, non oltre il
+ * bordo"*, e la leggeva la barra della Home. La barra e' stata tolta perche' oltre
+ * il budget era **al 100% sempre**, qualunque fosse lo sforamento: una marca che
+ * ha lo stesso aspetto in tutto un ramo non e' un grafico. E sotto il budget
+ * misurava `speso / budget`, che la schermata dice gia' col numero, con
+ * l'etichetta e con la nota — il suo `aria-label` **era letteralmente** la frase
+ * stampata venti pixel sopra.
+ *
+ * ## Perche' la funzione se n'e' andata con lei, e non e' zelo
+ *
+ * Restava con **zero chiamanti di produzione e quattro asserzioni che la tenevano
+ * viva**. E' la forma esatta di `expensesInRange` e `planBudgetChange`, cancellate
+ * da questo repository per la stessa ragione: un'API pubblica di dominio senza
+ * chiamanti e' una superficie che qualcuno usera' per sbaglio, e i test che la
+ * chiamano non sono una prova che serva — sono cio' che la fa **sembrare** viva.
+ *
+ * E' il precedente applicato una **terza** volta. Non ha eccezioni.
+ *
+ * ## La condizione, se qualcuno la rivolesse
+ *
+ * Torna il giorno in cui la Home mostra **quanto** si e' sforato invece che *se*.
+ * Quel disegno pero' non e' questa funzione: richiede di riscalare la traccia su
+ * `max(budget, speso)`, cioe' di **accorciare la rotaia del budget**, che e'
+ * esattamente l'argomento per cui `.stat__unlived` fu cancellata. Chi lo riapre
+ * riapre quello, non questo `clamp`.
+ */
 
 /* ------------------------------------------------------------------------- *
  * Il budget nato a periodo gia' cominciato (ADR 010).

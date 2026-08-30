@@ -137,6 +137,23 @@ export const it = {
   'home.blank.text':
     'Tocca il + qui sotto, digita l’importo e scegli la categoria. Sono due tap: si fa in cassa, con una mano.',
 
+  // --- la striscia dei sette giorni ---
+  //
+  // Il titolo e' della stessa famiglia di `stats.byPeriod.*` ("Settimana per
+  // settimana"), e non per gusto: e' la stessa domanda un gradino piu' in
+  // basso. Le Statistiche confrontano le settimane fra loro, questa striscia
+  // confronta i giorni dentro quella corrente — ed e' il gradino che l'app non
+  // aveva.
+  'home.week.title': 'Giorno per giorno',
+  // La legenda della linea. Porta **anche il numero**: il passo sostenibile e'
+  // `budget / giorni del periodo`, che **non e'** il numero della riga della
+  // disponibilita' (`rimanente / giorni rimanenti`). Sono due velocita' diverse,
+  // e una legenda senza cifra manderebbe a leggere il numero sbagliato due righe
+  // sopra.
+  'home.week.sustainable': '{amount} sostenibili al giorno',
+  'home.week.aria':
+    'Sette colonne, da lunedì a domenica: quanto è uscito ogni giorno. Il più alto è {day}, {amount}.',
+
   // **Una riga sola, ed era due.** Ogni voce di questo blocco portava un `main`
   // e un `sub`: due frasi per un fatto, esattamente cio' che la Home aveva in
   // sei copie. Il `sub` non aggiungeva un fatto — lo riformulava — quindi non e'

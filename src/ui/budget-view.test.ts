@@ -13,7 +13,6 @@ import {
   budgetStart,
   heroCopy,
   paceParts,
-  spentRatio,
   startNote,
   weekStrip,
 } from './budget-view'
@@ -262,21 +261,21 @@ describe('il numero grande', () => {
   })
 })
 
-describe('la barra del periodo', () => {
-  it('resta fra 0 e 1 anche sforando', () => {
-    expect(spentRatio(metrics({ today: MERCOLEDI, budgetCents: 20_000 }))).toBe(0)
-    expect(
-      spentRatio(metrics({ today: MERCOLEDI, budgetCents: 20_000, spese: [spesa(LUNEDI, 10_000)] })),
-    ).toBe(0.5)
-    expect(
-      spentRatio(metrics({ today: MERCOLEDI, budgetCents: 20_000, spese: [spesa(LUNEDI, 90_000)] })),
-    ).toBe(1)
-  })
-
-  it('senza budget non c e niente da riempire', () => {
-    expect(spentRatio(metrics({ today: MERCOLEDI, spese: [spesa(LUNEDI, 9000)] }))).toBe(0)
-  })
-})
+/*
+ * **Il blocco `la barra del periodo` non c'e' piu'.**
+ *
+ * Provava `spentRatio`, e le sue quattro asserzioni erano l'unica cosa che la
+ * teneva viva: zero chiamanti di produzione da quando la barra della Home e'
+ * stata tolta. Cancellarla e' il precedente di `expensesInRange` e
+ * `planBudgetChange`, applicato una terza volta.
+ *
+ * Va scritto **qui** e non solo sulla funzione, perche' e' qui che si vede la
+ * forma del difetto: quattro test verdi su una funzione che nessuno chiama non
+ * segnalano niente, e anzi la fanno sembrare coperta. Il controllo che trova i
+ * campi senza produttore non guarda le funzioni esportate — questa classe si
+ * chiude a mano, ed e' la ragione per cui il precedente e' scritto in CLAUDE.md
+ * invece che meccanizzato.
+ */
 
 describe('quanto puoi spendere al giorno', () => {
   /**

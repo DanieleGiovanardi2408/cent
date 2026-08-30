@@ -119,8 +119,15 @@
    * Ha un colore suo, **e non e' --danger**: il rosso e' la cosa che si e'
    * rotta, e qui non si e' rotto niente — si e' speso piu' del previsto, cosa
    * che chi ha speso sa gia'. E' un ambra scuro, leggibile come testo
-   * (5.5:1 su --bg, 5.1:1 su --surface-sunken) perche' colora sia una riga di
-   * testo sia la barra del progresso.
+   * (5.5:1 su --bg).
+   *
+   * **Colora solo testo**, e qui c'era scritto "sia una riga di testo sia la
+   * barra del progresso" con accanto un 5.1:1 su --surface-sunken. La barra del
+   * periodo e' uscita dalla Home (era al 100% in tutto il ramo sforato: vedi
+   * `Home.tsx`), quindi quel secondo numero non descriveva piu' niente. Se un
+   * giorno questo token tornasse a riempire una superficie, torna anche il
+   * vincolo dei 3:1 sui componenti non testuali, e la verifica che lo
+   * sorvegliava e' indicata in `colori.spec.ts`.
    * Non e' invisibile, pero': e' l'unico colore della Home diverso da --text e
    * --brand, quindi uno sforo si vede al primo sguardo senza gridare. */
   --over: #8a5a00;
@@ -152,7 +159,7 @@
     --brand-soft: #12332a;
     --on-brand: #06221a; /*  7.8:1 su --brand */
     --danger: #ff8a80; /*  8.1:1 su --bg */
-    --over: #e3b063; /*  9.4:1 su --bg, 9.9:1 su --surface-sunken */
+    --over: #e3b063; /*  9.4:1 su --bg */
     --focus: #35c795;
     --scrim: rgb(0 0 0 / 0.62);
     --shadow-1: 0 1px 2px rgb(0 0 0 / 0.5), 0 4px 12px rgb(0 0 0 / 0.35);

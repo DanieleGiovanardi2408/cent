@@ -81,6 +81,7 @@ interface Formats {
   readonly dayShort: Intl.DateTimeFormat
   readonly monthLong: Intl.DateTimeFormat
   readonly weekdayLong: Intl.DateTimeFormat
+  readonly weekdayShort: Intl.DateTimeFormat
   readonly dayAndMonth: Intl.DateTimeFormat
 }
 
@@ -104,6 +105,7 @@ function buildFormats(locale: string): Formats {
     }),
     dayShort: new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short' }),
     monthLong: new Intl.DateTimeFormat(locale, { month: 'long' }),
+    weekdayShort: new Intl.DateTimeFormat(locale, { weekday: 'short' }),
     weekdayLong: new Intl.DateTimeFormat(locale, { weekday: 'long' }),
     dayAndMonth: new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'long' }),
   }
@@ -445,6 +447,24 @@ export function fromDayLabel(period: BudgetPeriod, date: IsoDate): string {
   return period === 'weekly'
     ? t('fromDay.weekly', { day: formats.weekdayLong.format(at) })
     : t('fromDay.monthly', { day: formats.dayAndMonth.format(at) })
+}
+
+/**
+ * L'etichetta di una colonna della striscia dei sette giorni: `mer`, `Wed`.
+ *
+ * **`short` e non `narrow`, e la ragione e' la larghezza che c'e'.** `narrow`
+ * darebbe `L M M G V S D` in italiano e `M T W T F S S` in inglese: in tutte e
+ * due le lingue tre lettere su sette sono ambigue (M/M, T/T, S/S), e si
+ * disambiguano solo contando le colonne da lunedi'. Un grafico che si legge
+ * contando non risponde alla domanda per cui esiste — *in quale giorno parte la
+ * mano* — perche' la risposta e' il nome di un giorno.
+ *
+ * Il conto della larghezza dice che non serve pagare quell'ambiguita': a 320
+ * punti il passo di una colonna e' 41,1 px e `mer` a 13 px ne misura ~23,
+ * `Wed` ~27. Ci sta con margine nella lingua peggiore delle due.
+ */
+export function weekdayShortLabel(date: IsoDate): string {
+  return formats.weekdayShort.format(fromIsoDate(date))
 }
 
 /** `1 giorno` / `5 giorni`. Il singolare esiste ed e' il giorno che conta di piu'. */

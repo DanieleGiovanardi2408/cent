@@ -107,6 +107,13 @@ export const en: Record<keyof typeof it, string> = {
   'home.blank.text':
     'Tap the + below, type the amount and pick the category. Two taps: it works at the till, with one hand.',
 
+  // La striscia dei sette giorni. La legenda porta la cifra perche' il passo
+  // sostenibile non e' il numero della riga sopra: vedi it.ts.
+  'home.week.title': 'Day by day',
+  'home.week.sustainable': '{amount} a day is sustainable',
+  'home.week.aria':
+    'Seven columns, Monday to Sunday: what went out each day. The highest is {day}, {amount}.',
+
   // Una riga sola dove ce n'erano due: il `sub` riformulava il `main` invece di
   // aggiungere un fatto. Vedi it.ts.
   'allowance.closed': 'This period is over: the next one starts from scratch.',

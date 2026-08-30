@@ -543,28 +543,26 @@ test('lo sforo si legge, e non e\' lo stesso colore del resto', async ({ page },
     'testo sotto la soglia AA con lo sforo in pagina',
   ).toEqual([])
 
-  // `--over` colora testo **e** barra, quindi vale due volte: come testo deve
-  // stare sopra AA (sopra), come superficie deve staccarsi dalla traccia in cui
-  // sta — 3:1, la soglia dei componenti non testuali (WCAG 1.4.11).
-  const barra = await page.evaluate(() => {
-    const fill = document.querySelector('.track__fill') ?? document.querySelector('.track > *')
-    const track = document.querySelector('.track')
-    if (fill === null || track === null) return null
-    return {
-      pieno: getComputedStyle(fill).backgroundColor,
-      traccia: getComputedStyle(track).backgroundColor,
-      fondo: getComputedStyle(document.body).backgroundColor,
-    }
-  })
-  expect(barra, 'la barra del progresso non e\' in pagina').not.toBeNull()
-  if (barra !== null) {
-    const base = leggiColore(barra.fondo)
-    const pieno = sovrapponi(leggiColore(barra.pieno), base)
-    const traccia = sovrapponi(leggiColore(barra.traccia), base)
-    const rapporto = arrotonda(contrasto(pieno, traccia))
-    console.log(`  [${tema}] barra: ${scrivi(pieno)} su ${scrivi(traccia)} = ${rapporto}:1`)
-    expect(rapporto, 'la barra dello sforo non si stacca dalla traccia').toBeGreaterThanOrEqual(3)
-  }
+  // **`--over` adesso e' solo testo, e questa e' la riga che lo dice.**
+  //
+  // Qui c'era il controllo sulla superficie: `--over` riempiva anche la barra del
+  // periodo, quindi valeva due volte — come testo sopra AA, come superficie
+  // sopra 3:1 rispetto alla traccia (WCAG 1.4.11). La barra non c'e' piu' (era
+  // al 100% in tutto il ramo sforato: vedi `Home.tsx`), e con lei l'unica
+  // superficie che quel token dipingeva.
+  //
+  // La verifica non e' stata "sistemata", e' stata **tolta insieme al suo
+  // oggetto**: misurare il contrasto di una superficie che non esiste avrebbe
+  // richiesto di inventarne una. Cio' che resta e' la parte che vale ancora —
+  // il testo sopra AA, qui sopra — piu' l'asserzione che segue, che e' quella
+  // che rende visibile il cambiamento invece di lasciarlo implicito: se qualcuno
+  // rimettesse una superficie `--over`, questo file non se ne accorgerebbe, e la
+  // riga qui sotto e' il posto in cui verrebbe a cercare.
+  // Resta quindi una verifica sola su `--over`: che come **testo** stia sopra AA
+  // (il blocco qui sopra, che campiona i pixel dipinti), e che non collassi su
+  // `--text` (il blocco qui sotto). Il giorno in cui `--over` tornasse a
+  // riempire qualcosa, il controllo sulla superficie va rimesso qui: e' scritto
+  // perche' chi lo cerca lo trovi, invece di scoprire dal `git log` che c'era.
 
   // E non e' il colore di tutto il resto: se `--over` collassasse su `--text`,
   // i tre segnali dello sforo tornerebbero due (CLAUDE.md, "Calcolo budget").
