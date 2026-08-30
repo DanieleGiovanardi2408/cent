@@ -468,6 +468,192 @@ questo progetto ha visto cadere tre volte.
 se un giorno la finestra smettesse di finire col periodo corrente — la coincidenza
 cade da sola e la voce si chiude per altra via.
 
+## 7. La riserva della Home avanza di 61,75 px nello stato piu' comune
+
+**Stato: aperto, e sceso da 76,75 a 61,75.** La condizione che questa voce si era
+data si e' avverata il 30 agosto ed e' stata applicata; quello che resta ha una
+causa diversa, quindi la voce non si chiude — si riscrive su cio' che la regge
+adesso.
+
+**Cosa.** `--slot-min` in `Home.css` copre lo stato piu' alto del riquadro. Lo
+stato con budget **tipico** — una riga di disponibilita', nessuna nota di ADR 010,
+nessuna spesa fissa scattata nel periodo — ne prende 121,5 a 390 punti, e 142,75 a
+320. Misurato in entrambe le lingue:
+
+| | prima | adesso |
+|---|---|---|
+| `--slot-min` a 390 pt | 198,25 px | **183,25** |
+| `--slot-min` a 320 pt | 220,75 px | **204,5** |
+| avanzo nello stato comune, 390 pt | 76,75 px | **61,75** |
+| avanzo nello stato comune, 320 pt | 78 px | **61,75** |
+
+**Cosa e' stato tolto.** L'invito dello stato senza budget e' passato da tre righe
+a due (`--rows-invite`), togliendo la coda *", invece di quanto hai già speso"* —
+che non portava un fatto suo: diceva cosa mostra il numero grande adesso, cioe'
+`hero.spent`, scritto trenta pixel piu' su come etichetta di quel numero. Con
+quello, il `max()` di `--body-min` **cambia vincitore**: la colonna piu' alta non
+e' piu' quella senza budget (98 px) ma quella con budget (83).
+
+Misurato dentro `.invite` vero, nelle due lingue: 3 righe -> 2 a 358, 343 e 288 px
+di colonna. La forma intermedia — *"…not what you have spent."*, 86 caratteri — sta
+in due righe a 390 e 375 e ne prende **tre a 320**: scartata sulla misura, perche'
+la riserva regge alla larghezza piu' stretta o non regge.
+
+**Perche' i 61,75 che restano non si tolgono accorciando altro.** Sono la somma
+delle due righe che la colonna col budget deve riservare **insieme** — un budget
+grande nato a periodo iniziato le ha tutte e due:
+
+- **`--rows-allowance: 2`** — "Puoi spendere ~18.000,00 € al giorno per 5 giorni" va
+  a capo a 390 punti;
+- **`--rows-since: 2`** — la frase di ADR 010 e' 64 caratteri in italiano e 75 in
+  inglese contro un tetto di 42ch. Per stare in una riga dovrebbe perdere o il
+  giorno o l'importo, cioe' i due fatti per cui esiste. E **togliere il
+  `max-inline-size` non basta**, che era la strada che sembrava gratis: a 390 punti
+  la colonna vale ~54 caratteri e a 320 ~43. Va a capo comunque.
+
+Restano perche' il guscio si dipinge prima di sapere se un budget esiste (regola
+"Ordine di pittura") e perche' il gate `home.spec.ts`, "la Home non salta / passando
+da senza budget a con budget", pretende — giustamente — che impostare un budget non
+sposti la coda.
+
+**Dove cade lo spazio** non e' cambiato, e l'argomento sta su `--slot-min` in
+`Home.css`: corpo ancorato in basso, avanzo fra il blocco del numero e quello del
+budget. Le altre due posizioni erano state provate a schermo — una lasciava il
+bottone a 120 px dalla sua riga, l'altra faceva cadere il gate anti-CLS di 75-83 px
+su un bersaglio toccabile.
+
+**La condizione che chiude questa voce**, riscritta su cio' che la regge adesso:
+`.since` smette di essere una riga riservata **sempre** per un fatto che compare in
+**un periodo solo** nella vita di un utente. Non accorciandola — quella strada e'
+misurata e chiusa qui sopra — ma cambiando cio' che il guscio sa: il giorno in cui
+esistesse una forma di guscio che sappia gia' se il budget e' nato a periodo
+iniziato, la riserva scenderebbe a 42,5 + 8 + 16,25 = 66,75 px e l'avanzo tipico a
+45,5.
+
+**E la sentinella c'e' gia', ed e' diventata piu' stretta**: `home.spec.ts`, "una
+riga di troppo sfonda la riserva", pretende che sullo stato piu' alto la riserva
+avanzi **meno di una riga minima** (16,25 px). Avanzava 15; adesso avanza **0** —
+la riserva e' esattamente il contenuto dello stato piu' alto. Se lo scarto tornasse
+a crescere, quel test cade prima che questa voce peggiori in silenzio.
+
+## 8. `spentRatio` in `budget-view.ts` non ha piu' lettori di produzione — **CHIUSA**
+
+**Cosa.** La barra del periodo e' uscita dalla Home (l'argomento sta in testa a
+`Home.tsx`). `spentRatio` era la sua unica chiamante di produzione: adesso e'
+tenuta viva soltanto dai quattro `expect` che la esercitano in
+`budget-view.test.ts`.
+
+E' la forma esatta di `expensesInRange` e di `planBudgetChange`, cancellate in
+questo repo per questa ragione: **un'API pubblica senza chiamanti, mantenuta viva
+dai test che la chiamano.** Il controllo `audit:source` non la vede — guarda i
+campi dei tipi e le chiavi i18n, non le funzioni esportate.
+
+**Perche' e' ancora li'.** `budget-view.ts` era in mano a un altro agente nel
+momento in cui la barra e' uscita, e cancellare una funzione dentro un file che
+qualcun altro sta scrivendo produce il conflitto peggiore: non un merge, un pezzo
+di lavoro perso.
+
+**La condizione che chiude questa voce**: `spentRatio` e i suoi test si cancellano
+alla prima sessione in cui `budget-view.ts` e' fermo. Se invece la barra tornasse
+in qualche forma, la funzione riacquista un lettore e la voce si chiude da sola —
+ma allora torna anche il vincolo dei 3:1 su `--over` come superficie, che
+`colori.spec.ts` non sorveglia piu'.
+
+### CHIUSA il 30 agosto: la condizione si e' avverata nello stesso giro
+
+`budget-view.ts` si e' fermato — `data-core` aveva finito la striscia e `ui-craft`
+non lo tocca — e la funzione e' stata cancellata con le sue quattro asserzioni.
+**La prima meta' della condizione, non la seconda**: la barra non e' tornata, quindi
+il vincolo dei 3:1 su `--over` come superficie resta fuori da `colori.spec.ts`, e
+resta scritto dove rimetterlo.
+
+**Questa voce e' vissuta poche ore, e va detto perche' e' il caso buono.** Non e'
+stata scritta per rimandare: e' stata scritta perche' nel momento in cui il difetto
+e' nato **il file era in mano a un altro agente**, e cancellare dentro un file che
+qualcuno sta scrivendo produce il conflitto peggiore — non un merge, un pezzo di
+lavoro perso. La voce ha fatto esattamente il suo mestiere: **ha tenuto il difetto
+fuori dalla memoria di una sessione**, che e' il posto dove muore.
+
+E la prova che serviva davvero: la cancellazione non e' stata ricordata, e' stata
+**letta da qui** da chi ha coordinato il giro dopo. Un difetto accettato con la sua
+condizione scritta e' una decisione; lo stesso difetto tenuto a mente e' una
+scommessa sul fatto che qualcuno se ne ricordi.
+
+## 9. Le fisse sono mensili e nessuna schermata ha un orizzonte mensile
+
+**Stato: aperto.** Non e' un difetto della fase 6: e' una **lacuna di prodotto**
+emersa misurando M1 e M2 il 30 agosto.
+
+**Cosa.** Le spese fisse sono mensili — 530,00 € al mese, di cui **507,00 € di
+affitto**. La Home e le Statistiche rispondono entrambe **alla settimana**: l'eroe
+dice *"Questa settimana · 24–30 ago"*, il budget e' settimanale, B confronta
+settimane. **Non esiste il posto dove leggere "come sta andando il mese"**, cioe'
+l'orizzonte su cui la voce di spesa piu' grande della vita dell'utente e' definita.
+
+**Come e' emersa, ed e' la parte che vale.** La richiesta di misurare le categorie
+diceva *"mese corrente"*. L'app ragiona a settimana ovunque, quindi la misura e'
+stata fatta su tutte e due le finestre — e le due danno **numeri diversi**: nel mese
+`Coffeeshop` vale il 39,0% e nella settimana il 21,4%. Nessuno dei due e' sbagliato:
+sono due domande, e l'app ne risponde una sola.
+
+Non l'ha trovata un gate ne' un controllo: l'ha trovata **una parola in un brief che
+non corrispondeva al codice**, e che e' stata misurata invece che corretta in
+silenzio.
+
+**Perche' non si tampona.** Una riga in Home che dica *"questo mese: X"* sarebbe un
+secondo eroe su una schermata che ne ha uno solo per decisione (0d), e risponderebbe
+a meta' della domanda: *"come sta andando il mese"* non e' un totale, e' un totale
+**contro un'aspettativa**, e l'aspettativa mensile non esiste da nessuna parte —
+il budget e' settimanale.
+
+**La condizione di riapertura**: si decide in **fase 7**, oppure **prima se il test
+degli amici lo fa emergere** — cioe' se qualcuno che non ha scritto l'app chiede
+*"quanto ho speso questo mese?"* e non trova dove guardare. Fino ad allora l'eroe
+**deve continuare a dire "Questa settimana · <intervallo>"**: e' l'unica frase che
+impedisce di leggere quel numero come mensile, ed e' quindi parte di questa voce e
+non una rifinitura del copy.
+
+## 10. Le otto tinte nuove non hanno un nome parlato, e la ottava non ce l'ha per costruzione
+
+**Stato: aperto.** Nato il 30 agosto, insieme alla palette che passa i quattro
+pavimenti di `scripts/palette.mjs`.
+
+**Cosa.** `COLOR_NAMES`, in `src/ui/CategorySheet.tsx`, associa un nome parlato a
+ogni tinta della tavolozza ed e' indicizzata sull'**esadecimale**. Gli otto
+esadecimali sono cambiati, quella mappa no: chi esplora la tavolozza con la voce
+sente adesso otto volte *"Colore"* invece di *"Verde"*, *"Arancio"*, e cosi' via.
+La mappa non e' rotta — le sue otto voci restano vere per le categorie di chi ha
+gia' l'app, che tengono i colori vecchi — ma non copre piu' cio' che si offre a
+chi installa oggi.
+
+**Perche' non l'ha riparata chi ha cambiato le tinte.** `CategorySheet.tsx` e
+`src/ui/i18n/*` erano in mano a un altro agente nello stesso momento, ed e' la
+ragione gia' scritta nella voce 8: cancellare o riscrivere dentro un file che
+qualcuno sta scrivendo non produce un conflitto, produce lavoro perso.
+
+**La parte che non e' un rinvio ma una decisione da prendere.** Le chiavi di
+colore nei due dizionari sono **otto**, una per famiglia, e una di esse e'
+`color.grey`. La palette nuova **non ha un grigio**: Extra e' un blu d'acciaio
+(`#2a6198`), perche' un grigio ha croma 0,015 e in una ciambella si legge come
+*resto* e non come categoria. Quindi non esiste una chiave che descriva la nuova
+ottava tinta, e le due candidate hanno costi diversi:
+
+- **rinominare `color.grey`** in qualcosa come `color.navy` — tre righe (i due
+  dizionari e la mappa), ed e' la sola che non lascia due voci con lo stesso
+  nome. `color.grey` **non si puo' semplicemente cancellare**: perderebbe il suo
+  unico lettore e `npm run audit:source`, controllo B, fallirebbe;
+- **riusare `color.blue` per tutte e due** le tinte fredde — nessuna modifica ai
+  dizionari, ma due pastiglie che si annunciano *"Blu"* in una tavolozza dove
+  servono a distinguersi. E' la scelta che sembra piu' piccola e non lo e'.
+
+**La condizione che lo rende non piu' accettabile**: al primo giro in cui
+`CategorySheet.tsx` e i dizionari sono liberi. Non oltre la chiusura della fase 6
+— la palette e' visibile da subito, e questa e' l'unica schermata in cui la si
+tocca. Fino ad allora vale la nota gia' scritta accanto a `COLOR_NAMES`: *"una
+tinta che non fosse in tavolozza resta senza nome proprio e si annuncia come
+'Colore': una bugia sarebbe peggio"*. Qui il ripiego e' quello, ed e' onesto —
+solo, non e' piu' il caso raro per cui era stato scritto.
+
 ## 3. Rischi noti gia' scritti altrove
 
 Non si duplicano qui, per non creare la diciannovesima copia che parafrasa:

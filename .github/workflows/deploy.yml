@@ -54,6 +54,39 @@ jobs:
       - name: Campi e chiavi senza controparte
         run: npm run audit:source
 
+      # I quattro pavimenti della palette delle categorie, su tutte le 28 coppie
+      # e in tutti e due i temi. Sta qui accanto ad `audit:source` perche' e' la
+      # stessa famiglia: un difetto che una suite verde non vede per definizione.
+      #
+      # Dalla fase 6 il colore di una fetta **e'** il dato, non l'ornamento: due
+      # tinte troppo vicine non producono un test rosso da nessuna parte, e sullo
+      # schermo non producono due categorie — producono una fetta piu' grande.
+      # Costa poche decine di millisecondi e non legge niente dalla rete.
+      #
+      # Ferma la pipeline, e per la riga di calibrazione di questo repo: la
+      # riparazione e' meccanica (si cambia un esadecimale finche' il referto
+      # torna verde), quindi bloccare non costa un giudizio a nessuno. `npm run
+      # audit:palette -- --palette "#..."` valuta un candidato senza scriverlo.
+      - name: Pavimenti della palette
+        run: npm run audit:palette
+
+      # Chi consuma la palette. `audit:palette` misura gli **esadecimali**, e il
+      # 30 agosto e' passato verde mentre sette superfici su dieci erano sotto il
+      # pavimento percettivo: dipingevano la tinta mescolata col fondo, e il mix
+      # comprime ogni distanza (ΔE00 15,7 -> 8,99 fra Trasporti ed Extra).
+      # ADR 025 aveva gia' dichiarato quel punto cieco, e il difetto e' arrivato
+      # lo stesso, perche' nessuno aveva enumerato i consumatori.
+      #
+      # Non e' un secondo misuratore di ΔE: e' una regola su una **lista** —
+      # dove piu' colori sono compresenti, l'identita' non la porta una campitura
+      # mescolata. Cosi' il pavimento torna ad avere un solo ingresso, le tinte,
+      # che e' cio' che il passo qui sopra gia' misura. Millisecondi, e non puo'
+      # degradare piano come fa un margine.
+      #
+      # Ferma la pipeline: la riparazione e' meccanica (una dichiarazione CSS, o
+      # una riga di inventario), quindi bloccare non costa un giudizio a nessuno.
+      - name: Superfici che consumano la palette
+        run: npm run audit:surfaces
 
       - name: Test
         run: npm test

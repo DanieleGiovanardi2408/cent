@@ -5,15 +5,16 @@ import { addDays } from '../core/date'
 import { makeBudget, makeExpense } from '../core/testing'
 import type { Budget, Expense } from '../core/types'
 import { setLanguage } from './i18n'
-import type { AllowanceCopy } from './budget-view'
+import type { AllowanceCopy, Week } from './budget-view'
 import {
+  COLUMN_MIN_FRACTION,
   activePeriod,
   allowanceCopy,
   budgetStart,
   heroCopy,
   paceParts,
-  spentRatio,
   startNote,
+  weekStrip,
 } from './budget-view'
 
 /**
@@ -260,21 +261,21 @@ describe('il numero grande', () => {
   })
 })
 
-describe('la barra del periodo', () => {
-  it('resta fra 0 e 1 anche sforando', () => {
-    expect(spentRatio(metrics({ today: MERCOLEDI, budgetCents: 20_000 }))).toBe(0)
-    expect(
-      spentRatio(metrics({ today: MERCOLEDI, budgetCents: 20_000, spese: [spesa(LUNEDI, 10_000)] })),
-    ).toBe(0.5)
-    expect(
-      spentRatio(metrics({ today: MERCOLEDI, budgetCents: 20_000, spese: [spesa(LUNEDI, 90_000)] })),
-    ).toBe(1)
-  })
-
-  it('senza budget non c e niente da riempire', () => {
-    expect(spentRatio(metrics({ today: MERCOLEDI, spese: [spesa(LUNEDI, 9000)] }))).toBe(0)
-  })
-})
+/*
+ * **Il blocco `la barra del periodo` non c'e' piu'.**
+ *
+ * Provava `spentRatio`, e le sue quattro asserzioni erano l'unica cosa che la
+ * teneva viva: zero chiamanti di produzione da quando la barra della Home e'
+ * stata tolta. Cancellarla e' il precedente di `expensesInRange` e
+ * `planBudgetChange`, applicato una terza volta.
+ *
+ * Va scritto **qui** e non solo sulla funzione, perche' e' qui che si vede la
+ * forma del difetto: quattro test verdi su una funzione che nessuno chiama non
+ * segnalano niente, e anzi la fanno sembrare coperta. Il controllo che trova i
+ * campi senza produttore non guarda le funzioni esportate — questa classe si
+ * chiude a mano, ed e' la ragione per cui il precedente e' scritto in CLAUDE.md
+ * invece che meccanizzato.
+ */
 
 describe('quanto puoi spendere al giorno', () => {
   /**
@@ -612,5 +613,428 @@ describe('il budget nato a meta periodo', () => {
     const note = startNote(m, budgetStart(m, [spesa('2026-08-05', 10_000)]))
     expect(note).toContain('19 agosto')
     expect(note).toContain('100,00')
+  })
+})
+
+/* ------------------------------------------------------------------------- *
+ * La striscia dei sette giorni.
+ *
+ * Quello che puo' sbagliare qui non sono le parole: e' **l'aritmetica di una
+ * geometria**, cioe' esattamente cio' che si prova senza un browser. I casi che
+ * a mano non si toccano mai sono quattro — il confine della domenica, la
+ * settimana del cambio d'ora, la settimana con solo importi a zero, e la spesa
+ * datata in avanti che solo un import puo' scrivere.
+ * ------------------------------------------------------------------------- */
+
+const MARTEDI = '2026-08-18'
+const GIOVEDI = '2026-08-20'
+const VENERDI = '2026-08-21'
+const SABATO = '2026-08-22'
+
+/** `1/24`. Scritto qui in forma diversa: se la costante cambia, questa cade. */
+const PAVIMENTO = COLUMN_MIN_FRACTION
+
+/** L'altezza dipinta di una quota, riscritta a mano: la mappa, non la funzione. */
+const alto = (quota: number): number => PAVIMENTO + (1 - PAVIMENTO) * quota
+
+function striscia(options: {
+  readonly today: string
+  readonly budgetCents?: number
+  readonly spese?: readonly Expense[]
+}): Week | null {
+  const spese = options.spese ?? []
+  return weekStrip(metrics({ ...options, spese }), spese, options.today)
+}
+
+describe('la striscia dei sette giorni', () => {
+  it('sono sempre sette, da lunedi a domenica', () => {
+    const week = striscia({ today: MERCOLEDI, spese: [spesa(MERCOLEDI, 1000)] })
+    expect(week?.days.map((d) => d.date)).toEqual([
+      '2026-08-17',
+      '2026-08-18',
+      '2026-08-19',
+      '2026-08-20',
+      '2026-08-21',
+      '2026-08-22',
+      '2026-08-23',
+    ])
+  })
+
+  /**
+   * Il confine che si sbaglia sempre: con la settimana che comincia di lunedi',
+   * **domenica e' l'ultima colonna**, non la prima della settimana dopo. Con
+   * `startOfWeek` di una libreria tarata sulla domenica questa cade.
+   */
+  it('la domenica e l ultima colonna, non la prima della settimana dopo', () => {
+    const week = striscia({ today: DOMENICA, spese: [spesa(DOMENICA, 1000)] })
+    expect(week?.days[0]?.date).toBe(LUNEDI)
+    expect(week?.days[6]?.date).toBe(DOMENICA)
+    expect(week?.days[6]?.cents).toBe(1000)
+    expect(week?.days[6]?.current).toBe(true)
+  })
+
+  it('e il lunedi e la prima, con sei giorni ancora davanti', () => {
+    const week = striscia({ today: LUNEDI, spese: [spesa(LUNEDI, 1000)] })
+    expect(week?.days[0]?.current).toBe(true)
+    expect(week?.days.filter((d) => d.future)).toHaveLength(6)
+  })
+
+  /**
+   * La settimana in cui in Europa finisce l'ora legale (domenica 25 ottobre
+   * 2026). Sette date civili, nessuna saltata e nessuna doppia: e' il caso che
+   * un'aritmetica su `Date` in millisecondi sbaglia di un giorno.
+   */
+  it('la settimana del cambio d ora ha sette giorni come tutte le altre', () => {
+    const domenicaDelCambio = '2026-10-25'
+    const week = striscia({
+      today: domenicaDelCambio,
+      spese: [spesa('2026-10-19', 500), spesa(domenicaDelCambio, 700)],
+    })
+    expect(week?.days.map((d) => d.date)).toEqual([
+      '2026-10-19',
+      '2026-10-20',
+      '2026-10-21',
+      '2026-10-22',
+      '2026-10-23',
+      '2026-10-24',
+      '2026-10-25',
+    ])
+    expect(week?.days[0]?.cents).toBe(500)
+    expect(week?.days[6]?.cents).toBe(700)
+  })
+
+  it('le spese fuori dalla settimana non entrano in nessuna colonna', () => {
+    const week = striscia({
+      today: MERCOLEDI,
+      spese: [
+        spesa('2026-08-16', 50_000), // la domenica prima
+        spesa('2026-08-24', 50_000), // il lunedi dopo
+        spesa(MERCOLEDI, 1000),
+      ],
+    })
+    expect(week?.days.map((d) => d.cents)).toEqual([0, 0, 1000, 0, 0, 0, 0])
+  })
+
+  /* --- decisione 2: quali spese conta ------------------------------------ */
+
+  it('le ricorrenti restano fuori, come nel numero grande', () => {
+    // L'affitto e' la spesa piu' grande della settimana e non e' una decisione:
+    // una colonna che lo comprendesse andrebbe letta contro una linea che non
+    // lo comprende (ADR 016).
+    const week = striscia({
+      today: MERCOLEDI,
+      spese: [fissa(LUNEDI, 90_000), spesa(MARTEDI, 1000)],
+    })
+    expect(week?.days[0]?.cents).toBe(0)
+    expect(week?.days[1]?.cents).toBe(1000)
+    expect(week?.peak).toBe(MARTEDI)
+  })
+
+  it('una settimana di sole ricorrenti non ha striscia', () => {
+    expect(striscia({ today: MERCOLEDI, spese: [fissa(LUNEDI, 90_000)] })).toBeNull()
+  })
+
+  it('le cancellate non sono un uscita, ne dentro ne fuori dal budget', () => {
+    const morta = makeExpense({ date: LUNEDI, amountCents: 5000, deletedAt: '2026-08-17T10:00:00.000Z' })
+    expect(striscia({ today: MERCOLEDI, spese: [morta] })).toBeNull()
+  })
+
+  /**
+   * L'invariante che tiene la striscia e il numero grande sulla stessa moneta:
+   * su un periodo settimanale le sette colonne **sommano a `spentCents`**. Se
+   * un giorno qualcuno cambiasse il filtro di una delle due, questa cade.
+   */
+  it('su una settimana le sette colonne sommano allo speso del periodo', () => {
+    const spese = [
+      spesa(LUNEDI, 1234),
+      spesa(MARTEDI, 5678),
+      spesa(MERCOLEDI, 99),
+      fissa(GIOVEDI, 90_000),
+      makeExpense({ date: VENERDI, amountCents: 4000, deletedAt: '2026-08-21T10:00:00.000Z' }),
+      spesa(DOMENICA, 4321),
+    ]
+    const m = metrics({ today: MERCOLEDI, budgetCents: 20_000, spese })
+    const week = weekStrip(m, spese, MERCOLEDI)
+    const somma = week?.days.reduce((total, d) => total + d.cents, 0)
+    expect(somma).toBe(m.spentCents)
+    expect(somma).toBe(1234 + 5678 + 99 + 4321)
+  })
+
+  /* --- decisione 1: la scala --------------------------------------------- */
+
+  it('senza budget la scala e il giorno piu alto, e quella colonna e piena', () => {
+    const week = striscia({ today: MERCOLEDI, spese: [spesa(LUNEDI, 1000), spesa(MARTEDI, 4000)] })
+    expect(week?.sustainable).toBeNull()
+    expect(week?.scaleCents).toBe(4000)
+    expect(week?.days[1]?.fraction).toBe(1)
+  })
+
+  /**
+   * La settimana in cui si e' speso pochissimo: la scala e' **il sostenibile**,
+   * non il giorno piu' alto. La linea sta in cima e le colonne sono basse — che
+   * e' cio' che e' successo davvero, non un disegno rotto: scalare sul giorno
+   * piu' alto avrebbe messo la linea fuori dalla striscia, cioe' avrebbe tolto
+   * l'unica cosa contro cui quelle colonne si leggono.
+   */
+  it('sotto il sostenibile la scala e il sostenibile, e la linea sta in cima', () => {
+    const week = striscia({
+      today: MERCOLEDI,
+      budgetCents: 20_000, // 2857 al giorno
+      spese: [spesa(LUNEDI, 200), spesa(MARTEDI, 300)],
+    })
+    expect(week?.scaleCents).toBe(2857)
+    expect(week?.sustainable?.cents).toBe(2857)
+    expect(week?.sustainable?.fraction).toBe(1)
+    expect(week?.days[1]?.fraction).toBeCloseTo(alto(300 / 2857), 12)
+    // Nessuna colonna arriva in cima: e' il fatto, e si vede.
+    expect(week?.days.every((d) => d.fraction < 1)).toBe(true)
+  })
+
+  /**
+   * Il caso opposto: un giorno vale dieci volte il sostenibile. La linea cade a
+   * un decimo dell'altezza e **si vede ancora**, perche' passa dal pavimento
+   * come le colonne.
+   */
+  it('con un giorno dieci volte il sostenibile la linea resta sopra il pavimento', () => {
+    const week = striscia({
+      today: DOMENICA,
+      budgetCents: 20_000, // 2857 al giorno
+      spese: [spesa(SABATO, 28_570), spesa(LUNEDI, 2857)],
+    })
+    expect(week?.scaleCents).toBe(28_570)
+    expect(week?.sustainable?.fraction).toBeCloseTo(alto(0.1), 12)
+    expect(week?.sustainable?.fraction).toBeGreaterThan(PAVIMENTO)
+    expect(week?.days[5]?.fraction).toBe(1)
+  })
+
+  /**
+   * Il difetto che la mappa condivisa impedisce: se la linea non passasse dal
+   * pavimento, il giorno in cui si e' speso **esattamente** il sostenibile
+   * disegnerebbe una colonna piu' alta della linea — cioe' "sei sopra" stando
+   * sopra il pari. E' lo stesso difetto che `stats-view.ts` chiude fra la barra
+   * e la sua traccia.
+   */
+  it('il giorno esattamente sul sostenibile disegna alla stessa altezza della linea', () => {
+    const week = striscia({
+      today: DOMENICA,
+      budgetCents: 20_000, // 2857 al giorno
+      spese: [spesa(MARTEDI, 2857), spesa(SABATO, 5000)],
+    })
+    expect(week?.scaleCents).toBe(5000)
+    expect(week?.days[1]?.fraction).toBe(week?.sustainable?.fraction)
+    // E un centesimo sopra il sostenibile sta sopra la linea, non a pari.
+    const sopra = striscia({
+      today: DOMENICA,
+      budgetCents: 20_000,
+      spese: [spesa(MARTEDI, 2858), spesa(SABATO, 5000)],
+    })
+    expect(sopra?.days[1]?.fraction).toBeGreaterThan(sopra?.sustainable?.fraction ?? 1)
+  })
+
+  /* --- decisione 4: il pavimento ----------------------------------------- */
+
+  it('il pavimento vale due pixel sulla striscia piu bassa ammessa', () => {
+    // `2 / 48`: due pixel di inchiostro su una striscia di 3rem. Il legame col
+    // CSS e' un contratto scritto, non ancora una misura: se `--strip-h` scende
+    // sotto 3rem, questa riga resta verde e le colonne piu' corte spariscono.
+    expect(PAVIMENTO * 48).toBeCloseTo(2, 12)
+  })
+
+  it('un centesimo contro novecento euro resta un centesimo, e si vede', () => {
+    const week = striscia({
+      today: DOMENICA,
+      spese: [spesa(LUNEDI, 1), spesa(SABATO, 90_000)],
+    })
+    expect(week?.days[0]?.fraction).toBeGreaterThanOrEqual(PAVIMENTO)
+    expect(week?.days[0]?.fraction).toBeCloseTo(alto(1 / 90_000), 12)
+  })
+
+  it('un giorno senza spese non prende inchiostro: zero resta zero', () => {
+    const week = striscia({ today: DOMENICA, spese: [spesa(LUNEDI, 90_000)] })
+    expect(week?.days[1]?.fraction).toBe(0)
+    expect(week?.days[1]?.fraction).toBeLessThan(PAVIMENTO)
+  })
+
+  it('due giorni che differiscono di un centesimo non disegnano uguale', () => {
+    const week = striscia({
+      today: DOMENICA,
+      spese: [spesa(LUNEDI, 1), spesa(MARTEDI, 2), spesa(SABATO, 90_000)],
+    })
+    const uno = week?.days[0]?.fraction ?? 0
+    const due = week?.days[1]?.fraction ?? 0
+    expect(due).toBeGreaterThan(uno)
+    // La differenza e' esatta: la traslazione e' la stessa per tutte, la scala
+    // e' quella della striscia.
+    expect(due - uno).toBeCloseTo((1 - PAVIMENTO) * (1 / 90_000), 15)
+  })
+
+  it('la colonna piu alta arriva esattamente in cima, non a 0,999', () => {
+    const week = striscia({ today: DOMENICA, spese: [spesa(LUNEDI, 3), spesa(SABATO, 7)] })
+    expect(week?.days[5]?.fraction).toBe(1)
+  })
+
+  /**
+   * Un budget da 0,05 € a settimana: `divideCents` arrotonda verso il basso e il
+   * passo sostenibile e' **zero**. La linea c'e' — un budget c'e' — e si posa
+   * sulla base, perche' zero resta zero anche per lei. E' vero, non e' un guasto.
+   */
+  it('un sostenibile a zero mette la linea sulla base, non al pavimento', () => {
+    const week = striscia({ today: MERCOLEDI, budgetCents: 5, spese: [spesa(LUNEDI, 1000)] })
+    expect(week?.sustainable?.cents).toBe(0)
+    expect(week?.sustainable?.fraction).toBe(0)
+    expect(week?.scaleCents).toBe(1000)
+  })
+
+  /**
+   * La linea si disegna anche su un budget nato a meta' settimana, e **non** e'
+   * una dimenticanza: B delle Statistiche nasconde la traccia se un solo record
+   * non ha coperto il periodo intero, ma li' la traccia confronta un **totale**
+   * con un tetto di periodo. Qui ogni colonna e' un giorno e la linea e' un passo
+   * al giorno: non c'e' niente che si accumuli.
+   */
+  it('la linea c e anche col budget nato a meta settimana', () => {
+    const spese = [spesa(LUNEDI, 4000), spesa(MERCOLEDI, 1000)]
+    const m = metrics({ today: MERCOLEDI, budgetCents: 20_000, dal: MERCOLEDI, spese })
+    expect(m.comparableToBudget).toBe(false)
+    expect(weekStrip(m, spese, MERCOLEDI)?.sustainable?.cents).toBe(2857)
+  })
+
+  /* --- decisione 3: quando non c e' striscia ----------------------------- */
+
+  it('senza nessuna spesa non c e striscia', () => {
+    expect(striscia({ today: MERCOLEDI })).toBeNull()
+    expect(striscia({ today: MERCOLEDI, budgetCents: 20_000 })).toBeNull()
+  })
+
+  /**
+   * Il criterio e' **zero centesimi da disegnare**, non zero spese. Una spesa
+   * da 0,00 € esiste — la scrive un import — e `columnHeight(0)` vale zero,
+   * quindi contarla come "attivita'" produrrebbe sette colonne vuote sotto una
+   * linea: il telaio di un grafico senza dati.
+   */
+  it('una settimana di soli importi a zero non fa sette colonne vuote', () => {
+    const week = striscia({
+      today: MERCOLEDI,
+      budgetCents: 20_000,
+      spese: [spesa(LUNEDI, 0), spesa(MARTEDI, 0), spesa(MERCOLEDI, 0)],
+    })
+    expect(week).toBeNull()
+  })
+
+  it('ma un solo centesimo basta: la striscia c e', () => {
+    const week = striscia({ today: MERCOLEDI, budgetCents: 20_000, spese: [spesa(LUNEDI, 1)] })
+    expect(week).not.toBeNull()
+    expect(week?.peak).toBe(LUNEDI)
+    expect(week?.days[0]?.fraction).toBeGreaterThanOrEqual(PAVIMENTO)
+  })
+
+  /* --- il giorno da etichettare ------------------------------------------ */
+
+  it('il picco e il giorno piu alto', () => {
+    const week = striscia({
+      today: DOMENICA,
+      spese: [spesa(LUNEDI, 1000), spesa(GIOVEDI, 9000), spesa(SABATO, 2000)],
+    })
+    expect(week?.peak).toBe(GIOVEDI)
+  })
+
+  it('a parita vince il giorno prima: la domanda e quando parte la mano', () => {
+    const week = striscia({
+      today: DOMENICA,
+      spese: [spesa(MARTEDI, 5000), spesa(VENERDI, 5000)],
+    })
+    expect(week?.peak).toBe(MARTEDI)
+  })
+
+  it('il picco somma le spese del giorno, non guarda la piu grande', () => {
+    const week = striscia({
+      today: DOMENICA,
+      spese: [
+        spesa(LUNEDI, 4000),
+        spesa(MARTEDI, 2000),
+        spesa(MARTEDI, 2000),
+        spesa(MARTEDI, 1000),
+      ],
+    })
+    expect(week?.peak).toBe(MARTEDI)
+    expect(week?.days[1]?.cents).toBe(5000)
+  })
+
+  /* --- decisione 5: oggi e i giorni che non sono arrivati ---------------- */
+
+  it('oggi e uno solo, e i giorni dopo sono futuri', () => {
+    const week = striscia({ today: MERCOLEDI, spese: [spesa(LUNEDI, 1000)] })
+    expect(week?.days.map((d) => d.current)).toEqual([false, false, true, false, false, false, false])
+    expect(week?.days.map((d) => d.future)).toEqual([false, false, false, true, true, true, true])
+  })
+
+  /**
+   * Un giorno futuro vale zero perche' e' **vuoto**, non perche' e' futuro: la
+   * distinzione la porta `future`, e la porta perche' a schermo sono due cose
+   * diverse — una colonna a pavimento e una colonna che non c'e'.
+   *
+   * Le spese datate in avanti esistono: non le scrive nessuna schermata
+   * (`AddSheet` ha `max={day}`), le scrivono `parseBackup` e l'orologio del
+   * telefono che torna indietro. Contarle non e' un capriccio: `spentCents` le
+   * conta gia', quindi zerarle qui farebbe sette colonne che non sommano al
+   * numero grande scritto sopra.
+   */
+  it('una spesa datata in avanti riempie la sua colonna e resta futura', () => {
+    const spese = [spesa(LUNEDI, 1000), spesa(VENERDI, 3000)]
+    const m = metrics({ today: MERCOLEDI, budgetCents: 20_000, spese })
+    const week = weekStrip(m, spese, MERCOLEDI)
+    expect(week?.days[4]?.cents).toBe(3000)
+    expect(week?.days[4]?.future).toBe(true)
+    expect(week?.peak).toBe(VENERDI)
+    expect(week?.days.reduce((total, d) => total + d.cents, 0)).toBe(m.spentCents)
+  })
+
+  /* --- col budget mensile ------------------------------------------------ */
+
+  /**
+   * Con un budget mensile il periodo e' il mese, e sette colonne di un mese non
+   * sono niente: la striscia resta **la settimana di oggi**. La linea regge
+   * perche' `sustainablePaceCents` e' al giorno in tutti e due i periodi.
+   */
+  it('col budget mensile la striscia e ancora la settimana, e la linea e al giorno', () => {
+    const spese = [spesa(LUNEDI, 1000), spesa(MERCOLEDI, 2000)]
+    const m = computeBudgetMetrics({
+      expenses: spese,
+      budgets: [makeBudget({ period: 'monthly', amountCents: 80_000, effectiveFrom: '2026-01-01' })],
+      period: 'monthly',
+      onDate: MERCOLEDI,
+      today: MERCOLEDI,
+    })
+    const week = weekStrip(m, spese, MERCOLEDI)
+    expect(week?.days[0]?.date).toBe(LUNEDI)
+    expect(week?.days[6]?.date).toBe(DOMENICA)
+    // 80.000 / 31 giorni di agosto = 2580, arrotondato verso il basso.
+    expect(week?.sustainable?.cents).toBe(2580)
+    expect(week?.scaleCents).toBe(2580)
+  })
+
+  /**
+   * La settimana a cavallo di due mesi: le colonne sono sette lo stesso, e i
+   * giorni del mese prima ci sono. E' il limite dichiarato — la linea e' quella
+   * del budget di **oggi**, non quella che valeva a luglio — e il test lo fissa
+   * invece di lasciarlo alla prossima lettura.
+   */
+  it('a cavallo di due mesi le colonne restano sette, con i giorni del mese prima', () => {
+    // Lunedi 27 luglio 2026 - domenica 2 agosto 2026.
+    const spese = [spesa('2026-07-28', 4000), spesa('2026-08-01', 1000)]
+    const m = computeBudgetMetrics({
+      expenses: spese,
+      budgets: [makeBudget({ period: 'monthly', amountCents: 80_000, effectiveFrom: '2026-01-01' })],
+      period: 'monthly',
+      onDate: '2026-08-01',
+      today: '2026-08-01',
+    })
+    const week = weekStrip(m, spese, '2026-08-01')
+    expect(week?.days[0]?.date).toBe('2026-07-27')
+    expect(week?.days[1]?.cents).toBe(4000)
+    expect(week?.days[5]?.cents).toBe(1000)
+    // Lo speso del **mese** conta solo l'1 agosto: la striscia guarda altrove,
+    // e le due somme non devono coincidere fuori dal periodo settimanale.
+    expect(m.spentCents).toBe(1000)
   })
 })

@@ -79,11 +79,11 @@ const COLONNA_MIN_PX = 112
 const COLONNA_PX = 192.73
 
 /**
- * `showFixed: true` e' il valore con cui l'app apre la schermata (decisione 0c:
- * **acceso di default**), quindi e' il valore su cui gira quasi tutta la suite.
- * I casi che lo spengono lo dicono, e sono pochi apposta: uno stato che si
- * raggiunge con un tap non deve diventare la premessa implicita di un test che
- * parla d'altro.
+ * Qui c'era `showFixed: true`, *"il valore con cui l'app apre la schermata"*, e la
+ * nota che i casi che lo spegnevano dovevano dirlo per non diventare una premessa
+ * implicita. Il campo non esiste piu' (decisione 0c, chiusa **togliendo** il
+ * selettore) e con lui la premessa: non c'e' piu' nessuno stato di lettura da
+ * dichiarare, quindi ogni test parte dallo stesso.
  */
 function view(over: Partial<StatsInput>) {
   return statsView({
@@ -93,7 +93,6 @@ function view(over: Partial<StatsInput>) {
     budgets: [] as readonly Budget[],
     period: 'weekly',
     day: OGGI,
-    showFixed: true,
     ...over,
   })
 }
@@ -200,19 +199,39 @@ function tutteLeRighe(t: Trend): readonly PeriodBar[] {
  * righe che nessuno ha chiesto di vedere. Le altre valgono identiche, `split`
  * compreso — ed e' proprio quello il punto di `split`.
  */
-function invariantiDiA(v: Ready, mostraFisse = true) {
+function invariantiDiA(v: Ready) {
   const fisse = sezione(v, 'fixed')
   const variabili = sezione(v, 'variable')
 
-  if (mostraFisse) {
-    expect(sumCents((fisse?.rows ?? []).map((r) => r.cents))).toBe(v.current.recurringSpentCents)
-    if (fisse !== undefined && !fisse.single) {
-      expect(fisse.totalCents).toBe(v.current.recurringSpentCents)
-    }
-  } else {
-    // Spente, non svuotate: la sezione non esiste, e non e' una sezione con zero
-    // righe. La cifra che portava non e' persa — sta in `split`.
-    expect(fisse).toBeUndefined()
+  // **A copre tutti i soldi del periodo**, e questo invariante e' la guardia di un
+  // difetto vero, misurato guardando uno scatto.
+  //
+  // Il numero grande in cima si calcola come `split === null ? somma delle sezioni
+  // : le due meta' della divisione`. Con il selettore delle fisse, in una settimana
+  // di sole spese fisse e con l'interruttore spento, `sections` era **vuota** e
+  // `split` **nullo**: la somma valeva zero e il numero grande spariva. Cioe' una
+  // **scelta di lettura** che cancellava un **fatto** — 507,00 € usciti, e nessun
+  // euro a schermo.
+  //
+  // La prima forma di questa guardia chiedeva `sections.length >= 1`, ed **era
+  // sbagliata**: e' caduta subito su uno stato legittimo — spese solo nei periodi
+  // passati, cioe' **ogni lunedi' mattina** — dove A non ha sezioni perche' nel
+  // periodo non c'e' niente da ripartire, e zero non e' una cifra nascosta: e' la
+  // cifra. Chiedere "almeno una sezione" confondeva *"A copre tutto"* con *"A non e'
+  // vuota"*, che sono due cose diverse.
+  //
+  // La forma giusta guarda la **copertura**: la somma di ogni riga di ogni sezione
+  // e' esattamente il denaro del periodo. Se qualcuno rimettesse un filtro fra
+  // `present` e `sections`, questa cadrebbe con un numero — mentre l'altra sarebbe
+  // rimasta verde ogni volta che restava almeno una sezione, cioe' proprio nel caso
+  // misurato (le fisse spente lasciavano fuori 507,00 € e una sezione dentro).
+  expect(
+    sumCents(v.byCategory.sections.flatMap((p) => p.rows.map((r) => r.cents))),
+  ).toBe(v.current.spentCents + v.current.recurringSpentCents)
+
+  expect(sumCents((fisse?.rows ?? []).map((r) => r.cents))).toBe(v.current.recurringSpentCents)
+  if (fisse !== undefined && !fisse.single) {
+    expect(fisse.totalCents).toBe(v.current.recurringSpentCents)
   }
   expect(sumCents((variabili?.rows ?? []).map((r) => r.cents))).toBe(v.current.spentCents)
   if (variabili !== undefined && !variabili.single) {
@@ -636,20 +655,22 @@ describe('0a — la scala e della sezione, e la sezione la dichiara', () => {
     invariantiDiA(dopo)
   })
 
-  it('spegnere le fisse non cambia la scala della sezione variabile', () => {
-    const con = ready({ expenses: coppia })
-    const senza = ready({ expenses: coppia, showFixed: false })
-    // **La prova che il selettore non e' piu' quello che era.** Con la scala
-    // unica questa asserzione era falsa per costruzione — nascondere l'affitto
-    // ricalcolava la scala e le righe rimaste cambiavano lunghezza, e quello era
-    // *"l'unica cosa che il selettore fa di utile"*. Adesso la sezione variabile
-    // ha la propria scala e le fisse non ci sono mai state dentro.
-    expect(sezione(senza, 'variable')!.scaleCents).toBe(sezione(con, 'variable')!.scaleCents)
-    expect(sezione(senza, 'variable')!.rows.map((r) => r.fraction)).toEqual(
-      sezione(con, 'variable')!.rows.map((r) => r.fraction),
-    )
-    invariantiDiA(senza, false)
-  })
+  /*
+   * Qui c'era `spegnere le fisse non cambia la scala della sezione variabile`, ed
+   * e' **il test che ha ucciso il selettore**: asseriva che a fisse spente le
+   * `fraction` e `scaleCents` della sezione variabile fossero **identici**.
+   *
+   * Con la scala unica quell'asserzione era falsa per costruzione — nascondere
+   * l'affitto ricalcolava la scala, e quello era *"l'unica cosa che il selettore
+   * fa di utile"*. Rovesciata 0a, e' diventata vera: la sezione variabile ha la
+   * propria scala e le fisse non ci sono mai state dentro.
+   *
+   * Un test verde che dimostra che un comando non fa niente e' un rapporto sul
+   * prodotto, non una difesa del codice. Ha fatto il suo lavoro una volta, e
+   * adesso non e' nemmeno scrivibile: `showFixed` non esiste. Il fatto che
+   * provava — le due scale sono indipendenti — resta provato da
+   * `invariantiDiA`, che lo verifica su **ogni** fixture invece che su una.
+   */
 
   it('a pari importo massimo, dentro una sezione, le barre piene sono due', () => {
     const v = ready({
@@ -672,138 +693,31 @@ describe('0a — la scala e della sezione, e la sezione la dichiara', () => {
 })
 
 /*
- * **0c — il selettore delle fisse, e cosa gli e' rimasto da fare.**
+ * **Il blocco `0c` non c'e' piu', ed e' uscito con l'interruttore.**
  *
- * Questo blocco diceva che il selettore **non e' un filtro**, perche' ricalcolava
- * la scala. Con la scala tornata alla sezione (0a) quell'affermazione e' falsa:
- * toglie righe e non tocca nessuna lunghezza. Gli restano due effetti, e uno solo
- * dei due giustifica ancora `showFixed` come ingresso del modello —
- * `Breakdown.asChart`, che si decide sull'insieme delle righe a schermo.
+ * Provava otto cose sul selettore delle fisse. Sei erano gia' diventate
+ * tautologie il giorno in cui 0a e' stata rovesciata — *"le righe rimaste non
+ * cambiano di lunghezza"*, *"la proporzione resta"*, *"B non lo guarda"* — perche'
+ * con la scala per sezione spegnere le fisse **non toccava piu' nessun numero**.
+ * Le altre due erano vere e non lo sono piu': `showFixed` non esiste, quindi non
+ * c'e' niente da spegnere.
  *
- * Il resto del blocco non e' cambiato, e non e' una svista: sono i vincoli che il
- * selettore deve rispettare **qualunque cosa faccia** — `split` che resta, B che
- * non lo guarda, il vicolo cieco di `outside` che non si riapre.
+ * **Compreso quello che teneva chiuso il vicolo cieco**, e vale la pena dire
+ * perche' non e' stato salvato. Provava che `outside` guardasse un fatto sul
+ * periodo (`present`) invece delle sezioni a schermo: con le fisse spente in una
+ * settimana di sole fisse, guardare le sezioni avrebbe portato in `outside` — che
+ * dice *"niente cade dove questa schermata guarda"* mentre 900,00 € ci cadono, e
+ * che non disegna il selettore, cioe' chiude l'utente fuori dai propri dati
+ * dentro l'unico ramo in cui il comando che li riaccende non esiste.
+ *
+ * Senza selettore `present` e le sezioni a schermo sono **lo stesso insieme**, e
+ * quel test **non puo' piu' cadere**: nessun input del prodotto separa le due
+ * letture. Tenerlo sarebbe stato peggio che toglierlo — un'asserzione verde
+ * qualunque cosa faccia il codice, in un file dove ne abbiamo appena tolta
+ * un'altra della stessa specie. Il vicolo cieco resta chiuso **per costruzione**,
+ * che e' una garanzia piu' forte di un test: la strada che ci portava non esiste.
  */
-describe('0c — spegnere le fisse toglie righe, e non tocca le lunghezze', () => {
-  const spese: readonly Expense[] = [
-    makeExpense({ date: '2026-08-24', categoryId: 'c-casa', amountCents: 90000, source: 'recurring' }),
-    makeExpense({ date: '2026-08-25', categoryId: 'c-spesa', amountCents: 4200 }),
-    makeExpense({ date: '2026-08-26', categoryId: 'c-cibo', amountCents: 2600 }),
-  ]
 
-  it('le righe rimaste sono le stesse, con gli stessi importi', () => {
-    const con = sezione(ready({ expenses: spese }), 'variable')!
-    const senza = ready({ expenses: spese, showFixed: false })
-    // Resta una sezione sola, e non una vuota: la sezione delle fisse **non
-    // c'e'**, esattamente come quando nel periodo non ne e' uscita nessuna. La
-    // differenza fra i due vuoti non sta qui — sta in `split`, che nel primo caso
-    // resta e nel secondo e' `null`.
-    expect(senza.byCategory.sections.map((s) => s.kind)).toEqual(['variable'])
-    expect(sezione(senza, 'variable')!.rows.map((r) => r.cents)).toEqual(
-      con.rows.map((r) => r.cents),
-    )
-    expect(sezione(senza, 'variable')!.rows.map((r) => r.name)).toEqual(con.rows.map((r) => r.name))
-  })
-
-  it('le righe rimaste non cambiano di lunghezza, e prima cambiavano', () => {
-    const con = sezione(ready({ expenses: spese }), 'variable')!
-    const senza = sezione(ready({ expenses: spese, showFixed: false }), 'variable')!
-    // **Questa asserzione e' l'opposto di quella che stava qui**, e l'opposto era
-    // l'intera ragione per cui `showFixed` era finito nel modello: con la scala
-    // unica `con.rows[0]` valeva 4200/90000 e `senza.rows[0]` valeva 1, cioe' da
-    // 7,1 px a 112, e la riga da 26,00 passava da 5,2 px a 70,1. Con la scala per
-    // sezione le quotidiane si misurano contro
-    // 42,00 **anche a fisse accese**: il tap non ha piu' niente da restituire,
-    // perche' e' gia' tutto li'.
-    expect(con.rows[0]?.fraction).toBe(1)
-    expect(con.scaleCents).toBe(4200)
-    expect(senza.scaleCents).toBe(con.scaleCents)
-    expect(senza.rows.map((r) => r.fraction)).toEqual(con.rows.map((r) => r.fraction))
-    // La misura da cui erano nate le due scale, sulla colonna piu' stretta e
-    // senza toccare niente: 26,00 su 42,00 sono 70,1 px, non 5,2.
-    expect(con.rows[1]!.fraction * COLONNA_MIN_PX).toBeGreaterThan(60)
-    invariantiDiA(ready({ expenses: spese, showFixed: false }), false)
-  })
-
-  it('la proporzione resta: e cio che dice cosa si sta nascondendo', () => {
-    const v = ready({ expenses: spese, showFixed: false })
-    // ADR 016 §1 vieta di nascondere le fisse; 0c lo ripete perche' un selettore
-    // e' esattamente il modo in cui l'esclusione rientrerebbe dalla porta di
-    // servizio. `split` e' cio' che lo impedisce: 900,00 € restano scritti anche
-    // quando le loro righe non ci sono.
-    expect(v.byCategory.sections.map((s) => s.kind)).toEqual(['variable'])
-    expect(v.byCategory.split?.fixedCents).toBe(90000)
-    expect(v.byCategory.split?.variableCents).toBe(6800)
-    expect(v.current.recurringSpentCents).toBe(90000)
-  })
-
-  it('la soglia guarda le righe rimaste, ed e cio che tiene il selettore nel modello', () => {
-    // Tre righe con le fisse — A e' un grafico — e due senza: due categorie non
-    // sono una ripartizione, e non lo diventano perche' prima ce n'erano tre.
-    expect(ready({ expenses: spese }).byCategory.asChart).toBe(true)
-    expect(ready({ expenses: spese, showFixed: false }).byCategory.asChart).toBe(false)
-    // **E' rimasta l'unica cosa che `showFixed` fa e che un filtro in `Stats.tsx`
-    // non potrebbe fare**: filtrando a valle, `asChart` resterebbe deciso su tre
-    // righe mentre a schermo ne restano due, cioe' due barre disegnate sotto la
-    // soglia che dice di non disegnarne. Il test qui sopra prova che le lunghezze
-    // non cambiano piu'; questo prova che qualcosa cambia ancora.
-  })
-
-  it('B non lo guarda: la traccia del budget e il confronto che esclude le fisse', () => {
-    const conStorico: readonly Expense[] = [
-      ...spese,
-      makeExpense({ date: '2026-08-17', categoryId: 'c-spesa', amountCents: 7000 }),
-    ]
-    const con = ready({ expenses: conStorico })
-    const senza = ready({ expenses: conStorico, showFixed: false })
-    // Byte per byte: se un giorno `showFixed` toccasse B, le barre si
-    // misurerebbero contro una traccia che le fisse non comprende — due unita' di
-    // misura sullo stesso asse, che e' il difetto per cui ADR 016 esiste.
-    expect(senza.byPeriod).toEqual(con.byPeriod)
-    // E c'e' qualcosa da confrontare byte per byte: senza questa, due `null`
-    // uguali sarebbero un test verde su una sezione che non esiste.
-    expect(periodi(con).closed.length).toBeGreaterThan(0)
-  })
-
-  it('spegnendo le fisse in un periodo di sole fisse la schermata resta ready', () => {
-    const v = view({
-      expenses: [
-        makeExpense({ date: '2026-08-25', categoryId: 'c-casa', amountCents: 90000, source: 'recurring' }),
-      ],
-      showFixed: false,
-    })
-    // **Il vicolo cieco che questo test tiene chiuso.** `outside` non porta ne'
-    // sezioni ne' `split`, quindi non ha niente su cui appendere il selettore:
-    // arrivandoci con le fisse spente, l'utente resterebbe chiuso fuori dai propri
-    // dati con l'unico interruttore che li riaccende dentro il ramo che non si
-    // disegna. Un controllo che puo' cancellare se stesso non e' un controllo.
-    //
-    // E prima ancora sarebbe una frase falsa: `outside` dice *"niente cade dove
-    // questa schermata guarda"*, e li' cadono 900,00 €.
-    expect(v.kind).toBe('ready')
-    if (v.kind !== 'ready') return
-    expect(v.byCategory.sections).toHaveLength(0)
-    // A e' vuota **e non c'e' niente da dividere**: `split` non e' il rimedio a
-    // questo stato, e il modello non finge che lo sia. Cosa si scrive sopra
-    // un'unica sezione nascosta e' del componente, che ha il dizionario — qui c'e'
-    // il fatto che ci sia un posto dove scriverlo.
-    expect(v.byCategory.split).toBeNull()
-    invariantiDiA(v, false)
-  })
-
-  it('accese, la schermata di prima e la stessa di sempre', () => {
-    // La controprova del test qui sopra: non e' `outside` perche' le fisse ci
-    // sono, non perche' `outside` sia sparito. Gli altri suoi casi hanno i loro
-    // test, e sono rimasti verdi.
-    const v = ready({
-      expenses: [
-        makeExpense({ date: '2026-08-25', categoryId: 'c-casa', amountCents: 90000, source: 'recurring' }),
-      ],
-    })
-    expect(unica(sezione(v, 'fixed')).cents).toBe(90000)
-    expect(v.byCategory.split).toBeNull()
-  })
-})
 
 /*
  * **0b — la proporzione in cima**, cioe' il posto in cui il fatto dominante e'
@@ -1297,7 +1211,6 @@ describe('dati ostili', () => {
       budgets: [] as readonly Budget[],
       period: 'weekly',
       day: OGGI,
-      showFixed: true,
     })
     if (v.kind !== 'ready') throw new Error('atteso ready')
     return v

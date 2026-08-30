@@ -269,6 +269,49 @@ async function svuota(page: Page): Promise<void> {
   })
 }
 
+/**
+ * **Porta ogni sezione di A alla vista a barre**, e dice se e' riuscito.
+ *
+ * Dal 30 agosto A si apre in **ciambella**: ogni sezione con almeno tre voci
+ * disegna la ripartizione, e le righe con le barre sono l'altra vista. Tutti i
+ * test che misurano una barra devono quindi passare di qui, e la chiamata e'
+ * **il gesto di un utente** — un tap sul comando — non una scrittura di stato.
+ *
+ * ## Perche' non fa niente in silenzio quando non c'e' niente da fare
+ *
+ * Una sezione sotto soglia (o con una riga sola) non ha comando e **e' gia'** a
+ * barre: qui il ciclo non tocca nulla, ed e' corretto. L'asserzione finale copre
+ * tutti e due i casi con lo stesso fatto — *"nessuna sezione e' rimasta in
+ * ciambella"* — invece di distinguere due rami di cui uno passerebbe per la
+ * ragione sbagliata.
+ *
+ * Si tocca il segmento **non premuto**: toccare quello premuto rimetterebbe lo
+ * stesso stato, e un ciclo che tocca tutto due volte avrebbe lo stesso esito con
+ * il doppio dei gesti — cioe' un test che passa senza esercitare la commutazione.
+ *
+ * ## Si riparte sempre dal primo, e la prima versione non lo faceva
+ *
+ * L'insieme dei comandi da premere **si accorcia a ogni tap**: toccando quello
+ * delle fisse, il suo `aria-pressed` diventa `true` e il selettore smette di
+ * prenderlo. Un elenco preso una volta sola (`.all()`) puntava quindi a
+ * `nth(1)` di un insieme rimasto con un elemento, e aspettava trenta secondi un
+ * bersaglio che non poteva piu' esistere. Il giro e' limitato dal conteggio
+ * iniziale: se un tap non commutasse, si esce e a dirlo e' l'asserzione qui
+ * sotto invece di un ciclo infinito.
+ */
+async function mostraLeBarre(page: Page): Promise<void> {
+  const daPremere = page.locator('.stats__view[data-vista="ordine"][aria-pressed="false"]')
+  const quante = await daPremere.count()
+  for (let i = 0; i < quante; i += 1) {
+    if ((await daPremere.count()) === 0) break
+    await daPremere.first().tap()
+  }
+  await expect(
+    page.locator('.stats__view[data-vista="quote"][aria-pressed="true"]'),
+    'una sezione di A e\' rimasta in ciambella: le barre che questo test misura non ci sono',
+  ).toHaveCount(0)
+}
+
 async function apriStatistiche(page: Page): Promise<void> {
   await page.getByRole('button', { name: /Statistiche|Stats/ }).click()
   await expect(page.locator('.stats')).toBeVisible()
@@ -832,6 +875,23 @@ test('con spese e senza budget: le righe ci sono, le tracce no', async ({ page }
     { categoria: 'Casa', cents: 1000 },
   ])
 
+  // **Il totale del periodo si legge due volte, e le due volte hanno due
+  // mestieri.** In vista `quote` `70,00 €` sta sul numero grande — la risposta
+  // alla domanda della schermata — e nel buco della ciambella, dove e' il
+  // **denominatore** delle fette: senza di lui gli archi sono proporzioni di
+  // niente. Con una sezione sola i due numeri coincidono per costruzione, ed e'
+  // la sola ripetizione ammessa. Che sia esattamente **due** e non tre e' cio'
+  // che questa riga sorveglia.
+  const inCiambella = ((await page.locator('.stats').innerText()).match(/70,00/g) ?? []).length
+  expect(
+    inCiambella,
+    `in vista quote il totale e' scritto ${inCiambella} volte: le sole due ammesse sono ` +
+      'il numero grande e il buco della ciambella',
+  ).toBe(2)
+  await expect(page.locator('.stats__donutTotal')).toHaveText(/70,00/)
+
+  await mostraLeBarre(page)
+
   // A esiste ed e' un grafico: tre categorie sono la soglia.
   await expect(page.locator('.stats__section').first().locator('.stat')).toHaveCount(3)
   await expect(page.locator('.stat__bar').first()).toBeVisible()
@@ -903,6 +963,7 @@ test('la barra e in rapporto con il proprio grafico, e i grafici sono larghi ugu
     { categoria: 'Spesa', cents: 2000 },
     { categoria: 'Casa', cents: 1000 },
   ])
+  await mostraLeBarre(page)
 
   const righe = await righeDi(page, 0)
   expect(righe.length, 'nessuna riga con barra: il test non proverebbe niente').toBe(3)
@@ -993,6 +1054,7 @@ test('un nome che nessun editor accetta non accorcia le barre, e il grafico ha u
       ],
     },
   )
+  await mostraLeBarre(page)
 
   const righe = await righeDi(page, 0)
   expect(righe.length).toBe(4)
@@ -1171,6 +1233,15 @@ test('le spese senza categoria sono una riga sola, e non spostano le colonne', a
     { categoria: '(un altra categoria cancellata)', cents: 2000 },
   ])
 
+  // La legenda della ciambella nomina l'aggregato con la **stessa chiave** delle
+  // righe: e' lo stesso fatto, e due parole per lo stesso fatto sarebbero due
+  // fatti per chi legge. Si guarda prima di commutare, perche' e' la vista che
+  // si apre da sola.
+  await expect(
+    page.locator('.stats__legend .legend__name', { hasText: dizionario['row.categoryRemoved'] }),
+  ).toHaveCount(1)
+  await mostraLeBarre(page)
+
   const sezione = page.locator('.stats__section').first()
   // Tre righe, non quattro: le orfane si aggregano invece di diventare N
   // parafrasi dello stesso fatto.
@@ -1320,6 +1391,8 @@ test('A ha una scala per sezione, e ogni sezione dichiara quanto vale la sua bar
     { categoria: 'Spesa', cents: 6200 },
     { categoria: 'Fuori', cents: 3000 },
   ])
+  // La scala e' **delle barre**: si dichiara nella vista che le disegna.
+  await mostraLeBarre(page)
 
   const sezione = page.locator('.stats__section').first()
   const parti = sezione.locator('.stats__partTitle')
@@ -1458,6 +1531,10 @@ test('la parte con una riga sola non ripete la sua cifra nell\'intestazione', as
     { categoria: 'Fuori', cents: 4000 },
     { categoria: 'Trasporti', cents: 1000 },
   ])
+  // Si misura la vista a barre, che e' quella in cui la didascalia della scala
+  // esiste: la regola sotto esame — *"con una riga sola non si ripete la cifra"*
+  // — vale su tutti e due i pezzi che l'intestazione puo' portare.
+  await mostraLeBarre(page)
 
   const sezione = page.locator('.stats__section').first()
   const parti = sezione.locator('.stats__partTitle')
@@ -1590,6 +1667,7 @@ test('dentro A o tutte le righe hanno la barra o nessuna, e gli importi restano 
     { categoria: 'Spesa', cents: 6200 },
     { categoria: 'Fuori', cents: 3000 },
   ])
+  await mostraLeBarre(page)
 
   const sezione = page.locator('.stats__section').first()
   await expect(sezione.locator('.stats__partTitle')).toHaveCount(2)
@@ -1620,6 +1698,10 @@ test('dentro A o tutte le righe hanno la barra o nessuna, e gli importi restano 
     { categoria: 'Casa', cents: 50700, fissa: true },
     { categoria: 'Spesa', cents: 6200 },
   ])
+  // Niente `mostraLeBarre` qui, e non e' una dimenticanza: due sezioni con una
+  // riga ciascuna non hanno nessuna seconda vista da scegliere, quindi non c'e'
+  // nessun comando da toccare. Il ramo e' gia' quello che questa meta' misura.
+  await expect(page.locator('.stats__view')).toHaveCount(0)
   const vuoto = await conta()
   expect(vuoto.righe, 'la scena a due righe non e\' in pagina').toBe(2)
   expect(vuoto.barre, 'sotto soglia A disegna ancora delle barre').toBe(0)
@@ -1994,6 +2076,7 @@ test('il pavimento della barra nel modello e\' il contorno che il CSS dipinge', 
     { categoria: 'Spesa', cents: 25350 },
     { categoria: 'Fuori', cents: 5070 },
   ])
+  await mostraLeBarre(page)
 
   const pavimento = await plotMinPx(page)
   const bordo = await page.evaluate(() => {
@@ -2317,6 +2400,19 @@ test('a 390x844 la riga di oggi e quella del periodo prima stanno sopra la piega
     const sezione = document.querySelectorAll('.stats__section')[1]!
     return {
       altezza: window.innerHeight,
+      // **Dove finisce davvero cio' che si vede**, che non e' `innerHeight`.
+      //
+      // Le righe stanno dentro `.stats`, che e' il contenitore che scorre: sotto
+      // il suo bordo inferiore il contenuto e' ritagliato, non solo lontano. Fra
+      // i due c'e' `--fab-lane` — misurato a 390x844, `.stats` finisce a **760**
+      // dentro un viewport alto 844: **84 px** in cui una riga esiste nel DOM e
+      // non si vede.
+      //
+      // Il confronto con `innerHeight` resta perche' e' quello con cui questo
+      // test e' nato, ma da solo lascerebbe passare 84 px di contenuto invisibile
+      // — e ne bastano molti meno per rimangiarsi il margine con cui la ciambella
+      // e' stata dimensionata (`--pie-size`, Stats.css).
+      piega: document.querySelector('.stats')!.getBoundingClientRect().bottom,
       // Nessuno scorrimento: si misura cio' che si vede aprendo la schermata.
       scorrimento: document.querySelector('.app')!.scrollTop,
       righe: [...sezione.querySelectorAll('.stat')].map((riga) => ({
@@ -2366,6 +2462,24 @@ test('a 390x844 la riga di oggi e quella del periodo prima stanno sopra la piega
     `il periodo precedente cade sotto la piega: fondo ${seconda.fondo} su ${misura.altezza}, ` +
       'la risposta di B e\' a schermo senza il suo termine di paragone',
   ).toBeLessThanOrEqual(misura.altezza)
+
+  // **E si vedono davvero, non solo "sono dentro il viewport".**
+  //
+  // Le due asserzioni qui sopra confrontano con `innerHeight`; il contenuto
+  // sotto il bordo di `.stats` e' **ritagliato**, quindi la piega vera e' quella.
+  // Sulla scena misurata i due numeri distano 84 px, che e' abbastanza per
+  // perdere due righe intere senza che nessuna asserzione se ne accorga.
+  //
+  // Questa e' anche la guardia di `--pie-size`: la ciambella e' l'unica cosa di
+  // A che sia stata dimensionata **contro questo margine**, e alzarla di 45 px
+  // fa cadere questa riga.
+  for (const riga of [oggi, seconda]) {
+    expect(
+      riga.fondo,
+      `${riga.nome} e' nel viewport ma fuori da .stats: fondo ${riga.fondo} contro una piega ` +
+        `a ${misura.piega}, cioe' ritagliata`,
+    ).toBeLessThanOrEqual(misura.piega)
+  }
 })
 
 /**
@@ -2826,10 +2940,48 @@ for (const lingua of [
         { categoria: nomi.fuori, cents: 2000, giorniFa: 15 },
       ])
 
-      // Le premesse, o il resto sarebbe verde per assenza: la riga dell'orfana
-      // c'e' — e' l'etichetta piu' larga che l'app produce — e le sezioni sono
-      // due, cioe' anche B e' in scena.
+      // Le premesse, o il resto sarebbe verde per assenza: le sezioni sono due,
+      // cioe' anche B e' in scena.
       await expect(page.locator('.stats__section')).toHaveCount(2)
+
+      // **Prima la vista che si apre da sola**, che ha tre stringhe in piu' e
+      // tutte e tre scritte dall'app: le due parole del comando, il totale nel
+      // buco, e la legenda — dove l'orfana porta la stessa etichetta piu' larga
+      // che l'app produce.
+      await expect(
+        page.locator('.stats__legend .legend__name', {
+          hasText: lingua.dizionario['row.categoryRemoved'],
+        }),
+      ).toHaveCount(1)
+      const quote = await page.evaluate(() => {
+        const clampato = (el: Element): boolean => el.scrollHeight > el.clientHeight + 0.5
+        const troncato = (el: Element): boolean => el.scrollWidth > el.clientWidth + 1
+        const tagliato = (el: Element): boolean => clampato(el) || troncato(el)
+        const testo = (el: Element): string => el.textContent ?? ''
+        const stats = document.querySelector('.stats')
+        if (stats === null) throw new Error('nessuna schermata delle Statistiche')
+        return {
+          // Le due parole del comando: sono le uniche etichette della schermata
+          // che **cambiano lunghezza fra le due lingue senza avere dove andare a
+          // capo**, e stanno nella colonna che a 320 punti non deve cedere.
+          comandi: [...document.querySelectorAll('.stats__view')].filter(tagliato).map(testo),
+          // Il totale nel buco: se non ci sta, il buco smette di portare il
+          // numero per cui esiste.
+          buchi: [...document.querySelectorAll('.stats__donutTotal')].filter(tagliato).map(testo),
+          legenda: [...document.querySelectorAll('.legend__name, .legend__value')]
+            .filter(tagliato)
+            .map(testo),
+          nomiParte: [...document.querySelectorAll('.stats__partName')].filter(tagliato).map(testo),
+          scroll: stats.scrollWidth - stats.clientWidth,
+        }
+      })
+      expect(quote.comandi, 'una parola del comando e\' stata tagliata').toEqual([])
+      expect(quote.buchi, 'il totale non sta nel buco della ciambella').toEqual([])
+      expect(quote.legenda, 'una voce della legenda e\' stata tagliata').toEqual([])
+      expect(quote.nomiParte, 'un nome di parte e\' stato tagliato accanto al comando').toEqual([])
+      expect(quote.scroll, 'le Statistiche scorrono di lato in vista quote').toBeLessThanOrEqual(0)
+
+      await mostraLeBarre(page)
       await expect(
         page.locator('.stat__label', { hasText: lingua.dizionario['row.categoryRemoved'] }),
       ).toHaveCount(1)
@@ -3032,6 +3184,22 @@ test('a 320 punti, con un nome da import e un importo a sette cifre, niente scro
     { rinomina: [['Casa', 'Abbonamenti e cose che si rinnovano']] },
   )
 
+  // **Prima la vista che si apre da sola.** Con un importo a sette cifre il buco
+  // della ciambella e' il posto piu' stretto della schermata, e la legenda porta
+  // il nome da import accanto a quello stesso importo: se qualcosa manda la
+  // sezione fuori dal bordo, e' qui.
+  const inQuote = await page.evaluate(() => {
+    const stats = document.querySelector('.stats')!
+    return {
+      stats: stats.scrollWidth - stats.clientWidth,
+      pagina: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    }
+  })
+  expect(inQuote.stats, 'le Statistiche scorrono di lato in vista quote').toBeLessThanOrEqual(0)
+  expect(inQuote.pagina, 'la pagina scorre di lato in vista quote').toBeLessThanOrEqual(0)
+
+  await mostraLeBarre(page)
+
   const misura = await page.evaluate(() => {
     const stats = document.querySelector('.stats')!
     const valore = document.querySelector('.stat__value')!
@@ -3112,4 +3280,828 @@ test('lo speso della riga corrente e lo stesso carattere di quello della Home', 
 
   expect(daStatistiche).not.toBe('')
   expect(daHome).toContain(daStatistiche)
+})
+
+/* ------------------------------------------------ la ciambella delle quotidiane */
+
+/**
+ * **Un giro dell'anello, campionato sui pixel dipinti.**
+ *
+ * Restituisce i tratti di colore che si incontrano girando in senso orario dalle
+ * dodici, ciascuno con la propria ampiezza in gradi. Il fondo — cioe' il vuoto
+ * fra due fette — e' un tratto come gli altri, e si riconosce dal colore.
+ *
+ * ## Perche' i pixel e non `stroke-dasharray`
+ *
+ * Perche' la domanda e' *"quanto e' larga questa fetta a schermo"*, e fra il
+ * tratteggio che il componente chiede e l'arco che si vede ci sono il `viewBox`,
+ * la scala del riquadro e la rotazione. Un'asserzione sull'attributo
+ * riscriverebbe l'aritmetica del componente e sarebbe verde anche con la figura
+ * larga zero — e' la stessa ragione per cui `.stat__accrued` si campiona invece
+ * di interrogarlo.
+ *
+ * Il raggio di campionamento e' quello **medio** dell'anello, letto dal
+ * `<circle>` e riscalato col rapporto fra il riquadro dipinto e il `viewBox`:
+ * cosi' la misura non contiene nessuno degli 88, 24 o 32 scritti nel
+ * componente.
+ */
+async function giroDellAnello(
+  page: Page,
+  passi = 720,
+): Promise<readonly { readonly colore: string; readonly gradi: number }[]> {
+  // **Prima si porta la figura sotto gli occhi.** Uno screenshot ritrae il
+  // viewport, e a 800x327 la ciambella cade sotto il bordo di `.stats`:
+  // campionarla li' non legge la figura, legge il FAB e il fondo. Non e' una
+  // tautologia come lo sarebbe in una misura sulla piega — li' la domanda e'
+  // *"si vede senza scorrere"*, qui e' *"quanto e' larga questa fetta"*, e per
+  // rispondere bisogna guardarla.
+  await page.locator('.stats__pie').scrollIntoViewIfNeeded()
+  const png = (await page.screenshot()).toString('base64')
+  return page.evaluate(
+    async (input: { png: string; passi: number }) => {
+      const svg = document.querySelector('.stats__pie')
+      if (svg === null) throw new Error('non c\'e\' nessuna ciambella da campionare')
+      const cerchio = svg.querySelector('circle')
+      if (cerchio === null) throw new Error('la ciambella non ha nessuna fetta')
+
+      const box = svg.getBoundingClientRect()
+      // La scala fra il sistema di coordinate del disegno e i pixel dipinti.
+      const scala = box.width / (svg as SVGSVGElement).viewBox.baseVal.width
+      const raggio = cerchio.r.baseVal.value * scala
+      const cx = box.left + box.width / 2
+      const cy = box.top + box.height / 2
+
+      const blob = await (await fetch(`data:image/png;base64,${input.png}`)).blob()
+      const bitmap = await createImageBitmap(blob)
+      const tela = new OffscreenCanvas(bitmap.width, bitmap.height)
+      const ctx = tela.getContext('2d')
+      if (ctx === null) throw new Error('nessun contesto 2d per campionare i pixel')
+      ctx.drawImage(bitmap, 0, 0)
+      const dpr = window.devicePixelRatio
+
+      const tratti: { colore: string; gradi: number }[] = []
+      const passo = 360 / input.passi
+      for (let i = 0; i < input.passi; i += 1) {
+        const gradi = i * passo
+        const rad = (gradi * Math.PI) / 180
+        const x = Math.round((cx + raggio * Math.sin(rad)) * dpr)
+        const y = Math.round((cy - raggio * Math.cos(rad)) * dpr)
+        const d = ctx.getImageData(x, y, 1, 1).data
+        const colore = `${d[0] ?? 0},${d[1] ?? 0},${d[2] ?? 0}`
+        const ultimo = tratti[tratti.length - 1]
+        if (ultimo !== undefined && ultimo.colore === colore) ultimo.gradi += passo
+        else tratti.push({ colore, gradi: passo })
+      }
+      // Il giro e' chiuso: se il primo e l'ultimo tratto sono dello stesso
+      // colore sono lo stesso tratto, spezzato dal punto in cui si e'
+      // cominciato a contare.
+      const primo = tratti[0]
+      const ultimo = tratti[tratti.length - 1]
+      if (tratti.length > 1 && primo !== undefined && ultimo !== undefined && primo.colore === ultimo.colore) {
+        primo.gradi += ultimo.gradi
+        tratti.pop()
+      }
+      return tratti
+    },
+    { png, passi },
+  )
+}
+
+/**
+ * **La ciambella dipende da quante voci ha la sezione, non dalla sua natura.**
+ *
+ * ## Qui c'era il test opposto, e diceva la cosa giusta per la ragione sbagliata
+ *
+ * Si chiamava *"la ciambella sta sulle quotidiane, e le fisse non ne hanno una"*,
+ * e la sua ragione era ADR 016: *"le fisse non sono una ripartizione su cui si
+ * decida qualcosa"*. Quell'argomento **e' sul budget** — l'affitto non e' una
+ * decisione, quindi non entra nel calcolo — e la ciambella non e' il budget: e'
+ * una ripartizione che si guarda.
+ *
+ * L'esito era giusto **sui dati veri e per un'altra causa**: la parte fissa ha
+ * due voci (507,00 € e 23,00 €, cioe' 95,7% e 4,3%), e due fette sono una cifra,
+ * non una ripartizione. La regola vera e' quindi il **conteggio**, e la scena qui
+ * sotto la separa dalla natura nell'unico modo possibile: **tre fisse**. Con la
+ * regola vecchia questa ciambella non esisterebbe.
+ *
+ * E la conseguenza va detta perche' e' voluta: chi ha canone, utenze,
+ * abbonamento e palestra vede la ripartizione anche delle fisse. E' cio' che deve
+ * succedere — sono quattro impegni, e come si dividano e' una domanda che
+ * qualcuno si fa.
+ */
+test('la ciambella dipende da quante voci ha la sezione, non dalla natura', async ({ page }) => {
+  await page.goto('/')
+  await chiudiGuida(page)
+  await semina(page, [
+    { categoria: 'Casa', cents: 50700, fissa: true },
+    { categoria: 'Trasporti', cents: 2300, fissa: true },
+    { categoria: 'Extra', cents: 1500, fissa: true },
+    { categoria: 'Spesa', cents: 4200 },
+    { categoria: 'Fuori', cents: 2600 },
+    { categoria: 'Coffeeshop', cents: 2400 },
+  ])
+
+  const fisse = page.locator('.stats__partHead[data-kind="fixed"]')
+  const quotidiane = page.locator('.stats__partHead[data-kind="variable"]')
+
+  // La premessa: **tre voci per parte**, altrimenti non si sta separando niente.
+  // Si contano sulla legenda, che e' l'elenco che la vista `quote` disegna.
+  await expect(
+    fisse.locator('+ .stats__viz .legend'),
+    'la parte fissa non ha tre voci: la scena non separa la soglia dalla natura',
+  ).toHaveCount(3)
+  await expect(quotidiane.locator('+ .stats__viz .legend')).toHaveCount(3)
+
+  // Due ciambelle, una per sezione, e tutte e due si aprono da sole.
+  await expect(page.locator('.stats__pie')).toHaveCount(2)
+  await expect(fisse.locator('+ .stats__viz .stats__pie')).toHaveCount(1)
+  await expect(quotidiane.locator('+ .stats__viz .stats__pie')).toHaveCount(1)
+
+  // E ognuna porta **il totale della propria sezione** nel buco: 545,00 € di
+  // fisse e 92,00 € di quotidiane, che sono due numeri diversi e non il totale
+  // del periodo scritto due volte.
+  await expect(fisse.locator('+ .stats__viz .stats__donutTotal')).toHaveText(/545,00/)
+  await expect(quotidiane.locator('+ .stats__viz .stats__donutTotal')).toHaveText(/92,00/)
+})
+
+/**
+ * **Sotto le tre voci la sezione non ha ciambella, e non ha nemmeno il comando.**
+ *
+ * E' la soglia che si dimentica, perche' il numero e' lo stesso di quella delle
+ * barre e la decisione e' un'altra: `BREAKDOWN_MIN_ROWS` governa **le barre
+ * sull'insieme delle righe di A**, `PIE_MIN_SLICES` **la ciambella dentro una
+ * sezione**. L'argomento e' che due fette sono una cifra, non una ripartizione —
+ * e sui dati veri e' proprio il caso delle fisse, `95,7% / 4,3%`.
+ *
+ * La scena la separa: cinque voci in tutto — quindi A **e' un grafico** — ma solo
+ * due nelle quotidiane. Se le due soglie venissero unificate, qui comparirebbe
+ * una ciambella a due spicchi.
+ *
+ * **E il comando non compare**, che e' la meta' nuova: un comando su una sezione
+ * che ha una vista sola prometterebbe una scelta che non esiste. E' lo stesso
+ * difetto per cui l'interruttore delle fisse e' stato tolto — *"prometteva un
+ * potere che non aveva"* — e vale identico al contrario.
+ */
+test('sotto tre voci non c\'e\' ciambella, e nemmeno il comando', async ({ page }) => {
+  await page.goto('/')
+  await chiudiGuida(page)
+  await semina(page, [
+    { categoria: 'Casa', cents: 50700, fissa: true },
+    { categoria: 'Trasporti', cents: 2300, fissa: true },
+    { categoria: 'Extra', cents: 1500, fissa: true },
+    { categoria: 'Spesa', cents: 4200 },
+    { categoria: 'Fuori', cents: 2600 },
+  ])
+
+  const quotidiane = page.locator('.stats__partHead[data-kind="variable"]')
+
+  // La premessa: due voci nelle quotidiane, altrimenti non si sta provando la
+  // soglia. Sono a barre, perche' e' l'unica vista che quella sezione ha.
+  await expect(
+    quotidiane.locator('+ .stats__rows .stat'),
+    'le quotidiane non sono due: la scena non prova la soglia',
+  ).toHaveCount(2)
+  await expect(quotidiane.locator('+ .stats__rows .stat__bar')).toHaveCount(2)
+  await expect(quotidiane.locator('+ .stats__viz')).toHaveCount(0)
+  await expect(
+    quotidiane.locator('.stats__view'),
+    'una sezione con una vista sola offre un comando che non porta da nessuna parte',
+  ).toHaveCount(0)
+
+  // E le fisse, che di voci ne hanno tre, la ciambella ce l'hanno: senza questa
+  // meta' il test sarebbe verde anche su una schermata che non disegna piu'
+  // nessuna ciambella.
+  await expect(page.locator('.stats__pie')).toHaveCount(1)
+  await expect(
+    page.locator('.stats__partHead[data-kind="fixed"] + .stats__viz .stats__pie'),
+  ).toHaveCount(1)
+})
+
+/**
+ * **Le due sezioni sono indipendenti: una a barre e l'altra a ciambella.**
+ *
+ * Non e' una rifinitura: sono **due domande su due quantita' diverse**, e non
+ * c'e' nessuna ragione per cui debbano riceverne una sola. Chi vuole la
+ * classifica delle fisse e la ripartizione delle quotidiane la ottiene, e il
+ * contrario pure.
+ *
+ * Un comando solo per tutta la schermata sarebbe stato piu' semplice da
+ * scrivere e avrebbe legato due letture che non hanno niente in comune.
+ */
+test('commutare una sezione non tocca l\'altra', async ({ page }) => {
+  await page.goto('/')
+  await chiudiGuida(page)
+  await semina(page, [
+    { categoria: 'Casa', cents: 50700, fissa: true },
+    { categoria: 'Trasporti', cents: 2300, fissa: true },
+    { categoria: 'Extra', cents: 1500, fissa: true },
+    { categoria: 'Spesa', cents: 4200 },
+    { categoria: 'Fuori', cents: 2600 },
+    { categoria: 'Coffeeshop', cents: 2400 },
+  ])
+
+  const fisse = page.locator('.stats__partHead[data-kind="fixed"]')
+  const quotidiane = page.locator('.stats__partHead[data-kind="variable"]')
+
+  await fisse.locator('.stats__view[data-vista="ordine"]').tap()
+
+  // Le fisse sono passate alle barre: tre righe con la loro barra, nessuna
+  // ciambella, e la didascalia della scala — che e' la legenda delle barre e
+  // compare **solo** dove le barre ci sono.
+  await expect(fisse.locator('+ .stats__rows .stat__bar')).toHaveCount(3)
+  await expect(fisse.locator('+ .stats__viz')).toHaveCount(0)
+  await expect(fisse.locator('.stats__partScale')).toHaveCount(1)
+
+  // Le quotidiane no: sono rimaste dove stavano, ciambella compresa.
+  await expect(quotidiane.locator('+ .stats__viz .stats__pie')).toHaveCount(1)
+  await expect(quotidiane.locator('.stats__partScale')).toHaveCount(0)
+  await expect(
+    quotidiane.locator('.stats__view[data-vista="quote"]'),
+  ).toHaveAttribute('aria-pressed', 'true')
+})
+
+/**
+ * **Le due viste dicono lo stesso numero, e il numero e' quello nel buco.**
+ *
+ * E' l'invariante che rende il comando una domanda diversa invece che un filtro:
+ * **nessuna delle due viste nasconde niente**. La somma delle fette, la somma
+ * delle barre e il totale scritto nel buco sono lo stesso numero.
+ *
+ * ## Perche' e' il test che il comando aveva bisogno di avere
+ *
+ * L'interruttore che stava qui prima — quello delle fisse — e' morto perche'
+ * *"prometteva un potere che non aveva"*: toglieva righe. Un comando che commuta
+ * fra due viste puo' scivolare nella stessa cosa senza che nessuno se ne accorga,
+ * il giorno in cui una delle due comincia ad aggregare la coda in un `Altre`. Qui
+ * si guarda **cio' che si vede**: gli importi scritti, non uno stato interno.
+ *
+ * Gli importi si sommano **dai centesimi ricostruiti dal testo dipinto**, non da
+ * una somma che il test rifa' sui dati seminati: una somma sui dati sarebbe una
+ * seconda implementazione del modello, verde anche se lo schermo mostrasse
+ * tutt'altro.
+ */
+test('la vista a quote e la vista a barre espongono lo stesso totale', async ({ page }) => {
+  await page.goto('/')
+  await chiudiGuida(page)
+  await semina(page, [
+    { categoria: 'Casa', cents: 50700, fissa: true },
+    { categoria: 'Spesa', cents: 4200 },
+    { categoria: 'Fuori', cents: 2600 },
+    { categoria: 'Coffeeshop', cents: 2400 },
+    { categoria: 'Sigarette', cents: 1000 },
+    { categoria: 'Svago', cents: 1000 },
+  ])
+
+  /** `42,00 €` -> 4200. Legge cio' che e' dipinto, non cio' che e' stato scritto. */
+  const centesimi = (testo: string): number => {
+    const cifre = testo.replace(/[^\d,]/g, '').replace(',', '.')
+    return Math.round(Number.parseFloat(cifre) * 100)
+  }
+  const somma = async (dove: string): Promise<number> =>
+    (await page.locator(dove).allInnerTexts()).reduce((n, t) => n + centesimi(t), 0)
+
+  const quotidiane = page.locator('.stats__partHead[data-kind="variable"]')
+
+  // La premessa: cinque voci, altrimenti non c'e' nessuna ripartizione da
+  // confrontare con nessuna classifica.
+  await expect(quotidiane.locator('+ .stats__viz .legend')).toHaveCount(5)
+
+  const nelBuco = centesimi(
+    await quotidiane.locator('+ .stats__viz .stats__donutTotal').innerText(),
+  )
+  const inLegenda = await somma('.stats__partHead[data-kind="variable"] + .stats__viz .legend__value')
+
+  expect(inLegenda, `la legenda somma ${inLegenda} contro ${nelBuco} nel buco`).toBe(nelBuco)
+
+  await mostraLeBarre(page)
+
+  await expect(quotidiane.locator('+ .stats__rows .stat')).toHaveCount(5)
+  const inBarre = await somma('.stats__partHead[data-kind="variable"] + .stats__rows .stat__value')
+
+  expect(
+    inBarre,
+    `le barre sommano ${inBarre} e le fette ${inLegenda}: una delle due vista nasconde qualcosa`,
+  ).toBe(inLegenda)
+})
+
+/**
+ * **Riaprendo le Statistiche si riparte dalla ciambella.**
+ *
+ * *"Uno stato che sopravvive e' uno stato che va spiegato."* Il valore di
+ * partenza e' uno solo, quindi nessuno ritrova la schermata diversa da come se
+ * l'aspetta senza aver appena toccato qualcosa.
+ *
+ * Si esce **davvero** — si va sulla Home e si torna, che e' cio' che fa un utente
+ * — invece di ricaricare la pagina: un `reload()` proverebbe che lo stato non e'
+ * su disco, che e' un'altra domanda e piu' facile. Qui si prova che non
+ * sopravvive nemmeno **in memoria** al cambio di schermata.
+ */
+test('uscendo e rientrando, le Statistiche si riaprono in ciambella', async ({ page }) => {
+  await page.goto('/')
+  await chiudiGuida(page)
+  await semina(page, [
+    { categoria: 'Spesa', cents: 4200 },
+    { categoria: 'Fuori', cents: 2600 },
+    { categoria: 'Coffeeshop', cents: 2400 },
+  ])
+
+  const quote = page.locator('.stats__view[data-vista="quote"]')
+  await expect(quote).toHaveAttribute('aria-pressed', 'true')
+
+  await mostraLeBarre(page)
+  await expect(page.locator('.stat__bar')).toHaveCount(3)
+
+  await page.getByRole('button', { name: /^Home$/ }).click()
+  await expect(page.locator('.stats')).toHaveCount(0)
+  await apriStatistiche(page)
+
+  await expect(
+    quote,
+    'le Statistiche si sono riaperte a barre: la vista e\' sopravvissuta all\'uscita',
+  ).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.locator('.stats__pie')).toHaveCount(1)
+})
+
+/**
+ * **Il tap sul grafico fa la stessa cosa del comando, e in tutti e due i versi.**
+ *
+ * Il comando non sostituisce il gesto: **lo dichiara**. *"Un grafico che cambia
+ * solo se ti capita di toccarlo e' una funzione che nessuno trova"* — e la prova
+ * e' che il grafico a torta e' stato chiesto due volte prima che ne esistesse
+ * uno.
+ *
+ * Si tocca **la legenda** e non la figura, di proposito: l'area dichiarata
+ * comprende tutte e due, e la legenda e' la meta' che si toccherebbe per sbaglio
+ * se l'area fosse la sola ciambella.
+ */
+test('il tap sul grafico commuta la vista, e il comando lo dice', async ({ page }) => {
+  await page.goto('/')
+  await chiudiGuida(page)
+  await semina(page, [
+    { categoria: 'Spesa', cents: 4200 },
+    { categoria: 'Fuori', cents: 2600 },
+    { categoria: 'Coffeeshop', cents: 2400 },
+  ])
+
+  const quote = page.locator('.stats__view[data-vista="quote"]')
+  const ordine = page.locator('.stats__view[data-vista="ordine"]')
+
+  await page.locator('.stats__legend .legend').first().tap()
+  await expect(page.locator('.stat__bar')).toHaveCount(3)
+  await expect(
+    ordine,
+    'il comando non dice in quale vista si e\' finiti dopo un tap sul grafico',
+  ).toHaveAttribute('aria-pressed', 'true')
+  await expect(quote).toHaveAttribute('aria-pressed', 'false')
+
+  // E indietro, dallo stesso posto: l'elenco delle barre e' la stessa area.
+  await page.locator('.stats__rows[data-vista]').first().tap()
+  await expect(page.locator('.stats__pie')).toHaveCount(1)
+  await expect(quote).toHaveAttribute('aria-pressed', 'true')
+})
+
+/**
+ * **L'ordine delle due sezioni e' l'ordine dei segmenti della barra in cima.**
+ *
+ * Sono due elementi della stessa schermata che raccontano la stessa divisione: se
+ * la barra mette le fisse a sinistra e le sezioni le mettessero seconde, l'occhio
+ * dovrebbe invertire una mappa fra due cose distanti trenta pixel.
+ *
+ * Si misura **la geometria dipinta**, non l'ordine nel DOM: la barra e' un `flex`
+ * e le sezioni una griglia, e in tutti e due i casi il CSS puo' rovesciare
+ * l'ordine visivo senza toccare il markup — che e' esattamente il difetto che
+ * questo test deve poter vedere.
+ */
+test('l\'ordine delle sezioni e\' quello dei segmenti della barra divisa', async ({ page }) => {
+  await page.goto('/')
+  await chiudiGuida(page)
+  await semina(page, [
+    { categoria: 'Casa', cents: 50700, fissa: true },
+    { categoria: 'Trasporti', cents: 2300, fissa: true },
+    { categoria: 'Spesa', cents: 4200 },
+    { categoria: 'Fuori', cents: 2600 },
+    { categoria: 'Coffeeshop', cents: 2400 },
+  ])
+
+  const misura = await page.evaluate(() => {
+    const naturaDi = (el: Element): string => (el as HTMLElement).dataset['kind'] ?? '?'
+    return {
+      segmenti: [...document.querySelectorAll('.stats__seg')]
+        .sort((a, b) => a.getBoundingClientRect().left - b.getBoundingClientRect().left)
+        .map(naturaDi),
+      sezioni: [...document.querySelectorAll('.stats__partHead[data-kind]')]
+        .sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top)
+        .map(naturaDi),
+    }
+  })
+
+  // Le premesse: due segmenti e due sezioni, altrimenti non c'e' nessun ordine
+  // da confrontare e il test sarebbe verde su una schermata a meta'.
+  expect(misura.segmenti, 'la barra divisa non ha due segmenti').toHaveLength(2)
+  expect(misura.sezioni, 'A non ha due sezioni').toHaveLength(2)
+  expect(
+    misura.sezioni,
+    `la barra va ${misura.segmenti.join(' -> ')} e le sezioni ${misura.sezioni.join(' -> ')}: ` +
+      'l\'occhio deve invertire una mappa fra due elementi della stessa schermata',
+  ).toEqual(misura.segmenti)
+})
+
+/**
+ * **Gli angoli sono le quote, e l'ordine e' quello delle categorie.**
+ *
+ * Tre affermazioni in una misura sola, e stanno insieme perche' e' insieme che
+ * reggono la scelta di non mettere nessuna etichetta dentro le fette: **la
+ * legenda e' l'unico modo di sapere quale arco e' quale**. Perche' lo sia
+ * davvero, il colore della pastiglia dev'essere quello della fetta e l'ordine
+ * dev'essere lo stesso.
+ *
+ * ## L'ordine e' l'importo decrescente, ed e' lo stesso delle barre
+ *
+ * Qui c'era scritto che l'ordine era quello delle categorie, *"cosi' le coppie
+ * adiacenti sono sempre le stesse"*. Era la motivazione refutata da ADR 025 — la
+ * ciambella disegna solo le categorie con spese nella finestra, quindi su un
+ * sottoinsieme qualunque coppia diventa adiacente — e **questo test la
+ * difendeva**: un test che codifica una premessa falsa non la nasconde soltanto,
+ * e' l'artefatto che domani ne giustifica la reintroduzione.
+ *
+ * L'ordine e' l'importo decrescente, che e' **lo stesso delle barre**. Non e'
+ * una preferenza fra due ordinamenti: e' che ce ne sia **uno solo**. Con due, il
+ * tap rimescolava le righe — stesse categorie, posizioni diverse — e il tap deve
+ * cambiare la domanda, non la mappa.
+ *
+ * Gli importi qui restano scelti perche' l'ordine per importo e quello di
+ * griglia **diano sequenze diverse**, e la differenza e' una premessa asserita:
+ * senza, questo test sarebbe verde anche sull'ordinamento che rifiuta.
+ *
+ * ## Il vuoto entra nel conto, e per questo il conto e' su due cifre
+ *
+ * Ogni fetta paga `PIE_GAP` di superficie sul raggio medio, e cinque fette
+ * pagano cinque volte. Il confronto e' quindi `quota · 360 - vuoto`, e la
+ * tolleranza (2 gradi) copre il campionamento a mezzo grado e l'antialiasing ai
+ * bordi, non il vuoto: se qualcuno lo togliesse, ogni fetta sarebbe piu' larga
+ * e questo test cadrebbe cinque volte.
+ *
+ * `PIE_GAP` e' copiato da `Stats.tsx` — non e' esportato — mentre **il raggio si
+ * legge dalla pagina**: cosi' cambiare il lato della ciambella non fa cadere
+ * questa riga, e toglierle il vuoto si'.
+ */
+/**
+ * **Il tap cambia la domanda, non la mappa.**
+ *
+ * Nessuno sorvegliava che le stesse categorie restassero nello stesso posto
+ * attraversando il comando. Il test accanto — *"l'ordine delle sezioni e' quello
+ * dei segmenti della barra divisa"* — guarda l'ordine delle **sezioni**, non
+ * quello delle **righe**, e per un giorno le due viste ne hanno avuto due
+ * diversi: le barre per importo (`stats-view.ts`, dal primo giorno delle
+ * Statistiche) e le fette per `Category.order`. Stesse categorie, posizioni
+ * diverse, e la legenda che cambiava sequenza sotto il dito.
+ *
+ * Non e' un test sull'ordine *giusto* — quello lo prova il test qui sotto, che
+ * asserisce l'importo decrescente. E' un test sull'**identita'**: qualunque
+ * ordine si scelga, le tre viste devono portarlo tutte e tre. Se un domani
+ * l'ordine cambiasse, questo test resterebbe verde e sarebbe giusto che lo
+ * restasse; cade solo se le viste **divergono**, che e' il difetto vero.
+ *
+ * La scena e' quella del test accanto, e per la stessa ragione: gli importi sono
+ * scelti perche' l'ordine per importo e quello di griglia diano sequenze
+ * diverse. Senza quella premessa, tre viste allineate per coincidenza non
+ * proverebbero niente.
+ */
+test('la sequenza delle categorie e\' la stessa in ciambella, legenda e barre', async ({
+  page,
+}) => {
+  await page.goto('/')
+  await chiudiGuida(page)
+  const scena: readonly (readonly [string, number])[] = [
+    ['Spesa', 1000],
+    ['Fuori', 4200],
+    ['Coffeeshop', 2400],
+    ['Sigarette', 2600],
+    ['Svago', 1000],
+  ]
+  await semina(
+    page,
+    scena.map(([categoria, cents]) => ({ categoria, cents })),
+  )
+  await apriStatistiche(page)
+
+  const sezione = page.locator('.stats__partHead[data-kind="variable"] + .stats__viz')
+  await expect(sezione.locator('.legend')).toHaveCount(scena.length)
+
+  // 1. La legenda, nella vista a quote.
+  const inLegenda = (await sezione.locator('.legend__name').allInnerTexts()).map((n) => n.trim())
+
+  // 2. Le fette, nello stesso ordine della legenda: si prende il **colore** di
+  //    ogni arco e lo si rimappa sul nome con la pastiglia che lo porta. Non si
+  //    confronta la legenda con se stessa: il capo fra arco e nome e' proprio
+  //    cio' che deve reggere, visto che le fette non hanno etichetta.
+  const pastiglie = await sezione.locator('.legend__dot').evaluateAll((nodi) =>
+    nodi.map((n) => getComputedStyle(n).backgroundColor),
+  )
+  const archi = await sezione.locator('.stats__pie circle').evaluateAll((nodi) =>
+    nodi.map((n) => getComputedStyle(n).stroke),
+  )
+  const inFette = archi.map((colore) => {
+    const i = pastiglie.indexOf(colore)
+    return i === -1 ? `?${colore}` : (inLegenda[i] ?? '?')
+  })
+  expect(
+    inFette,
+    'le fette non sono nella sequenza della legenda: l\'arco e il nome non si corrispondono',
+  ).toEqual(inLegenda)
+
+  // 3. Le barre, nell'altra vista. Si commuta col comando, come farebbe chiunque.
+  await page.locator('.stats__partHead[data-kind="variable"] .stats__view[data-vista="ordine"]')
+    .first()
+    .tap()
+  const righe = page.locator('.stats__rows[data-vista="ordine"], .stats__rows').last()
+  const inBarre = (await righe.locator('.stat__name').allInnerTexts()).map((n) => n.trim())
+
+  console.log(
+    `\n| legenda ${inLegenda.join(' > ')} |\n| fette   ${inFette.join(' > ')} |\n` +
+      `| barre   ${inBarre.join(' > ')} |\n`,
+  )
+  expect(
+    inBarre,
+    'il tap rimescola le righe: le stesse categorie cambiano posizione fra le due viste',
+  ).toEqual(inLegenda)
+
+  // **La premessa.** Con sequenze che coincidono per costruzione questo test
+  // sarebbe verde anche su due viste divergenti.
+  const perGriglia = scena.map(([nome]) => nome)
+  expect(
+    inLegenda,
+    'la scena ha i due ordini uguali: l\'identita\' fra le viste non e\' provata',
+  ).not.toEqual(perGriglia)
+})
+
+test('gli angoli della ciambella sono le quote, nell\'ordine e nei colori della legenda', async ({
+  page,
+}) => {
+  await page.goto('/')
+  await chiudiGuida(page)
+  // **Gli importi non seguono l'ordine di griglia**, ed e' il punto della scena:
+  // per importo sarebbe `Fuori 42 · Sigarette 26 · Coffeeshop 24 · Spesa 10 ·
+  // Svago 10`, per categoria e' `Spesa · Fuori · Coffeeshop · Sigarette · Svago`.
+  const perCategoria: readonly (readonly [string, number])[] = [
+    ['Spesa', 1000],
+    ['Fuori', 4200],
+    ['Coffeeshop', 2400],
+    ['Sigarette', 2600],
+    ['Svago', 1000],
+  ]
+  await semina(page, [
+    // Una fissa sola: la sua sezione ha una riga, quindi niente ciambella, e a
+    // schermo ne resta **una** — quella che si campiona.
+    { categoria: 'Casa', cents: 50700, fissa: true },
+    ...perCategoria.map(([categoria, cents]) => ({ categoria, cents })),
+  ])
+
+  const legenda = page.locator('.stats__partHead[data-kind="variable"] + .stats__viz')
+  await expect(legenda.locator('.legend')).toHaveCount(5)
+  await expect(page.locator('.stats__pie'), 'due ciambelle: il giro campiona la sbagliata')
+    .toHaveCount(1)
+
+  // I nomi in legenda, nell'ordine dipinto: **importo decrescente**, che e' lo
+  // stesso ordine delle barre.
+  const nomi = (await legenda.locator('.legend__name').allInnerTexts()).map((n) => n.trim())
+  const perImporto = [...perCategoria]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .map(([nome]) => nome)
+  expect(
+    nomi,
+    'la legenda non e\' per importo decrescente: le fette e le barre hanno due ordini',
+  ).toEqual(perImporto)
+
+  // **La premessa che rende il test una prova.** Se le due sequenze
+  // coincidessero — come succede con gli otto importi di default — questa misura
+  // sarebbe verde anche sull'ordine di griglia, cioe' su quello che questa
+  // schermata ha smesso di usare.
+  expect(
+    nomi,
+    'la scena ha gli stessi due ordini: non prova niente sull\'ordine delle fette',
+  ).not.toEqual(perCategoria.map(([nome]) => nome))
+
+  // I colori delle pastiglie, **dipinti**: e' il capo della legenda che sta sulle
+  // righe. Si derivano dalla pagina e non si scrivono qui — le otto tinte delle
+  // categorie sono un sistema che puo' cambiare, e un test che le ricopia
+  // diventerebbe rosso per una ragione che non e' la sua.
+  const coloriDellaLegenda = await legenda.locator('.legend__dot').evaluateAll((punti) =>
+    punti.map((p) =>
+      getComputedStyle(p)
+        .backgroundColor.replace(/^rgba?\(|\)$/g, '')
+        .split(',')
+        .slice(0, 3)
+        .map((n) => n.trim())
+        .join(','),
+    ),
+  )
+
+  const giro = await giroDellAnello(page)
+  const fondo = await page.evaluate(() =>
+    getComputedStyle(document.body)
+      .backgroundColor.replace(/^rgba?\(|\)$/g, '')
+      .split(',')
+      .slice(0, 3)
+      .map((n) => n.trim())
+      .join(','),
+  )
+
+  const fette = giro.filter((tratto) => tratto.colore !== fondo && tratto.gradi > 1)
+
+  console.log(
+    `\n${fette
+      .map(
+        (f, i) =>
+          `| ${String(i).padStart(2)} | ${(nomi[i] ?? '?').padEnd(12)} | ${f.colore.padEnd(13)} | ${f.gradi
+            .toFixed(2)
+            .padStart(7)}° |`,
+      )
+      .join('\n')}\n`,
+  )
+
+  expect(
+    fette.map((f) => f.colore),
+    'le fette non sono nell\'ordine e nei colori della legenda',
+  ).toEqual(coloriDellaLegenda)
+
+  const totale = perCategoria.reduce((s, [, c]) => s + c, 0)
+  // Il vuoto in gradi: `PIE_GAP` (2, copiato) sul raggio **medio letto dalla
+  // pagina**, cioe' `2 / r` radianti.
+  const raggio = await page.locator('.stats__pie circle').first().evaluate(
+    (c) => (c as SVGCircleElement).r.baseVal.value,
+  )
+  const vuotoInGradi = (2 / raggio) * (180 / Math.PI)
+  // L'importo si prende **dal nome**, non dalla posizione nell'array della
+  // scena: quello e' in ordine di griglia e le fette sono per importo, quindi
+  // indicizzarlo per posizione confronterebbe la fetta di `Fuori` con i
+  // centesimi di `Spesa`. E' esattamente il difetto che questo giro ha corretto,
+  // rifatto dentro la sua stessa verifica.
+  const centesimiDi = new Map(perCategoria)
+  fette.forEach((fetta, i) => {
+    const cents = centesimiDi.get(nomi[i] ?? '') ?? 0
+    const atteso = (cents / totale) * 360 - vuotoInGradi
+    expect(
+      fetta.gradi,
+      `la fetta ${i} (${nomi[i] ?? '?'}) vale ${fetta.gradi.toFixed(2)}° contro ` +
+        `${atteso.toFixed(2)}° attesi per ${cents} centesimi su ${totale}`,
+    ).toBeGreaterThan(atteso - 2)
+    expect(fetta.gradi).toBeLessThan(atteso + 2)
+  })
+})
+
+/**
+ * **Fra due fette che si toccano c'e' la superficie, non un bordo.**
+ *
+ * E' la condizione che nelle barre di A **non valeva** — quelle non si toccano
+ * mai, stanno su righe diverse e hanno un contorno perche' quattro degli otto
+ * colori non si staccano dal fondo — e che qui vale davvero: due fette adiacenti
+ * condividono un raggio. Un contorno fra loro aggiungerebbe una terza tinta
+ * proprio sul confine; il vuoto non colora niente, ed e' lo stesso argomento
+ * gia' scritto per la barra divisa, dove pero' il confine e' uno solo.
+ *
+ * ## La scena e' scelta perche' rende il confine prevedibile
+ *
+ * Quattro importi uguali mettono i quattro confini alle dodici, alle tre, alle
+ * sei e alle nove. Alle nove il raggio e' orizzontale, quindi il vuoto e'
+ * **verticale**: una scansione orizzontale attraverso l'anello sinistro, alla
+ * quota esatta del centro, deve incontrare **solo** il fondo. Otto pixel piu' in
+ * su, dentro la stessa corona, deve incontrare del colore — altrimenti il test
+ * sarebbe verde anche con la ciambella cancellata.
+ */
+test('fra due fette che si toccano c\'e\' la superficie, non un bordo', async ({ page }) => {
+  await page.goto('/')
+  await chiudiGuida(page)
+  await semina(page, [
+    { categoria: 'Spesa', cents: 2500 },
+    { categoria: 'Fuori', cents: 2500 },
+    { categoria: 'Coffeeshop', cents: 2500 },
+    { categoria: 'Sigarette', cents: 2500 },
+  ])
+
+  // Come nel giro dell'anello: lo screenshot ritrae il viewport, e a 800x327 la
+  // figura puo' cadere sotto il bordo di `.stats`.
+  await page.locator('.stats__pie').scrollIntoViewIfNeeded()
+
+  const geometria = await page.evaluate(() => {
+    const svg = document.querySelector('.stats__pie')
+    if (svg === null) throw new Error('non c\'e\' nessuna ciambella')
+    const cerchio = svg.querySelector('circle')
+    if (cerchio === null) throw new Error('la ciambella non ha fette')
+    const box = svg.getBoundingClientRect()
+    const scala = box.width / (svg as SVGSVGElement).viewBox.baseVal.width
+    return {
+      cx: box.left + box.width / 2,
+      cy: box.top + box.height / 2,
+      raggio: cerchio.r.baseVal.value * scala,
+      spessore: Number.parseFloat(getComputedStyle(cerchio).strokeWidth) * scala,
+    }
+  })
+
+  const fondo = await page.evaluate(() => getComputedStyle(document.body).backgroundColor)
+  const atteso = (fondo.match(/\d+/g) ?? []).slice(0, 3).map(Number).join(',')
+
+  // La corona a sinistra, alla quota del centro: il vuoto delle nove.
+  const dentroIlVuoto = await scansiona(page, {
+    da: geometria.cx - geometria.raggio - geometria.spessore / 2 + 1,
+    a: geometria.cx - geometria.raggio + geometria.spessore / 2 - 1,
+    y: geometria.cy,
+  })
+  const diversi = dentroIlVuoto.filter(({ px }) => px.join(',') !== atteso)
+  expect(
+    diversi.map(({ x, px }) => `${x.toFixed(1)}: ${esadecimale(px)}`),
+    'sul confine fra due fette c\'e\' qualcosa che non e\' la superficie',
+  ).toEqual([])
+
+  // E la stessa corona otto pixel piu' su e' dipinta: senza questa meta' il
+  // controllo qui sopra sarebbe verde su una ciambella che non esiste.
+  const dentroLaFetta = await scansiona(page, {
+    da: geometria.cx - geometria.raggio - geometria.spessore / 2 + 1,
+    a: geometria.cx - geometria.raggio + geometria.spessore / 2 - 1,
+    y: geometria.cy - 8,
+  })
+  expect(
+    dentroLaFetta.filter(({ px }) => px.join(',') !== atteso).length,
+    'la corona non e\' dipinta: il vuoto qui sopra non separa niente',
+  ).toBeGreaterThan(0)
+})
+
+/**
+ * **La ciambella non ha voce, e il dato non si perde.**
+ *
+ * E' la forma di cinque numeri scritti trenta pixel piu' sotto: ogni fetta ha
+ * una riga di legenda con il proprio nome e il proprio importo, e chi legge lo
+ * schermo con la voce le incontra tutte, in quest'ordine, subito dopo. La quota —
+ * l'unica cosa che la figura aggiunge a chi guarda — si ricava dagli stessi
+ * numeri che la voce sta per leggere, a partire dal totale.
+ *
+ * E' la stessa scelta gia' presa nella stessa schermata per la barra divisa, che
+ * risponde alla stessa domanda con la stessa forma: due grafici sovrapposti alla
+ * stessa lettura con due statuti diversi si leggerebbero come una svista.
+ *
+ * ## Tre controlli, e il secondo e' quello che ha cambiato il markup
+ *
+ * 1. **La figura non ha nome.** Non si guarda l'attributo: si guarda il **nome
+ *    accessibile** del blocco che la contiene, che e' cio' che una voce
+ *    leggerebbe. Un `<title>` dentro l'SVG passerebbe un `toHaveAttribute` e
+ *    cadrebbe qui.
+ * 2. **Il titolo di parte non recita i propri comandi.** E' la ragione per cui il
+ *    comando sta fuori dall'`<h3>`: un bottone dentro un'intestazione entra nel
+ *    suo nome accessibile, e la voce leggerebbe *"Quotidiane Quote Ordine,
+ *    intestazione di livello 3"*. Rimettendolo dentro, questa riga cade.
+ * 3. **Il totale nel buco si sente.** E' HTML e non un `<text>` dentro l'SVG: li'
+ *    dentro sarebbe una cifra che si vede e non si sente, cioe' il denominatore
+ *    di tutte le fette perso proprio per chi le fette non le vede.
+ */
+test('la ciambella non ha voce: i nomi e gli importi li porta la legenda', async ({ page }) => {
+  await page.goto('/')
+  await chiudiGuida(page)
+  await semina(page, [
+    { categoria: 'Casa', cents: 50700, fissa: true },
+    { categoria: 'Spesa', cents: 4200 },
+    { categoria: 'Fuori', cents: 2600 },
+    { categoria: 'Coffeeshop', cents: 2400 },
+  ])
+
+  const testa = page.locator('.stats__partHead[data-kind="variable"]')
+  const grafico = testa.locator('+ .stats__viz')
+  await expect(grafico.locator('.stats__pie')).toHaveCount(1)
+
+  // 1. **La figura non ha voce, in tutti e due i modi in cui potrebbe averne
+  // una.** `aria-hidden` la toglie dall'albero di accessibilita' con tutto cio'
+  // che contiene; e il testo del blocco e' fatto **solo** del totale e della
+  // legenda, che e' il controllo che prende un `<title>` — un elemento che
+  // `aria-hidden` non rende invisibile a `textContent`, e che chiunque
+  // aggiungerebbe credendo di fare una cortesia.
+  //
+  // Si confrontano le due stringhe **senza spazi**: `textContent` concatena i
+  // riquadri di blocco senza separatore, e il separatore non e' il soggetto — un
+  // pezzo in piu' cambierebbe la stringa comunque.
+  await expect(grafico.locator('.stats__pie')).toHaveAttribute('aria-hidden', 'true')
+  const senzaSpazi = (t: string): string => t.replace(/\s+/g, '')
+  const scritto = await grafico.evaluate((el) =>
+    [...el.querySelectorAll('p, .legend__name, .legend__value')]
+      .map((n) => n.textContent ?? '')
+      .join(''),
+  )
+  const detto = await grafico.evaluate((el) => el.textContent ?? '')
+  expect(
+    senzaSpazi(detto),
+    `il blocco del grafico dice "${detto.trim()}", che non e' solo il totale e la legenda`,
+  ).toBe(senzaSpazi(scritto))
+
+  // 2. Il titolo di parte non recita il proprio comando.
+  const titolo = testa.locator('.stats__partTitle')
+  await expect(titolo).toHaveAccessibleName(dizionario['stats.variable'])
+  await expect(
+    titolo.locator('button'),
+    'il comando e\' dentro l\'intestazione: il suo nome accessibile lo recita',
+  ).toHaveCount(0)
+
+  // 3. Il totale nel buco e' testo vero, e le tre voci sono tutte scritte.
+  await expect(grafico.locator('.stats__donutTotal')).toHaveText(/92,00/)
+  const voci = grafico.locator('.legend')
+  await expect(voci).toHaveCount(3)
+  await expect(voci.first()).toContainText(dizionario['cat.default.groceries'])
+  await expect(voci.first()).toContainText(/42,00/)
 })

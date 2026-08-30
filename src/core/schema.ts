@@ -19,7 +19,7 @@ import type { StoreName } from './types'
 export const DB_NAME = 'cent'
 
 /** Versione corrente. Si incrementa aggiungendo un passo a `MIGRATIONS`. */
-export const SCHEMA_VERSION = 4
+export const SCHEMA_VERSION = 5
 
 export const STORE_NAMES: readonly StoreName[] = [
   'expenses',
@@ -218,7 +218,133 @@ export const MIGRATIONS: readonly MigrationStep[] = [
       settings: data.settings.map((raw) => ({ ...raw, schemaVersion: 4 })),
     }),
   },
+  {
+    to: 5,
+    summary: 'Le otto tinte delle categorie passano alla palette che regge i pavimenti',
+    /**
+     * **Cambiare `defaults.ts` non cambia niente a chi l'app ce l'ha gia'.**
+     *
+     * Le categorie di default si **seminano** al primo avvio
+     * (`repository.ts`, `if (settings === null)`) e da quel momento sono dati
+     * dell'utente: nessuno rilegge `DEFAULT_CATEGORY_SEEDS`. Le otto tinte nuove
+     * — quelle che passano i quattro pavimenti di `scripts/palette.mjs` e ΔE00
+     * 12,64 a schermo — sarebbero quindi arrivate **solo alle installazioni
+     * nuove**, e ogni telefono esistente avrebbe continuato a dipingere la
+     * palette vecchia, quella a ΔE 9,4 fra `Spesa` e `Coffeeshop`.
+     *
+     * Il difetto che questo giro e' venuto a togliere sarebbe rimasto intero
+     * esattamente dove qualcuno stava per guardarlo: **nella ciambella**, dove
+     * il colore non e' ornamento ma **e' il dato**.
+     *
+     * ## Il criterio e' "quale pastiglia hai scelto", non "l'hai toccata"
+     *
+     * La formulazione naturale sarebbe *"aggiorna le categorie che l'utente non
+     * ha mai toccato, lascia stare quelle personalizzate"*. **Non e'
+     * applicabile, e per un fatto dell'albero**: la tavolozza dell'editor offre
+     * **esattamente le otto tinte di default** (`CategorySheet.tsx`, `PALETTE`
+     * deriva da `DEFAULT_CATEGORY_SEEDS`). Una categoria ricolorata a mano porta
+     * quindi **un esadecimale della palette vecchia** come una mai toccata: il
+     * colore non distingue i due casi, perche' non c'e' nessun terzo colore da
+     * cui distinguerli.
+     *
+     * E il ripiego `updatedAt !== createdAt` sarebbe peggio: si muove per
+     * **qualunque** modifica — un rinomina, uno spostamento, un'archiviazione.
+     * Lascerebbe la palette vecchia proprio a chi ha usato l'app come e'
+     * progettata, visto che rinominare le categorie e' *"esattamente cio' che
+     * l'editor serve a fare"* (CLAUDE.md).
+     *
+     * Quindi la migrazione mappa **pastiglia su pastiglia**, per posizione nella
+     * palette: chi aveva scelto la terza pastiglia si ritrova la terza pastiglia
+     * nuova. Non conserva un esadecimale, conserva **la scelta** — ed e' la
+     * lettura giusta perche' i colori sono *"un sistema, non otto scelte
+     * separate"* (CLAUDE.md): quando il sistema si sostituisce, si sostituisce
+     * l'elemento, non lo si abbandona.
+     *
+     * Il caso che lo rende evidente: chi avesse messo su una categoria il grigio
+     * di `Extra` (`#676c75`). Tenerglielo non sarebbe rispetto di una scelta —
+     * dalla palette nuova **il grigio non e' piu' una tinta di categoria**, e'
+     * il colore con cui l'interfaccia dice *"qui non c'e' un dato"* ed e' quello
+     * che indossa l'aggregato delle orfane **nella stessa figura** (ADR 025).
+     * Lasciarlo vorrebbe dire lasciare una categoria travestita da assenza.
+     *
+     * ## Cosa non tocca
+     *
+     * - **Un colore fuori dalla palette vecchia resta dov'e'.** Oggi nessun
+     *   writer dell'app puo' produrne uno — la tavolozza ha otto chiavi — ma un
+     *   backup importato si': quello e' un valore che viene da fuori, e su cui
+     *   questa mappa non ha niente da dire.
+     * - **Nessun altro campo.** Nomi, emoji, ordine, archiviazione: intatti.
+     *   Questa migrazione cambia un solo campo e solo dove sa cosa scriverci.
+     *
+     * `categories` esce **con lo stesso riferimento** se non c'e' niente da
+     * cambiare, cosi' `applyTransforms` in `idb.ts` non riscrive uno store che
+     * non e' cambiato — la forma verificabile di "non tocca i record che non la
+     * riguardano".
+     */
+    transform: (data) => ({
+      ...data,
+      categories: withPaletteV2(data.categories),
+      settings: data.settings.map((raw) => ({ ...raw, schemaVersion: 5 })),
+    }),
+  },
 ]
+
+/**
+ * La palette che si ritira, nell'ordine dei seed, e quella che la sostituisce.
+ *
+ * **Le due liste sono scritte qui a mano, ed e' l'unico posto del progetto in
+ * cui una copia degli esadecimali e' giusta.** Altrove — `palette.mjs`,
+ * `palette.test.ts` — le tinte si leggono da `defaults.ts` proprio per non avere
+ * una seconda fonte di verita'. Qui no: una migrazione descrive **una
+ * transizione fra due stati passati**, e `defaults.ts` conosce solo il presente.
+ * Se questa mappa leggesse da li', il giorno della prossima palette
+ * riscriverebbe le tinte di ieri con quelle di domani saltando un passaggio, e
+ * lo farebbe **retroattivamente su chi non ha ancora migrato**.
+ *
+ * Una migrazione e' un fatto storico. I fatti storici si scrivono.
+ */
+const PALETTE_V1: readonly string[] = [
+  '#81a369', // groceries
+  '#f26b00', // eatingOut
+  '#06b0a0', // coffeeshop
+  '#845e23', // cigarettes
+  '#3f5db6', // transport
+  '#b90e5c', // leisure
+  '#bc85ec', // home
+  '#676c75', // extra — il grigio che la palette nuova non ha piu'
+]
+
+const PALETTE_V2: readonly string[] = [
+  '#709951',
+  '#fc5401',
+  '#00a6c6',
+  '#895c02',
+  '#3157fa',
+  '#b90f60',
+  '#9861c7',
+  '#2a6198',
+]
+
+/**
+ * Porta ogni colore della palette vecchia sulla pastiglia corrispondente della
+ * nuova. Restituisce **lo stesso array** se non c'era niente da fare.
+ *
+ * Il confronto e' insensibile a maiuscole e minuscole: `Category.color` e' una
+ * stringa, e un backup scritto a mano puo' portare `#81A369`.
+ */
+function withPaletteV2(categories: RawRecord[]): RawRecord[] {
+  const mappa = new Map(PALETTE_V1.map((vecchio, i) => [vecchio, PALETTE_V2[i]!]))
+  let changed = false
+  const next = categories.map((raw) => {
+    const colore = raw['color']
+    if (typeof colore !== 'string') return raw
+    const nuovo = mappa.get(colore.trim().toLowerCase())
+    if (nuovo === undefined || nuovo === colore) return raw
+    changed = true
+    return { ...raw, color: nuovo }
+  })
+  return changed ? next : categories
+}
 
 /**
  * Il giorno del mese scritto in una `YYYY-MM-DD`, o `null` se non lo e'.

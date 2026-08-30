@@ -98,14 +98,24 @@ export const en: Record<keyof typeof it, string> = {
   'hero.noBudget': 'no budget set for this period',
   'hero.note': 'of {budget} · {spent} spent',
 
+  // Due righe, e la ragione sta in it.ts: **e' l'inglese a decidere la riserva**
+  // del riquadro, quindi e' questa frase che va misurata prima di allungarla.
+  // A 390 e 375 punti la versione con la coda `, instead of how much you have
+  // already spent.` ne prendeva tre.
   'home.invite.before': 'With a budget this line becomes ',
-  'home.invite.strong': 'how much you can spend today',
-  'home.invite.after': ', instead of how much you have already spent.',
+  'home.invite.strong': 'how much you can spend today.',
   'home.budget.set': 'Set a budget',
   'home.budget.change': 'Change the budget',
   'home.blank.title': 'Nothing written down today',
   'home.blank.text':
     'Tap the + below, type the amount and pick the category. Two taps: it works at the till, with one hand.',
+
+  // La striscia dei sette giorni. La legenda porta la cifra perche' il passo
+  // sostenibile non e' il numero della riga sopra: vedi it.ts.
+  'home.week.title': 'Day by day',
+  'home.week.sustainable': '{amount} a day is sustainable',
+  'home.week.aria':
+    'Seven columns, Monday to Sunday: what went out each day. The highest is {day}, {amount}.',
 
   // Una riga sola dove ce n'erano due: il `sub` riformulava il `main` invece di
   // aggiungere un fatto. Vedi it.ts.
@@ -501,12 +511,6 @@ export const en: Record<keyof typeof it, string> = {
     'This period is {range}, and nothing you have logged falls inside it: it is all in {history}. The next expense you add today shows up here.',
 
   'stats.variable': 'Day to day',
-  // `stats.fixed` e `stats.perMonthRate` sono uscite con la riga che le leggeva
-  // (la proiezione mensile in testa alle Statistiche, che ripeteva il totale
-  // della parte fisse). Vedi it.ts.
-  // Acceso a ogni apertura, mai ricordato. Spento, la cifra delle fisse resta
-  // sull'intestazione e nella barra divisa. Vedi it.ts.
-  'stats.showFixed': 'Show fixed costs',
 
   'stats.byCategory': 'What it went on',
   // Vedi it.ts: la scheda in testa e' una previsione al mese, questa e' quanto e'
@@ -525,17 +529,32 @@ export const en: Record<keyof typeof it, string> = {
   // Con un verbo ("bars are scaled to…") sarebbe una riga da leggere, e nessuno
   // legge una didascalia sotto un titolo.
   'stats.scale': 'Full bar = {amount}',
+  /* **Le due domande che una sezione di A sa fare**, e sono le due parole del
+   * comando che ci si commuta.
+   *
+   * ## Perche' due parole e non due icone
+   *
+   * *"Le icone sono la cosa che si vibe-codea per prima."* Una ciambella e un
+   * istogramma disegnati a 16 px sono due macchie che vanno imparate; due parole
+   * si leggono. E il comando deve **dichiarare** che il gesto esiste — il grafico
+   * a torta e' stato chiesto due volte prima che ne esistesse uno, cioe' una
+   * funzione che si scopre per caso viene chiesta come se non ci fosse.
+   *
+   * ## E nominano la domanda, non la forma
+   *
+   * Non `Donut` e `Bars`: quelle sono le forme, e chi legge dovrebbe gia' sapere
+   * a che domanda risponde ciascuna per scegliere. `Shares` e' *"quanto pesa
+   * cosa"*, `Ranking` e' *"quanto e' grande cosa, in ordine"*. Sono anche le due
+   * parole che tengono i due stati **paralleli**: un sostantivo ciascuno, stessa
+   * classe grammaticale, stesso peso — cosi' il comando si legge come una scelta
+   * e non come un titolo con accanto un'alternativa.
+   *
+   * Corte perche' vivono nella colonna che a 375 punti cede per prima: il nome
+   * di parte va a capo, il comando no. */
+  'stats.view.shares': 'Shares',
+  'stats.view.ranking': 'Ranking',
   'stats.byPeriod.weekly': 'Week by week',
   'stats.byPeriod.monthly': 'Month by month',
-  // Il periodo ha **solo** spese fisse e l'utente le ha spente: A resta senza
-  // righe. Non e' lo stato vuoto — i dati ci sono — e non e' un guasto: e' una
-  // conseguenza di un gesto, quindi la frase **nomina il gesto**, altrimenti
-  // sembra che l'app abbia perso qualcosa.
-  //
-  // Non dice cosa fare adesso perche' l'interruttore che lo disfa e' due righe
-  // sopra, acceso in posizione "spento": un'istruzione qui ripeterebbe a parole
-  // un comando che si vede.
-  'stats.hiddenAll': 'Only fixed costs in this period, and you have hidden them.',
 
   /* **La riga del periodo in corso dice quanti giorni ha vissuto.**
    *

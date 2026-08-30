@@ -321,13 +321,22 @@
   box-shadow: inset 0 0 0 2px var(--brand);
 }
 
+/* Tinta piena, e la ragione **non e' il pavimento**: qui le pastiglie sono
+ * quattro (`SaveArt` disegna `categories.slice(0, 4)`), quindi le coppie
+ * compresenti sono sei e non ventotto — misurate, la peggiore vale ΔE00 14,21
+ * in chiaro e 17,00 in scuro, cioe' passava anche al 40%.
+ *
+ * Cambia perche' questa e' **l'illustrazione della griglia vera**, e un ritratto
+ * che smette di somigliare al soggetto e' un difetto anche quando i suoi numeri
+ * tornano. Scritto qui perche' il giorno in cui il pavimento cambiasse, la
+ * ragione di questa riga non cambia. */
 .mock__emoji {
   display: grid;
   place-items: center;
   inline-size: 1.5rem;
   block-size: 1.5rem;
   border-radius: var(--radius-full);
-  background-color: color-mix(in srgb, var(--cat) 40%, var(--surface));
+  background-color: var(--cat);
   font-size: 0.875rem;
   line-height: 1;
 }

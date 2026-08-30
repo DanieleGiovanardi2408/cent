@@ -35,18 +35,32 @@
  * la regola; includerli sarebbe stato un rosso permanente che si finisce per
  * disattivare, cioe' una guardia in meno.
  *
- * ## Le categorie: distanza percettiva, non contrasto
+ * ## Le categorie: la distanza percettiva si misura altrove, qui si misura il ponte
  *
  * Fra due colori adiacenti di un grafico il rapporto di contrasto non dice
  * niente di utile — due colori possono avere la stessa luminanza ed essere
  * lontanissimi, o luminanze diverse ed essere lo stesso colore. La domanda
- * "si distinguono?" e' percettiva, quindi si misura con **CIEDE2000** sulle
- * ventotto coppie, e sul colore **dipinto** (`color-mix(... , var(--surface))`),
- * che nei due temi non e' lo stesso: la mescola con il fondo chiaro e quella
- * con il fondo scuro sono due palette diverse, e una puo' collassare mentre
- * l'altra tiene. E' esattamente il buco che il progetto `dark` chiude.
+ * "si distinguono?" e' percettiva, e si misura con **CIEDE2000**.
+ *
+ * **Ma non piu' qui.** Le ventotto coppie le contano `scripts/palette.mjs` e
+ * `scripts/category-surfaces.mjs`, sugli esadecimali, in millisecondi e in CI.
+ * Questo file misura cio' che quei due non possono: che gli esadecimali che
+ * loro contano siano **quelli che il browser dipinge davvero**.
+ *
+ * La divisione e' nata da un difetto preciso. Fino al 30 agosto la campitura
+ * era `color-mix(... , var(--surface))`, cioe' due palette diverse nei due temi,
+ * e la distanza vera stava nei pixel e non negli esadecimali: `audit:palette`
+ * era verde a ΔE00 15,7 mentre a schermo arrivava 8,99. Adesso, per la regola
+ * "dove piu' colori sono compresenti l'identita' non la porta una campitura
+ * mescolata", **la superficie e' la tinta** — una sola nei due temi — e quindi
+ * gli esadecimali *sono* i pixel. Questo file lo verifica invece di darlo per
+ * scontato, ed e' il solo posto in cui un browser dice qualcosa che un calcolo
+ * non sa dire.
+ *
+ * Il progetto `dark` resta e serve piu' di prima: il contrasto dei testi e la
+ * superficie residua che ancora mescola dipendono ancora dal tema.
  */
-import { chiudiGuida, expect, test } from './installed'
+import { chiudiGuida, expect, guidaChiusaSuDisco, test } from './installed'
 import { fissaOrologio } from './clock'
 import type { Page } from '@playwright/test'
 
@@ -543,28 +557,26 @@ test('lo sforo si legge, e non e\' lo stesso colore del resto', async ({ page },
     'testo sotto la soglia AA con lo sforo in pagina',
   ).toEqual([])
 
-  // `--over` colora testo **e** barra, quindi vale due volte: come testo deve
-  // stare sopra AA (sopra), come superficie deve staccarsi dalla traccia in cui
-  // sta — 3:1, la soglia dei componenti non testuali (WCAG 1.4.11).
-  const barra = await page.evaluate(() => {
-    const fill = document.querySelector('.track__fill') ?? document.querySelector('.track > *')
-    const track = document.querySelector('.track')
-    if (fill === null || track === null) return null
-    return {
-      pieno: getComputedStyle(fill).backgroundColor,
-      traccia: getComputedStyle(track).backgroundColor,
-      fondo: getComputedStyle(document.body).backgroundColor,
-    }
-  })
-  expect(barra, 'la barra del progresso non e\' in pagina').not.toBeNull()
-  if (barra !== null) {
-    const base = leggiColore(barra.fondo)
-    const pieno = sovrapponi(leggiColore(barra.pieno), base)
-    const traccia = sovrapponi(leggiColore(barra.traccia), base)
-    const rapporto = arrotonda(contrasto(pieno, traccia))
-    console.log(`  [${tema}] barra: ${scrivi(pieno)} su ${scrivi(traccia)} = ${rapporto}:1`)
-    expect(rapporto, 'la barra dello sforo non si stacca dalla traccia').toBeGreaterThanOrEqual(3)
-  }
+  // **`--over` adesso e' solo testo, e questa e' la riga che lo dice.**
+  //
+  // Qui c'era il controllo sulla superficie: `--over` riempiva anche la barra del
+  // periodo, quindi valeva due volte — come testo sopra AA, come superficie
+  // sopra 3:1 rispetto alla traccia (WCAG 1.4.11). La barra non c'e' piu' (era
+  // al 100% in tutto il ramo sforato: vedi `Home.tsx`), e con lei l'unica
+  // superficie che quel token dipingeva.
+  //
+  // La verifica non e' stata "sistemata", e' stata **tolta insieme al suo
+  // oggetto**: misurare il contrasto di una superficie che non esiste avrebbe
+  // richiesto di inventarne una. Cio' che resta e' la parte che vale ancora —
+  // il testo sopra AA, qui sopra — piu' l'asserzione che segue, che e' quella
+  // che rende visibile il cambiamento invece di lasciarlo implicito: se qualcuno
+  // rimettesse una superficie `--over`, questo file non se ne accorgerebbe, e la
+  // riga qui sotto e' il posto in cui verrebbe a cercare.
+  // Resta quindi una verifica sola su `--over`: che come **testo** stia sopra AA
+  // (il blocco qui sopra, che campiona i pixel dipinti), e che non collassi su
+  // `--text` (il blocco qui sotto). Il giorno in cui `--over` tornasse a
+  // riempire qualcosa, il controllo sulla superficie va rimesso qui: e' scritto
+  // perche' chi lo cerca lo trovi, invece di scoprire dal `git log` che c'era.
 
   // E non e' il colore di tutto il resto: se `--over` collassasse su `--text`,
   // i tre segnali dello sforo tornerebbero due (CLAUDE.md, "Calcolo budget").
@@ -578,11 +590,67 @@ test('lo sforo si legge, e non e\' lo stesso colore del resto', async ({ page },
     .toBeGreaterThanOrEqual(20)
 })
 
-test('le otto categorie: etichetta AA e otto superfici distinguibili', async ({
+/**
+ * **Le otto categorie: l'etichetta in AA, e il ponte fra l'aritmetica e i pixel.**
+ *
+ * Questo test si chiamava *"otto superfici distinguibili"* e misurava qui le
+ * ventotto coppie. Non le misura piu', e non e' copertura persa: le coppie le
+ * conta `scripts/palette.mjs` sugli esadecimali — in millisecondi, in CI, e su
+ * tutte e 28 invece che sulle sole otto adiacenti — e
+ * `scripts/category-surfaces.mjs` vieta che una superficie compresente le
+ * comprima mescolandole col fondo.
+ *
+ * Quei due controlli sono **aritmetica**, e un'aritmetica vale quanto la sua
+ * corrispondenza con cio' che finisce sullo schermo. Il 30 agosto quella
+ * corrispondenza non era verificata da nessuno: `audit:palette` era verde
+ * mentre a schermo ΔE00 15,7 arrivava come 8,99. Il mestiere di questo test e'
+ * adesso **esattamente quel ponte** — l'unica cosa che un browser puo' dire e
+ * un calcolo no.
+ */
+test('le otto categorie: etichetta AA, e i pixel confermano l\'aritmetica', async ({
   page,
 }, testInfo) => {
   const tema = testInfo.project.name
-  await apri(page)
+  // `apri()` non va bene qui: chiude la guida, e il canarino del punto 2b vive
+  // dentro la guida. Gli stessi passi, con una lettura in mezzo.
+  await fissaOrologio(page)
+  await page.goto('./')
+  await expect(page.locator('.budget')).toBeEnabled()
+
+  // Letto **prima** di chiudere la guida: `.mock__cat[data-on]` e' l'ultima
+  // superficie dell'app che mescola una tinta di categoria col fondo, e serve
+  // intera al punto 2b.
+  //
+  // Sta sulla **seconda** scheda (`Guide.tsx:96`, `card === 0 ? <AmountArt/> :
+  // <SaveArt/>`), quindi si avanza col bottone che avanza — come farebbe
+  // chiunque, e come fa il resto di questa suite con la guida.
+  await page.locator('.guide__next').tap()
+  await expect(page.locator('.mock__cat[data-on]')).toBeVisible()
+  const canarino = await page.evaluate(() => {
+    const el = document.querySelector('.mock__cat[data-on]')
+    if (el === null) return null
+    const s = getComputedStyle(el)
+    return {
+      cat: s.getPropertyValue('--cat').trim(),
+      surface: getComputedStyle(document.documentElement).getPropertyValue('--surface').trim(),
+      dipinto: s.backgroundColor,
+      quota: 0.22,
+    }
+  })
+
+  // La guida si chiude col bottone della **seconda** scheda, che e' "Inizia" e
+  // non "Salta" (`guide__skip` esiste solo sulla prima). Non si puo' quindi
+  // usare `chiudiGuida`, e si rifa' cio' che quella garantisce: la sparizione
+  // **e** la scrittura sul disco, perche' un `reload()` che precedesse la
+  // scrittura rifarebbe comparire la guida a meta' scena.
+  await page.locator('.guide__next').tap()
+  await expect(page.locator('.guide')).toHaveCount(0)
+  await expect
+    .poll(() => guidaChiusaSuDisco(page), {
+      message: '"Inizia" non ha scritto onboardingCompletedAt',
+    })
+    .toBe(true)
+
   await page.locator('.fab').tap()
   await expect(page.locator('.sheet--add')).toBeVisible()
   // Una cifra: i chip si accendono, e li' l'etichetta e' quella vera.
@@ -627,32 +695,89 @@ test('le otto categorie: etichetta AA e otto superfici distinguibili', async ({
     'nome di categoria sotto AA',
   ).toEqual([])
 
-  // 2. Le ventotto coppie. Il minimo e' la misura che conta: bastano due colori
-  //    vicini per rendere un grafico illeggibile, e la media li nasconderebbe.
-  const superfici = chip.map((c) => leggiColore(c.superficie))
-  let peggiore = { coppia: '', de: Number.POSITIVE_INFINITY }
-  for (let i = 0; i < superfici.length; i += 1) {
-    for (let j = i + 1; j < superfici.length; j += 1) {
-      const de = deltaE00(superfici[i] ?? [0, 0, 0, 1], superfici[j] ?? [0, 0, 0, 1])
-      if (de < peggiore.de) {
-        peggiore = { coppia: `${chip[i]?.label} / ${chip[j]?.label}`, de }
-      }
-    }
-  }
-  console.log(
-    `  [${tema}] superfici dipinte: ` + chip.map((c, i) => `${c.label} ${scrivi(superfici[i] ?? [0, 0, 0, 1])}`).join(' · '),
-  )
-  console.log(`  [${tema}] coppia piu' vicina: ${peggiore.coppia} ΔE00 ${arrotonda(peggiore.de)}`)
+  // 2. **Il canarino: cio' che il browser dipinge e' cio' che l'aritmetica dice.**
+  //
+  //    Qui c'erano le ventotto coppie, misurate sui pixel. Non ci sono piu', e
+  //    non e' una copertura persa: e' un mestiere cambiato.
+  //
+  //    Le 28 coppie le misura `scripts/palette.mjs` sugli esadecimali, in
+  //    millisecondi e in CI, e `scripts/category-surfaces.mjs` garantisce che
+  //    nessuna superficie compresente le alteri mescolandole col fondo. Quei due
+  //    controlli sono **aritmetica**, e valgono solo se l'aritmetica corrisponde
+  //    a cio' che finisce sullo schermo. Questo test e' quel ponte, ed e'
+  //    l'unica cosa che un browser puo' dire e un calcolo no.
+  //
+  //    Il 30 agosto quel ponte non c'era: `audit:palette` era verde — 28 coppie,
+  //    quattro pavimenti — mentre sette superfici su dieci dipingevano tinte
+  //    compresse dal `color-mix`, e ΔE00 15,7 arrivava a schermo come 8,99.
+  //    ADR 025 dichiarava gia' il proprio punto cieco (*"misura esadecimali,
+  //    non pixel"*), e il difetto e' passato lo stesso.
+  //
+  //    Due asserzioni, e servono tutte e due perche' dicono cose diverse.
 
-  // La soglia e' percettiva, non ereditata: sotto ΔE00 10 due aree adiacenti in
-  // un grafico si leggono come sfumature dello stesso colore. E' il numero che
-  // deve fallire quando qualcuno cambia un esadecimale in `defaults.ts` senza
-  // rifare la ricerca che li ha prodotti — che e' l'unica cosa che puo'
-  // rompere questa palette, visto che e' dichiarata definitiva.
+  // 2a. **La tinta piena arriva intatta.** E' la premessa che rende sensato
+  //     misurare gli esadecimali: se il CSS alterasse la campitura — un'opacita'
+  //     ereditata, un filtro, un fondo che traspare — `audit:palette` misurerebbe
+  //     un colore che nessuno vede. Il confronto e' fra cio' che l'app **mette**
+  //     (`--cat`, dal record della categoria) e cio' che il browser **dipinge**.
+  const pieno = await page.evaluate(() =>
+    [...document.querySelectorAll('.cat')].map((c) => {
+      const pastiglia = c.querySelector('.cat__emoji')!
+      return {
+        label: (c.querySelector('.cat__name')?.textContent ?? '').trim(),
+        dichiarato: getComputedStyle(c).getPropertyValue('--cat').trim(),
+        dipinto: getComputedStyle(pastiglia).backgroundColor,
+      }
+    }),
+  )
+  const scostate = pieno
+    .map((p) => ({ ...p, atteso: leggiColore(p.dichiarato), reso: leggiColore(p.dipinto) }))
+    .filter((p) => p.atteso.slice(0, 3).some((v, i) => Math.abs(v - (p.reso[i] ?? 0)) > 0.5))
+  console.log(
+    `  [${tema}] tinta piena intatta su ${pieno.length - scostate.length}/${pieno.length}: ` +
+      pieno.map((p) => `${p.label} ${p.dichiarato}`).join(' \u00b7 '),
+  )
   expect(
-    arrotonda(peggiore.de),
-    `le due categorie piu' vicine (${peggiore.coppia}) non si distinguono nel tema ${tema}`,
-  ).toBeGreaterThanOrEqual(10)
+    scostate.map((p) => `${p.label}: dichiarata ${p.dichiarato}, dipinta ${p.dipinto}`),
+    'il CSS altera la campitura: gli esadecimali che audit:palette misura non sono quelli a schermo',
+  ).toEqual([])
+
+  // 2b. **Dove il mix resta, l'aritmetica lo prevede.** Il mix non e' sparito:
+  //     vive dove la pastiglia e' **una sola** e dice l'estetica di uno stato,
+  //     non l'identita' (`.cat:active`, `.mock__cat[data-on]`). Serve una prova
+  //     che `color-mix(in srgb, C p%, S)` sia davvero l'interpolazione
+  //     componente per componente in sRGB gamma-encoded che gli script assumono:
+  //     se il browser interpolasse altrove, ogni numero calcolato sarebbe falso
+  //     **e nessun altro test se ne accorgerebbe**.
+  //
+  //     Si prende `.mock__cat[data-on]` nella guida — 22% su `--surface` — perche'
+  //     e' la prima schermata e non chiede nessuna navigazione. Una coppia
+  //     canarino, non ventotto.
+  expect(canarino, 'il chip premuto della guida non c\'e\' piu\': il canarino sul mix e\' senza oggetto').not.toBeNull()
+  const c = leggiColore(canarino!.cat)
+  const f = leggiColore(canarino!.surface)
+  const previsto: Rgba = [
+    c[0] * canarino!.quota + f[0] * (1 - canarino!.quota),
+    c[1] * canarino!.quota + f[1] * (1 - canarino!.quota),
+    c[2] * canarino!.quota + f[2] * (1 - canarino!.quota),
+    1,
+  ]
+  const reso = leggiColore(canarino!.dipinto)
+  console.log(
+    `  [${tema}] canarino sul mix: ${canarino!.cat} 22% su ${canarino!.surface} -> ` +
+      `previsto ${scrivi(previsto)} / dipinto ${scrivi(reso)}`,
+  )
+  // Un canale solo di scarto e' gia' un'aritmetica diversa. La tolleranza copre
+  // l'arrotondamento del browser a interi, non uno spazio di interpolazione
+  // sbagliato — che sposterebbe i canali di parecchie unita'.
+  for (const [i, nome] of ['rosso', 'verde', 'blu'].entries()) {
+    expect(
+      Math.abs((previsto[i] ?? 0) - (reso[i] ?? 0)),
+      `il canale ${nome} del mix dipinto non e\' quello previsto: ` +
+        `previsto ${scrivi(previsto)}, dipinto ${scrivi(reso)} — ` +
+        'gli script calcolano in uno spazio che il browser non usa',
+    ).toBeLessThanOrEqual(1)
+  }
 })
 
 /**
@@ -761,8 +886,14 @@ test('la barra divisa: i due segmenti si vedono, e la legenda porta i loro color
     // pseudo-elemento e non dal nodo: leggerlo dal padre darebbe il colore del
     // testo dell'intestazione, cioe' un numero verde su una cosa che non e'
     // quella misurata.
+    //
+    // `.stats__partHead` e non `.stats__partTitle`: dal 30 agosto la natura sta
+    // sul `<div>` che raccoglie il titolo e il comando delle due viste, non
+    // sull'`<h3>` — un bottone dentro un'intestazione entra nel suo nome
+    // accessibile. La pastiglia e' rimasta dov'era, sul nome; e' il selettore
+    // che la trova ad avere un antenato in piu'.
     const pastiglia = (kind: string): string => {
-      const h = document.querySelector(`.stats__partTitle[data-kind="${kind}"] .stats__partName`)
+      const h = document.querySelector(`.stats__partHead[data-kind="${kind}"] .stats__partName`)
       if (h === null) throw new Error(`nessuna intestazione "${kind}"`)
       return getComputedStyle(h, '::before').backgroundColor
     }
@@ -840,9 +971,9 @@ test('la barra divisa: i due segmenti si vedono, e la legenda porta i loro color
     'la pastiglia delle quotidiane non e\' del colore del proprio segmento',
   ).toEqual(quotidiane)
 
-  // 5. **I due testi che le Statistiche hanno guadagnato**, misurati qui e non
+  // 5. **I testi che le Statistiche hanno guadagnato**, misurati qui e non
   //    nel test AA generale: quello enumera schermate raggiungibili **a
-  //    database vuoto**, e nessuno dei due esiste senza spese. Senza questa
+  //    database vuoto**, e nessuno di loro esiste senza spese. Senza questa
   //    coda resterebbero l'unica copy dell'app che nessuna misura di contrasto
   //    tocca.
   //
@@ -868,7 +999,19 @@ test('la barra divisa: i due segmenti si vedono, e la legenda porta i loro color
         soglia,
       }
     }
-    return [leggi('.stats__hero', 3), leggi('.stats__partScale', 4.5)]
+    return [
+      leggi('.stats__hero', 3),
+      // **I testi della vista `quote`**, che e' quella che si apre da sola:
+      // il totale nel buco (15 px), le due voci della legenda (15 px) e le due
+      // parole del comando — quella premuta su `--brand-soft`, quella spenta sul
+      // fondo. Sono cinque stringhe che prima non esistevano, e quattro di loro
+      // vivono su una superficie che non e' `--bg`.
+      leggi('.stats__donutTotal', 4.5),
+      leggi('.legend__name', 4.5),
+      leggi('.legend__value', 4.5),
+      leggi('.stats__view[aria-pressed="true"]', 4.5),
+      leggi('.stats__view[aria-pressed="false"]', 4.5),
+    ]
   })
   for (const t of testi) {
     const rapporto = arrotonda(contrasto(leggiColore(t.colore), leggiColore(t.dietro)))
@@ -877,4 +1020,35 @@ test('la barra divisa: i due segmenti si vedono, e la legenda porta i loro color
       t.soglia,
     )
   }
+
+  // 6. **E la didascalia della scala, che vive nell'altra vista.**
+  //
+  //    `stats.scale` si disegna solo dove ci sono barre da calibrare, quindi in
+  //    vista `quote` non esiste: misurarla richiede di commutare, che e' cio' che
+  //    farebbe chiunque voglia la classifica. Senza questa coda la didascalia
+  //    resterebbe fuori da ogni misura di contrasto — che e' esattamente il buco
+  //    che il punto 5 e' venuto a chiudere, riaperto da una vista nuova.
+  await page.locator('.stats__view[data-vista="ordine"]').first().tap()
+  const scala = await page.evaluate(() => {
+    const el = document.querySelector('.stats__partScale')
+    if (el === null) throw new Error('nessuna didascalia della scala nella vista a barre')
+    const stile = getComputedStyle(el)
+    const fondo = (n: Element): string => {
+      for (let p: Element | null = n; p !== null; p = p.parentElement) {
+        const bg = getComputedStyle(p).backgroundColor
+        if (!/,\s*0\)$/.test(bg) && bg !== 'transparent') return bg
+      }
+      return getComputedStyle(document.body).backgroundColor
+    }
+    return {
+      label: `.stats__partScale "${(el.textContent ?? '').trim()}" ${stile.fontSize}`,
+      colore: stile.color,
+      dietro: fondo(el),
+    }
+  })
+  const rapportoScala = arrotonda(contrasto(leggiColore(scala.colore), leggiColore(scala.dietro)))
+  console.log(`  [${tema}] ${scala.label} = ${rapportoScala}:1 / 4.5`)
+  expect(rapportoScala, `${scala.label} sotto la soglia AA della sua taglia`).toBeGreaterThanOrEqual(
+    4.5,
+  )
 })

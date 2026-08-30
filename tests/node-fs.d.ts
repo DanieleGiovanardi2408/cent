@@ -1,5 +1,10 @@
 /**
- * La sola cosa che i test prendono da Node, dichiarata a mano.
+ * La prima delle due cose che i test prendono da Node, dichiarata a mano.
+ *
+ * La seconda e' `spawnSync`, in `tests/node-child-process.d.ts`: stessa ragione,
+ * stessa forma. Questa riga diceva "la sola cosa" ed e' stata corretta nel
+ * momento in cui ha smesso di essere vera — una nota che conta quante cose sono
+ * entrate da fuori vale solo se il conto e' giusto.
  *
  * `tests/e2e/font.ts` legge 48 KB di font dal disco: e' l'unica riga di tutto il
  * progetto che tocca il filesystem. La via normale sarebbe `@types/node`, e non

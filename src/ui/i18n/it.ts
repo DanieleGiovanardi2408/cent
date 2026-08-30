@@ -128,14 +128,49 @@ export const it = {
   'hero.noBudget': 'nessun budget impostato per questo periodo',
   'hero.note': 'di {budget} · {spent} spesi',
 
+  // L'invito dello stato senza budget, e **la sua lunghezza e' una misura di
+  // layout**, non una questione di gusto.
+  //
+  // La coda che c'era — `, invece di quanto hai già speso.` — portava la frase a
+  // tre righe in inglese a 390 e 375 punti, e a tre anche in italiano a 320.
+  // Tre righe qui vuol dire `--rows-invite: 3` in Home.css, cioe' la colonna
+  // senza budget che vince il `max()` della riserva: 98 px contro gli 83 della
+  // colonna col budget, con l'avanzo che ne segue **nello stato piu' comune
+  // dell'app**. E' il debito 7, e la sua condizione di chiusura era esattamente
+  // questa copy a due righe.
+  //
+  // **E la coda non pagava quel prezzo con un fatto suo.** Diceva cosa il numero
+  // grande sta mostrando adesso — lo speso — che e' scritto trenta pixel piu'
+  // su, in `hero.spent`, come etichetta di quel numero. Una parafrasi (DEBITO 1)
+  // che costava una riga di riserva permanente.
+  //
+  // Il punto finale sta **dentro** `strong` e non in una terza chiave: una
+  // chiave il cui unico contenuto e' un punto e' una chiave che nessuno sa
+  // tradurre. Il grassetto su un punto fermo non si vede.
   'home.invite.before': 'Con un budget questa riga diventa ',
-  'home.invite.strong': 'quanto puoi spendere oggi',
-  'home.invite.after': ', invece di quanto hai già speso.',
+  'home.invite.strong': 'quanto puoi spendere oggi.',
   'home.budget.set': 'Imposta un budget',
   'home.budget.change': 'Cambia il budget',
   'home.blank.title': 'Oggi non hai segnato niente',
   'home.blank.text':
     'Tocca il + qui sotto, digita l’importo e scegli la categoria. Sono due tap: si fa in cassa, con una mano.',
+
+  // --- la striscia dei sette giorni ---
+  //
+  // Il titolo e' della stessa famiglia di `stats.byPeriod.*` ("Settimana per
+  // settimana"), e non per gusto: e' la stessa domanda un gradino piu' in
+  // basso. Le Statistiche confrontano le settimane fra loro, questa striscia
+  // confronta i giorni dentro quella corrente — ed e' il gradino che l'app non
+  // aveva.
+  'home.week.title': 'Giorno per giorno',
+  // La legenda della linea. Porta **anche il numero**: il passo sostenibile e'
+  // `budget / giorni del periodo`, che **non e'** il numero della riga della
+  // disponibilita' (`rimanente / giorni rimanenti`). Sono due velocita' diverse,
+  // e una legenda senza cifra manderebbe a leggere il numero sbagliato due righe
+  // sopra.
+  'home.week.sustainable': '{amount} sostenibili al giorno',
+  'home.week.aria':
+    'Sette colonne, da lunedì a domenica: quanto è uscito ogni giorno. Il più alto è {day}, {amount}.',
 
   // **Una riga sola, ed era due.** Ogni voce di questo blocco portava un `main`
   // e un `sub`: due frasi per un fatto, esattamente cio' che la Home aveva in
@@ -846,25 +881,6 @@ export const it = {
     'Questo periodo è {range}, e nessuna delle tue spese ci cade dentro: le trovi tutte nello {history}. La prossima spesa che segni oggi compare qui.',
 
   'stats.variable': 'Quotidiane',
-  // Qui c'erano `stats.fixed` (*"Spese fisse"*) e `stats.perMonthRate`
-  // (*"{amount}/mese"*): la riga in testa alle Statistiche che scriveva la
-  // proiezione mensile delle regole. La riga non c'e' piu' — ripeteva la cifra
-  // che il totale della parte fisse scrive duecento pixel piu' sotto — e le due
-  // chiavi se ne sono andate con lei invece di restare vive nel dizionario e
-  // morte nei fatti, che e' il difetto per cui il controllo B di
-  // `dead-surface.mjs` esiste (`history.blank.install`).
-  //
-  // Il fatto che portavano vive dove ADR 016 §3 lo mette: `fixed.total`,
-  // *"In tutto {amount} al mese."*, in Impostazioni, subito sotto il budget.
-  // L'interruttore che toglie le fisse dalla **scala** di A, non solo dalle
-  // righe. Nasce acceso a ogni apertura e non si ricorda: un controllo di vista
-  // che tornasse spento nasconderebbe 507,00 € a chi non l'ha mai toccato, cioe'
-  // ADR 016 §1 dalla porta di servizio.
-  //
-  // Spento, la cifra delle fisse **resta a schermo** — sull'intestazione che
-  // porta l'interruttore, e nella barra divisa qui sopra — quindi nascondere le
-  // righe non nasconde il fatto.
-  'stats.showFixed': 'Mostra le spese fisse',
 
   'stats.byCategory': 'Dove sono finiti',
   // **Non e' `stats.fixed`, e la differenza non e' di stile.** La scheda in testa
@@ -885,11 +901,16 @@ export const it = {
   // `Casa affitto utenze e condomin` contro `Casa affitto utenze e cond…`. Un
   // importo non tronca mai: la sua colonna e' `max-content`.
   'stats.scale': 'Barra intera = {amount}',
+  // Vedi en.ts per l'argomento. Due sostantivi, non due forme: `Quote` e' quanto
+  // pesa cosa, `Ordine` e' quanto e' grande cosa, in ordine. `Ordine` e non
+  // `Classifica` per una ragione misurata — a 375 punti la colonna del comando e'
+  // quella che non deve cedere, e le due parole devono restare corte uguali:
+  // `Classifica` e' larga il doppio di `Quote` e squilibrerebbe una scelta che
+  // dev'essere simmetrica.
+  'stats.view.shares': 'Quote',
+  'stats.view.ranking': 'Ordine',
   'stats.byPeriod.weekly': 'Settimana per settimana',
   'stats.byPeriod.monthly': 'Mese per mese',
-  // Vedi en.ts: il periodo ha solo spese fisse e l'utente le ha spente. La frase
-  // nomina il gesto, perche' senza sembra un guasto.
-  'stats.hiddenAll': 'In questo periodo ci sono solo spese fisse, e le hai nascoste.',
 
   // Vedi en.ts per l'argomento. In una riga: e' un **fatto sul calendario**,
   // non un conto alla rovescia — "ne mancano quattro" sarebbe un'affermazione

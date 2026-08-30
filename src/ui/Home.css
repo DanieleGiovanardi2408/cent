@@ -51,10 +51,6 @@
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
   padding-block-end: var(--sp-3);
-  /* L'altezza della barra del periodo. Non e' testo: e' l'unica cosa dentro il
-   * riquadro che non si misura in righe, e sta qui perche' `.track` e la
-   * riserva usino lo stesso numero invece di due copie che un giorno divergono. */
-  --track-h: 0.625rem;
 
   /* **Una riga** di ciascuna delle frasi che vivono nel riquadro, cioe' il suo
    * `1lh`. Scritto come `font-size * line-height` e non con l'unita' `lh`
@@ -62,26 +58,52 @@
    * `.home` — e non a quello dei figli, che hanno tipografie diverse. E' lo
    * stesso ripiego che `.sheet__hint` tiene accanto al suo `1lh`, per lo stesso
    * motivo: lo stesso numero, scritto a mano. */
-  --line-allowance: calc(var(--fs-400) * var(--lh-snug)); /* .allowance */
+  --line-allowance: calc(var(--fs-300) * var(--lh-snug)); /* .allowance */
   --line-note: calc(var(--fs-100) * var(--lh-snug)); /* .since, .fixed */
   --line-pace: calc(var(--fs-200) * var(--lh-body)); /* .pace, .invite */
 
   /* **Quante** righe ciascuna puo' prendere. Sono i numeri misurati, in
    * italiano e in inglese, su tutti gli stati del riquadro:
    *
-   * - `.allowance` due, e non e' un margine di sicurezza: a 20px la riga dello
-   *   sforo ("2 giorni alla fine del periodo · 48,00 € al giorno contro 28,57 €
-   *   sostenibili") e "Puoi spendere ~18.000,00 € al giorno per 6 giorni" vanno
-   *   a capo. A una riga sola questa e' la prima cosa che sfonda;
+   * - `.allowance` due, e non e' un margine di sicurezza: anche a 17px la riga
+   *   dello sforo ("2 giorni alla fine del periodo · 48,00 € al giorno contro
+   *   28,57 € sostenibili") e "Puoi spendere ~18.000,00 € al giorno per 6
+   *   giorni" vanno a capo. A una riga sola questa e' la prima cosa che sfonda;
+   *   la riserva **non** e' scesa con la tipografia, e il test la rimisura;
    * - `.since` due: la frase di ADR 010 e' la piu' lunga del riquadro in
    *   entrambe le lingue, e a `42ch` prende sempre due righe;
    * - `.fixed` una: e' 13px con `nowrap`, quindi una per costruzione;
    * - `.pace` **una** sopra i 360 punti: "Finora stai spendendo 18.000,00 € al
    *   giorno." ci sta, misurato in tutte e due le lingue. Sotto ne prende due, e
    *   la media query lo dice;
-   * - `.invite` tre, ed e' l'inglese a deciderlo: "With a budget this line
-   *   becomes how much you can spend today, instead of how much you have
-   *   already spent." va a capo due volte.
+   * - `.invite` **due**, ed e' ancora l'inglese a deciderlo — erano tre.
+   *
+   * ## Le tre righe dell'invito erano il termine piu' caro della riserva
+   *
+   * `--rows-invite: 3` non era un numero sbagliato: era la misura giusta di una
+   * frase che si poteva accorciare. Con la coda *", instead of how much you have
+   * already spent."* l'inglese prendeva tre righe a 390 e a 375 punti, e
+   * l'italiano tre a 320. Tre righe qui vogliono dire che la colonna **senza
+   * budget** vince il `max()` di `--body-min` — 98 px contro gli 83 della
+   * colonna col budget — e che l'avanzo di quel `max()` si scarica sullo stato
+   * piu' comune dell'app.
+   *
+   * La coda e' uscita perche' **non portava un fatto suo**: diceva cosa mostra
+   * adesso il numero grande, cioe' lo speso, che e' scritto trenta pixel piu' su
+   * come etichetta di quel numero (`hero.spent`). Una parafrasi che costava una
+   * riga di riserva permanente.
+   *
+   * Misurato dentro `.invite` vero, nelle due lingue, alle tre larghezze:
+   *
+   *     larghezza colonna    prima (105 car. en)   adesso (61 car. en)
+   *     358 px (390 pt)      3 righe               2
+   *     343 px (375 pt)      3 righe               2
+   *     288 px (320 pt)      3 righe               2
+   *
+   * Anche la forma intermedia e' stata provata e **scartata sulla misura**:
+   * *"…how much you can spend today, not what you have spent."* (86 car.) sta in
+   * due righe a 390 e 375 e ne prende **tre a 320**, cioe' non chiude niente —
+   * la riserva deve reggere alla larghezza piu' stretta, non a quella comoda.
    *
    * **`--rows-sub` non c'e' piu'** perche' non c'e' piu' la riga: la
    * disponibilita' e il suo dettaglio erano due frasi per un fatto, e i giorni
@@ -91,45 +113,153 @@
   --rows-since: 2;
   --rows-fixed: 1;
   --rows-pace: 1;
-  --rows-invite: 3;
+  --rows-invite: 2;
 
-  /* Il riquadro sotto il numero grande. **E' l'unica altezza riservata di
-   * questa parte**, e le righe dentro non ne hanno una loro: cosi' lo spazio
-   * che avanza si raccoglie tutto in fondo al riquadro — prima del bottone del
-   * budget, dove non si nota — invece di aprire un buco fra una riga e l'altra.
+  /* **Il corpo del blocco del budget**: la parte che cambia contenuto fra i due
+   * stati. La riserva sta qui, ed e' un `max()` delle due colonne, gap per gap:
    *
-   * **Adesso sono due somme e un `max()`, e prima era una sola.** Il commento
-   * diceva *"lo stato senza budget non compare qui perche' e' piu' basso"*, e
-   * ha smesso di essere vero quando la colonna col budget e' dimagrita di tre
-   * righe: 144,75px contro i 156,75 dello stato senza. Scrivere la sola somma
-   * piu' alta avrebbe lasciato un numero giusto **per caso** e falso al
-   * prossimo taglio — che e' esattamente il difetto per cui questa riserva ha
-   * smesso di essere un `rem` tondo. Le due somme stanno scritte tutte e due, e
-   * quale vinca lo decide `max()` invece di un commento.
+   *     con budget:  disponibilita' (2 righe) + gap + nota di ADR 010 (2 righe)
+   *     senza:       invito (2 righe)          + gap + passo (1 riga)
    *
-   * La somma e' la colonna vera, gap per gap. Col budget: aria sopra, barra,
-   * la riga della disponibilita', la nota di ADR 010, la nota delle fisse.
-   * Senza: aria, invito, passo, nota delle fisse.
+   * Scrivere la sola somma piu' alta lascerebbe un numero giusto **per caso** e
+   * falso al prossimo taglio — e' il difetto per cui questa riserva ha smesso di
+   * essere un `rem` tondo, ed e' gia' successo una volta su questo stesso
+   * numero. Le due somme stanno scritte tutte e due; quale vinca lo decide
+   * `max()` invece di un commento.
    *
-   * Da 197,75px a 156,75: **41px in meno**, e sono lo spazio morto fra l'ultima
-   * riga e il bottone del budget che si vedeva a schermo. Cio' che resta e' la
-   * riserva di `.since` — due righe che compaiono per un periodo solo nella
-   * vita di un utente — e non si puo' togliere: senza, l'arrivo dei dati
-   * sposterebbe le spese di oggi, cioe' CLS sulla prima schermata dell'app. */
-  --slot-min: max(
+   * **E adesso vince la prima**: a 390 punti 83 px contro 75,5. Fino
+   * all'accorciamento dell'invito vinceva la seconda con 98, ed e' esattamente
+   * per questo che il `max()` sta scritto per esteso: il vincitore e' cambiato
+   * senza che nessuno dovesse ricordarsi di girare una somma. */
+  --body-min: max(
     calc(
-      var(--sp-3) + var(--track-h) + var(--sp-2) + var(--rows-allowance) * var(--line-allowance) +
-        var(--sp-2) + var(--rows-since) * var(--line-note) + var(--sp-2) + var(--rows-fixed) *
+      var(--rows-allowance) * var(--line-allowance) + var(--sp-2) + var(--rows-since) *
         var(--line-note)
     ),
-    calc(
-      var(--sp-3) + var(--rows-invite) * var(--line-pace) + var(--sp-2) + var(--rows-pace) *
-        var(--line-pace) + var(--sp-2) + var(--rows-fixed) * var(--line-note)
-    )
+    calc(var(--rows-invite) * var(--line-pace) + var(--sp-2) + var(--rows-pace) * var(--line-pace))
   );
-  /* Lo stato vuoto di oggi non e' mezza schermata come nello Storico: sopra c'e'
-   * gia' tutto il periodo. */
-  --blank-min: 22dvh;
+
+  /* Il blocco intero: aria, corpo, la nota delle fisse, il bottone, aria.
+   *
+   * **Il bottone e' dentro la riserva, e prima stava fuori.** Sotto il riquadro
+   * galleggiava fra due margini che non appartenevano a niente, pur riguardando
+   * il blocco sopra di lui; adesso e' l'ultima riga del blocco, e la sua altezza
+   * (`--tap-min`, che il bottone **dichiara**) e' un termine della somma come
+   * tutte le altre. Rispetto a prima e' uscita la barra del periodo
+   * (`--track-h` e il suo gap, vedi `Home.tsx`) ed e' entrato il bottone.
+   *
+   * I due `var(--sp-3)` sono l'aria in cima e in fondo, e stanno **dentro** la
+   * riserva perche' `box-sizing: border-box` mette il padding dentro
+   * `min-block-size`. Scriverli fuori dalla somma l'avrebbe resa piu' corta del
+   * blocco di 24 px, cioe' inutile: e' il tipo di errore che non si vede finche'
+   * il contenuto non arriva al limite.
+   *
+   * Misurato a 390 punti: **183,25 px** (erano 198,25 finche' l'invito prendeva
+   * tre righe, e 204,75 quando riquadro e bottone erano due blocchi separati).
+   * A 320 punti: **204,5**, erano 220,75.
+   *
+   * ## Lo spazio che avanza, e dove cade — che e' la parte che si sbaglia
+   *
+   * La riserva del corpo copre adesso lo stato **con** budget piu' alto —
+   * disponibilita' a due righe e nota di ADR 010, 83 px a 390 punti. Lo stato con
+   * budget **tipico** — una riga di disponibilita', nessuna nota — ne prende
+   * 21,25. **Avanzano 61,75 px, sempre, in quello che e' lo stato piu' comune
+   * dell'app.**
+   *
+   * Erano 76,75, e i 15 recuperati sono venuti dall'unica strada che li fa
+   * scendere davvero: **ridurre cio' che va riservato** (l'invito da tre righe a
+   * due, vedi `--rows-invite`). Non da un `max()` diverso, che sposta il numero
+   * senza toccare il fatto.
+   *
+   * Quelli che restano non sono riparabili spostando niente, e le due voci che li
+   * producono sono state rimisurate una per una:
+   *
+   * - **`--rows-allowance: 2`** — "Puoi spendere ~18.000,00 € al giorno per 5
+   *   giorni" va a capo a 390 punti. Misurato, non stimato;
+   * - **`--rows-since: 2`** — la frase di ADR 010 e' 64 caratteri in italiano
+   *   ("Budget attivo da lunedì 17 ago · prima avevi già speso 9.999,98 €") e 75
+   *   in inglese, contro un tetto di 42ch. Per starci in una riga dovrebbe
+   *   perdere o il giorno o l'importo, cioe' i due fatti per cui esiste — e
+   *   togliere il `max-inline-size` non basta: a 390 punti la colonna vale ~54
+   *   caratteri, a 320 ~43. Va a capo comunque.
+   *
+   * Le due si presentano **insieme** — un budget grande nato a periodo iniziato le
+   * ha tutte e due — quindi la riserva le somma, e 83 e' il pavimento onesto.
+   * Resta debito (`docs/DEBITO.md`, voce 7) con la sua condizione riscritta.
+   *
+   * Quello che si puo' decidere e' **dove cadono**, e le tre possibilita' sono
+   * state provate a schermo, non dedotte:
+   *
+   * - *fra la riga grande e il bottone* — cioe' corpo in alto e piede in fondo:
+   *   il bottone finiva a 120 px dalla riga che lo riguarda, con niente in
+   *   mezzo. E' il difetto del bottone che galleggia, spostato di venti pixel
+   *   invece che riparato;
+   * - *dopo il bottone, prima del filo*: il bottone tornava attaccato alla sua
+   *   riga, e **il gate anti-CLS e' caduto** — con tutto in alto, la posizione
+   *   del bottone dipende da quante righe ha il testo sopra di lui, quindi si
+   *   spostava di 75-83 px fra guscio e dati. Su un bersaglio toccabile e' peggio
+   *   di uno spostamento qualunque: e' un bottone che si muove sotto il pollice
+   *   nei primi 40 ms;
+   * - **sopra la riga grande** (questa): il corpo e' ancorato in basso, quindi
+   *   il gruppo "disponibilita' + note + bottone" resta compatto e lo spazio si
+   *   apre fra il blocco del numero e il blocco del budget. E' l'unica delle tre
+   *   in cui l'aria cade **fra due sezioni** invece che dentro una, ed e' anche
+   *   l'unica in cui ogni cosa che compare — la seconda riga della
+   *   disponibilita', la nota di ADR 010 — cresce verso l'alto senza spostare
+   *   niente.
+   *
+   * La meta' del difetto che si poteva chiudere e' chiusa; l'altra meta' resta in
+   * `docs/DEBITO.md` (voce 7), con la condizione riscritta su cio' che oggi la
+   * regge davvero. */
+  --slot-min: calc(
+    var(--sp-3) + var(--body-min) + var(--sp-2) + var(--rows-fixed) * var(--line-note) +
+      var(--sp-2) + var(--tap-min) + var(--sp-3)
+  );
+
+  /* **Lo stato vuoto della coda non riserva niente, e la riserva che c'era non
+   * proteggeva nessuno.**
+   *
+   * Qui c'era `--blank-min: 22dvh` (185,67 px a 844 di altezza) con questa
+   * ragione scritta accanto: *"non e' mezza schermata come nello Storico, sopra
+   * c'e' gia' tutto il periodo"*. La ragione parlava di **quanto**; il numero
+   * pero' non era una misura tipografica, era una **riserva**, e una riserva ha
+   * un mestiere solo: impedire che cio' che sta sotto si sposti quando arrivano i
+   * dati.
+   *
+   * Sotto di lei non c'e' niente. `.days` e' la coda — l'ultimo blocco della
+   * Home, l'unico senza altezza riservata (vedi il suo commento), e cio' che
+   * contiene non e' riservabile per costruzione: le righe di oggi sono cinquemila
+   * nel caso peggiore. Di una coda il guscio garantisce **dove comincia**, non
+   * cosa contiene.
+   *
+   * **Verificato disfacendo, non dedotto.** Con `--blank-min` forzato a 0, in tre
+   * scene (senza budget / budget con oggi vuoto / budget con oggi pieno) e a tre
+   * viewport (390x844, 320x844, 800x327), guscio contro dati:
+   *
+   *     .days.top  361,94 -> 361,94    375,73 -> 375,73    356,69 -> 356,69
+   *     CLS 0, zero voci `layout-shift`, in tutte e nove
+   *
+   * Identico a prima. Niente si sposta perche' non c'e' niente da spostare: nel
+   * guscio il messaggio non esiste, quindi non e' un elemento che si muove — e'
+   * un elemento che compare.
+   *
+   * E c'era un secondo indizio che la riserva non riservava: **a 667 e a 327 punti
+   * di altezza era gia' inerte**. Con la geometria di allora il messaggio occupava
+   * 173,75 px da solo, e 22dvh a 667 valgono 146,7, 30dvh a 327 ne valgono 98,1:
+   * tutti e due **sotto** il contenuto. Su due dei tre viewport di prova quel
+   * numero non decideva niente gia' prima, e nessuno se n'era accorto.
+   *
+   * Quello che decideva, dove decideva, era l'unica cosa che poteva decidere:
+   * 11,92 px di aria in piu' a 844, spartiti sopra e sotto un messaggio di due
+   * frasi. **Non i 75 che sembravano**: quei 75 erano il confronto fra il testo
+   * nudo (109,75) e la riserva (185,67), e mettevano in conto alla riserva anche i
+   * 64 px di padding, che sono della scatola e stanno in fondo a questo file.
+   *
+   * `0` e non la rimozione della riga: `Blank.css` ha `var(--blank-min, 60dvh)`, e
+   * senza dichiarazione il ripiego dello Storico — **mezza schermata** — si
+   * prenderebbe la coda della Home. La dichiarazione e' il modo di dire "qui
+   * zero", che e' una scelta; l'assenza direbbe 60dvh, che e' un incidente. */
+  --blank-min: 0;
 }
 
 /* --- il periodo e il numero grande --------------------------------------- */
@@ -241,55 +371,81 @@
   text-overflow: ellipsis;
 }
 
-/* --- il riquadro che cambia contenuto ma non misura ---------------------- */
+/* --- il blocco del budget ------------------------------------------------ */
 
+/* Il blocco del budget: corpo, nota delle fisse, bottone.
+ *
+ * **Il corpo ha la sua riserva e il suo contenuto sta in fondo.** Sono le due
+ * meta' della stessa decisione:
+ *
+ * - la riserva (`--body-min`) rende la posizione del bottone **indipendente dai
+ *   dati**: non dipende piu' da quante righe ha il testo sopra di lui, quindi
+ *   non si sposta fra il guscio e l'arrivo del database. Senza, il gate ha
+ *   misurato 75-83 px di salto su un bersaglio toccabile;
+ * - `justify-content: flex-end` decide **da che parte** cresce cio' che compare.
+ *   Verso l'alto: la disponibilita' che passa a due righe e la nota di ADR 010
+ *   invadono l'aria sopra di loro invece di spingere in giu' il bottone e la
+ *   coda.
+ *
+ * Il conto dello spazio che avanza, e perche' cade qui e non altrove, sta su
+ * `--slot-min`. */
 .slot {
   display: flex;
   flex-direction: column;
   gap: var(--sp-2);
   min-block-size: var(--slot-min);
-  padding-block-start: var(--sp-3);
+  padding-block: var(--sp-3);
 }
 
-/* --- la barra del periodo ------------------------------------------------ */
-
-.track {
-  flex: none;
-  /* 10px: si legge di sfuggita, non si tocca. Lo stesso token che la riserva
-   * somma, cosi' cambiarlo qui cambia anche cio' che il riquadro riserva. */
-  block-size: var(--track-h);
-  border-radius: var(--radius-full);
-  background-color: var(--surface-sunken);
-  overflow: hidden;
+.slot__body,
+.slot__foot {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
 }
 
-/* Si riempie con `scaleX`, mai con `width`: nessun reflow, nessun ricalcolo di
- * layout, e sotto prefers-reduced-motion i token di durata valgono zero e la
- * barra e' semplicemente gia' al suo posto. */
-.track__fill {
-  block-size: 100%;
-  transform-origin: 0 50%;
-  background-color: var(--brand);
-  transition: transform var(--dur-2) var(--ease-out);
-}
-
-.track[data-tone="over"] .track__fill {
-  background-color: var(--over);
+.slot__body {
+  justify-content: flex-end;
+  min-block-size: var(--body-min);
 }
 
 /* --- la riga piu' utile: quanto al giorno -------------------------------- */
 
+/* Il livello 2, ed era un secondo titolo.
+ *
+ * ## Il conto che l'ha fatta scendere da 20 a 17 px
+ *
+ * Il difetto non era la dimensione del singolo carattere: era la **massa**. Il
+ * peso visivo di un blocco di testo va come `caratteri × corpo²`, e nello stato
+ * sforato i due blocchi valevano:
+ *
+ *     numero grande   "−176,00 €"      9 car. × 44,85px²  ≈  18.100
+ *     .allowance      la riga intera  55 car. × 20px²     ≈  22.000
+ *
+ * Cioe' la riga dell'azione pesava **il 22% piu' del fatto**, ed era anche dello
+ * stesso colore: `--over` su tutti e due. Due titoli sulla stessa schermata.
+ *
+ * A 17px la stessa riga vale ~15.900, il 12% **meno** del numero grande: il
+ * rapporto si inverte con un solo gradino della scala tipografica. A 15px
+ * (`--fs-200`) varrebbe 12.400, ma quello e' il corpo del testo secondario, e
+ * questa e' la riga piu' utile dell'app — scenderebbe di due livelli invece che
+ * di uno.
+ *
+ * ## `--over` resta, e non e' il secondo urlo
+ *
+ * Il colore non e' cio' che competeva: era la massa a renderlo un titolo. A 17px
+ * l'ambra non e' un titolo che grida, e' la stessa famiglia del numero grande —
+ * la riga che dice *quanto* si sta andando oltre, tinta come il numero che dice
+ * *che* si e' andati oltre. Toglierlo avrebbe portato lo sforo da tre segnali a
+ * due senza che nessuno lo avesse chiesto. */
 .allowance {
-  font-size: var(--fs-400);
+  font-size: var(--fs-300);
   font-weight: var(--fw-semibold);
   line-height: var(--lh-snug);
   letter-spacing: var(--tracking-tight);
   font-variant-numeric: tabular-nums;
 }
 
-/* Budget finito: stesso posto, stessa dimensione, solo il colore dell'ambra.
- * Non sparisce e non urla — e' la seconda delle tre cose che dicono lo stesso
- * fatto (numero col segno, questa riga, barra piena). */
 .allowance[data-tone="over"] {
   color: var(--over);
 }
@@ -324,17 +480,20 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* --- il budget: un bottone solo, sempre allo stesso posto ---------------- */
+/* --- il budget: un bottone solo, ultima riga del blocco che lo riguarda --- */
 
 /* La larghezza e' quella dell'etichetta, che qui cambia **due volte**: con la
  * lingua ("Imposta un budget" / "Set a budget") e con lo stato (imposta /
  * modifica). Il pavimento la dichiara invece di lasciarla misurare
- * (CLAUDE.md, "Ogni bersaglio dichiara le proprie misure minime"). */
+ * (CLAUDE.md, "Ogni bersaglio dichiara le proprie misure minime").
+ *
+ * **I margini verticali non ci sono piu'.** Erano quelli che lo tenevano
+ * sospeso: adesso la distanza dalla nota sopra e' il `gap` del piede, come fra
+ * due righe qualsiasi del blocco, e sotto c'e' il filo che chiude la sezione. */
 .budget {
   align-self: flex-start;
   min-block-size: var(--tap-min);
   min-inline-size: var(--tap-min);
-  margin-block: var(--sp-2);
   /* Il rientro negativo allinea il testo al resto della colonna lasciando al
    * bersaglio i suoi 44px pieni. */
   margin-inline-start: calc(var(--sp-3) * -1);
@@ -354,16 +513,407 @@
   opacity: 0.4;
 }
 
+/* --- la coda: la striscia e le spese di oggi ------------------------------ */
+
+/* **L'unico blocco della Home senza altezza riservata**, ed e' l'ultimo.
+ *
+ * Non e' una dimenticanza, e' la condizione che rende possibili due cose che la
+ * Home non poteva fare prima: la striscia che non esiste quando non c'e' niente
+ * da disegnare, e l'intestazione "Oggi" che cade quando la giornata e' vuota.
+ * Sotto di lei non c'e' niente da spingere, quindi cio' che compare e sparisce
+ * qui dentro non produce un pixel di spostamento — mentre un blocco riservato
+ * qui vorrebbe dire riservare **cinquemila righe**, cioe' non riservare niente.
+ *
+ * Il gate anti-CLS di `home.spec.ts` guarda quindi il `top` di questa sezione,
+ * non i suoi figli: e' quello l'invariante — la coda comincia dove il guscio
+ * l'aveva messa. */
+.days {
+  border-block-start: 1px solid var(--line);
+}
+
+/* --- la striscia dei sette giorni ---------------------------------------- */
+
+/* Sette colonne, lunedi' -> domenica, con la linea del sostenibile attraverso.
+ *
+ * ## `--strip-h`, e il contratto che questo numero deve rispettare
+ *
+ * `budget-view.ts` calcola il pavimento delle colonne come
+ * `COLUMN_MIN_FRACTION = 2 / 48`: due pixel di inchiostro minimo su
+ * un'altezza dichiarata di **3rem**. Quel 48 e' un contratto sul CSS, non una
+ * lettura del CSS — quindi vale solo finche' questo numero non gli scende
+ * sotto. Qui vale **5rem**, cioe' 80 px, su ogni viewport (la media query
+ * dell'orizzontale non lo tocca): 32 px di margine sopra il contratto, e la
+ * colonna piu' corta dipinta vale `80 × 2/48 = 3,33 px`.
+ *
+ * Il legame non e' scritto, e' **misurato**: `home.spec.ts`, "il pavimento della
+ * colonna", risolve `--strip-h` dalla pagina, lo moltiplica per
+ * `COLUMN_MIN_FRACTION` importata dal modulo e confronta con la colonna piu'
+ * corta davvero dipinta. E' il gemello del controllo che `statistiche.spec.ts`
+ * fa su `--plot-min` contro `BAR_MIN_FRACTION`, e ha la stessa ragione: due file
+ * che non si vedono, con dentro lo stesso numero, non si tengono d'accordo da
+ * soli.
+ *
+ * ## Perche' 80 px, e non i 64 proposti
+ *
+ * L'altezza e' la dimensione che porta il valore, quindi la risoluzione di
+ * lettura e' `1 / altezza`: a `h` px, due giorni che differiscono di una quota
+ * `q` della scala distano `q · h` px.
+ *
+ * La differenza piu' piccola che deve sopravvivere non e' una percentuale
+ * scelta: e' **un caffe' contro il picco di una serata**. Ad Amsterdam sono
+ * 3,50 € contro un picco realistico di 100,00 €, cioe' `q = 3,5%`. A 64 px
+ * valgono 2,24 px; a 80 valgono 2,80. La soglia sotto cui due colonne
+ * affiancate e appoggiate alla stessa base smettono di distinguersi sta
+ * **fra 2 e 3 px** — a `deviceScaleFactor: 3` sono 6 e 9 pixel fisici — quindi
+ * 64 px cade dentro la zona incerta e 80 ne esce.
+ *
+ * Nell'altro verso il costo e' zero: 16 px in piu' su una colonna che a 390
+ * punti ne ha 267 di vuoto sotto di se' (misurato prima di questa modifica).
+ * Non si paga niente e si compra un caffe' di risoluzione.
+ *
+ * ## Niente asse e niente griglia
+ *
+ * Un solo riferimento orizzontale, la linea del sostenibile, che ha una legenda
+ * col proprio numero. Il resto si legge per confronto fra le colonne — che e'
+ * la domanda: **in quale giorno parte la mano**, non quanto esattamente. */
+.week {
+  --strip-h: 5rem;
+  /* L'altezza di una riga di 13px, cioe' l'etichetta del giorno e quella del
+   * picco. Scritta come `font-size × line-height` e non con `lh`, per lo stesso
+   * motivo delle `--line-*` qui sopra: `lh` risponderebbe al font di `.week`,
+   * non a quello dei figli. */
+  --day-h: calc(var(--fs-100) * var(--lh-snug));
+  /* Quanto stacca l'etichetta del picco dalla cima della sua colonna. */
+  --peak-gap: 2px;
+
+  display: block;
+  padding-block: var(--sp-3) var(--sp-4);
+  border-block-end: 1px solid var(--line);
+}
+
+/* La riga del titolo: la domanda a sinistra, la legenda della linea a destra,
+ * sulla stessa linea di base. E' la stessa forma di `.stats__head`, e vale qui
+ * perche' vale la stessa condizione: due testi di due pesi diversi su una riga
+ * si leggono come una riga sola solo se stanno sulla stessa base. */
+.week__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sp-1) var(--sp-3);
+}
+
+/* Stesso trattamento di `.stats__title`: e' l'intestazione di una sezione di
+ * grafico, e le due schermate non hanno ragione di scriverle in due modi.
+ *
+ * `nowrap`, e la riga sopra e' `flex-wrap: wrap`: a 320 punti i due testi non ci
+ * stanno insieme — 153 px di titolo piu' 205 di legenda contro 288 disponibili —
+ * e senza queste due righe a cedere era il titolo, che si spezzava in
+ * "GIORNO PER / GIORNO". Adesso a cedere e' la **legenda**, che scende intera su
+ * una riga sua: e' il verso giusto perche' la legenda finisce cosi' subito sopra
+ * la linea che nomina, mentre un titolo spezzato non guadagna niente. */
+.week__title {
+  white-space: nowrap;
+  color: var(--text-muted);
+  font-size: var(--fs-100);
+  font-weight: var(--fw-semibold);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
+}
+
+/* La legenda della linea, **con la propria cifra**.
+ *
+ * Il trattino davanti e' la pastiglia della legenda, ed e' lo stesso gesto di
+ * `.stats__partTitle[data-kind] .stats__partName::before`: un `::before` e non
+ * un elemento, perche' e' decorazione pura e il testo accanto dice gia' tutto a
+ * chi non la vede. Qui e' un tratto e non un quadrato perche' quel che marca e'
+ * una linea. */
+.week__legend {
+  flex: none;
+  color: var(--text-muted);
+  font-size: var(--fs-100);
+  line-height: var(--lh-snug);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.week__legend::before {
+  content: "";
+  display: inline-block;
+  inline-size: 0.75rem;
+  block-size: 2px;
+  margin-inline-end: var(--sp-1);
+  vertical-align: middle;
+  background-color: var(--text-muted);
+}
+
+/* Le sette colonne. `position: relative` perche' la linea del sostenibile e'
+ * assoluta rispetto a loro.
+ *
+ * Il margine in alto riserva la riga dell'etichetta del picco, che sta **fuori**
+ * dalla colonna quando la colonna e' piena: senza, uscirebbe dalla sezione. */
+.week__cols {
+  position: relative;
+  display: flex;
+  gap: var(--sp-2);
+  margin-block-start: calc(var(--sp-3) + var(--day-h) + var(--peak-gap));
+}
+
+.week__col {
+  flex: 1 1 0;
+  min-inline-size: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+
+/* Il riquadro di una colonna: l'altezza e' `--strip-h` **dichiarata**, non
+ * derivata dall'inchiostro, o sette colonne avrebbero sette basi diverse. */
+.week__cell {
+  position: relative;
+  display: block;
+  block-size: var(--strip-h);
+}
+
+/* Il filo di base, e **distingue un giorno da zero euro da un giorno non ancora
+ * arrivato**.
+ *
+ * Sono due cose diverse e il modello le tiene separate (`DayBar.future` esiste
+ * apposta): un giorno passato senza spese e' un'informazione — quel giorno non
+ * hai speso niente — mentre domenica prossima non e' un giorno da zero euro,
+ * e' un giorno che non c'e' ancora. Senza questa distinzione la meta' destra
+ * della striscia direbbe "tre giorni a zero" a chiunque guardi di giovedi'.
+ *
+ * A dirlo e' un filo e non un colore: colorare diversamente sei colonne vuote
+ * vorrebbe dire dipingere il futuro, cioe' dargli una quantita'. Il filo e' la
+ * base su cui una colonna poggia, e una base c'e' solo dove il giorno c'e'
+ * stato.
+ *
+ * `--line-strong` e non `--line`: e' una marca che porta un fatto, non un
+ * divisore. `tokens.css` lo dice — `--line` sono i "divisori decorativi",
+ * `--line-strong` i "bordi che contano" — ed e' 3,2:1 sul fondo in chiaro e
+ * 3,3:1 in scuro, cioe' sopra la soglia dei componenti non testuali. */
+.week__cell[data-past]::after {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  inset-block-end: 0;
+  block-size: 1px;
+  background-color: var(--line-strong);
+}
+
+/* L'inchiostro di un giorno. L'altezza viene da `DayBar.fraction`, che il
+ * modello ha gia' fatto passare per il pavimento: **qui non si ricalcola
+ * niente**. Un `cents / scaleCents` scritto in questo file sarebbe un secondo
+ * proprietario dello stesso numero, e salterebbe la traslazione — cioe'
+ * rimetterebbe il difetto che il pavimento esiste per chiudere.
+ *
+ * `--brand` e non una tinta di categoria: la striscia e' un numero solo per
+ * giorno, e otto tinte categoriche per un numero solo e' l'errore da manuale.
+ * E' anche lo stesso significato che `--brand` ha gia' nelle Statistiche —
+ * quotidiane, cioe' cio' che entra nel budget — che e' esattamente cio' che
+ * queste colonne contano.
+ *
+ * Il raggio solo in cima: la colonna poggia sulla base, non galleggia. 2px per
+ * la stessa ragione di `.stat__bar` — sotto le due volte il raggio una barra
+ * corta smette di essere un rettangolo e l'occhio confronta macchie invece che
+ * lunghezze. */
+.week__ink {
+  position: absolute;
+  inset-inline: 0;
+  inset-block-end: 0;
+  block-size: calc(var(--h) * var(--strip-h));
+  border-radius: 2px 2px 0 0;
+  background-color: var(--brand);
+}
+
+/* **Oggi non e' finito, e il bordo alto e' aperto.**
+ *
+ * E' la stessa marca di `.stat__bar[data-open]`, con lo stesso numero
+ * (`min(0.5rem, 50%)`) e la stessa ragione: un bordo aperto e' un **attributo
+ * della marca** — dice che il numero sta ancora crescendo — e non afferma
+ * nessuna quantita'. Disegnare "mancano dodici ore" come pixel vorrebbe dire
+ * inventare un valore in euro per il resto della giornata.
+ *
+ * L'asse e' l'altro, e la condizione va riscritta qui perche' qui e' diversa:
+ * li' le barre crescono verso destra e la sfumatura e' `to right`, con la nota
+ * che in una lingua RTL andrebbe girata. **Qui crescono verso l'alto**, e
+ * `to top` non dipende dalla direzione di scrittura: e' l'unico punto in cui
+ * questa marca costa meno dell'originale.
+ *
+ * Il `50%` resta il freno per le colonne cortissime: al pavimento (3,33 px)
+ * una sfumatura da 8 px mangerebbe tutto, e una colonna corta e' esattamente
+ * quella di un giorno appena cominciato.
+ *
+ * Il ripiego dichiarato e' lo stesso: dove `mask-image` non esiste (iOS < 15.4)
+ * la colonna resta netta e la marca si perde. Il fatto lo porta comunque
+ * l'etichetta del giorno, che oggi e' in `--text` e in semibold — cioe' testo,
+ * che non si perde mai. */
+.week__ink[data-open] {
+  --open-fade: min(0.5rem, 50%);
+
+  -webkit-mask-image: linear-gradient(
+    to top,
+    #000 calc(100% - var(--open-fade)),
+    transparent 100%
+  );
+  mask-image: linear-gradient(to top, #000 calc(100% - var(--open-fade)), transparent 100%);
+}
+
+/* L'importo del giorno piu' alto, ancorato alla cima della propria colonna.
+ *
+ * **E' l'unico importo scritto, e la regola sull'etichettare selettivamente vale
+ * qui mentre nelle Statistiche non valeva.** Li' i numeri stanno **accanto** a
+ * barre orizzontali, in una colonna loro, e ci stanno tutti; qui starebbero
+ * **sopra** colonne larghe 44 px, sette in fila, e si leggerebbero prima delle
+ * colonne — una tabella disegnata male al posto di un grafico.
+ *
+ * **E dichiara la scala.** `scaleCents` e' `max(giorno piu' alto, sostenibile)`,
+ * quindi cio' che puo' toccare il bordo alto e' o questa colonna o la linea: nel
+ * primo caso il fondo scala e' questo numero, nel secondo e' quello della
+ * legenda. In tutti e due i casi **e' scritto**. Una terza riga "colonna intera
+ * = X" ripeterebbe uno dei due; le Statistiche ce l'hanno perche' li' le sezioni
+ * sono piu' d'una e una barra piena vale importi diversi nella stessa schermata.
+ *
+ * ## Le due colonne di bordo si agganciano al lato
+ *
+ * Centrata, l'etichetta sulla prima colonna uscirebbe verso il margine della
+ * pagina: a 320 punti la colonna e' larga 33 px e `1.234,56 €` ne misura ~72,
+ * cioe' 19 px oltre il bordo — scroll orizzontale. Agganciata al lato non puo'
+ * uscire da nessuna parte, e verso l'interno ha sei colonne di spazio.
+ *
+ * Le due colonne per lato e non una sola: alla seconda, centrata, un importo a
+ * cinque cifre sborderebbe comunque di qualche pixel. Dalla terza in poi
+ * servirebbe un'etichetta larga cinque colonne, che nessun importo raggiunge. */
+.week__peak {
+  position: absolute;
+  inset-block-end: calc(var(--h) * var(--strip-h) + var(--peak-gap));
+  inset-inline-start: 50%;
+  transform: translateX(-50%);
+  color: var(--text);
+  font-size: var(--fs-100);
+  line-height: var(--lh-snug);
+  font-weight: var(--fw-semibold);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.week__peak[data-edge="start"] {
+  inset-inline-start: 0;
+  transform: none;
+}
+
+.week__peak[data-edge="end"] {
+  inset-inline-start: auto;
+  inset-inline-end: 0;
+  transform: none;
+}
+
+/* Le lettere dei giorni. Il pavimento sull'altezza e' dichiarato e non derivato
+ * dal font, perche' la linea del sostenibile ci si appoggia sopra col suo
+ * `calc`: se questa riga cambiasse altezza col font, la linea cadrebbe qualche
+ * pixel piu' su o piu' giu' della quota che rappresenta. */
+.week__day {
+  min-block-size: var(--day-h);
+  color: var(--text-muted);
+  font-size: var(--fs-100);
+  line-height: var(--lh-snug);
+  text-align: center;
+  white-space: nowrap;
+}
+
+/* Oggi si nomina. E' la stessa incompletezza che il bordo aperto disegna, detta
+ * in testo: dove `mask-image` non arriva, questa resta. */
+.week__day[data-current] {
+  color: var(--text);
+  font-weight: var(--fw-semibold);
+}
+
+/* La linea del passo sostenibile.
+ *
+ * ## Dove cade
+ *
+ * `--at` e' `sustainable.fraction`, cioe' la quota **gia' passata per la stessa
+ * mappa delle colonne**, pavimento compreso. Non e' pignoleria del modello: con
+ * un `cents / scaleCents` calcolato qui, il giorno in cui si spende
+ * **esattamente** il sostenibile disegnerebbe una colonna piu' alta della
+ * propria linea — "sei sopra" stando sul pari.
+ *
+ * L'offset verticale somma la riga delle lettere e il suo gap perche' questa
+ * linea e' assoluta rispetto a `.week__cols`, che contiene tutte e due le
+ * righe. Ed e' esatto, non approssimato: `--day-h` e' dichiarato e
+ * `.week__day` lo impone.
+ *
+ * ## Perche' un nucleo con una guaina, e non un colore
+ *
+ * Perche' la linea attraversa **due** riempimenti: l'inchiostro delle colonne
+ * (`--brand`) e il fondo (`--bg`). Un colore piatto a 3:1 da tutti e due non
+ * esiste: in tema chiaro `--bg` ha luminanza 0,906 e `--brand` 0,109, quindi
+ * servirebbe una luminanza ≤ 0,269 e ≥ 0,428 nello stesso momento. In scuro le
+ * due si scambiano e il vincolo resta impossibile identico. E' lo stesso conto
+ * di `.stat__accrued`, e va rifatto qui invece che citato perche' **qui le
+ * superfici sono due e non tre**: non c'e' nessuna rotaia, quindi il caso
+ * `--surface-sunken` non si presenta.
+ *
+ * Quindi 1px di `--bg`, 2px di `--text-muted`, 1px di `--bg`. Sopra l'inchiostro
+ * stacca la guaina (`--bg` su `--brand`: 6,00:1 in chiaro, 8,62:1 in scuro);
+ * sopra il fondo stacca il nucleo (`--text-muted` su `--bg`: 5,40:1 e 7,30:1).
+ * Il minimo fra i quattro e' 5,40:1, contro i 3:1 richiesti.
+ *
+ * ## Piena, non tratteggiata
+ *
+ * Il tratteggio si legge come "proiezione", e questo e' un fatto: `budget /
+ * giorni del periodo`. Stessa scelta di `.stat__accrued`, stessa ragione.
+ *
+ * ## Sta dopo le colonne nel DOM, e conta
+ *
+ * Fra due assoluti senza livello dichiarato vince chi viene dopo. L'unico caso
+ * in cui questa linea dice qualcosa e' quello in cui una colonna l'ha superata:
+ * messa prima, sarebbe coperta proprio li'. E' il segnale invertito che
+ * `.stat__accrued` ha gia' pagato, e per questo qui non c'e' nessun `z-index` —
+ * l'ordine del DOM basta gia', e una difesa che nessun test puo' vedere cadere
+ * e' una riga che il prossimo lettore credera' necessaria. */
+.week__line {
+  position: absolute;
+  inset-inline: 0;
+  inset-block-end: calc(
+    var(--day-h) + var(--sp-1) + var(--at) * var(--strip-h) - 2px
+  );
+  block-size: 4px;
+  background-image: linear-gradient(
+    to bottom,
+    var(--bg) 0 1px,
+    var(--text-muted) 1px 3px,
+    var(--bg) 3px 4px
+  );
+}
+
 /* --- le spese di oggi ---------------------------------------------------- */
 
+/* **L'intestazione esiste solo dove c'e' qualcosa da intestare.**
+ *
+ * Quando la giornata e' vuota non si disegna: era "Oggi" seguito dal nulla, con
+ * "Oggi non hai segnato niente" otto righe sotto — lo stesso fatto due volte,
+ * con un buco in mezzo. Il copy resta (e' l'esempio giusto della regola *dove ci
+ * sono dati si mostrano numeri, dove non ce ne sono si parla*); cade
+ * l'intestazione.
+ *
+ * Il filo qui sopra c'e' **solo se sopra non c'e' gia' la striscia**, che porta
+ * il proprio. Con `:first-child` la condizione e' geometrica invece che
+ * indovinata: e' raggiungibile davvero — una giornata le cui uniche spese sono
+ * ricorrenti ha righe da intestare e nessuna colonna da disegnare, perche' la
+ * striscia conta cio' che conta il budget (ADR 016). */
 .today__head {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   gap: var(--sp-3);
   padding-block: var(--sp-3) var(--sp-1);
-  border-block-start: 1px solid var(--line);
   font-size: var(--fs-200);
+}
+
+.days > .today__head:first-child {
+  border-block-start: 1px solid var(--line);
 }
 
 .today__name {
@@ -380,16 +930,17 @@
  * larghezza — e a parita' di larghezza guscio e dati riservano lo stesso.
  *
  * Qui cambia una cosa sola, ed e' quella misurata: **la riga della
- * disponibilita' prende tre righe invece di due**. A 20px e 288px di colonna,
- * lo stato sforato — "2 giorni alla fine del periodo · 48,00 € al giorno contro
- * 28,57 € sostenibili" — non ci sta in due, e con importi a quattro cifre non ci
- * sta nemmeno a 375. Tutte le altre righe prendono lo stesso numero di prima.
+ * disponibilita' prende tre righe invece di due**. A 288 px di colonna, lo stato
+ * sforato — "2 giorni alla fine del periodo · 48,00 € al giorno contro 28,57 €
+ * sostenibili" — non ci sta in due, e con importi a quattro cifre non ci sta
+ * nemmeno a 375. Tutte le altre righe prendono lo stesso numero di prima.
  *
- * Qui c'era `--rows-sub: 2`, per la riga di dettaglio che adesso non esiste
- * piu': il caso che copriva — "Restano 5 giorni: quello che spendi da qui e' in
- * piu'" a 13px — e' finito dentro la riga sopra, a 20px, cioe' esattamente dove
- * costa di piu'. La riserva non e' stata tolta: si e' spostata su chi ha preso
- * il posto. */
+ * **Il conteggio non e' sceso quando la riga e' scesa da 20 a 17 px**, ed e' una
+ * cosa che si poteva sbagliare: un corpo piu' piccolo fa entrare piu' caratteri
+ * per riga, quindi la tentazione e' togliere una riga di riserva. La riserva pero'
+ * non descrive il caso tipico, descrive il **peggiore** — l'importo piu' lungo
+ * nella lingua piu' lunga — e quello va a capo lo stesso. Rimisurato, non
+ * dedotto. */
 @media (max-width: 359px) {
   .home {
     --rows-allowance: 3;
@@ -401,10 +952,43 @@
  * del periodo, che e' il titolo vero della schermata. Con la misura dello
  * Storico (dove quel testo e' l'unica cosa in pagina) griderebbe piu' del
  * residuo, che e' il motivo per cui si e' aperta l'app. */
-.today .blank__title {
+.days .blank__title {
   font-size: var(--fs-300);
   font-weight: var(--fw-semibold);
   letter-spacing: normal;
+}
+
+/* **Lo stesso argomento, applicato alla scatola invece che alla tipografia.**
+ *
+ * La regola qui sopra e' vecchia di una fase e dice *"e' un vuoto secondario,
+ * quindi non prende la misura dello Storico"*. Non nomina il corpo del carattere:
+ * lo nomina solo la riga che la applica. Applicata alla scatola dice la stessa
+ * cosa e cade in un posto diverso — **la geometria dello Storico era rimasta**,
+ * cioe' 32 px di padding sopra e sotto, il contenuto centrato dentro la riserva,
+ * e il messaggio che comincia a 38 px dal filo della sezione.
+ *
+ * Lo Storico ha ragione di essere fatto cosi': li' il messaggio e' **la pagina**,
+ * e una cosa che e' la pagina si centra. Qui il messaggio e' **cio' che si legge
+ * al posto delle righe di oggi**, quindi comincia dove comincerebbero le righe:
+ * `.today__head` stacca dal filo di `var(--sp-3)`, e questo stacca uguale.
+ *
+ * I numeri, misurati a 390 punti e presi **dal filo della sezione** invece che
+ * dalla cima della pagina — l'altra meta' di questa passata alza `.days` di 15
+ * px, e sommare due effetti in una cifra sola e' il modo di non poter piu' dire
+ * quale dei due ha fatto cosa:
+ *
+ *     distanza del titolo dal filo di `.days`    38,95 px  ->  13
+ *     altezza del blocco                        185,67 px  ->  145,75
+ *
+ * I 13 px non sono un numero scelto: sono `var(--sp-3)` piu' il filo, cioe' **lo
+ * stesso stacco di `.today__head`**. Il messaggio e le righe che sostituisce
+ * cominciano allo stesso pixel.
+ *
+ * `padding-block-end` piu' generoso del principio perche' sotto non c'e' un filo
+ * che chiuda: c'e' la fine della colonna e poi la corsia del FAB. Un messaggio
+ * appoggiato al bordo inferiore del contenuto si legge come troncato. */
+.days .blank {
+  padding-block: var(--sp-3) var(--sp-5);
 }
 
 /* --- il telefono girato --------------------------------------------------- */
@@ -415,12 +999,23 @@
  * `--slot-min` invece **non** si abbassa, ed e' costato un test rosso: le
  * altezze riservate dentro il riquadro sono in `em`, quindi non cambiano con il
  * viewport — cambia solo quante righe il testo occupa davvero. Un riquadro piu'
- * basso qui vorrebbe dire che il contenuto lo supera e spinge in giu' le spese
- * di oggi appena si imposta un budget. Il prezzo e' un po' di spazio vuoto in
- * orizzontale; l'alternativa era un salto. */
+ * basso qui vorrebbe dire che il contenuto lo supera e spinge in giu' la coda
+ * appena si imposta un budget. Il prezzo e' un po' di spazio vuoto in
+ * orizzontale; l'alternativa era un salto.
+ *
+ * **E `--strip-h` non si abbassa neanche lei**, benche' qui l'altezza sia il
+ * vincolo vero. Il contratto di `COLUMN_MIN_FRACTION` e' `2 / 48`: a 3rem la
+ * colonna piu' corta vale esattamente 2 px, cioe' il limite. Guadagnare 32 px in
+ * una finestra alta 327 — che scorre gia' — al prezzo di portare il pavimento
+ * sul filo non e' uno scambio: la striscia si legge in orizzontale quanto in
+ * verticale, e questa e' l'unica misura di questo file che un altro file usa
+ * come premessa.
+ *
+ * **E `--blank-min: 30dvh` non c'e' piu'**, insieme a quello in verticale. Qui
+ * valeva 98,1 px contro i 173,75 che il messaggio occupa da solo: era gia'
+ * inerte, cioe' una riga che dichiarava una riserva senza produrne una. */
 @media (max-height: 480px) and (orientation: landscape) {
   .home {
     --fs-hero: 2.5rem;
-    --blank-min: 30dvh;
   }
 }

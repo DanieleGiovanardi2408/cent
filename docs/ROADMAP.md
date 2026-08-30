@@ -25,25 +25,26 @@ sa gia', e per questo non puo' invecchiare. I giudizi — cosa e' in volo, cosa
 aspetta una persona — stanno sotto, scritti a mano e timbrati con lo SHA a cui
 sono stati rivisti.
 
-- **Ultimo commit**: `8f12a70` — feat: la scala torna per sezione, e ogni sezione dichiara quanto vale una barra piena
-- **Data**: 29/08/2026 21:57
+- **Ultimo commit**: `d9fdfe5` — fix: le tinte nuove non arrivavano a chi l'app ce l'ha gia' — migrazione 5
+- **Data**: 30/08/2026 22:14
 - **Ramo**: `fase-6-wip`
-- **Pushato**: si, `origin/fase-6-wip` e' allo stesso commit
-- **Rispetto a `origin/main`**: 9 commit avanti
-- **Albero di lavoro**: **non pulito**, ci sono modifiche non committate
+- **Pushato**: **no: 1 commit non pushati su `origin/fase-6-wip`**
+- **Rispetto a `origin/main`**: 15 commit avanti
+- **Albero di lavoro**: pulito
 
-- **Test unitari**: 700 in 23 file, tutti verdi
-- **Test e2e dichiarati**: 329 in 14 file, su 4 progetti (iphone-se, iphone-14, landscape, dark)
-- **Test e2e eseguiti**: 311 passati, 18 saltati, in 2.7 minuti. I saltati sono condizionali (ADR 013): solo un'esecuzione li vede.
-- **Bundle iniziale**: 55.2 KB gzip su 60.0 KB (4.8 KB di margine)
+- **Test unitari**: 749 in 25 file, tutti verdi
+- **Test e2e dichiarati**: 371 in 14 file, su 4 progetti (iphone-se, iphone-14, landscape, dark)
+- **Test e2e eseguiti**: 353 passati, 18 saltati, in 2.7 minuti. I saltati sono condizionali (ADR 013): solo un'esecuzione li vede.
+- **Bundle iniziale**: 57.3 KB gzip su 60.0 KB (2.7 KB di margine)
 
-- **Schema del database**: 4. La scala delle migrazioni:
+- **Schema del database**: 5. La scala delle migrazioni:
   - **1** — Schema iniziale: expenses, categories, recurringRules, budgets, settings
   - **2** — Expense.timeMinutes (opzionale); le impostazioni dichiarano la versione 2
   - **3** — Settings.language e Settings.onboardingCompletedAt (opzionali, default assente)
   - **4** — RecurringRule.anchorDay esplicito e obbligatorio sulle regole mensili
+  - **5** — Le otto tinte delle categorie passano alla palette che regge i pavimenti
 
-  Un dispositivo fermo a una versione precedente le esegue **tutte in fila fino alla 4**
+  Un dispositivo fermo a una versione precedente le esegue **tutte in fila fino alla 5**
   alla prima apertura dopo l’aggiornamento. Da quale parta e' un fatto del telefono, non del
   repository, e per questo non e' scritto qui.
 
@@ -51,12 +52,24 @@ sono stati rivisti.
 
 ## In volo adesso
 
-<!-- JUDGMENT rivisto=35c54f0 -->
-> Rivisto a `35c54f0`, 3 commit fa.
+<!-- JUDGMENT rivisto=2d9f75e -->
+> Rivisto a `2d9f75e`, 2 commit fa.
 
-**Fase 6 sul ramo `fase-6-wip`, cinque commit sopra `origin/main`.** Il ramo e'
-spinto; `main` non e' stato toccato, quindi **cio' che sta su Pages e' ancora
-`d9d6471`** — la fase 6 di prima delle cinque decisioni, non quella di adesso.
+**Fase 6 sul ramo `fase-6-wip`, tredici commit sopra `origin/main`.** Il ramo e'
+spinto a ogni rientro.
+
+**Rilettura del 30 agosto sera: questa riga era falsa in due punti.** Diceva
+*"cinque commit sopra"* (erano tredici) e *"cio' che sta su Pages e' ancora
+`d9d6471`"*. Su Pages c'e' **`005224d`** — *"densita', accento e numero grande, e
+ADR 016 §3 non abitava qui"* — che contiene `d9d6471`: `main` **e' stato toccato**
+dopo che questa riga fu scritta, esattamente come l'emendamento qui sotto
+prevedeva, e la riga non se n'e' accorta.
+
+E' la **seconda volta** che questo giudizio invecchia sullo stesso fatto — la
+prima e' raccontata due paragrafi piu' giu'. Due volte sullo stesso fatto non e'
+sfortuna: e' che **la posizione di `main` e' derivabile e sta scritta a mano**.
+Va in `npm run state` insieme agli altri fatti; finche' non ci sta, questa riga
+va riletta guardando `git rev-parse origin/main`, non ricordando.
 
 Qui c'era scritto *"la fase 6 e' gia' su Pages"*, ed era vero a `848f417`. Quattro
 commit dopo non lo era piu', e la riga non se n'era accorta: e' il guasto che questa
@@ -269,12 +282,128 @@ mascherano la stessa uscita. E' la forma di DEBITO §6, trovata **dentro** la su
 riparazione. Sta scritta accanto al codice con la ragione: il giorno in cui una
 delle due maschere cade, B mostrerebbe un periodo in cui l'app non aveva dati.
 
+## Le sei misure del 30 agosto, prima di toccare una riga
+
+**Derivazione dichiarata**: l'export del 26 agosto come fixture a runtime, mai
+committato; il validatore di `dataviz` per i colori; `git log -S` per l'archeologia;
+l'harness fuori dal repository per la geometria. Nessuna implementazione prima.
+
+### M1 · M2 · M3 — le categorie, e **la finestra cambia la risposta**
+
+La richiesta diceva *"mese corrente"*. **Il periodo dell'app e' settimanale**, quindi
+cio' che sta a schermo e' la settimana, non il mese. Le due finestre danno risposte
+diverse su M3, quindi valgono tutte e due.
+
+**Mese (1–31 ago) — Quotidiane, 248,45 €, 5 categorie**
+
+| | € | quota | arco |
+|---|---|---|---|
+| Spesa | 105,45 | 42,4% | 152,8° |
+| Coffeeshop | 97,00 | 39,0% | 140,6° |
+| Svago | 26,00 | 10,5% | 37,7° |
+| Fuori | 10,00 | **4,0%** | 14,5° |
+| Trasporti | 10,00 | **4,0%** | 14,5° |
+
+**Settimana (24–30 ago) — Quotidiane, 112,00 €, 5 categorie**
+
+| | € | quota | arco |
+|---|---|---|---|
+| Spesa | 42,00 | 37,5% | 135,0° |
+| Svago | 26,00 | 23,2% | 83,6° |
+| Coffeeshop | 24,00 | 21,4% | 77,1° |
+| Fuori | 10,00 | 8,9% | 32,1° |
+| Trasporti | 10,00 | 8,9% | 32,1° |
+
+**Fisse, identiche nelle due finestre — 530,00 €, 2 categorie**: Casa 507,00
+(**95,7%**, 344,4°) e Trasporti 23,00 (**4,3%**, 15,6°).
+
+**M3**: sotto il 5% sono **due** nel mese (Fuori, Trasporti), **zero** nella
+settimana, **una** nelle fisse (Trasporti, 4,3% = 15,6°).
+
+**Conseguenza sulla coda "Altre": oggi non serve in nessuna delle due finestre**,
+perche' la regola la prevede solo sopra le sei categorie e qui sono cinque. La regola
+va scritta lo stesso — il tetto e' otto — ma **non ha un caso da coprire adesso**, e
+va detto invece di costruirla e crederla provata.
+
+### M4 — la palette non regge, e **l'adiacenza dipende dai dati**
+
+E' il risultato che decide, e non e' quello che la richiesta si aspettava.
+
+Il criterio proposto era *"nessuna coppia **adiacente** nell'ordine di disegno sotto
+soglia"*. **Non e' verificabile in CI**, perche' l'ordine di disegno e' l'ordine per
+importo, cioe' **cambia con i dati dell'utente** — e i dati dell'utente la CI non li
+ha. Misurato: nella settimana `Spesa` e `Coffeeshop` **non** sono adiacenti e tutto
+passa; nel mese lo diventano e cadono a **ΔE 9,4**, sotto il pavimento di 15.
+
+**Quindi il controllo dev'essere su tutte le coppie, non sulle adiacenti.** Una
+coppia qualunque puo' diventare adiacente la settimana prossima.
+
+Sulle otto tinte, `--pairs all`, superfici vere (`#f6f6f3` / `#101413`):
+
+- **CVD**: peggiore `#676c75` (Extra) ↔ `#b90e5c` (Svago) — **ΔE 4,3** deutan
+- **Vista normale**: peggiore `#06b0a0` (Coffeeshop) ↔ `#81a369` (Spesa) — **ΔE 9,4**,
+  sotto 15: *"difficili da distinguere anche con la vista piena"*
+- **Croma**: tre sotto il pavimento — `#81a369` 0,09 · `#845e23` 0,089 · `#676c75`
+  **0,015** (e' 0f, gia' misurata)
+- **Tema scuro**: quattro tinte **fuori dalla banda di luminosita'**
+
+**La palette va ri-derivata.** La condizione di 0f — *"adesso, finche' il parco
+installato e' un telefono"* — e' arrivata, e la ciambella e' cio' che la rende
+bloccante: con le barre il colore era ornamento e la lunghezza portava il dato; in una
+ciambella **il colore e' il dato**, e due fette adiacenti indistinguibili non sono due
+categorie, sono una fetta piu' grande.
+
+### M5 — `--body-min` ha una motivazione scritta, e **smentisce l'ipotesi**
+
+Introdotto in `8161b89` (30 agosto). La motivazione e' nel codice, `Home.css`, sopra
+`.slot__body`, **verbatim**:
+
+> *"la riserva (`--body-min`) rende la posizione del bottone **indipendente dai
+> dati**: non dipende piu' da quante righe ha il testo sopra di lui, quindi non si
+> sposta **fra il guscio e l'arrivo del database**. Senza, il gate ha misurato 75-83
+> px di salto su un bersaglio toccabile"*
+
+**L'ipotesi che la riserva protegga da un cambio di stato che l'utente non puo'
+osservare e' falsa.** Il salto che previene e' **guscio -> dati**, e quello succede
+**a ogni apertura**, non a un aggiornamento. ADR 005 non c'entra: l'app non si
+aggiorna da sola, ma il database si apre sempre.
+
+**Quindi `--body-min` non si toglie.** Il buco resta, ed e' un buco dichiarato.
+
+### M6 — la Home a 390x844, e le tre risposte stanno tutte sopra la piega
+
+Piega a 760; contenuto 708 su 708 visibili: **zero px sotto la piega**.
+
+| blocco | top | fondo |
+|---|---|---|
+| `.hero__period` | 64 | 80,3 |
+| `.hero__value` **88,00 €** | 99 | 147,4 |
+| `.hero__note` | 147,4 | 163,7 |
+| `.allowance` **quanto posso spendere** | 237,4 | 258,7 |
+| `.slot__fixed` | 266,7 | 282,9 |
+| `.budget` | 290,9 | 334,9 |
+| `.week__head` | 359,9 | 376,2 |
+| `.week__cols` | 406,4 | 506,7 |
+| `.today__head` **quanto ho speso oggi** | 523,7 | 558,4 |
+| prima riga di oggi | 558,4 | 602,4 |
+
+**Le tre risposte, nell'ordine chiesto**: *quanto posso spendere oggi* a **237,4** ·
+*quanto ho speso oggi* a **523,7** · *quanto resta* a **99**. Tutte e tre sopra la
+piega, a 390x844 e a 393x852.
+
+**Ma la terza non e' "per il mese": e' per la settimana.** Il budget e' settimanale, e
+l'eroe dice *"Questa settimana · 24–30 ago"*. Non e' un difetto di layout, e' una
+differenza fra il modello mentale della richiesta e la configurazione dei dati.
+
+**iPhone SE (375x667)**: `.blank__text` cade **sotto la piega** (fondo 663,8 contro
+583). E' l'unico viewport dei tre in cui qualcosa esce, e riguarda lo stato vuoto.
+
 ## In sospeso sul telefono — nessuna di queste e' automatizzabile
 
 Sono ferme dal **24 agosto** e vanno fatte **in quest'ordine**, che non e' una
 preferenza: ogni passo distrugge la possibilita' di fare il precedente.
 
-<!-- JUDGMENT rivisto=35c54f0 -->
+<!-- JUDGMENT rivisto=2d9f75e -->
 > Rivisto a `58e0880`, 8 commit fa. **Da riguardare.**
 
 ### Stato al 29 agosto: **i passi 1 e 2 sono FATTI**
@@ -285,6 +414,17 @@ Quindi la finestra unica del passo 1 e' stata usata, e la migrazione del passo 2
 girata sul database reale.
 
 **Restano il 3 e il 4.**
+
+**Riletto il 30 agosto sera, e il timbro dice meno di quanto sembra.** Nei
+diciassette commit da allora non c'e' niente che possa aver mosso i passi 1 e 2:
+sono azioni sul telefono, e questa macchina non li puo' ne' fare ne' disfare. Ma
+**non ho potuto verificare il 3** — *"creare la regola dell'affitto vero"* succede
+sul telefono, e da qui non si legge. Il timbro nuovo certifica quindi che questa
+prosa e' stata **riletta**, non che il passo 3 sia ancora aperto: quello lo sa
+solo chi ha il telefono in mano.
+
+E' la regola scritta qui sotto applicata al proprio timbro — *una derivazione
+vale dove ha guardato, e deve dire dove.*
 
 ### La correzione che ha prodotto questa riga, e vale piu' del fatto
 
@@ -368,7 +508,7 @@ macchina non puo' leggere.
 
 ## Il disco
 
-<!-- JUDGMENT rivisto=35c54f0 -->
+<!-- JUDGMENT rivisto=2d9f75e -->
 > Rivisto a `58e0880`, cioe' a questo commit.
 
 **Rivisto il 29 agosto, derivando: 10 GB liberi, 62% di capacita'.** Il taglio
@@ -379,6 +519,14 @@ morde piu': si misura a ogni giro, tre volte in questa sessione.
 stessi 10 GB e lo stesso 62%, `~/.ollama` gli stessi 12 KB. `node_modules` del
 progetto vale 160 MB e `test-results` 424 KB — cioe' le due cose che crescono qui
 non crescono abbastanza da contare.
+
+**Ri-derivato di nuovo il 30 agosto sera, e stavolta si sono mossi — in meglio**:
+`df` da' **20 GB liberi al 44%**, non piu' 10 GB al 62%. `~/.ollama` e' fermo a
+12 KB, identico. La conclusione non cambia (il taglio regge, la e2e si misura a
+ogni giro), ma **i numeri della riga precedente erano scaduti**, e un timbro
+spostato senza rimisurare li avrebbe portati avanti come se fossero di oggi:
+e' precisamente il difetto che il paragrafo qui sotto esiste per impedire, e
+questa volta e' stato evitato guardando `df` invece che il timbro.
 
 Va scritto che e' stato **ri-derivato** e non solo ritimbrato, perche' per un
 momento questa voce ha portato un timbro nuovo su una misura vecchia: il timbro
@@ -600,7 +748,7 @@ giorno in cui serviva davvero.
 
 ## Decisioni prese e non ancora applicate
 
-<!-- JUDGMENT rivisto=35c54f0 -->
+<!-- JUDGMENT rivisto=2d9f75e -->
 > Rivisto a `b289fff`, 6 commit fa. **Da riguardare.**
 
 **L'esistenza di una decisione e' un giudizio; la sua applicazione e' un fatto
@@ -612,6 +760,11 @@ erano gia' implementate.
 Adesso ogni voce porta il proprio **controllo di applicazione** in un commento, e
 `npm run state` lo esegue e ci scrive sotto **applicata / non applicata**. Il
 giudizio resta umano — *cosa* si e' deciso e *perche'*. Il fatto e' derivato.
+
+**Riletto il 30 agosto sera, e il meccanismo tiene**: `npm run state` da'
+**14/14 applicate**, cioe' nessuna decisione dichiarata e non nel codice — che e'
+esattamente il guasto (sei dichiarate, nessuna verificata) da cui questa
+meccanizzazione e' nata.
 
 E c'e' un guadagno che vale da solo: **una decisione la cui applicazione non si
 riesce a esprimere come controllo e' una decisione troppo vaga per essere
@@ -761,6 +914,25 @@ vanno scritti.
 **La torta a sette fette e' esclusa**: 62% e sei spicchi fra 1% e 16%
 costringono a una legenda e a confrontare angoli.
 
+##### L'alternativa a ciambella in cima e' chiusa con DUE argomenti, non uno
+
+**Un argomento solo si riapre, due no**, ed e' la ragione per cui questa voce porta
+tutte e due invece della sola disciplina.
+
+**Il primo e' della skill**: due fette sono una cifra, e una torta a due spicchi va
+sostituita da una stat tile.
+
+**Il secondo e' una misura, presa costruendo la variante e guardandola.** La
+ciambella al posto del numero grande costa **979 px di contenuto contro 862** su 708
+visibili, e la differenza cade tutta su cio' che sta sotto: *"Settimana per
+settimana"* torna a mostrare **una riga tagliata a meta'**. E' il rilievo 12 — la
+domanda di B e la sua risposta mai sullo schermo insieme — che avevamo chiuso
+guadagnando 62 px. La ciambella in cima ne spende **117** per riaprirlo.
+
+E' il caso in cui una disciplina e una misura dicono la stessa cosa per due strade
+diverse. Quando succede vanno scritte tutte e due: la disciplina puo' essere
+contestata da chi non la condivide, la misura no.
+
 **E l'alternativa a ciambella e' caduta il 29 agosto, leggendo `dataviz`.** Qui
 c'era scritto *"forma alternativa ammessa: ciambella a due segmenti col totale nel
 mezzo — due angoli si confrontano bene"*. La skill la vieta due volte e per due
@@ -784,21 +956,68 @@ uno stato che avrei creato invece di uno che esisteva, ed e' esattamente la form
 per cui quella regola e' stata scritta. Presa perche' il brief chiedeva all'agente
 di segnalare la discrepanza; senza quella riga sarebbe passata.
 
-#### 0c. Selettore fisse si'/no su A
+#### 0c. ~~Selettore fisse si'/no su A~~ — **CHIUSA TOGLIENDO IL SELETTORE, 30 agosto**
 
 <!-- DECISION
-     present: src/ui/i18n/it.ts :: stats.showFixed
+     absent:  src/ui/Stats.tsx :: stats__toggle
+     present: src/ui/stats-view.ts :: `showFixed` non c'e' piu'
 -->
-> **Applicata**, verificato da: `stats.showFixed`.
+> **Applicata**, verificato da: `!stats__toggle`, ``showFixed` non c'e' piu'`.
 
-Sostituisce **una regola di layout con un controllo dell'utente**. Tre vincoli:
+**Il selettore non c'e' piu'.** Non e' stato ridiscusso il suo default: e' caduto
+l'oggetto.
 
-- **acceso di default** — spento nasconderebbe 507 € dietro un controllo, cioe'
-  ADR 016 §1 di nuovo, dalla porta di servizio;
-- lo **stato dev'essere leggibile senza toccare niente**;
-- **non si applica a B**: con le fisse accese la traccia del budget non
-  significherebbe piu' niente. Li' o non si applica, o la traccia sparisce — che e'
-  gia' la regola di `comparableToBudget`.
+##### La ragione per cui esisteva, e quando e' evaporata
+
+0c sostituiva *"una regola di layout con un controllo dell'utente"*, e il controllo
+serviva perche' con la **scala unica** (0a) le sei righe quotidiane valevano fra 4 e
+19 px con l'affitto dentro. Spegnere le fisse ricalcolava la scala e le riapriva a
+49–196. Era *"l'unica cosa utile che il selettore fa"*, ed era anche la sola ragione
+per cui `showFixed` stava nel **modello** invece che essere un filtro nel componente.
+
+**Rovesciata 0a, la scala e' tornata per sezione, e quelle sei righe nascono gia'
+riaperte**: l'affitto non e' nella loro scala, quindi non le schiaccia. Verificato e
+non dedotto — a fisse spente le `fraction` erano **identiche** e `scaleCents` non si
+muoveva di un centesimo. Il test che lo dimostrava e' stato scritto, ha fatto il suo
+lavoro una volta, ed e' uscito con l'oggetto che descriveva.
+
+Restava un effetto solo: ricalcolare `Breakdown.asChart` sulle righe rimaste. Adesso
+`asChart` si calcola su `present`, che e' un fatto sui dati.
+
+##### Il criterio, che vale oltre questo caso
+
+> **Un comando che non cambia quasi niente e' peggio di nessun comando: promette un
+> potere che non ha.**
+
+Chi lo tocca si aspetta che succeda qualcosa e vede sparire una sezione — meno di
+quanto la sua presenza annunciava. E' la stessa famiglia di *"un indicatore che puo'
+sbagliare deve sbagliare verso l'allarme"*: il costo non e' la funzione mancante, e'
+la **fiducia** che si spende per scoprirlo.
+
+##### E ne e' uscito un difetto che nessuno aveva progettato
+
+Con l'interruttore spento in una settimana di **sole spese fisse**, `sections` era
+vuota, `split` nullo, e il numero grande in cima — che il componente dichiara *"non
+cambia quando si spengono le fisse, ed e' voluto"* — **spariva**. Una scelta di
+lettura che cancellava un fatto: 507,00 € usciti e nessun euro a schermo. Togliendo
+il selettore quel ramo non e' piu' raggiungibile.
+
+**E la sua guardia e' stata sbagliata prima di essere giusta**, che e' la parte da
+tenere. La prima forma chiedeva *"in `ready` A ha almeno una sezione"*, ed e' caduta
+subito su uno stato legittimo: spese solo nei periodi passati — cioe' **ogni lunedi'
+mattina** — dove A non ha sezioni perche' nel periodo non c'e' niente da ripartire, e
+zero non e' una cifra nascosta, e' la cifra. Confondeva *"A copre tutto"* con *"A non
+e' vuota"*.
+
+La forma giusta guarda la **copertura**: la somma di ogni riga di ogni sezione e'
+esattamente il denaro del periodo. E non e' solo piu' corretta, e' **piu' forte** —
+avrebbe preso il difetto misurato (le fisse spente lasciavano fuori 507,00 € **e una
+sezione dentro**), dove `length >= 1` sarebbe rimasta verde. Gira su ogni fixture.
+
+##### Cosa resta vero dei tre vincoli originali
+
+Il terzo — *"non si applica a B"* — non era un vincolo sul selettore: e' la regola di
+`comparableToBudget`, e vive li'. Gli altri due sono caduti col loro oggetto.
 
 #### 0d. Home: quattro livelli invece di sei affermazioni
 
@@ -847,6 +1066,96 @@ nessuna chiave per il negativo.
 (`remainingCents < 0`) e guida il **colore** (`data-tone`), non la **parola**. Il
 fatto era li', usato per la decorazione e non per la frase — il "peso visivo
 inverso all'importanza", in miniatura e in una riga di codice.
+
+#### 0g. La ciambella nelle Quotidiane — e **solo** li'
+
+<!-- DECISION
+     present: src/ui/Stats.tsx :: stats__pie
+     present: src/ui/Stats.css :: --pie-size
+-->
+> **Applicata**, verificato da: `stats__pie`, `--pie-size`.
+
+Le Quotidiane portano **una ciambella sopra le proprie righe**. Le Fisse no. La
+barra divisa in cima resta.
+
+##### La decisione precedente e' caduta col caso che la sosteneva
+
+Il no alla torta era scritto in 0b, e diceva: *"62% e sei spicchi fra l'1% e il 16%
+costringono a una legenda e a confrontare angoli"*. Era vero, e riguardava **sette
+categorie con l'affitto dentro lo stesso grafico**.
+
+**Separando A in due sezioni quel caso non esiste piu'**, e i numeri lo dicono. Sui
+dati veri del 24–30 agosto:
+
+| | distribuzione | verdetto |
+|---|---|---|
+| **Quotidiane** | 42 / 26 / 24 / 10 / 10 su 112 -> **37% · 23% · 21% · 9% · 9%** | cinque fette, la piu' grande **sotto il 40%**, la piu' piccola **sopra l'8%** |
+| **Fisse** | 507 / 23 su 530 -> **95,7% · 4,3%** | un cerchio con una scheggia |
+
+La prima e' **esattamente** la distribuzione in cui una torta funziona: nessuna
+domina, nessuna diventa una scheggia. La seconda e' il caso su cui `dataviz` ha
+ragione — due fette sono una cifra, e la cifra e' gia' scritta.
+
+**Non e' "la torta si puo' fare".** E' *"la torta si puo' fare su questa
+distribuzione, ed ecco perche' quella di prima no"*. Un'obiezione che cade va scritta
+insieme al caso che la reggeva, altrimenti la volta dopo si riapre l'intera
+questione invece della parte che e' cambiata.
+
+##### Tre trattamenti, tre ragioni — e la schermata smette di sembrare tutta uguale
+
+- la **barra divisa** in cima -> due quantita';
+- le **barre** nelle Fisse -> due o tre impegni noti, che si **controllano**;
+- la **ciambella** nelle Quotidiane -> cinque voci confrontabili, che si **esplorano**.
+
+**Ognuno con la propria condizione scritta**, altrimenti fra un mese sembrera'
+varieta' decorativa — e qualcuno la uniformera' per coerenza, togliendo tre risposte
+a tre domande diverse.
+
+##### Il vincolo che tiene in piedi tutto
+
+> **La ciambella si AGGIUNGE alle righe, non le sostituisce.**
+
+Gli angoli danno la forma a colpo d'occhio, le righe danno i valori. Se una settimana
+c'e' una spesa enorme che schiaccia le altre in schegge, **il dato resta leggibile
+sotto**: la ciambella puo' fallire senza portarsi via l'informazione.
+
+Senza questo vincolo non si fa. E' anche cio' che rende accettabile una forma che la
+disciplina sconsiglia: non e' l'unico portatore di niente.
+
+##### Il controllo di questa voce e' stato scritto sbagliato, e il difetto e' istruttivo
+
+Chiedeva `present: src/ui/i18n/it.ts :: stats.pie`, cioe' **una chiave di dizionario
+per una figura che non ha nessuna stringa**. La ciambella e' `aria-hidden` e non
+porta etichette dentro — e' scritto tre righe piu' sotto, in questa stessa voce.
+
+Il controllo contraddiceva la decisione che doveva verificare, e nel modo peggiore:
+soddisfarlo avrebbe richiesto di **aggiungere una chiave senza lettore**, che e'
+esattamente cio' che il controllo B di `audit:source` fa fallire in CI. Un ago che si
+puo' soddisfare solo rompendo un altro controllo non e' un ago debole: e' un ago che
+chiede la cosa sbagliata.
+
+Adesso guarda **`--pie-size`**, cioe' il numero su cui la decisione si regge — quanto
+e' grande la figura, che e' l'unica cosa di lei che si possa sbagliare in silenzio.
+
+**La regola che ne esce**, e vale per il prossimo: *un controllo si scrive guardando
+cosa la decisione **produce**, non cosa un'altra decisione simile aveva prodotto.* Ho
+copiato la forma da `0c`, che aveva una chiave perche' aveva un comando con
+un'etichetta accessibile. Questa non ha ne' l'uno ne' l'altra, e la forma e' arrivata
+prima del contenuto.
+
+##### Le altre condizioni
+
+- **Sotto le tre voci non si disegna.** E' `BREAKDOWN_MIN_ROWS` come numero, e **non
+  e' la stessa decisione**: quella governa le barre sull'insieme di A, questa governa
+  la ciambella dentro una sezione. L'argomento e' un altro — due fette sono una
+  cifra, non una ripartizione — e vale anche se le barre ci sono.
+- **I colori sono quelli delle categorie**, che hanno separazione per daltonismo
+  **8,7** misurata col validatore. Nessuna tinta nuova.
+- **Le fette non portano etichette dentro.** Le portano le righe sotto, che sono la
+  legenda naturale e **esistono gia'** — e' la ragione per cui questa forma non costa
+  una legenda, che era meta' dell'obiezione originale.
+- **Niente ciambella nelle Fisse**, col **95,7%** scritto accanto alla decisione
+  perche' chi la rilegge non debba ricalcolarlo.
 
 ### 0f. Da valutare, con la condizione scritta
 

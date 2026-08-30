@@ -223,14 +223,41 @@
 /* Il colore della categoria e' un dato, non un token: arriva come `--cat` sul
  * bordo del chip. Non tinge mai il testo — nessun colore fisso puo' avere
  * contrasto AA sia su fondo chiaro sia su fondo scuro — quindi resta una
- * superficie e l'etichetta resta `--text`. */
+ * superficie e l'etichetta resta `--text`.
+ *
+ * ## Tinta piena, e non piu' `color-mix(... 40%, --surface)`
+ *
+ * **Su una superficie dove otto colori sono compresenti e devono essere
+ * distinti, l'identita' non puo' essere portata da una campitura mescolata.**
+ * Il mix serve all'estetica di uno stato — `.cat:active` qui sotto lo usa
+ * ancora, e li' e' giusto perche' un chip premuto e' uno solo — non a dire chi
+ * e' chi.
+ *
+ * Il numero che l'ha deciso: mescolate al 40% le otto tinte cadevano a **ΔE00
+ * 8,99** (chiaro) e **8,52** (scuro) sulla coppia `Trasporti / Extra`, sotto il
+ * pavimento di 10. A tinta piena la stessa coppia vale **12,64** in tutti e due
+ * i temi. Non era un difetto delle tinte — a tinta piena passano i quattro
+ * pavimenti di `scripts/palette.mjs` — era del mix, che comprime ogni distanza
+ * verso il fondo.
+ *
+ * Alzare la percentuale invece di toglierla era la strada scartata: sotto al
+ * 90% non passa niente (la curva ha un **minimo** al 55-60%, quindi mescolare di
+ * piu' prima peggiora), e al 90% il margine sarebbe stato di sei centesimi su
+ * un pavimento di dieci, cioe' finito al primo token che qualcuno tocca. Cosi'
+ * il pavimento ΔE torna ad avere **un solo ingresso, le tinte**, che e'
+ * esattamente cio' che `audit:palette` gia' misura.
+ *
+ * L'emoji ci sta sopra e non ha bisogno di un pavimento di contrasto: e'
+ * `aria-hidden`, e' un'immagine multicolore, e non porta nessuno stato. Cio'
+ * che porta uno stato — la spunta della tavolozza — ha invece un inchiostro
+ * scelto per tinta: vedi `src/ui/ink.ts`. */
 .cat__emoji {
   display: grid;
   place-items: center;
   inline-size: 1.625rem;
   block-size: 1.625rem;
   border-radius: var(--radius-full);
-  background-color: color-mix(in srgb, var(--cat) 40%, var(--surface));
+  background-color: var(--cat);
   font-size: 0.9375rem;
   line-height: 1;
 }
