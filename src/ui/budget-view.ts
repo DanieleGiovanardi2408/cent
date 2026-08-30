@@ -9,10 +9,11 @@
  * senza DOM, quindi hanno un test.
  */
 
-import { budgetSpent, resolveBudget } from '../core/budget'
+import { budgetSpent, countsTowardBudget, resolveBudget } from '../core/budget'
 import type { BudgetMetrics } from '../core/budget'
-import { addDays, isAfter } from '../core/date'
+import { addDays, daysBetween, isAfter, isBefore, startOfWeek } from '../core/date'
 import type { IsoDate } from '../core/date'
+import { sumCents } from '../core/money'
 import type { Cents } from '../core/money'
 import type { Budget, BudgetPeriod, Expense } from '../core/types'
 import { daysLabel, fromDayLabel, money, t } from './i18n'
@@ -451,4 +452,360 @@ export function paceParts(m: BudgetMetrics): readonly Segment[] {
     { text: money(m.currentPaceCents), strong: true },
     { text: t('pace.soFar.after') },
   ]
+}
+
+/* ------------------------------------------------------------------------- *
+ * La striscia dei sette giorni.
+ *
+ * Sette colonne, **lunedi' -> domenica**, con la linea del passo sostenibile
+ * attraverso. Risponde a una domanda che nessun'altra parte della Home fa: **in
+ * quale giorno parte la mano.**
+ *
+ * ## Perche' questo andamento e non un altro
+ *
+ * Perche' **ha sette punti gia' oggi**. L'andamento per settimane (B delle
+ * Statistiche) ne ha due dopo due settimane e per un mese resta cosi': una
+ * finestra di otto caselle con sei vuote non e' un andamento, e' l'annuncio di
+ * un andamento futuro. Sette giorni ce li ha chiunque abbia installato l'app
+ * lunedi'.
+ *
+ * ## Sta qui e non in `stats-view.ts`
+ *
+ * Perche' e' la Home a leggerla, e la Home legge di qui. Ma anche perche' e' un
+ * modello **del budget**: conta cio' che il budget conta (ADR 016) e si legge
+ * contro il passo sostenibile, che e' un numero del budget. Le Statistiche
+ * mostrano tutto, e mescolare le due unita' e' esattamente cio' che ADR 016
+ * vieta.
+ *
+ * ## Il pavimento **non e' quello di `stats-view.ts`**, ed e' ri-derivato
+ *
+ * `BAR_MIN_FRACTION` vale `2 / 112` perche' li' la dimensione che porta il
+ * valore e' la **larghezza**: 2 px sono i due bordi di `.stat__bar` sotto
+ * `border-box` (un floor geometrico, il box non puo' essere piu' stretto) e 112
+ * px sono `--plot-min`, la colonna piu' stretta.
+ *
+ * Qui la dimensione che porta il valore e' l'**altezza**, la larghezza e' fissa,
+ * e nessuno dei due numeri si eredita:
+ *
+ * - **il numeratore non e' geometrico, e' percettivo.** Non so se la colonna
+ *   avra' un bordo, e non e' quello che decide: sette colonne su una base comune
+ *   si leggono per **quanto sono alte**, e sotto i 2 px una colonna presente non
+ *   si distingue dalla base su cui poggia. Il difetto che il pavimento esiste
+ *   per impedire e' quindi **piu' grave** che nelle Statistiche: li' due importi
+ *   diversi si dipingevano uguali, qui **un giorno in cui si e' speso si dipinge
+ *   come un giorno in cui non si e' speso** — cioe' la striscia direbbe una cosa
+ *   falsa proprio sulla domanda per cui esiste;
+ * - **il denominatore e' l'altezza della striscia, e va presa la piu' bassa.**
+ *   Il pavimento e' una garanzia: su una striscia piu' alta la colonna minima e'
+ *   proporzionalmente piu' alta, mai piu' bassa. E' l'unico pezzo di argomento
+ *   che si trasporta identico dall'asse orizzontale, e vale qui perche' vale la
+ *   stessa condizione: la frazione e' relativa, il pixel no.
+ *
+ * ### Il numero che non ho: `--strip-h`
+ *
+ * `STRIP_MIN_PX` **non e' letto da Home.css**, perche' quando questo modulo e'
+ * stato scritto la striscia nel CSS non esisteva ancora. E' scritto come
+ * **contratto**: la striscia non scende sotto 3rem. Nella direzione sbagliata
+ * (striscia piu' bassa) il pavimento diventa troppo corto e il difetto torna;
+ * nella direzione giusta (striscia piu' alta) e' una sovrastima innocua, come lo
+ * e' `BAR_MIN_FRACTION` su un viewport largo.
+ *
+ * Il legame va **misurato** come lo e' quello di `--plot-min` in
+ * `statistiche.spec.ts`: risolvere `--strip-h` dalla pagina, leggere la colonna
+ * piu' corta davvero dipinta e confrontarla con questa costante. Finche' quella
+ * misura non esiste, il contratto e' scritto e non sorvegliato — ed e' il solo
+ * numero di questo blocco che non viene da un fatto verificato.
+ * ------------------------------------------------------------------------- */
+
+/**
+ * L'inchiostro minimo di una colonna, in pixel: **sotto questa altezza un
+ * giorno in cui si e' speso si legge come un giorno vuoto.**
+ *
+ * Non e' il `2` di `BAR_MIN_FRACTION`, che e' la somma di due bordi sotto
+ * `border-box`. E' la piu' corta colonna che si distingue dalla base su cui
+ * poggia — e coincide col numero solo per caso.
+ */
+const COLUMN_MIN_INK_PX = 2
+
+/**
+ * L'altezza piu' bassa che la striscia puo' avere, in pixel a `rem` = 16.
+ *
+ * **E' un contratto sul CSS, non una lettura del CSS**: quando questa costante e'
+ * stata scritta la striscia non era ancora disegnata. Chi scrive `--strip-h` piu'
+ * basso di `3rem` deve cambiare anche questo numero, o le colonne piu' corte
+ * tornano invisibili.
+ */
+const STRIP_MIN_PX = 48
+
+/**
+ * Il pavimento di una colonna, come frazione dell'altezza della striscia.
+ * `2 / 48`, cioe' `1/24`.
+ *
+ * La **forma** e' la stessa di `BAR_MIN_FRACTION` — si trasla, non si taglia —
+ * e la ragione vale identica qui: una soglia dura (`max(f, MIN)`) rimetterebbe
+ * il difetto, perche' due giorni diversi entrambi sotto soglia tornerebbero alti
+ * uguali. Con la traslazione `f -> MIN + (1 - MIN) · f`:
+ *
+ * - **zero resta zero**, unica discontinuita': un giorno senza spese non prende
+ *   inchiostro. E' la meta' dell'argomento che rende leggibile l'altra;
+ * - la mappa e' strettamente crescente, quindi due giorni che differiscono di un
+ *   centesimo hanno due altezze diverse;
+ * - **la colonna piu' alta vale esattamente 1**, in virgola mobile: per ogni
+ *   `MIN` rappresentabile in `(0, 1)`, `MIN + (1 - MIN)` arrotonda a 1.
+ */
+export const COLUMN_MIN_FRACTION = COLUMN_MIN_INK_PX / STRIP_MIN_PX
+
+/** Giorni in una striscia. Sette, sempre: e' una settimana. */
+const STRIP_DAYS = 7
+
+export interface DayBar {
+  readonly date: IsoDate
+  /**
+   * Speso in quel giorno **secondo il budget**: vive, ricorrenti escluse
+   * (ADR 016). E' la stessa moneta di `BudgetMetrics.spentCents`, quindi su un
+   * periodo settimanale le sette colonne sommano esattamente al numero grande
+   * della Home.
+   */
+  readonly cents: Cents
+  /** 0..1 sulla scala della striscia. Zero resta zero, il resto parte da `COLUMN_MIN_FRACTION`. */
+  readonly fraction: number
+  /** Il giorno **non e' ancora finito**: oggi. Esattamente uno dei sette. */
+  readonly current: boolean
+  /** Il giorno **non e' ancora arrivato**. Un giorno futuro non e' un giorno da zero euro. */
+  readonly future: boolean
+}
+
+export interface Week {
+  /** Sette, lunedi' -> domenica, sempre. */
+  readonly days: readonly DayBar[]
+  /**
+   * Quanto vale una colonna piena. Si scrive, come `BreakdownSection.scaleCents`
+   * nelle Statistiche, e per la stessa ragione: una lunghezza senza la sua unita'
+   * di misura e' un disegno che non si puo' leggere.
+   */
+  readonly scaleCents: Cents
+  /**
+   * La linea del passo sostenibile, `null` senza budget.
+   *
+   * `fraction` passa per **la stessa mappa** delle colonne, e non e' pignoleria:
+   * una lunghezza mappata accanto a una non mappata e' un confronto falsato di
+   * `COLUMN_MIN_FRACTION`, cioe' **una colonna che supera la propria linea nel
+   * giorno in cui si e' speso esattamente il sostenibile**. E' lo stesso difetto
+   * che `stats-view.ts` chiude fra la barra e la traccia; vale qui perche' vale
+   * la stessa condizione — colonna e linea si leggono l'una contro l'altra, sullo
+   * stesso asse e sulla stessa scala.
+   *
+   * ## La linea **non** e' condizionata a `comparableToBudget`, e la ragione
+   *
+   * B delle Statistiche disegna la traccia del budget **se e solo se** un unico
+   * record ha coperto il periodo intero, perche' li' la traccia dice *"il budget
+   * di quel periodo era X"* — un'affermazione sul passato, falsa se il budget e'
+   * nato a meta'. Quell'argomento **non si trapianta**, e si vede provando a
+   * riscriverne la condizione qui:
+   *
+   * - la traccia di B confronta **un totale di periodo** con un tetto di
+   *   periodo, quindi la copertura parziale falsa il confronto per accumulo.
+   *   Qui ogni colonna e' **un giorno**, e il confronto e' con un passo **al
+   *   giorno**: non si accumula niente;
+   * - `comparableToBudget` e' calcolato su `m.range`, che con un budget mensile
+   *   e' **il mese**. Applicarlo a una finestra di sette giorni sarebbe una
+   *   condizione valutata sulla finestra sbagliata — l'argomento non e' nemmeno
+   *   esprimibile senza ricalcolarlo, e ricalcolarlo vorrebbe dire deciderlo di
+   *   nuovo, non ereditarlo.
+   *
+   * Cio' che la linea afferma e' quindi: **il passo che il budget di oggi
+   * implica**. E' un riferimento, non un verdetto sui giorni gia' passati — ed e'
+   * lo stesso numero che la Home scrive gia' a parole quando si sfora, quindi non
+   * afferma niente che l'utente non possa riconciliare con lo schermo.
+   *
+   * Il limite che resta, e va detto: un giorno **precedente** al primo budget
+   * (ADR 010) si legge contro una linea che allora non c'era. La striscia non lo
+   * marca. Il fatto lo racconta gia' `startNote`, per il periodo intero e a
+   * parole; una marca per giorno sarebbe un campo in piu' e un ramo di disegno in
+   * piu' per un periodo solo nella vita di un utente.
+   *
+   * ## Il degenere: `cents` zero
+   *
+   * `sustainablePaceCents` e' `divideCents(budget, giorni)`, che arrotonda verso
+   * il basso: un budget da 0,05 € a settimana da' **zero**. La linea esiste
+   * (un budget c'e') e si posa sulla base, perche' `columnHeight(0)` e' zero e
+   * zero resta zero. E' vero: il passo sostenibile di quel budget e' 0,00 € al
+   * giorno.
+   */
+  readonly sustainable: { readonly cents: Cents; readonly fraction: number } | null
+  /**
+   * Il giorno da etichettare: il piu' alto. A parita' il **primo**, perche' la
+   * domanda e' quando parte la mano, non quando si ferma.
+   *
+   * **Non e' annullabile**, e il contratto di partenza diceva "`null` se sono
+   * tutti a zero": quel caso non e' un campo vuoto dentro una striscia, e'
+   * l'assenza della striscia. `weekStrip` restituisce `null` esattamente
+   * quando nessun giorno ha un importo positivo, quindi qui un giorno positivo
+   * c'e' sempre. Tenere il `null` avrebbe lasciato uno stato rappresentabile che
+   * nessuno produce, e un ramo di disegno che nessuno esegue.
+   */
+  readonly peak: IsoDate
+}
+
+/** Quota grezza di un importo sulla scala, con `scale <= 0` che non divide per zero. */
+function columnShare(value: Cents, scale: Cents): number {
+  return scale <= 0 ? 0 : value / scale
+}
+
+/** L'altezza dipinta di una quota: zero resta zero, tutto il resto parte dal pavimento. */
+function columnHeight(quota: number): number {
+  return quota <= 0 ? 0 : COLUMN_MIN_FRACTION + (1 - COLUMN_MIN_FRACTION) * quota
+}
+
+/**
+ * La striscia della settimana che contiene `today`, o `null` quando non c'e'
+ * niente da disegnare.
+ *
+ * ## Quali spese conta: le stesse del budget
+ *
+ * `countsTowardBudget` — vive, **ricorrenti escluse** (ADR 016). Non e' una
+ * scelta ripetuta per simmetria: la linea viene da `sustainablePaceCents`, che e'
+ * `budget / giorni`, e il budget le fisse le esclude. Una colonna che comprendesse
+ * l'affitto contro una linea che non lo comprende metterebbe **due unita' di
+ * misura sullo stesso asse**, e il giorno dell'affitto leggerebbe "disastro" per
+ * costruzione. E' l'argomento con cui B delle Statistiche esclude le ricorrenti,
+ * e vale qui perche' qui c'e' la stessa linea contro cui leggere.
+ *
+ * Coerente con il resto di questo modulo: `budgetStart` somma con `budgetSpent`,
+ * `heroCopy` legge `spentCents`. Nessuno di questi conta le ricorrenti, e
+ * `recurringSpentCents` esiste apposta perche' l'esclusione si possa **dire**
+ * invece che subire. Le fisse non spariscono: le mostrano Storico e Statistiche.
+ *
+ * ## La settimana e' quella di `today`, anche con un budget mensile
+ *
+ * `startOfWeek(today)`, non `m.range.start`: con un budget mensile il periodo e'
+ * il mese, e sette colonne di un mese non sono niente. La linea resta leggibile
+ * perche' `sustainablePaceCents` e' **al giorno** in tutti e due i periodi.
+ *
+ * Il limite, dichiarato: con un budget mensile la settimana puo' cadere a cavallo
+ * di due mesi, e la linea e' quella del budget **di oggi**, non quella che valeva
+ * nei giorni del mese precedente. Non e' un numero inverificabile — e' lo stesso
+ * passo sostenibile che la Home scrive quando si sfora — ma non e' una linea
+ * storicizzata, e non finge di esserlo.
+ *
+ * ## `null` quando **nessun giorno ha un importo positivo**
+ *
+ * Non "zero spese": zero **da disegnare**. I due criteri divergono su una
+ * settimana le cui uniche spese contate valgono `0,00 €` — e li' il criterio sul
+ * conteggio produrrebbe **sette colonne vuote piu' una linea**, cioe' esattamente
+ * la striscia che non deve esistere: `columnHeight(0)` e' `0`, quindi quei giorni
+ * non prendono inchiostro comunque. Disegnare il telaio di un grafico i cui dati
+ * sono tutti a zero non informa, occupa.
+ *
+ * Chi scrive una spesa da zero centesimi: **l'import** (`parseBackup` accetta
+ * qualunque intero sicuro, zero e negativi compresi) e la ricorrente degenere a
+ * zero centesimi, che pero' qui e' gia' fuori perche' e' ricorrente. Il tastierino
+ * non conferma a zero. Il criterio copre tutti e tre senza nominarli: se non c'e'
+ * un importo positivo, non c'e' una colonna.
+ *
+ * ## Un giorno futuro ha una `fraction`, e vale zero perche' e' vuoto
+ *
+ * Non perche' e' futuro. La distinzione la porta `future`, che e' un campo
+ * apposta: `0` e "non ancora arrivato" sono due cose diverse a schermo, e chi
+ * disegna deve poterle separare senza dedurle.
+ *
+ * Il conto e' quindi lo stesso di ogni altro giorno, e la ragione e' che le spese
+ * datate in avanti **esistono**. Non le scrive nessuna schermata — `AddSheet`
+ * limita il selettore a `max={day}`, `updateExpense` dalla UI riscrive solo
+ * `amountCents`, la materializzazione si ferma a `today` — e i due scrittori sono
+ * fuori dall'app: `parseBackup`, e **l'orologio del dispositivo che torna
+ * indietro**. Sono gli stessi due che `stats-view.ts` enumera per il proprio ramo
+ * vuoto.
+ *
+ * Contarle non e' un capriccio: `spentCents` le conta gia' (`inRange` guarda la
+ * data, non l'orologio), quindi zerarle qui farebbe **sette colonne che non
+ * sommano al numero grande scritto sopra di loro**, nella stessa schermata.
+ */
+export function weekStrip(
+  m: BudgetMetrics,
+  expenses: readonly Expense[],
+  today: IsoDate,
+): Week | null {
+  const start = startOfWeek(today)
+  const end = addDays(start, STRIP_DAYS - 1)
+
+  /*
+   * ## Il confine sulle stringhe e' una **corsia veloce**, non la guardia
+   *
+   * A tenere fuori dalle colonne le spese fuori settimana sono i **limiti
+   * dell'array**: `daysBetween` da' `-1` per la domenica prima e `7` per il
+   * lunedi' dopo, e `buckets[-1]` e `buckets[7]` sono `undefined`, quindi
+   * `?.push` non fa niente.
+   *
+   * **Provato disfacendo**: togliendo il confine — l'uno, l'altro o tutti e due
+   * — i test restano verdi, ed e' giusto che restino. Non e' una lacuna della
+   * suite: e' che quella riga cambia **quanto lavoro si fa**, non il risultato.
+   * Sta qui perche' `toEpochDay` valida con una regex e tre `Number(slice)`, e
+   * su 5.000 spese sarebbe pagato per intero a ogni ricalcolo; `isBefore` e
+   * `isAfter` passano da `compareIsoDates`, che confronta le stringhe e basta.
+   *
+   * Cio' che il confine **non** e': una difesa contro una data corrotta. Una
+   * stringa spazzatura che ordini *dentro* la settimana arriva lo stesso a
+   * `daysBetween`, che lancia. Nessuno la scrive — `parseBackup` valida con
+   * `isIsoDate` e le schermate scrivono date costruite — e dichiararlo qui vale
+   * piu' di un test su un caso che nessuno produce.
+   */
+  const buckets: Cents[][] = Array.from({ length: STRIP_DAYS }, () => [])
+  for (const expense of expenses) {
+    if (!countsTowardBudget(expense)) continue
+    if (isBefore(expense.date, start) || isAfter(expense.date, end)) continue
+    buckets[daysBetween(start, expense.date)]?.push(expense.amountCents)
+  }
+  const cents = buckets.map((values) => sumCents(values))
+
+  // Il massimo, che decide sia la scala sia se c'e' qualcosa da disegnare.
+  let peakCents = cents[0] ?? 0
+  let peakIndex = 0
+  for (let i = 1; i < STRIP_DAYS; i += 1) {
+    const value = cents[i] ?? 0
+    // `>` e non `>=`: a parita' vince il giorno **prima**.
+    if (value > peakCents) {
+      peakCents = value
+      peakIndex = i
+    }
+  }
+  if (peakCents <= 0) return null
+
+  const sustainableCents = m.sustainablePaceCents
+  // `max(giorno piu' alto, sostenibile)`: la linea deve **stare dentro** la
+  // striscia, o non attraversa niente. Le due letture estreme sono tutte e due
+  // vere e tutte e due utili — una settimana molto sotto il sostenibile disegna
+  // colonne basse sotto una linea in cima ("sei rimasto lontano dal tetto tutti
+  // i giorni"), un giorno dieci volte il sostenibile schiaccia la linea in basso
+  // insieme agli altri sei ("sabato e' tutta la storia"). Il pavimento e'
+  // quello che le tiene leggibili: nel secondo caso la linea, finche' il
+  // sostenibile e' positivo, non scende sotto `COLUMN_MIN_FRACTION` e quindi non
+  // si appiattisce sulla base. Se il sostenibile e' **zero** — un budget da 0,05
+  // € a settimana — sulla base ci sta davvero, ed e' vero.
+  //
+  // `peakCents` e' positivo, quindi `scaleCents` lo e': nessuna divisione per
+  // zero, qualunque cosa valga il sostenibile.
+  const scaleCents =
+    sustainableCents === null ? peakCents : Math.max(peakCents, sustainableCents)
+
+  const days = cents.map((value, index) => {
+    const date = addDays(start, index)
+    return {
+      date,
+      cents: value,
+      fraction: columnHeight(columnShare(value, scaleCents)),
+      current: date === today,
+      future: isAfter(date, today),
+    }
+  })
+
+  return {
+    days,
+    scaleCents,
+    sustainable:
+      sustainableCents === null
+        ? null
+        : { cents: sustainableCents, fraction: columnHeight(columnShare(sustainableCents, scaleCents)) },
+    peak: addDays(start, peakIndex),
+  }
 }
