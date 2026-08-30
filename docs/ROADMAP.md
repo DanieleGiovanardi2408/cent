@@ -25,17 +25,17 @@ sa gia', e per questo non puo' invecchiare. I giudizi — cosa e' in volo, cosa
 aspetta una persona — stanno sotto, scritti a mano e timbrati con lo SHA a cui
 sono stati rivisti.
 
-- **Ultimo commit**: `7334a09` — feat: la ciambella nelle Quotidiane, e il caso in cui fallisce e' guardato
-- **Data**: 30/08/2026 14:48
+- **Ultimo commit**: `2d9f75e` — fix: un ordine solo nelle Statistiche, e la motivazione contraria c'era gia'
+- **Data**: 30/08/2026 21:49
 - **Ramo**: `fase-6-wip`
 - **Pushato**: si, `origin/fase-6-wip` e' allo stesso commit
-- **Rispetto a `origin/main`**: 6 commit avanti
+- **Rispetto a `origin/main`**: 13 commit avanti
 - **Albero di lavoro**: **non pulito**, ci sono modifiche non committate
 
-- **Test unitari**: 720 in 23 file, tutti verdi
-- **Test e2e dichiarati**: 353 in 14 file, su 4 progetti (iphone-se, iphone-14, landscape, dark)
-- **Test e2e eseguiti**: 335 passati, 18 saltati, in 2.5 minuti. I saltati sono condizionali (ADR 013): solo un'esecuzione li vede.
-- **Bundle iniziale**: 56.2 KB gzip su 60.0 KB (3.8 KB di margine)
+- **Test unitari**: 738 in 25 file, tutti verdi
+- **Test e2e dichiarati**: 371 in 14 file, su 4 progetti (iphone-se, iphone-14, landscape, dark)
+- **Test e2e eseguiti**: 353 passati, 18 saltati, in 2.8 minuti. I saltati sono condizionali (ADR 013): solo un'esecuzione li vede.
+- **Bundle iniziale**: 57.1 KB gzip su 60.0 KB (2.9 KB di margine)
 
 - **Schema del database**: 4. La scala delle migrazioni:
   - **1** — Schema iniziale: expenses, categories, recurringRules, budgets, settings
@@ -51,12 +51,24 @@ sono stati rivisti.
 
 ## In volo adesso
 
-<!-- JUDGMENT rivisto=35c54f0 -->
-> Rivisto a `35c54f0`, 10 commit fa. **Da riguardare.**
+<!-- JUDGMENT rivisto=2d9f75e -->
+> Rivisto a `2d9f75e`, cioe' a questo commit.
 
-**Fase 6 sul ramo `fase-6-wip`, cinque commit sopra `origin/main`.** Il ramo e'
-spinto; `main` non e' stato toccato, quindi **cio' che sta su Pages e' ancora
-`d9d6471`** — la fase 6 di prima delle cinque decisioni, non quella di adesso.
+**Fase 6 sul ramo `fase-6-wip`, tredici commit sopra `origin/main`.** Il ramo e'
+spinto a ogni rientro.
+
+**Rilettura del 30 agosto sera: questa riga era falsa in due punti.** Diceva
+*"cinque commit sopra"* (erano tredici) e *"cio' che sta su Pages e' ancora
+`d9d6471`"*. Su Pages c'e' **`005224d`** — *"densita', accento e numero grande, e
+ADR 016 §3 non abitava qui"* — che contiene `d9d6471`: `main` **e' stato toccato**
+dopo che questa riga fu scritta, esattamente come l'emendamento qui sotto
+prevedeva, e la riga non se n'e' accorta.
+
+E' la **seconda volta** che questo giudizio invecchia sullo stesso fatto — la
+prima e' raccontata due paragrafi piu' giu'. Due volte sullo stesso fatto non e'
+sfortuna: e' che **la posizione di `main` e' derivabile e sta scritta a mano**.
+Va in `npm run state` insieme agli altri fatti; finche' non ci sta, questa riga
+va riletta guardando `git rev-parse origin/main`, non ricordando.
 
 Qui c'era scritto *"la fase 6 e' gia' su Pages"*, ed era vero a `848f417`. Quattro
 commit dopo non lo era piu', e la riga non se n'era accorta: e' il guasto che questa
@@ -390,7 +402,7 @@ differenza fra il modello mentale della richiesta e la configurazione dei dati.
 Sono ferme dal **24 agosto** e vanno fatte **in quest'ordine**, che non e' una
 preferenza: ogni passo distrugge la possibilita' di fare il precedente.
 
-<!-- JUDGMENT rivisto=35c54f0 -->
+<!-- JUDGMENT rivisto=2d9f75e -->
 > Rivisto a `58e0880`, 8 commit fa. **Da riguardare.**
 
 ### Stato al 29 agosto: **i passi 1 e 2 sono FATTI**
@@ -401,6 +413,17 @@ Quindi la finestra unica del passo 1 e' stata usata, e la migrazione del passo 2
 girata sul database reale.
 
 **Restano il 3 e il 4.**
+
+**Riletto il 30 agosto sera, e il timbro dice meno di quanto sembra.** Nei
+diciassette commit da allora non c'e' niente che possa aver mosso i passi 1 e 2:
+sono azioni sul telefono, e questa macchina non li puo' ne' fare ne' disfare. Ma
+**non ho potuto verificare il 3** — *"creare la regola dell'affitto vero"* succede
+sul telefono, e da qui non si legge. Il timbro nuovo certifica quindi che questa
+prosa e' stata **riletta**, non che il passo 3 sia ancora aperto: quello lo sa
+solo chi ha il telefono in mano.
+
+E' la regola scritta qui sotto applicata al proprio timbro — *una derivazione
+vale dove ha guardato, e deve dire dove.*
 
 ### La correzione che ha prodotto questa riga, e vale piu' del fatto
 
@@ -484,7 +507,7 @@ macchina non puo' leggere.
 
 ## Il disco
 
-<!-- JUDGMENT rivisto=35c54f0 -->
+<!-- JUDGMENT rivisto=2d9f75e -->
 > Rivisto a `58e0880`, cioe' a questo commit.
 
 **Rivisto il 29 agosto, derivando: 10 GB liberi, 62% di capacita'.** Il taglio
@@ -495,6 +518,14 @@ morde piu': si misura a ogni giro, tre volte in questa sessione.
 stessi 10 GB e lo stesso 62%, `~/.ollama` gli stessi 12 KB. `node_modules` del
 progetto vale 160 MB e `test-results` 424 KB — cioe' le due cose che crescono qui
 non crescono abbastanza da contare.
+
+**Ri-derivato di nuovo il 30 agosto sera, e stavolta si sono mossi — in meglio**:
+`df` da' **20 GB liberi al 44%**, non piu' 10 GB al 62%. `~/.ollama` e' fermo a
+12 KB, identico. La conclusione non cambia (il taglio regge, la e2e si misura a
+ogni giro), ma **i numeri della riga precedente erano scaduti**, e un timbro
+spostato senza rimisurare li avrebbe portati avanti come se fossero di oggi:
+e' precisamente il difetto che il paragrafo qui sotto esiste per impedire, e
+questa volta e' stato evitato guardando `df` invece che il timbro.
 
 Va scritto che e' stato **ri-derivato** e non solo ritimbrato, perche' per un
 momento questa voce ha portato un timbro nuovo su una misura vecchia: il timbro
@@ -716,7 +747,7 @@ giorno in cui serviva davvero.
 
 ## Decisioni prese e non ancora applicate
 
-<!-- JUDGMENT rivisto=35c54f0 -->
+<!-- JUDGMENT rivisto=2d9f75e -->
 > Rivisto a `b289fff`, 6 commit fa. **Da riguardare.**
 
 **L'esistenza di una decisione e' un giudizio; la sua applicazione e' un fatto
@@ -728,6 +759,11 @@ erano gia' implementate.
 Adesso ogni voce porta il proprio **controllo di applicazione** in un commento, e
 `npm run state` lo esegue e ci scrive sotto **applicata / non applicata**. Il
 giudizio resta umano — *cosa* si e' deciso e *perche'*. Il fatto e' derivato.
+
+**Riletto il 30 agosto sera, e il meccanismo tiene**: `npm run state` da'
+**14/14 applicate**, cioe' nessuna decisione dichiarata e non nel codice — che e'
+esattamente il guasto (sei dichiarate, nessuna verificata) da cui questa
+meccanizzazione e' nata.
 
 E c'e' un guadagno che vale da solo: **una decisione la cui applicazione non si
 riesce a esprimere come controllo e' una decisione troppo vaga per essere
