@@ -8,7 +8,7 @@ import {
   migrateRawData,
   pendingMigrations,
 } from './schema'
-import type { MigrationStep, RawDataSet } from './schema'
+import type { MigrationStep, RawDataSet, RawRecord } from './schema'
 
 /**
  * Due gruppi di test, e fanno due mestieri diversi.
@@ -507,5 +507,184 @@ describe('il passo vero alla versione 4', () => {
     expect(dopo.recurringRules[2] && 'anchorDay' in dopo.recurringRules[2]).toBe(false)
     // I due campi della 2 -> 3 restano assenti: la catena non li inventa.
     expect(dopo.settings[0] && 'language' in dopo.settings[0]).toBe(false)
+  })
+})
+
+describe('il passo vero alla versione 5', () => {
+  /**
+   * Un archivio di schema 4 con le otto categorie **come le ha un telefono
+   * vero**: seminate al primo avvio con la palette di allora, piu' una che
+   * l'utente ha ricolorato scegliendo la pastiglia di un'altra, piu' una con un
+   * colore che nessuna tavolozza dell'app ha mai offerto — arrivata da un
+   * import.
+   */
+  function datiVersione4(): RawDataSet {
+    const data = emptyRawDataSet()
+    const seed = (
+      id: string,
+      name: string,
+      color: string,
+      order: number,
+      toccata = false,
+    ): RawRecord => ({
+      id,
+      createdAt: '2026-07-01T10:00:00.000Z',
+      updatedAt: toccata ? '2026-08-20T09:00:00.000Z' : '2026-07-01T10:00:00.000Z',
+      name,
+      emoji: '🏠',
+      color,
+      order,
+      archived: false,
+    })
+    data.categories = [
+      seed('c1', 'Spesa', '#81a369', 10),
+      seed('c2', 'Fuori', '#f26b00', 20),
+      seed('c3', 'Coffeeshop', '#06b0a0', 30),
+      seed('c4', 'Sigarette', '#845e23', 40),
+      seed('c5', 'Trasporti', '#3f5db6', 50),
+      seed('c6', 'Svago', '#b90e5c', 60),
+      // Rinominata **e** ricolorata: ha preso la pastiglia del grigio di Extra.
+      seed('c7', 'Affitto', '#676c75', 70, true),
+      // Colore fuori da qualunque tavolozza dell'app: viene da un backup altrui.
+      seed('c8', 'Extra', '#123456', 80, true),
+    ]
+    data.expenses = [
+      {
+        id: 'e1',
+        createdAt: '2026-08-01T10:00:00.000Z',
+        updatedAt: '2026-08-01T10:00:00.000Z',
+        amountCents: 1250,
+        categoryId: 'c1',
+        date: '2026-08-01',
+        source: 'manual',
+      },
+    ]
+    data.settings = [
+      {
+        id: 'settings',
+        createdAt: '2026-07-01T10:00:00.000Z',
+        updatedAt: '2026-07-01T10:00:00.000Z',
+        weekStartsOn: 1,
+        theme: 'auto',
+        schemaVersion: 4,
+        language: 'it',
+      },
+    ]
+    return data
+  }
+
+  it('porta le sei mai toccate sulla palette nuova, pastiglia per pastiglia', () => {
+    const dopo = migrateRawData(datiVersione4(), 4, 5)
+    expect(dopo.categories.slice(0, 6).map((c) => c['color'])).toEqual([
+      '#709951',
+      '#fc5401',
+      '#00a6c6',
+      '#895c02',
+      '#3157fa',
+      '#b90f60',
+    ])
+  })
+
+  it('porta avanti anche una ricolorata a mano: si conserva la scelta, non l esadecimale', () => {
+    // `c7` aveva preso il grigio di Extra. Tenerglielo non sarebbe rispetto:
+    // dalla palette nuova il grigio **non e' piu' una tinta di categoria**, e'
+    // cio' che indossa l'aggregato delle orfane nella stessa figura (ADR 025).
+    const dopo = migrateRawData(datiVersione4(), 4, 5)
+    const c7 = dopo.categories.find((c) => c['id'] === 'c7')
+    expect(c7?.['color']).toBe('#2a6198')
+    // E nient'altro di lei si muove: il nome che si e' scelta resta.
+    expect(c7?.['name']).toBe('Affitto')
+  })
+
+  it('un colore fuori dalla palette vecchia resta dov e: da fuori non si mappa', () => {
+    const dopo = migrateRawData(datiVersione4(), 4, 5)
+    expect(dopo.categories.find((c) => c['id'] === 'c8')?.['color']).toBe('#123456')
+  })
+
+  it('non tocca nessun altro campo delle categorie', () => {
+    const prima = datiVersione4()
+    const dopo = migrateRawData(prima, 4, 5)
+    dopo.categories.forEach((c, i) => {
+      const p = prima.categories[i]!
+      for (const campo of ['id', 'createdAt', 'updatedAt', 'name', 'emoji', 'order', 'archived']) {
+        expect(c[campo], `${campo} di ${c['id']} e' cambiato`).toEqual(p[campo])
+      }
+    })
+  })
+
+  it('non tocca nessuno degli altri store', () => {
+    const prima = datiVersione4()
+    const dopo = migrateRawData(prima, 4, 5)
+    expect(dopo.expenses).toEqual(prima.expenses)
+    expect(dopo.recurringRules).toBe(prima.recurringRules)
+    expect(dopo.budgets).toBe(prima.budgets)
+  })
+
+  it('aggiorna il numero di versione delle impostazioni e nient altro di loro', () => {
+    const prima = datiVersione4()
+    const dopo = migrateRawData(prima, 4, 5)
+    expect(dopo.settings[0]?.['schemaVersion']).toBe(5)
+    expect(dopo.settings[0]?.['language']).toBe('it')
+    expect(dopo.settings[0]?.['theme']).toBe('auto')
+    expect(dopo.settings[0]?.['weekStartsOn']).toBe(1)
+  })
+
+  it('se nessun colore e da mappare l array delle categorie esce com e entrato', () => {
+    // Stessa proprieta' verificata sul passo 4: e' cosi' che `applyTransforms`
+    // in `idb.ts` sa di non dover riscrivere uno store che non e' cambiato.
+    const prima = datiVersione4()
+    prima.categories = [
+      {
+        id: 'solo',
+        createdAt: '2026-07-01T10:00:00.000Z',
+        updatedAt: '2026-07-01T10:00:00.000Z',
+        name: 'Fuori palette',
+        emoji: '🔖',
+        color: '#123456',
+        order: 10,
+        archived: false,
+      },
+    ]
+    const dopo = migrateRawData(prima, 4, 5)
+    expect(dopo.categories).toBe(prima.categories)
+  })
+
+  it('un colore scritto in maiuscolo si mappa lo stesso', () => {
+    // `Category.color` e' una stringa: un backup scritto a mano puo' portare
+    // `#81A369`, e mancarlo lascerebbe quella categoria sulla palette vecchia.
+    const prima = datiVersione4()
+    prima.categories = [{ ...prima.categories[0]!, color: '#81A369' }]
+    expect(migrateRawData(prima, 4, 5).categories[0]?.['color']).toBe('#709951')
+  })
+
+  it('applicarlo due volte da lo stesso risultato', () => {
+    // Le due palette non hanno tinte in comune, quindi un colore gia' migrato
+    // non e' piu' una chiave della mappa. Se un giorno la nuova contenesse una
+    // tinta della vecchia, questo test cadrebbe — ed e' il posto giusto.
+    const una = migrateRawData(datiVersione4(), 4, 5)
+    const due = migrateRawData(una, 4, 5)
+    expect(due.categories.map((c) => c['color'])).toEqual(una.categories.map((c) => c['color']))
+  })
+
+  it('la catena 3 -> 5 in un colpo solo: nessun record perso, i colori nuovi', () => {
+    const prima = datiVersione4()
+    prima.settings = [{ ...prima.settings[0]!, schemaVersion: 3 }]
+    const dopo = migrateRawData(prima, 3, 5)
+
+    expect(pendingMigrations(3, 5).map((s) => s.to)).toEqual([4, 5])
+    expect(dopo.categories).toHaveLength(8)
+    expect(dopo.expenses).toHaveLength(1)
+    expect(dopo.settings[0]?.['schemaVersion']).toBe(5)
+    expect(dopo.categories[0]?.['color']).toBe('#709951')
+  })
+
+  it('nessuna tinta della palette nuova sopravvive per caso nella vecchia', () => {
+    // La premessa che rende sensato il test di idempotenza qui sopra, asserita
+    // invece che sperata.
+    const dopo = migrateRawData(datiVersione4(), 4, 5)
+    const nuovi = dopo.categories.map((c) => c['color'])
+    const vecchi = datiVersione4().categories.map((c) => c['color'])
+    const restati = nuovi.filter((c) => vecchi.includes(c) && c !== '#123456')
+    expect(restati, 'una tinta vecchia e sopravvissuta alla migrazione').toEqual([])
   })
 })
