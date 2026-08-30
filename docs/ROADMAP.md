@@ -25,11 +25,11 @@ sa gia', e per questo non puo' invecchiare. I giudizi — cosa e' in volo, cosa
 aspetta una persona — stanno sotto, scritti a mano e timbrati con lo SHA a cui
 sono stati rivisti.
 
-- **Ultimo commit**: `2c672ac` — fix: il buco della Home, e un numero mio gonfiato di sei volte
-- **Data**: 30/08/2026 14:30
+- **Ultimo commit**: `7334a09` — feat: la ciambella nelle Quotidiane, e il caso in cui fallisce e' guardato
+- **Data**: 30/08/2026 14:48
 - **Ramo**: `fase-6-wip`
 - **Pushato**: si, `origin/fase-6-wip` e' allo stesso commit
-- **Rispetto a `origin/main`**: 5 commit avanti
+- **Rispetto a `origin/main`**: 6 commit avanti
 - **Albero di lavoro**: **non pulito**, ci sono modifiche non committate
 
 - **Test unitari**: 720 in 23 file, tutti verdi
@@ -52,7 +52,7 @@ sono stati rivisti.
 ## In volo adesso
 
 <!-- JUDGMENT rivisto=35c54f0 -->
-> Rivisto a `35c54f0`, 9 commit fa. **Da riguardare.**
+> Rivisto a `35c54f0`, 10 commit fa. **Da riguardare.**
 
 **Fase 6 sul ramo `fase-6-wip`, cinque commit sopra `origin/main`.** Il ramo e'
 spinto; `main` non e' stato toccato, quindi **cio' che sta su Pages e' ancora
@@ -268,6 +268,122 @@ togliendolo **94 test su 94 restano verdi** — la soglia e `comparableToBudget`
 mascherano la stessa uscita. E' la forma di DEBITO §6, trovata **dentro** la sua
 riparazione. Sta scritta accanto al codice con la ragione: il giorno in cui una
 delle due maschere cade, B mostrerebbe un periodo in cui l'app non aveva dati.
+
+## Le sei misure del 30 agosto, prima di toccare una riga
+
+**Derivazione dichiarata**: l'export del 26 agosto come fixture a runtime, mai
+committato; il validatore di `dataviz` per i colori; `git log -S` per l'archeologia;
+l'harness fuori dal repository per la geometria. Nessuna implementazione prima.
+
+### M1 · M2 · M3 — le categorie, e **la finestra cambia la risposta**
+
+La richiesta diceva *"mese corrente"*. **Il periodo dell'app e' settimanale**, quindi
+cio' che sta a schermo e' la settimana, non il mese. Le due finestre danno risposte
+diverse su M3, quindi valgono tutte e due.
+
+**Mese (1–31 ago) — Quotidiane, 248,45 €, 5 categorie**
+
+| | € | quota | arco |
+|---|---|---|---|
+| Spesa | 105,45 | 42,4% | 152,8° |
+| Coffeeshop | 97,00 | 39,0% | 140,6° |
+| Svago | 26,00 | 10,5% | 37,7° |
+| Fuori | 10,00 | **4,0%** | 14,5° |
+| Trasporti | 10,00 | **4,0%** | 14,5° |
+
+**Settimana (24–30 ago) — Quotidiane, 112,00 €, 5 categorie**
+
+| | € | quota | arco |
+|---|---|---|---|
+| Spesa | 42,00 | 37,5% | 135,0° |
+| Svago | 26,00 | 23,2% | 83,6° |
+| Coffeeshop | 24,00 | 21,4% | 77,1° |
+| Fuori | 10,00 | 8,9% | 32,1° |
+| Trasporti | 10,00 | 8,9% | 32,1° |
+
+**Fisse, identiche nelle due finestre — 530,00 €, 2 categorie**: Casa 507,00
+(**95,7%**, 344,4°) e Trasporti 23,00 (**4,3%**, 15,6°).
+
+**M3**: sotto il 5% sono **due** nel mese (Fuori, Trasporti), **zero** nella
+settimana, **una** nelle fisse (Trasporti, 4,3% = 15,6°).
+
+**Conseguenza sulla coda "Altre": oggi non serve in nessuna delle due finestre**,
+perche' la regola la prevede solo sopra le sei categorie e qui sono cinque. La regola
+va scritta lo stesso — il tetto e' otto — ma **non ha un caso da coprire adesso**, e
+va detto invece di costruirla e crederla provata.
+
+### M4 — la palette non regge, e **l'adiacenza dipende dai dati**
+
+E' il risultato che decide, e non e' quello che la richiesta si aspettava.
+
+Il criterio proposto era *"nessuna coppia **adiacente** nell'ordine di disegno sotto
+soglia"*. **Non e' verificabile in CI**, perche' l'ordine di disegno e' l'ordine per
+importo, cioe' **cambia con i dati dell'utente** — e i dati dell'utente la CI non li
+ha. Misurato: nella settimana `Spesa` e `Coffeeshop` **non** sono adiacenti e tutto
+passa; nel mese lo diventano e cadono a **ΔE 9,4**, sotto il pavimento di 15.
+
+**Quindi il controllo dev'essere su tutte le coppie, non sulle adiacenti.** Una
+coppia qualunque puo' diventare adiacente la settimana prossima.
+
+Sulle otto tinte, `--pairs all`, superfici vere (`#f6f6f3` / `#101413`):
+
+- **CVD**: peggiore `#676c75` (Extra) ↔ `#b90e5c` (Svago) — **ΔE 4,3** deutan
+- **Vista normale**: peggiore `#06b0a0` (Coffeeshop) ↔ `#81a369` (Spesa) — **ΔE 9,4**,
+  sotto 15: *"difficili da distinguere anche con la vista piena"*
+- **Croma**: tre sotto il pavimento — `#81a369` 0,09 · `#845e23` 0,089 · `#676c75`
+  **0,015** (e' 0f, gia' misurata)
+- **Tema scuro**: quattro tinte **fuori dalla banda di luminosita'**
+
+**La palette va ri-derivata.** La condizione di 0f — *"adesso, finche' il parco
+installato e' un telefono"* — e' arrivata, e la ciambella e' cio' che la rende
+bloccante: con le barre il colore era ornamento e la lunghezza portava il dato; in una
+ciambella **il colore e' il dato**, e due fette adiacenti indistinguibili non sono due
+categorie, sono una fetta piu' grande.
+
+### M5 — `--body-min` ha una motivazione scritta, e **smentisce l'ipotesi**
+
+Introdotto in `8161b89` (30 agosto). La motivazione e' nel codice, `Home.css`, sopra
+`.slot__body`, **verbatim**:
+
+> *"la riserva (`--body-min`) rende la posizione del bottone **indipendente dai
+> dati**: non dipende piu' da quante righe ha il testo sopra di lui, quindi non si
+> sposta **fra il guscio e l'arrivo del database**. Senza, il gate ha misurato 75-83
+> px di salto su un bersaglio toccabile"*
+
+**L'ipotesi che la riserva protegga da un cambio di stato che l'utente non puo'
+osservare e' falsa.** Il salto che previene e' **guscio -> dati**, e quello succede
+**a ogni apertura**, non a un aggiornamento. ADR 005 non c'entra: l'app non si
+aggiorna da sola, ma il database si apre sempre.
+
+**Quindi `--body-min` non si toglie.** Il buco resta, ed e' un buco dichiarato.
+
+### M6 — la Home a 390x844, e le tre risposte stanno tutte sopra la piega
+
+Piega a 760; contenuto 708 su 708 visibili: **zero px sotto la piega**.
+
+| blocco | top | fondo |
+|---|---|---|
+| `.hero__period` | 64 | 80,3 |
+| `.hero__value` **88,00 €** | 99 | 147,4 |
+| `.hero__note` | 147,4 | 163,7 |
+| `.allowance` **quanto posso spendere** | 237,4 | 258,7 |
+| `.slot__fixed` | 266,7 | 282,9 |
+| `.budget` | 290,9 | 334,9 |
+| `.week__head` | 359,9 | 376,2 |
+| `.week__cols` | 406,4 | 506,7 |
+| `.today__head` **quanto ho speso oggi** | 523,7 | 558,4 |
+| prima riga di oggi | 558,4 | 602,4 |
+
+**Le tre risposte, nell'ordine chiesto**: *quanto posso spendere oggi* a **237,4** ·
+*quanto ho speso oggi* a **523,7** · *quanto resta* a **99**. Tutte e tre sopra la
+piega, a 390x844 e a 393x852.
+
+**Ma la terza non e' "per il mese": e' per la settimana.** Il budget e' settimanale, e
+l'eroe dice *"Questa settimana · 24–30 ago"*. Non e' un difetto di layout, e' una
+differenza fra il modello mentale della richiesta e la configurazione dei dati.
+
+**iPhone SE (375x667)**: `.blank__text` cade **sotto la piega** (fondo 663,8 contro
+583). E' l'unico viewport dei tre in cui qualcosa esce, e riguarda lo stato vuoto.
 
 ## In sospeso sul telefono — nessuna di queste e' automatizzabile
 
