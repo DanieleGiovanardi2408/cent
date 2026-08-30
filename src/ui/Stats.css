@@ -159,6 +159,47 @@
    * col nome lungo diventi piu' alta delle altre. */
   --bar-h: 1.5rem;
 
+  /* **Il lato della ciambella delle quotidiane: 88 px.**
+   *
+   * ## Il numero viene dalla piega di B, non dall'occhio
+   *
+   * La ciambella e' l'unica cosa nuova di questa schermata che costa altezza, e
+   * l'altezza qui ha un prezzo scritto: ogni pixel speso in A allontana dalla
+   * piega la **seconda** riga di B, cioe' il termine di paragone senza il quale
+   * *"sto spendendo piu' o meno degli altri periodi"* non ha risposta.
+   *
+   * Misurato a 390x844 sulla scena dell'export del 26 agosto — un canone, cinque
+   * quotidiane, otto settimane dietro — prima di questa figura:
+   *
+   *     contenuto di .stats            862 px
+   *     .stats visibile                708 px (da 52 a 760: sotto c'e' --fab-lane)
+   *     seconda riga di B, fondo    662,19 px
+   *     margine dalla piega vera     97,81 px
+   *
+   * La figura sta nella **colonna 3 dell'intestazione di parte**, che e' vuota da
+   * quando l'interruttore delle fisse se n'e' andato, e attraversa le due righe
+   * di testo — nome + totale, e la scala — che ne occupano 35. Costa quindi
+   * `88 - 35 = 53 px`, non 88: il margine scende da 97,81 a **44,81**.
+   *
+   * In un blocco suo, fra l'intestazione e l'elenco, costerebbe 88 piu' gli 8 del
+   * passo della sezione — **96** — e il margine sarebbe **1,81 px**, cioe' un
+   * numero che nessuna delle due lingue e nessuno dei due font puo' garantire.
+   * Ed e' la ragione per cui la figura sta dov'e': non e' un'idea di
+   * composizione, e' l'unico posto in cui ci sta.
+   *
+   * ## E perche' 88 e non di piu'
+   *
+   * Perche' l'anello e' spesso `--bar-h` (24), quindi il buco vale `88 - 48 =
+   * 40 px`: sotto quel lato il buco si chiude e la ciambella torna una torta,
+   * cioe' una figura in cui l'occhio confronta **aree** invece di **archi** —
+   * che e' la cosa che si legge peggio. Sopra, si comprano archi piu' lunghi al
+   * prezzo di pixel che B non ha.
+   *
+   * `5.5rem` e non `88px`: e' l'unica misura della schermata che va scalata se
+   * qualcuno alza la dimensione del testo di sistema, perche' e' l'unica che
+   * divide una riga con del testo. */
+  --pie-size: 5.5rem;
+
   display: grid;
   /* La barra prende quello che avanza, e mai meno di --plot-min. Il nome si
    * dimensiona sul contenuto fino a --name-max, e quando lo spazio non basta
@@ -522,6 +563,69 @@
   font-weight: var(--fw-regular);
   line-height: var(--lh-snug);
   font-variant-numeric: tabular-nums;
+}
+
+/* **La ciambella delle quotidiane.**
+ *
+ * Sta nella **colonna 3** dell'intestazione — quella lasciata libera
+ * dall'interruttore delle fisse — e attraversa le due righe di testo. Il conto
+ * dei pixel e la ragione per cui non e' un blocco a se' stanno su `--pie-size`,
+ * qui sopra; l'argomento della forma sta in `Stats.tsx`, su `Pie`.
+ *
+ * Le misure sono **dichiarate su tutti e due gli assi** e non ereditate dal
+ * `viewBox`: un SVG senza dimensioni esplicite cade sul default di 300x150 nel
+ * frame in cui il foglio non e' ancora applicato, e quel frame e' esattamente
+ * quello in cui il CLS si misura.
+ *
+ * Non porta nessuna transizione. L'unica che questa schermata ha — la larghezza
+ * della barra — anima una lunghezza che cambia coi dati; qui non c'e' niente che
+ * cambi senza che cambi tutta la schermata, e un cerchio che si compone
+ * all'apertura sarebbe decorazione che costa un frame.
+ *
+ * ## Le due righe flessibili, che sono la riparazione di un difetto misurato
+ *
+ * La prima forma metteva la figura in `1 / 3 / 3 / 4`, cioe' a cavallo delle due
+ * righe di testo. Misurato: la figura alta 88 **gonfia le due righe che
+ * attraversa** — 44 e 44 invece di 18,75 e 16,25 — e con
+ * `align-items: baseline` ciascun testo si incolla in cima alla propria riga.
+ * Il risultato era `Quotidiane 111,00 €` e, **25,25 px di niente piu' sotto**,
+ * `Barra intera = 42,00 €`: la legenda staccata dal nome che spiega, e due
+ * intestazioni di parte con due spaziature diverse nella stessa schermata,
+ * secondo che una ciambella ci sia o no.
+ *
+ * La riparazione e' `1fr auto auto 1fr` con il testo sulle due righe **in
+ * mezzo**: un elemento che attraversa una riga flessibile **non contribuisce**
+ * al dimensionamento intrinseco delle righe che attraversa, quindi le due di
+ * testo tornano alla propria altezza e i 53 px che avanzano si dividono in parti
+ * uguali sopra e sotto. Misurato dopo: testo a 306,94 e 325,69 — adiacenti — con
+ * il proprio centro a 324,44, cioe' **esattamente** il centro della figura. E il
+ * blocco non cresce di un pixel: intestazione 101, contenuto 915, prima e dopo.
+ *
+ * `min-block-size` e non `block-size`: a 320 punti il nome puo' andare a capo e
+ * la didascalia con lui (37,5 + 32,5 = 70), e un'altezza fissa li' taglierebbe.
+ * Sopra gli 88 px comanda il testo, e la figura resta centrata su cio' che c'e'. */
+.stats__pie {
+  grid-column: 3;
+  grid-row: 1 / -1;
+  align-self: center;
+  inline-size: var(--pie-size);
+  block-size: var(--pie-size);
+}
+
+.stats__partTitle[data-pie] {
+  grid-template-rows: 1fr auto auto 1fr;
+  min-block-size: var(--pie-size);
+}
+
+/* Le tre celle di testo scendono di una riga: le due flessibili qui sopra
+ * esistono per stare **intorno** a loro, non sopra. */
+.stats__partTitle[data-pie] .stats__partName,
+.stats__partTitle[data-pie] .stats__partTotal {
+  grid-row: 2;
+}
+
+.stats__partTitle[data-pie] .stats__partScale {
+  grid-row: 3;
 }
 
 /* Il totale della parte. Tabulari come gli importi delle righe che somma: e'

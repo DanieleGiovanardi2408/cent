@@ -25,17 +25,17 @@ sa gia', e per questo non puo' invecchiare. I giudizi — cosa e' in volo, cosa
 aspetta una persona — stanno sotto, scritti a mano e timbrati con lo SHA a cui
 sono stati rivisti.
 
-- **Ultimo commit**: `8161b89` — feat: la Home ha tre livelli, e sette colonne al posto del vuoto
-- **Data**: 30/08/2026 13:37
+- **Ultimo commit**: `2c672ac` — fix: il buco della Home, e un numero mio gonfiato di sei volte
+- **Data**: 30/08/2026 14:30
 - **Ramo**: `fase-6-wip`
 - **Pushato**: si, `origin/fase-6-wip` e' allo stesso commit
-- **Rispetto a `origin/main`**: 3 commit avanti
+- **Rispetto a `origin/main`**: 5 commit avanti
 - **Albero di lavoro**: **non pulito**, ci sono modifiche non committate
 
 - **Test unitari**: 720 in 23 file, tutti verdi
-- **Test e2e dichiarati**: 338 in 14 file, su 4 progetti (iphone-se, iphone-14, landscape, dark)
-- **Test e2e eseguiti**: non misurato — l'ultima esecuzione e' piu' vecchia dei sorgenti — va rilanciata
-- **Bundle iniziale**: 55.8 KB gzip su 60.0 KB (4.2 KB di margine)
+- **Test e2e dichiarati**: 353 in 14 file, su 4 progetti (iphone-se, iphone-14, landscape, dark)
+- **Test e2e eseguiti**: 335 passati, 18 saltati, in 2.5 minuti. I saltati sono condizionali (ADR 013): solo un'esecuzione li vede.
+- **Bundle iniziale**: 56.2 KB gzip su 60.0 KB (3.8 KB di margine)
 
 - **Schema del database**: 4. La scala delle migrazioni:
   - **1** — Schema iniziale: expenses, categories, recurringRules, budgets, settings
@@ -52,7 +52,7 @@ sono stati rivisti.
 ## In volo adesso
 
 <!-- JUDGMENT rivisto=35c54f0 -->
-> Rivisto a `35c54f0`, 7 commit fa. **Da riguardare.**
+> Rivisto a `35c54f0`, 9 commit fa. **Da riguardare.**
 
 **Fase 6 sul ramo `fase-6-wip`, cinque commit sopra `origin/main`.** Il ramo e'
 spinto; `main` non e' stato toccato, quindi **cio' che sta su Pages e' ancora
@@ -918,9 +918,9 @@ inverso all'importanza", in miniatura e in una riga di codice.
 
 <!-- DECISION
      present: src/ui/Stats.tsx :: stats__pie
-     present: src/ui/i18n/it.ts :: stats.pie
+     present: src/ui/Stats.css :: --pie-size
 -->
-> **Non applicata**: manca `stats__pie` in `src/ui/Stats.tsx`; manca `stats.pie` in `src/ui/i18n/it.ts`.
+> **Applicata**, verificato da: `stats__pie`, `--pie-size`.
 
 Le Quotidiane portano **una ciambella sopra le proprie righe**. Le Fisse no. La
 barra divisa in cima resta.
@@ -968,6 +968,27 @@ sotto**: la ciambella puo' fallire senza portarsi via l'informazione.
 
 Senza questo vincolo non si fa. E' anche cio' che rende accettabile una forma che la
 disciplina sconsiglia: non e' l'unico portatore di niente.
+
+##### Il controllo di questa voce e' stato scritto sbagliato, e il difetto e' istruttivo
+
+Chiedeva `present: src/ui/i18n/it.ts :: stats.pie`, cioe' **una chiave di dizionario
+per una figura che non ha nessuna stringa**. La ciambella e' `aria-hidden` e non
+porta etichette dentro — e' scritto tre righe piu' sotto, in questa stessa voce.
+
+Il controllo contraddiceva la decisione che doveva verificare, e nel modo peggiore:
+soddisfarlo avrebbe richiesto di **aggiungere una chiave senza lettore**, che e'
+esattamente cio' che il controllo B di `audit:source` fa fallire in CI. Un ago che si
+puo' soddisfare solo rompendo un altro controllo non e' un ago debole: e' un ago che
+chiede la cosa sbagliata.
+
+Adesso guarda **`--pie-size`**, cioe' il numero su cui la decisione si regge — quanto
+e' grande la figura, che e' l'unica cosa di lei che si possa sbagliare in silenzio.
+
+**La regola che ne esce**, e vale per il prossimo: *un controllo si scrive guardando
+cosa la decisione **produce**, non cosa un'altra decisione simile aveva prodotto.* Ho
+copiato la forma da `0c`, che aveva una chiave perche' aveva un comando con
+un'etichetta accessibile. Questa non ha ne' l'uno ne' l'altra, e la forma e' arrivata
+prima del contenuto.
 
 ##### Le altre condizioni
 

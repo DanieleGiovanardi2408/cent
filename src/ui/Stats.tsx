@@ -92,6 +92,161 @@ function sliceLabel(row: CategorySlice): string {
   return row.orphan ? t('row.categoryRemoved') : row.name
 }
 
+/* --- la ciambella delle quotidiane -------------------------------------- */
+
+/**
+ * **Sotto quante voci la ciambella non si disegna.**
+ *
+ * Vale **tre**, che e' anche il valore di `BREAKDOWN_MIN_ROWS` in
+ * `stats-view.ts`, e **non e' la stessa decisione**. Sono due costanti apposta:
+ * unificarle richiederebbe cancellare uno dei due argomenti, che e' esattamente
+ * la difesa che serve.
+ *
+ * - `BREAKDOWN_MIN_ROWS` governa **le barre sull'insieme delle righe di A**, e la
+ *   sua ragione e' che due righe non sono un grafico ma due fatti da leggere.
+ * - Questa governa **la ciambella dentro una sezione**, e la sua ragione e'
+ *   un'altra: **due fette sono una cifra, non una ripartizione.** Un cerchio
+ *   diviso in due dice "una e' piu' grande dell'altra" e nient'altro — la stessa
+ *   frase che la barra divisa in cima gia' scrive per le due nature, con due
+ *   lunghezze affiancate invece che con due angoli. Con una sola fetta dice
+ *   "100%", che e' il totale scritto qui accanto.
+ *
+ * E vale **anche quando le barre ci sono**: A puo' essere un grafico (cinque
+ * righe in tutto) con la parte quotidiana che ne ha due. Li' le barre restano e
+ * la ciambella non si disegna, perche' le due soglie rispondono a due domande.
+ *
+ * Il numero coincide oggi e puo' smettere di coincidere domani: se qualcuno
+ * alzasse `BREAKDOWN_MIN_ROWS` a quattro per le barre, questa non lo seguirebbe
+ * senza che qualcuno ne riscriva la ragione.
+ */
+const PIE_MIN_SLICES = 3
+
+/**
+ * La geometria della ciambella, in unita' del `viewBox`. Alla dimensione di
+ * testo di sistema predefinita il disegno e' **1:1** — `--pie-size` vale
+ * `5.5rem`, cioe' 88 px — quindi i tre numeri qui sotto sono i pixel veri.
+ *
+ * Se qualcuno ingrandisce il testo di sistema il riquadro cresce e **cresce
+ * tutto insieme**, vuoto compreso: e' il verso giusto, perche' un vuoto da 2 px
+ * dentro una figura larga il doppio smetterebbe di separare. E' l'unico posto
+ * della schermata in cui il vuoto scala — sulla barra divisa e' `2px` fissi —
+ * e la differenza e' che li' il vuoto sta in un box del foglio, qui dentro un
+ * sistema di coordinate che si scala per intero.
+ *
+ * - `PIE_BOX` — 88, l'unico numero scelto. Il conto che ce l'ha portato sta in
+ *   `Stats.css`, su `--pie-size`: e' quanto costa in altezza, misurato contro la
+ *   piega di B.
+ * - `PIE_RING` — 24, cioe' `--bar-h`. **E' lo stesso inchiostro delle barre e
+ *   della barra divisa**, ed e' lo stesso argomento gia' scritto per
+ *   `.stats__split`: due spessori diversi nella stessa schermata si leggerebbero
+ *   come due tipi di grafico.
+ * - `PIE_GAP` — 2, il vuoto nella superficie fra due fette che **si toccano**.
+ *   La condizione, riscritta qui perche' e' qui che vale: le barre di A non si
+ *   toccano mai fra loro — hanno un contorno e stanno su righe diverse — quindi
+ *   li' il vuoto non aveva niente da separare e il rimedio era il contorno. Qui
+ *   due fette adiacenti condividono un raggio: senza il vuoto, `Fuori` e
+ *   `Coffeeshop` (26,00 e 24,00, due tinte vicine) diventano una macchia sola, e
+ *   un contorno aggiungerebbe una terza tinta **proprio sul confine**, cioe'
+ *   dove serve leggere dove finisce l'una. E' l'argomento della barra divisa,
+ *   che li' vale per un confine solo e qui per cinque.
+ *
+ * Il raggio e' quello **medio** dell'anello, perche' la ciambella si disegna
+ * come un cerchio **tratteggiato**: un `<circle>` per fetta, con
+ * `stroke-dasharray` a produrre l'arco e `stroke-dashoffset` a metterlo al suo
+ * posto. Non ci sono archi scritti a mano (`A`), nessun seno e nessun coseno, e
+ * il taglio fra due fette esce **radiale** per costruzione — e' il modo in cui
+ * un tratteggio chiude un tratto su un cerchio.
+ *
+ * Il vuoto misura quindi esattamente `PIE_GAP` sul raggio medio, e si apre a
+ * ventaglio: 1,25 px sul bordo interno e 2,75 sull'esterno. E' la stessa cosa
+ * che fa un vuoto fra due settori, e non un'approssimazione da correggere.
+ */
+const PIE_BOX = 88
+const PIE_RING = 24
+const PIE_GAP = 2
+const PIE_R = (PIE_BOX - PIE_RING) / 2
+const PIE_C = 2 * Math.PI * PIE_R
+
+/**
+ * Una fetta, gia' in unita' di tratteggio: **niente da decidere in JSX**.
+ *
+ * `fill` e' `null` con lo stesso significato che ha su `Row`, e il ripiego e' lo
+ * stesso — `var(--brand)`. Non e' una seconda regola sul colore: e' la stessa
+ * espressione, scritta una volta per la barra e una per la fetta, sulla stessa
+ * funzione `fill()`.
+ */
+interface PieSlice {
+  readonly key: string
+  readonly fill: string | null
+  /** Lunghezza dell'arco dipinto, gia' al netto del vuoto. Puo' valere 0. */
+  readonly len: number
+  /** Dove comincia, misurato sul raggio medio dal punto delle dodici. */
+  readonly start: number
+}
+
+/**
+ * Le fette di una sezione, oppure `null` se qui la ciambella non si disegna.
+ *
+ * ## Le tre condizioni, e la seconda e' quella che si dimentica
+ *
+ * 1. **Solo le quotidiane.** Le fisse no, e il numero e' `95,7%`: sui dati veri
+ *    del 24–30 agosto la parte fissa e' `507,00 €` di canone e `23,00 €` di
+ *    abbonamento, cioe' **un cerchio con una scheggia**. E' il caso su cui
+ *    `dataviz` ha ragione — due fette sono una cifra, e la cifra e' gia' scritta
+ *    sulle due righe qui sotto. Ma la ragione non e' solo la forma: **le fisse
+ *    non sono una ripartizione su cui si decide qualcosa** (ADR 016, *"l'affitto
+ *    non e' una decisione"*), e la ciambella e' la marca di cio' che si esplora.
+ *    Le fisse si controllano, e per controllare due impegni noti bastano due
+ *    righe con il loro importo.
+ * 2. **Almeno `PIE_MIN_SLICES` voci.** Vedi la costante.
+ * 3. **Un totale sopra zero.** Una sezione di sole ricorrenti da zero centesimi
+ *    esiste davvero (ha gia' il suo test in `stats-view.test.ts`), e li' non c'e'
+ *    nessuna ripartizione: ogni quota sarebbe `0/0`.
+ *
+ * ## Il denominatore e' `totalCents`, e **non** e' `row.fraction`
+ *
+ * `CategorySlice.fraction` e' la lunghezza della **barra**, cioe' la quota sulla
+ * riga piu' grande della sezione (`scaleCents`): la piu' grande vale 1 e le
+ * altre le stanno sotto. Una ciambella disegnata con quelle quote sommerebbe a
+ * piu' di un giro. La quota di una fetta e' `cents / totalCents`, e i due numeri
+ * arrivano tutti e due dal modello.
+ *
+ * Che questa divisione stia qui e non in `stats-view.ts` non contraddice
+ * *"questo file non decide niente"*: e' **aritmetica su due campi pubblicati**,
+ * non una regola. Il giorno in cui avesse una regola dentro — un pavimento come
+ * `BAR_MIN_FRACTION`, un aggregato "Altre" per la coda — quella regola
+ * apparterrebbe al modello, e questa funzione sarebbe il posto sbagliato in cui
+ * scriverla.
+ *
+ * ## Le quote sono esatte, e le fette che non ci stanno spariscono
+ *
+ * `start` viene dalla quota **cumulata vera**, quindi ogni fetta cade dove le
+ * spetta anche quando la precedente e' troppo corta per essere dipinta. Una
+ * fetta piu' stretta del vuoto ha `len` zero: **non si disegna affatto**, invece
+ * di essere allargata a un minimo visibile. Allargarla direbbe una quota falsa
+ * proprio dove la quota e' l'unica cosa che la ciambella aggiunge, e il dato non
+ * si perde comunque — sta sulla riga sotto, con il suo importo.
+ */
+function pieOf(part: BreakdownSection): readonly PieSlice[] | null {
+  if (part.kind !== 'variable') return null
+  if (part.single) return null
+  if (part.rows.length < PIE_MIN_SLICES) return null
+  if (part.totalCents <= 0) return null
+
+  const totalCents = part.totalCents
+  let cumulata = 0
+  return part.rows.map((row) => {
+    const start = cumulata * PIE_C
+    cumulata += row.cents / totalCents
+    return {
+      key: row.orphan ? ORPHAN : row.categoryId,
+      fill: fill(row),
+      len: Math.max(0, (row.cents / totalCents) * PIE_C - PIE_GAP),
+      start: start + PIE_GAP / 2,
+    }
+  })
+}
+
 /**
  * Una riga: etichetta, barra, importo. E' la marca unica della schermata — A e B
  * la condividono, e la differenza fra le due sta **nei dati** (B porta una
@@ -434,6 +589,9 @@ function Categories({
           // dichiarare: questa intestazione si disegna **senza la propria
           // sezione**, per non lasciare la cifra della divisione senza un nome.
           scale={null}
+          // E nessuna ciambella, per due ragioni indipendenti: e' l'intestazione
+          // delle fisse, e non ha righe da ripartire.
+          pie={null}
         />
       ) : null}
 
@@ -521,6 +679,12 @@ function Categories({
                 ? t('stats.scale', { amount: money(part.scaleCents) })
                 : null
             }
+            // **La ciambella e' delle quotidiane, e solo di loro.** Le tre
+            // condizioni — quale parte, quante voci, e un totale sopra zero —
+            // stanno su `pieOf`, che e' anche il posto in cui e' scritto perche'
+            // la soglia delle tre voci non e' `BREAKDOWN_MIN_ROWS` malgrado sia
+            // lo stesso numero.
+            pie={pieOf(part)}
           />
           <ul class="stats__rows">
             {part.rows.map((row: CategorySlice) => (
@@ -696,6 +860,7 @@ function PartHead({
   kind,
   amount,
   scale,
+  pie,
 }: {
   readonly kind: BreakdownSection['kind']
   /** Il totale della parte, o `null` quando lo porta gia' qualcos'altro. */
@@ -726,14 +891,54 @@ function PartHead({
    * stanno sul chiamante.
    */
   readonly scale: string | null
+  /**
+   * Le fette della ciambella, o `null` dove non se ne disegna una. Le tre
+   * condizioni stanno su `pieOf`.
+   *
+   * ## Perche' la ciambella sta **dentro** l'intestazione, e non fra lei e le righe
+   *
+   * Perche' li' costa **meno della meta'**, e la differenza e' misurata, non
+   * stimata. La colonna 3 di questa griglia e' vuota da quando l'interruttore
+   * delle fisse se n'e' andato, e le due righe di testo — nome + totale, e la
+   * scala — ne occupano 35 px in tutto: una figura alta 88 messa li' fa crescere
+   * l'intestazione di **53 px**. La stessa figura in un blocco suo fra
+   * l'intestazione e l'elenco ne costerebbe 88 piu' gli 8 del passo della
+   * sezione, cioe' **96**.
+   *
+   * Misurato a 390x844 sulla scena dell'export del 26 agosto — un canone, cinque
+   * quotidiane, otto settimane dietro — la seconda riga di B (il termine di
+   * paragone, cioe' la ragione per cui B esiste) sta a `fondo 662,19` dentro un
+   * `.stats` che si vede fino a **760**: 97,81 px di margine. Un blocco a se'
+   * ne lascerebbe **1,81**; qui dentro ne lascia **44,81**.
+   *
+   * E la scelta alternativa — un blocco a se' con la ciambella piu' piccola —
+   * non e' uno scambio, e' una perdita secca: a parita' di 53 px di costo la
+   * ciambella in un blocco suo sarebbe larga 45, cioe' meta' raggio per le
+   * stesse cinque fette.
+   *
+   * ## E ha senso anche a leggerla
+   *
+   * L'intestazione dice **quanto** (`Quotidiane · 92,00 €`) e **come si leggono
+   * le barre** (`Barra intera = 42,00 €`); la ciambella accanto dice **com'e'
+   * fatto** quel numero, e le righe sotto lo scompongono in cifre. Tre gradini
+   * della stessa frase, e nessuno di loro ripete un numero dell'altro.
+   */
+  readonly pie: readonly PieSlice[] | null
 }) {
   const fixed = kind === 'fixed'
   return (
-    <h3 class="stats__partTitle" data-kind={kind}>
+    // `data-pie` non e' un gancio per i test: e' cio' che dice al foglio di
+    // dare a questa intestazione **due righe flessibili** intorno al testo, cosi'
+    // che le sue due righe restino adiacenti e centrate contro una figura che e'
+    // piu' alta di loro. Senza, la figura gonfia le righe che attraversa e la
+    // didascalia della scala si stacca dal nome che spiega — misurato, 25,25 px
+    // di niente in mezzo. L'argomento e i numeri stanno in `Stats.css`.
+    <h3 class="stats__partTitle" data-kind={kind} data-pie={pie === null ? undefined : ''}>
       <span class="stats__partName">
         {t(fixed ? 'stats.fixedInPeriod' : 'stats.variable')}
       </span>
       {amount === null ? null : <span class="stats__partTotal">{amount}</span>}
+      {pie === null ? null : <Pie slices={pie} />}
       {/* La scala sta sulla **seconda riga** dell'intestazione, e non e' una
           riga in piu' dell'elenco.
 
@@ -745,6 +950,111 @@ function PartHead({
           perche' chi misura la densita' sappia da dove viene. */}
       {scale === null ? null : <span class="stats__partScale">{scale}</span>}
     </h3>
+  )
+}
+
+/**
+ * **La ciambella delle quotidiane.** Gli angoli danno la forma a colpo d'occhio,
+ * le righe qui sotto danno i valori.
+ *
+ * ## Il vincolo che la rende ammissibile, e che non e' negoziabile
+ *
+ * > **Si AGGIUNGE alle righe, non le sostituisce.**
+ *
+ * Non e' l'unico portatore di niente: ogni fetta ha, a pochi pixel di distanza,
+ * una riga con il proprio nome, la propria barra e il proprio importo. **La
+ * ciambella puo' fallire senza portarsi via l'informazione** — ed e' esattamente
+ * cio' che succede quando una spesa enorme schiaccia le altre in schegge: gli
+ * angoli smettono di dire qualcosa e le cifre restano dove sono. Il giorno in
+ * cui qualcuno togliesse le righe per far spazio, questa figura andrebbe tolta
+ * con loro.
+ *
+ * ## Perche' una forma che la disciplina dei grafici sconsiglia
+ *
+ * `dataviz` la sconsiglia due volte — *"una torta a 2 fette -> una stat tile"* e
+ * *"niente donut per confrontare valori vicini"* — e tutte e due le volte
+ * riguarda casi che qui non ci sono, perche' A e' **divisa in due sezioni**.
+ * Sui dati veri del 24–30 agosto le quotidiane valgono `42 / 26 / 24 / 10 / 10
+ * su 112`, cioe' **37% · 23% · 21% · 9% · 9%**: nessuna sotto l'8%, nessuna
+ * sopra il 40%. Le fisse sono `95,7% / 4,3%`, ed e' li' che la skill ha ragione
+ * — infatti li' non si disegna (vedi `pieOf`).
+ *
+ * Resta un punto in cui contraddice davvero: la skill vuole **al massimo sei
+ * segmenti** per un part-to-whole, e qui possono essere nove — otto categorie
+ * attive piu' l'aggregato delle orfane. Il tetto delle otto e' strutturale
+ * (CLAUDE.md: al massimo otto categorie attive in griglia) e la nona indossa
+ * `--text-muted`, cioe' il grigio del "non c'e' un colore" e non una nona tinta
+ * generata: la cosa che la skill vieta davvero — *"un nono colore categorico e'
+ * indistinguibile da uno esistente sotto CVD"* — non puo' succedere. Cio' che
+ * resta del suo argomento e' che con nove spicchi non si legge piu' quale sia
+ * quale, e vale: la risposta e' che qui **non serve leggerlo dalla fetta**,
+ * perche' l'ordine delle fette e' l'ordine delle righe e la riga porta il nome.
+ *
+ * ## Nessuna etichetta dentro le fette, e nessuna legenda
+ *
+ * La legenda **sono le righe qui sotto**, che esistono gia': stesso ordine —
+ * dalla piu' grande, in senso orario dalle dodici — e stesso colore. E' la
+ * ragione per cui questa forma non costa una riga di legenda, che era meta'
+ * dell'obiezione con cui era stata rifiutata. Un'etichetta dentro una fetta
+ * sarebbe per giunta la cosa che `dataviz` chiama per nome — *"un'etichetta
+ * tagliata da un segmento troppo piccolo"* — su spicchi che qui possono valere
+ * l'1%.
+ *
+ * ## `aria-hidden`, per lo stesso argomento della barra divisa
+ *
+ * E' **la forma di cinque numeri che stanno scritti trenta pixel piu' sotto**,
+ * non un'informazione in piu': ogni fetta ha una riga con nome e importo, e chi
+ * legge lo schermo con la voce le incontra tutte, in quest'ordine, subito dopo.
+ * Annunciare la figura vorrebbe dire mettere davanti a quelle cinque righe un
+ * oggetto da saltare che non aggiunge nessun fatto — e la quota, che e' l'unica
+ * cosa che la ciambella aggiunge a chi guarda, e' **derivabile dagli stessi
+ * numeri** che la voce sta per leggere.
+ *
+ * Ed e' la stessa scelta gia' presa, nella stessa schermata, per la marca che
+ * risponde alla stessa domanda: `.stats__split` e' `aria-hidden` con questo
+ * identico argomento. Due grafici sovrapposti alla stessa lettura con due
+ * statuti diversi si leggerebbero come una svista.
+ *
+ * **Conseguenza da dichiarare**: non esiste nessuna chiave di dizionario per
+ * questa figura, e non deve esistere. Una chiave senza lettore e' esattamente
+ * cio' che il controllo B di `audit:source` rifiuta.
+ */
+function Pie({ slices }: { readonly slices: readonly PieSlice[] }) {
+  return (
+    <svg
+      class="stats__pie"
+      // `width`/`height` come attributi **oltre** alle misure del foglio: e'
+      // cio' che da' al riquadro un rapporto intrinseco, cosi' l'arrivo dei
+      // dati non produce un riflusso del testo accanto (CLS).
+      width={PIE_BOX}
+      height={PIE_BOX}
+      viewBox={`0 0 ${PIE_BOX} ${PIE_BOX}`}
+      aria-hidden="true"
+    >
+      {/* Le fette partono dalle **dodici** e girano in senso orario, che e' il
+          verso in cui si legge un cerchio. Un `<circle>` di SVG comincia alle
+          tre: la rotazione e' quel quarto di giro, scritta come attributo e non
+          nel foglio perche' e' geometria del disegno — se sparisse dal CSS il
+          grafico direbbe cose diverse, non sarebbe solo meno bello. */}
+      <g transform={`rotate(-90 ${PIE_BOX / 2} ${PIE_BOX / 2})`}>
+        {slices.map((slice) => (
+          <circle
+            key={slice.key}
+            cx={PIE_BOX / 2}
+            cy={PIE_BOX / 2}
+            r={PIE_R}
+            fill="none"
+            // Stesso `fill()` e stesso ripiego della barra della riga: un solo
+            // posto decide che colore ha una categoria, e che l'aggregato delle
+            // orfane non ne ha uno.
+            stroke={slice.fill ?? 'var(--brand)'}
+            stroke-width={PIE_RING}
+            stroke-dasharray={`${slice.len} ${PIE_C - slice.len}`}
+            stroke-dashoffset={-slice.start}
+          />
+        ))}
+      </g>
+    </svg>
   )
 }
 
