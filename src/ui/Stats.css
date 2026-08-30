@@ -411,6 +411,49 @@
   gap: var(--sp-3);
 }
 
+/* **A 320 punti il comando scende sotto il nome, invece di stringerlo.**
+ *
+ * L'intestazione ospita due cose che vogliono la stessa riga: il nome di parte,
+ * che puo' andare a capo, e il comando delle due viste, che non puo'. Il disegno
+ * dice *"il nome va a capo, il comando no"* — ma a 320 punti la colonna del nome
+ * si stringe abbastanza che `Quotidiane` non ci sta **nemmeno in due righe**, e
+ * il clamp lo taglia.
+ *
+ * **L'ha trovato la CI, e non poteva trovarlo questa macchina.** I test girano su
+ * Chromium coi font di sistema: su macOS `Quotidiane` a 320 stava in due righe,
+ * su Linux no. E' il caso 2 della tassonomia in `CLAUDE.md` — asserzione esatta
+ * con premessa dipendente dall'ambiente — ma **il rimedio qui non e' "la macchina
+ * e' sbagliata"**: il difetto e' vero e nuovo, l'ha introdotto il comando delle
+ * due viste occupando una riga che prima era tutta del nome. Su un telefono con
+ * lo Zoom schermo attivo si vedrebbe.
+ *
+ * Il rimedio sta nel CSS e non nel test, e **toglie la contesa invece di
+ * tararla**: sotto i 360 punti l'intestazione va a capo e il comando prende la
+ * propria riga. Il nome ha tutta la larghezza, e nessuna metrica di font puo'
+ * piu' decidere se ci sta. E' la mossa che ricorre in questo progetto — rendere
+ * esatta la cosa misurata invece di tollerare l'approssimazione nella misura.
+ *
+ * La soglia e' 359px come in `AddSheet.css`, e per la stessa ragione scritta li':
+ * 320 punti non e' solo il vecchio SE, e' anche quello che si ottiene attivando
+ * lo Zoom schermo di iOS su un telefono normale.
+ *
+ * Sopra i 360 non cambia niente: il ramo comune resta a una riga, e con lui ogni
+ * misura di geometria gia' presa a 375, 390 e 393. */
+@media (max-width: 359px) {
+  .stats__partHead {
+    flex-wrap: wrap;
+    align-items: flex-start;
+    row-gap: var(--sp-1);
+  }
+
+  /* Il titolo si prende la riga intera, cosi' il comando e' costretto a capo:
+   * senza questo, `flex-wrap` non basta — il titolo si stringerebbe lo stesso
+   * fino a lasciare il comando accanto. */
+  .stats__partHead[data-vista] > .stats__partTitle {
+    flex: 1 0 100%;
+  }
+}
+
 /* **L'intestazione dichiara 44 px dove ospita un bersaglio**, e non li deriva
  * dal proprio testo.
  *
