@@ -25,25 +25,26 @@ sa gia', e per questo non puo' invecchiare. I giudizi — cosa e' in volo, cosa
 aspetta una persona — stanno sotto, scritti a mano e timbrati con lo SHA a cui
 sono stati rivisti.
 
-- **Ultimo commit**: `2d9f75e` — fix: un ordine solo nelle Statistiche, e la motivazione contraria c'era gia'
-- **Data**: 30/08/2026 21:49
+- **Ultimo commit**: `d9fdfe5` — fix: le tinte nuove non arrivavano a chi l'app ce l'ha gia' — migrazione 5
+- **Data**: 30/08/2026 22:14
 - **Ramo**: `fase-6-wip`
-- **Pushato**: si, `origin/fase-6-wip` e' allo stesso commit
-- **Rispetto a `origin/main`**: 13 commit avanti
-- **Albero di lavoro**: **non pulito**, ci sono modifiche non committate
+- **Pushato**: **no: 1 commit non pushati su `origin/fase-6-wip`**
+- **Rispetto a `origin/main`**: 15 commit avanti
+- **Albero di lavoro**: pulito
 
-- **Test unitari**: 738 in 25 file, tutti verdi
+- **Test unitari**: 749 in 25 file, tutti verdi
 - **Test e2e dichiarati**: 371 in 14 file, su 4 progetti (iphone-se, iphone-14, landscape, dark)
-- **Test e2e eseguiti**: 353 passati, 18 saltati, in 2.8 minuti. I saltati sono condizionali (ADR 013): solo un'esecuzione li vede.
-- **Bundle iniziale**: 57.1 KB gzip su 60.0 KB (2.9 KB di margine)
+- **Test e2e eseguiti**: 353 passati, 18 saltati, in 2.7 minuti. I saltati sono condizionali (ADR 013): solo un'esecuzione li vede.
+- **Bundle iniziale**: 57.3 KB gzip su 60.0 KB (2.7 KB di margine)
 
-- **Schema del database**: 4. La scala delle migrazioni:
+- **Schema del database**: 5. La scala delle migrazioni:
   - **1** — Schema iniziale: expenses, categories, recurringRules, budgets, settings
   - **2** — Expense.timeMinutes (opzionale); le impostazioni dichiarano la versione 2
   - **3** — Settings.language e Settings.onboardingCompletedAt (opzionali, default assente)
   - **4** — RecurringRule.anchorDay esplicito e obbligatorio sulle regole mensili
+  - **5** — Le otto tinte delle categorie passano alla palette che regge i pavimenti
 
-  Un dispositivo fermo a una versione precedente le esegue **tutte in fila fino alla 4**
+  Un dispositivo fermo a una versione precedente le esegue **tutte in fila fino alla 5**
   alla prima apertura dopo l’aggiornamento. Da quale parta e' un fatto del telefono, non del
   repository, e per questo non e' scritto qui.
 
@@ -52,7 +53,7 @@ sono stati rivisti.
 ## In volo adesso
 
 <!-- JUDGMENT rivisto=2d9f75e -->
-> Rivisto a `2d9f75e`, cioe' a questo commit.
+> Rivisto a `2d9f75e`, 2 commit fa.
 
 **Fase 6 sul ramo `fase-6-wip`, tredici commit sopra `origin/main`.** Il ramo e'
 spinto a ogni rientro.
