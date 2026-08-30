@@ -846,25 +846,6 @@ export const it = {
     'Questo periodo è {range}, e nessuna delle tue spese ci cade dentro: le trovi tutte nello {history}. La prossima spesa che segni oggi compare qui.',
 
   'stats.variable': 'Quotidiane',
-  // Qui c'erano `stats.fixed` (*"Spese fisse"*) e `stats.perMonthRate`
-  // (*"{amount}/mese"*): la riga in testa alle Statistiche che scriveva la
-  // proiezione mensile delle regole. La riga non c'e' piu' — ripeteva la cifra
-  // che il totale della parte fisse scrive duecento pixel piu' sotto — e le due
-  // chiavi se ne sono andate con lei invece di restare vive nel dizionario e
-  // morte nei fatti, che e' il difetto per cui il controllo B di
-  // `dead-surface.mjs` esiste (`history.blank.install`).
-  //
-  // Il fatto che portavano vive dove ADR 016 §3 lo mette: `fixed.total`,
-  // *"In tutto {amount} al mese."*, in Impostazioni, subito sotto il budget.
-  // L'interruttore che toglie le fisse dalla **scala** di A, non solo dalle
-  // righe. Nasce acceso a ogni apertura e non si ricorda: un controllo di vista
-  // che tornasse spento nasconderebbe 507,00 € a chi non l'ha mai toccato, cioe'
-  // ADR 016 §1 dalla porta di servizio.
-  //
-  // Spento, la cifra delle fisse **resta a schermo** — sull'intestazione che
-  // porta l'interruttore, e nella barra divisa qui sopra — quindi nascondere le
-  // righe non nasconde il fatto.
-  'stats.showFixed': 'Mostra le spese fisse',
 
   'stats.byCategory': 'Dove sono finiti',
   // **Non e' `stats.fixed`, e la differenza non e' di stile.** La scheda in testa
@@ -887,9 +868,6 @@ export const it = {
   'stats.scale': 'Barra intera = {amount}',
   'stats.byPeriod.weekly': 'Settimana per settimana',
   'stats.byPeriod.monthly': 'Mese per mese',
-  // Vedi en.ts: il periodo ha solo spese fisse e l'utente le ha spente. La frase
-  // nomina il gesto, perche' senza sembra un guasto.
-  'stats.hiddenAll': 'In questo periodo ci sono solo spese fisse, e le hai nascoste.',
 
   // Vedi en.ts per l'argomento. In una riga: e' un **fatto sul calendario**,
   // non un conto alla rovescia — "ne mancano quattro" sarebbe un'affermazione

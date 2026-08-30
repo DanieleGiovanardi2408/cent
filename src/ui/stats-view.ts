@@ -143,8 +143,7 @@
  * e' `530,00 contro 112,00`"*. Con la scala per sezione **e' peggio**, non uguale:
  * quelle due righe sono due barre **piene**, quindi l'occhio che le confronta non
  * legge una domanda sbagliata, legge `507,00 = 42,00`. Il totale di sezione e'
- * l'unico posto in cui si confrontano i due **insiemi**, e con le fisse spente
- * (`StatsInput.showFixed`) di qua non c'e' nemmeno una riga da guardare.
+ * l'unico posto in cui si confrontano i due **insiemi**.
  *
  * Con **una riga sola** quel totale non c'e', ed e' la stessa ragione letta al
  * contrario: il confronto che la cifra serviva a permettere lo fa gia' la riga,
@@ -414,9 +413,11 @@ export const TREND_MIN_ROWS = 2
  * modulo la puo' chiudere, e cio' che separa quelle due righe e' l'importo scritto
  * accanto.
  *
- * (Il selettore delle fisse **non** e' la via d'uscita, e qui c'era scritto che lo
- * fosse: da quando la scala e' della sezione, spegnere le fisse non cambia di un
- * pixel le righe rimaste. Vedi `StatsInput.showFixed`.)
+ * (Qui c'era scritto che la via d'uscita fosse **il selettore delle fisse**. Non
+ * lo era gia' allora — da quando la scala e' della sezione, spegnere le fisse non
+ * cambiava di un pixel le righe rimaste — e adesso il selettore non esiste. La via
+ * d'uscita vera e' che le due righe cadano in **sezioni diverse**, dove ognuna ha
+ * la propria scala: e' cio' che le separa, e non richiede nessun gesto.)
  */
 export const BAR_MIN_FRACTION = 2 / 112
 
@@ -503,9 +504,8 @@ export type CategorySlice = SliceIdentity & {
    * anche il motivo per cui `scaleCents` non e' facoltativo: una lunghezza senza
    * il numero che la interpreta e' meta' di un fatto.
    *
-   * **Non dipende da `StatsInput.showFixed`**, e questa riga diceva il contrario.
-   * La scala e' della sezione, quindi spegnere le fisse non cambia di un pixel le
-   * righe rimaste: cosa resti da fare al selettore sta scritto su `showFixed`.
+   * **La scala e' della sezione**, e non di cio' che si sta guardando: nessuna
+   * scelta di lettura la muove, perche' non ce n'e' piu' nessuna da fare.
    *
    * Zero, oppure almeno `BAR_MIN_FRACTION`: mai una via di mezzo che il CSS
    * dovrebbe correggere.
@@ -889,10 +889,11 @@ export interface Breakdown {
    * proprie sezioni a seconda del mese fa cercare due volte la stessa riga. E'
    * la stessa ragione per cui la griglia delle categorie non si riordina mai.
    *
-   * **Con `StatsInput.showFixed` a `false` la sezione delle fisse non c'e'.**
-   * Non e' lo stesso vuoto di "nessuna fissa nel periodo" — quello e' un fatto
-   * sui dati, questo e' una scelta di lettura — e la differenza si vede in due
-   * posti: `split` resta — dice cosa si sta nascondendo, ed e' l'argomento di
+   * **La sezione delle fisse c'e' se e solo se nel periodo ne e' uscita almeno
+   * una.** C'era un secondo modo di non averla — l'interruttore spento — e non
+   * c'e' piu': un vuoto solo, e viene dai dati. La distinzione fra i due vuoti
+   * costava due nomi (`present` e `shown`) e un ramo per ognuno; adesso `split`
+   * resta perche' dice cos'e' uscito, ed e' l'argomento di
    * ADR 016 §2, *"un'esclusione taciuta e' un numero che mente per omissione"*,
    * che nella sua ragione non nomina la Home — e lo stato `outside` non arriva
    * mai per questa via (vedi `statsView`).
@@ -913,11 +914,10 @@ export interface Breakdown {
    * regola, applicata a cio' che c'e' a schermo — l'unica cosa di cui la soglia
    * ha mai parlato.
    *
-   * **Ed e' l'unico effetto che `StatsInput.showFixed` ha ancora sul disegno**,
-   * da quando la scala e' della sezione: quel campo non tocca piu' nessuna
-   * lunghezza. E' anche l'unica ragione per cui il selettore sta nel modello
-   * invece che in `Stats.tsx`, e l'argomento — che e' molto piu' sottile di
-   * quello di prima — sta li'.
+   * **Si calcola su `present`**, cioe' su un fatto sui dati. Per un giorno si e'
+   * calcolato su cio' che il selettore lasciava a schermo, ed era l'ultimo
+   * mestiere rimasto a quel campo: tolto il selettore, questa soglia non ha piu'
+   * bisogno di sapere cosa qualcuno stia guardando.
    *
    * **Ha due valori veri, in B no**: A sotto soglia esiste lo stesso — nome e
    * importo si leggono senza barra — mentre B sotto la propria soglia non esiste
@@ -928,11 +928,12 @@ export interface Breakdown {
    * La proporzione fisse/quotidiane del periodo, o `null` dove non c'e' niente
    * da dividere. L'argomento sta su `BreakdownSplit`.
    *
-   * **Non dipende da `showFixed`**: e' cio' che dice all'utente *cosa* sta
-   * nascondendo. Nasconderlo insieme alle righe sarebbe ADR 016 §1 dalla porta di
-   * servizio — 530,00 € che spariscono dallo schermo senza lasciare traccia —
-   * cioe' esattamente il difetto che il selettore ha il divieto esplicito di
-   * reintrodurre.
+   * **Non dipende da nessuna scelta di lettura**, e per un periodo la sua ragione
+   * e' stata *"resta anche a fisse spente, perche' dice cosa si sta nascondendo"*.
+   * Il selettore non c'e' piu' e la ragione **non cade con lui**: si spoglia. Resta
+   * che 530,00 € non possono stare fuori da questa schermata senza lasciare
+   * traccia, che e' ADR 016 §1 — e vale contro chiunque provi a toglierli, non
+   * contro un interruttore in particolare.
    */
   readonly split: BreakdownSplit | null
 }
@@ -1131,51 +1132,38 @@ export interface StatsInput {
   readonly budgets: readonly Budget[]
   readonly period: BudgetPeriod
   readonly day: IsoDate
-  /**
-   * **Le fisse si vedono in A** (decisione 0c). Il valore che l'app passa
-   * all'apertura e' `true`: partire da `false` nasconderebbe 530,00 € dietro un
-   * controllo, che e' ADR 016 §1 dalla porta di servizio.
+    /**
+   * **`showFixed` non c'e' piu', e con lui l'interruttore.**
    *
-   * ## Cosa fa, adesso che la scala e' della sezione
+   * Era entrato qui — invece di restare un filtro in `Stats.tsx` — per una
+   * ragione sola e vera: *"non toglie righe, ricalcola la scala"*. Con la scala
+   * unica di A, spegnere le fisse rimetteva in gioco le sei righe quotidiane, che
+   * a schermo valevano fra 4 e 19 px e tornavano a valere fra 49 e 196.
    *
-   * **Non tocca piu' nessuna lunghezza**, e qui c'era scritto il contrario. Era
-   * vero finche' le lunghezze erano frazioni del massimo di **tutta** A:
-   * spegnere l'affitto riapriva le sei righe che stavano in dieci pixel, e quella
-   * era *"l'unica cosa che il selettore fa di utile"*. Con la scala per sezione
-   * quelle sei righe **nascono gia' riaperte**, perche' l'affitto non e' nella
-   * loro scala: cio' che il selettore restituiva a richiesta e' diventato il
-   * valore di partenza, e restituirlo una seconda volta non si puo'.
+   * **Quella ragione e' evaporata quando 0a e' stata rovesciata.** Con la scala di
+   * nuovo per sezione, le righe che il tap riapriva **nascono gia' riaperte**:
+   * l'affitto non e' nella loro scala, quindi non le schiaccia. Verificato e non
+   * dedotto — a fisse spente le `fraction` erano **identiche** e `scaleCents` non
+   * si muoveva di un centesimo.
    *
-   * Restano due effetti, tutti e due sull'**insieme delle righe a schermo** e
-   * nessuno dei due sulla geometria di una riga:
+   * Restava un effetto solo: ricalcolare `asChart` sulle righe rimaste. Adesso
+   * `asChart` si calcola su `present`, che e' un fatto sui dati, e non ha piu'
+   * bisogno di sapere cosa qualcuno stia guardando.
    *
-   * - la sezione delle fisse **non c'e'**, come quando nel periodo non ne e'
-   *   uscita nessuna — `split` distingue i due vuoti, e resta in tutti e due;
-   * - **`Breakdown.asChart` si ricalcola** sulle righe rimaste: tre righe che
-   *   diventano due smettono di essere una ripartizione.
+   * **Perche' si e' tolto invece di lasciarlo:** un interruttore che non cambia
+   * quasi niente e' peggio di nessun interruttore, perche' **promette un potere
+   * che non ha**. Chi lo tocca si aspetta che succeda qualcosa e vede sparire una
+   * sezione, che e' meno di quanto la sua presenza annunciava.
    *
-   * ## Perche' resta un ingresso del modello, che e' un'altra domanda
-   *
-   * Per il secondo effetto, **e solo per quello**. Un filtro applicato in
-   * `Stats.tsx` a un modello gia' calcolato lascerebbe `asChart` deciso su tre
-   * righe mentre a schermo ne restano due: due barre disegnate sotto la soglia
-   * che dice di non disegnarne.
-   *
-   * E' una ragione vera e **molto piu' sottile di quella che sostituisce**: chi
-   * legge questo campo deve sapere che dal 29 agosto sera il selettore e' quasi
-   * un filtro, e che il giorno in cui `asChart` cambiasse forma non avrebbe piu'
-   * nessuna ragione di stare qui. Se serva ancora un interruttore, e a quale
-   * domanda risponda adesso, e' una decisione di prodotto e non di questo file.
-   *
-   * ## Non tocca B, e la ragione e' geometrica
-   *
-   * `byPeriod` non lo guarda. B **e'** il confronto col budget, e il budget le
-   * fisse le esclude: una barra che comprendesse l'affitto contro una traccia che
-   * non lo comprende metterebbe due unita' di misura sullo stesso asse. Non c'e'
-   * niente da accendere di la', quindi non c'e' nessun ramo — e questa riga
-   * esiste perche' chi legge il campo non vada a cercarlo.
+   * **E ne e' uscito un difetto che non era stato progettato.** Con l'interruttore
+   * spento in una settimana di sole spese fisse, `sections` era vuota, `split`
+   * nullo, e il numero grande in cima — che `Stats.tsx` dichiara *"non cambia
+   * quando si spengono le fisse, ed e' voluto"* — spariva. Una **scelta di
+   * lettura** che cancellava un **fatto**: 507,00 € usciti e nessun euro a
+   * schermo. Togliendo il selettore quel ramo non e' piu' raggiungibile, ed e' la
+   * seconda volta in questa fase che una superficie in meno chiude un difetto che
+   * un controllo non copriva.
    */
-  readonly showFixed: boolean
 }
 
 /**
@@ -1337,7 +1325,7 @@ interface SectionSource {
  * Con `tallies` vuoto uscirebbe una sezione a zero righe, che romperebbe
  * `single === (rows.length === 1)`. **Non e' una dichiarazione di
  * irraggiungibilita' a parole**: il chiamante e' uno solo — `statsView` — e
- * `shown` e' un sottoinsieme di `present`, che e' `parts` filtrato proprio su
+ * il chiamante passa `present`, che e' `parts` filtrato proprio su
  * `tallies.length > 0`. Chi aggiungesse un secondo chiamante legge questa riga
  * insieme alla firma.
  */
@@ -1430,28 +1418,27 @@ export function statsView(input: StatsInput): StatsView {
       totalCents: current.spentCents,
     },
   ]
-  // Una sezione senza righe non c'e'. E' un fatto **sui dati**, e resta separato
-  // dal selettore qui sotto, che e' una scelta di lettura: `present` e' cio' che
-  // il periodo contiene, `shown` e' cio' che si guarda. Confonderli e' il modo in
-  // cui il selettore diventerebbe un vicolo cieco — vedi `outside`, sotto.
+  // Una sezione senza righe non c'e', ed e' un fatto **sui dati**.
+  //
+  // Qui c'era anche `shown`, cioe' `present` filtrato dal selettore delle fisse.
+  // La distinzione fra i due — *cio' che il periodo contiene* e *cio' che si
+  // guarda* — esisteva perche' confonderli rendeva il selettore un vicolo cieco.
+  // Tolto il selettore, la scelta di lettura non c'e' piu' e ne resta uno solo:
+  // **niente da confondere, invece di due nomi da tenere distinti.**
   const present = parts.filter((part) => part.tallies.length > 0)
-  const shown = present.filter((part) => input.showFixed || part.kind !== 'fixed')
 
   // **Qui non si calcola nessuna scala**, ed e' il segno che la scala e' della
   // sezione: `sectionOf` prende il massimo delle proprie righe e lo dichiara in
   // `scaleCents`. Il `reduce` su tutte le righe visibili che stava qui era la
   // scala unica di A, ed e' caduto con lei — l'argomento sta in cima al file, la
   // misura che l'ha deciso pure.
-  //
-  // Conseguenza da sapere leggendo `shown`: **il selettore non tocca piu' nessuna
-  // lunghezza.** Toglie una sezione e rimette in gioco `asChart`, e basta.
   const byCategory: Breakdown = {
-    sections: shown.map((part) => sectionOf(part)),
+    sections: present.map((part) => sectionOf(part)),
     // La soglia conta le righe **a schermo**, tutte insieme: applicata per
     // sezione lasciava senza barre la meta' che pesava 530,00 € su 642,00 €.
     // L'argomento sta su `BREAKDOWN_MIN_ROWS`, la tabella misurata in cima al
     // file.
-    asChart: shown.reduce((n, part) => n + part.tallies.length, 0) >= BREAKDOWN_MIN_ROWS,
+    asChart: present.reduce((n, part) => n + part.tallies.length, 0) >= BREAKDOWN_MIN_ROWS,
     // **Dalle metriche, e fuori dal selettore.** Fuori perche' e' cio' che dice
     // all'utente cosa sta nascondendo: sparendo con le righe, spegnere le fisse
     // toglierebbe 530,00 € dallo schermo senza lasciare traccia, che e' ADR 016

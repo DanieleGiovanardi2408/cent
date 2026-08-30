@@ -1,5 +1,5 @@
 import { Fragment } from 'preact'
-import { useMemo, useState } from 'preact/hooks'
+import { useMemo } from 'preact/hooks'
 import type { Budget, BudgetPeriod, Category, Expense, RecurringRule } from '../core/types'
 import type { IsoDate } from '../core/date'
 import { daysLabel, money, periodRangeLabel, t } from './i18n'
@@ -310,8 +310,6 @@ function Row({
 function Categories({
   breakdown,
   range,
-  showFixed,
-  onToggleFixed,
 }: {
   readonly breakdown: Breakdown
   /**
@@ -333,23 +331,22 @@ function Categories({
    * pixel piu' sotto) **non nomina il confine**, quindi non lo copre.
    */
   readonly range: string
-  readonly showFixed: boolean
-  readonly onToggleFixed: () => void
 }) {
   const { sections, split, asChart } = breakdown
-
-  // **A si disegna anche senza sezioni, se a svuotarla e' stato l'utente.**
+  // **Nessuna sezione vuol dire che nel periodo non e' uscito niente**, e allora
+  // A non si disegna.
   //
-  // Con il selettore spento in un periodo di sole spese fisse — la settimana in
-  // cui esce solo l'affitto, cioe' il caso che ADR 016 da' per scontato — il
-  // modello consegna zero sezioni e nessuna divisione (una meta' e' zero). Se
-  // questo componente uscisse su `sections.length === 0` come faceva prima,
-  // **sparirebbe anche il selettore**: l'utente resterebbe chiuso fuori dai
-  // propri dati esattamente dentro il ramo in cui l'unico interruttore che li
-  // riaccende non si disegna piu'.
+  // Questa riga e' stata `sections.length === 0 && showFixed` per un giorno, e la
+  // congiunzione copriva un vicolo cieco: con l'interruttore spento in una
+  // settimana di sole fisse le sezioni erano zero **per scelta di lettura**, e
+  // uscire qui avrebbe fatto sparire anche l'interruttore — l'utente chiuso fuori
+  // dai propri dati dentro l'unico ramo in cui il comando che li riaccende non si
+  // disegna.
   //
-  // La condizione quindi non guarda le righe: guarda **chi le ha tolte**.
-  if (sections.length === 0 && showFixed) return null
+  // Tolto il selettore, quel ramo **non e' piu' raggiungibile**: zero sezioni ha
+  // una causa sola, ed e' un fatto sui dati. La congiunzione se n'e' andata con la
+  // seconda causa invece di restare a difendersi da una possibilita' morta.
+  if (sections.length === 0) return null
 
   // Il totale del periodo, che e' cio' che rendeva monco `DOVE SONO FINITI ·
   // 24–30 AGO`: finiti *quanto?* Viene dalla divisione quando c'e', perche' li'
@@ -418,21 +415,25 @@ function Categories({
       {split === null ? null : <Split split={split} />}
 
       {/* **L'intestazione delle fisse si disegna anche quando la sezione non
-          c'e'**, e non e' una duplicazione: e' l'unico posto in cui vive il
-          selettore, e un selettore che sparisce insieme a cio' che nasconde e'
-          un vicolo cieco. Porta con se' la cifra nascosta, cosi' spegnere le
-          righe non spegne il fatto (ADR 016 §1). */}
-      {fixedSection === undefined && (split !== null || !showFixed) ? (
+          c'e'**, e adesso ha una ragione sola invece di due.
+
+          Ne aveva due: ospitava l'interruttore — che sparendo insieme a cio' che
+          nascondeva sarebbe stato un vicolo cieco — e portava la cifra nascosta.
+          L'interruttore non c'e' piu'; **la cifra resta**, ed e' ADR 016 §1: se la
+          divisione dice che 530,00 € sono fisse, quel numero deve avere una riga
+          che lo nomina, anche quando le sue categorie non sono in elenco.
+
+          La condizione si e' semplificata con la ragione che e' caduta: era
+          `split !== null || !showFixed`, cioe' *"c'e' una divisione, oppure sei tu
+          ad aver spento"*. Resta la prima meta'. */}
+      {fixedSection === undefined && split !== null ? (
         <PartHead
           kind="fixed"
-          amount={split === null ? null : money(split.fixedCents)}
+          amount={money(split.fixedCents)}
           // Nessuna riga, quindi nessuna barra, quindi nessuna scala da
           // dichiarare: questa intestazione si disegna **senza la propria
-          // sezione**, per non far sparire il selettore insieme a cio' che
-          // nasconde.
+          // sezione**, per non lasciare la cifra della divisione senza un nome.
           scale={null}
-          showFixed={showFixed}
-          onToggleFixed={onToggleFixed}
         />
       ) : null}
 
@@ -520,8 +521,6 @@ function Categories({
                 ? t('stats.scale', { amount: money(part.scaleCents) })
                 : null
             }
-            showFixed={showFixed}
-            onToggleFixed={onToggleFixed}
           />
           <ul class="stats__rows">
             {part.rows.map((row: CategorySlice) => (
@@ -553,12 +552,12 @@ function Categories({
         </Fragment>
       ))}
 
-      {/* **Non e' "non c'e' niente": e' "l'hai nascosto tu".**
-          Le due frasi descrivono lo stesso schermo vuoto e mandano a fare due
-          cose opposte — la prima a segnare una spesa, la seconda a riaccendere
-          l'interruttore che sta due righe sopra. Dirlo com'e' e' anche l'unico
-          modo perche' non sembri un guasto. */}
-      {sections.length === 0 ? <p class="stats__hidden">{t('stats.hiddenAll')}</p> : null}
+      {/* Qui c'era `stats.hiddenAll`, *"in questo periodo ci sono solo spese
+          fisse, e le hai nascoste"*. Diceva la cosa giusta — non *"non c'e'
+          niente"*, ma *"l'hai nascosto tu"* — e non ha piu' un soggetto: senza
+          interruttore nessuno puo' nascondere niente, e zero sezioni con delle
+          spese nel periodo non e' uno stato raggiungibile. La chiave e' uscita dai
+          due dizionari insieme a questa riga. */}
     </section>
   )
 }
@@ -678,13 +677,15 @@ function Split({ split }: { readonly split: BreakdownSplit }) {
  * dedicata sarebbe costata 44 px pieni sopra B, cioe' avrebbe allontanato di
  * un'altra riga il confronto settimanale che gia' non ci sta.
  *
- * `role="switch"` e non un `aria-expanded`: non e' una divulgazione — le righe
- * non ricompaiono uguali, **la scala si rifa'** sulle sole quotidiane — ed e'
- * cio' che un interruttore e' per definizione, uno stato acceso/spento.
+ * **Qui dentro c'era un interruttore, e non c'e' piu'.** Accendeva e spegneva le
+ * fisse, con `role="switch"` e la sua etichetta; l'argomento era *"non e' una
+ * divulgazione: le righe non ricompaiono uguali, la scala si rifa'"*.
  *
- * L'etichetta accessibile e' quella dell'interruttore (`stats.showFixed`) e non
- * il testo dell'intestazione: il nome di un comando dice cosa fa, e il nome
- * della sezione lo dice gia' l'intestazione a cui e' dentro.
+ * Quell'argomento e' morto quando 0a e' stata rovesciata: con la scala di nuovo
+ * per sezione **la scala non si rifaceva piu'**, e le righe ricomparivano
+ * identiche al pixel. Restava un interruttore che toglieva una sezione, cioe'
+ * che **prometteva un potere che non aveva**. Vedi la lapide su `stats-view.ts`,
+ * dove sta anche il difetto che la sua rimozione ha chiuso.
  *
  * Non c'e' un `<div>` a raccogliere titolo ed elenco: sarebbe un box in mezzo
  * fra la sezione e le sue colonne, e `subgrid` non attraversa un box che non sia
@@ -695,8 +696,6 @@ function PartHead({
   kind,
   amount,
   scale,
-  showFixed,
-  onToggleFixed,
 }: {
   readonly kind: BreakdownSection['kind']
   /** Il totale della parte, o `null` quando lo porta gia' qualcos'altro. */
@@ -727,8 +726,6 @@ function PartHead({
    * stanno sul chiamante.
    */
   readonly scale: string | null
-  readonly showFixed: boolean
-  readonly onToggleFixed: () => void
 }) {
   const fixed = kind === 'fixed'
   return (
@@ -738,23 +735,15 @@ function PartHead({
       </span>
       {amount === null ? null : <span class="stats__partTotal">{amount}</span>}
       {/* La scala sta sulla **seconda riga** dell'intestazione, e non e' una
-          riga in piu' dell'elenco: l'intestazione delle fisse dichiara gia'
-          `min-block-size: var(--tap-min)` perche' dentro ha l'interruttore, e
-          il suo testo ne usa 18,75 su 44. La didascalia entra in quelli che
-          avanzano. */}
+          riga in piu' dell'elenco.
+
+          Fino al 30 agosto entrava gratis: l'intestazione delle fisse riservava
+          44 px per l'interruttore e il suo testo ne usava 18,75. Tolto
+          l'interruttore quella riserva non c'e' piu', quindi **adesso la
+          didascalia costa la propria altezza** — 18,75 px per sezione. E' il
+          prezzo di dire la scala invece di farla dedurre, ed e' scritto qui
+          perche' chi misura la densita' sappia da dove viene. */}
       {scale === null ? null : <span class="stats__partScale">{scale}</span>}
-      {fixed ? (
-        <button
-          type="button"
-          class="stats__toggle"
-          role="switch"
-          aria-checked={showFixed}
-          aria-label={t('stats.showFixed')}
-          onClick={onToggleFixed}
-        >
-          <span class="stats__switch" aria-hidden="true" />
-        </button>
-      ) : null}
     </h3>
   )
 }
@@ -971,11 +960,10 @@ export function Stats({ phase, expenses, categories, rules, budgets, period, day
    * E il costo di non persisterlo e' un tap per chi lo spegne spesso, contro
    * una migrazione di schema su dati veri per chi non lo spegne mai.
    */
-  const [showFixed, setShowFixed] = useState(true)
 
   const view = useMemo(
-    () => statsView({ expenses, categories, rules, budgets, period, day, showFixed }),
-    [expenses, categories, rules, budgets, period, day, showFixed],
+    () => statsView({ expenses, categories, rules, budgets, period, day }),
+    [expenses, categories, rules, budgets, period, day],
   )
 
   // Il guscio si dipinge prima dei dati ("Ordine di pittura"): finche' non sono
@@ -1082,8 +1070,6 @@ export function Stats({ phase, expenses, categories, rules, budgets, period, day
       <Categories
         breakdown={view.byCategory}
         range={periodRangeLabel(view.period, view.current.range)}
-        showFixed={showFixed}
-        onToggleFixed={() => setShowFixed((on) => !on)}
       />
       {/* **L'assenza di B si legge qui, e non dentro `Periods`.**
 

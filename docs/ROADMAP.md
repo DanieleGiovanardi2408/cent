@@ -25,17 +25,17 @@ sa gia', e per questo non puo' invecchiare. I giudizi — cosa e' in volo, cosa
 aspetta una persona — stanno sotto, scritti a mano e timbrati con lo SHA a cui
 sono stati rivisti.
 
-- **Ultimo commit**: `8f12a70` — feat: la scala torna per sezione, e ogni sezione dichiara quanto vale una barra piena
-- **Data**: 29/08/2026 21:57
+- **Ultimo commit**: `005224d` — feat: densita', accento e numero grande — e ADR 016 §3 non abitava qui
+- **Data**: 29/08/2026 22:28
 - **Ramo**: `fase-6-wip`
 - **Pushato**: si, `origin/fase-6-wip` e' allo stesso commit
-- **Rispetto a `origin/main`**: 9 commit avanti
+- **Rispetto a `origin/main`**: allo stesso commit
 - **Albero di lavoro**: **non pulito**, ci sono modifiche non committate
 
-- **Test unitari**: 700 in 23 file, tutti verdi
+- **Test unitari**: 692 in 23 file, tutti verdi
 - **Test e2e dichiarati**: 329 in 14 file, su 4 progetti (iphone-se, iphone-14, landscape, dark)
-- **Test e2e eseguiti**: 311 passati, 18 saltati, in 2.7 minuti. I saltati sono condizionali (ADR 013): solo un'esecuzione li vede.
-- **Bundle iniziale**: 55.2 KB gzip su 60.0 KB (4.8 KB di margine)
+- **Test e2e eseguiti**: 311 passati, 18 saltati, in 2.4 minuti. I saltati sono condizionali (ADR 013): solo un'esecuzione li vede.
+- **Bundle iniziale**: 54.8 KB gzip su 60.0 KB (5.2 KB di margine)
 
 - **Schema del database**: 4. La scala delle migrazioni:
   - **1** — Schema iniziale: expenses, categories, recurringRules, budgets, settings
@@ -52,7 +52,7 @@ sono stati rivisti.
 ## In volo adesso
 
 <!-- JUDGMENT rivisto=35c54f0 -->
-> Rivisto a `35c54f0`, 3 commit fa.
+> Rivisto a `35c54f0`, 4 commit fa.
 
 **Fase 6 sul ramo `fase-6-wip`, cinque commit sopra `origin/main`.** Il ramo e'
 spinto; `main` non e' stato toccato, quindi **cio' che sta su Pages e' ancora
@@ -784,21 +784,68 @@ uno stato che avrei creato invece di uno che esisteva, ed e' esattamente la form
 per cui quella regola e' stata scritta. Presa perche' il brief chiedeva all'agente
 di segnalare la discrepanza; senza quella riga sarebbe passata.
 
-#### 0c. Selettore fisse si'/no su A
+#### 0c. ~~Selettore fisse si'/no su A~~ — **CHIUSA TOGLIENDO IL SELETTORE, 30 agosto**
 
 <!-- DECISION
-     present: src/ui/i18n/it.ts :: stats.showFixed
+     absent:  src/ui/Stats.tsx :: stats__toggle
+     present: src/ui/stats-view.ts :: `showFixed` non c'e' piu'
 -->
-> **Applicata**, verificato da: `stats.showFixed`.
+> **Applicata**, verificato da: `!stats__toggle`, ``showFixed` non c'e' piu'`.
 
-Sostituisce **una regola di layout con un controllo dell'utente**. Tre vincoli:
+**Il selettore non c'e' piu'.** Non e' stato ridiscusso il suo default: e' caduto
+l'oggetto.
 
-- **acceso di default** — spento nasconderebbe 507 € dietro un controllo, cioe'
-  ADR 016 §1 di nuovo, dalla porta di servizio;
-- lo **stato dev'essere leggibile senza toccare niente**;
-- **non si applica a B**: con le fisse accese la traccia del budget non
-  significherebbe piu' niente. Li' o non si applica, o la traccia sparisce — che e'
-  gia' la regola di `comparableToBudget`.
+##### La ragione per cui esisteva, e quando e' evaporata
+
+0c sostituiva *"una regola di layout con un controllo dell'utente"*, e il controllo
+serviva perche' con la **scala unica** (0a) le sei righe quotidiane valevano fra 4 e
+19 px con l'affitto dentro. Spegnere le fisse ricalcolava la scala e le riapriva a
+49–196. Era *"l'unica cosa utile che il selettore fa"*, ed era anche la sola ragione
+per cui `showFixed` stava nel **modello** invece che essere un filtro nel componente.
+
+**Rovesciata 0a, la scala e' tornata per sezione, e quelle sei righe nascono gia'
+riaperte**: l'affitto non e' nella loro scala, quindi non le schiaccia. Verificato e
+non dedotto — a fisse spente le `fraction` erano **identiche** e `scaleCents` non si
+muoveva di un centesimo. Il test che lo dimostrava e' stato scritto, ha fatto il suo
+lavoro una volta, ed e' uscito con l'oggetto che descriveva.
+
+Restava un effetto solo: ricalcolare `Breakdown.asChart` sulle righe rimaste. Adesso
+`asChart` si calcola su `present`, che e' un fatto sui dati.
+
+##### Il criterio, che vale oltre questo caso
+
+> **Un comando che non cambia quasi niente e' peggio di nessun comando: promette un
+> potere che non ha.**
+
+Chi lo tocca si aspetta che succeda qualcosa e vede sparire una sezione — meno di
+quanto la sua presenza annunciava. E' la stessa famiglia di *"un indicatore che puo'
+sbagliare deve sbagliare verso l'allarme"*: il costo non e' la funzione mancante, e'
+la **fiducia** che si spende per scoprirlo.
+
+##### E ne e' uscito un difetto che nessuno aveva progettato
+
+Con l'interruttore spento in una settimana di **sole spese fisse**, `sections` era
+vuota, `split` nullo, e il numero grande in cima — che il componente dichiara *"non
+cambia quando si spengono le fisse, ed e' voluto"* — **spariva**. Una scelta di
+lettura che cancellava un fatto: 507,00 € usciti e nessun euro a schermo. Togliendo
+il selettore quel ramo non e' piu' raggiungibile.
+
+**E la sua guardia e' stata sbagliata prima di essere giusta**, che e' la parte da
+tenere. La prima forma chiedeva *"in `ready` A ha almeno una sezione"*, ed e' caduta
+subito su uno stato legittimo: spese solo nei periodi passati — cioe' **ogni lunedi'
+mattina** — dove A non ha sezioni perche' nel periodo non c'e' niente da ripartire, e
+zero non e' una cifra nascosta, e' la cifra. Confondeva *"A copre tutto"* con *"A non
+e' vuota"*.
+
+La forma giusta guarda la **copertura**: la somma di ogni riga di ogni sezione e'
+esattamente il denaro del periodo. E non e' solo piu' corretta, e' **piu' forte** —
+avrebbe preso il difetto misurato (le fisse spente lasciavano fuori 507,00 € **e una
+sezione dentro**), dove `length >= 1` sarebbe rimasta verde. Gira su ogni fixture.
+
+##### Cosa resta vero dei tre vincoli originali
+
+Il terzo — *"non si applica a B"* — non era un vincolo sul selettore: e' la regola di
+`comparableToBudget`, e vive li'. Gli altri due sono caduti col loro oggetto.
 
 #### 0d. Home: quattro livelli invece di sei affermazioni
 

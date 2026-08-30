@@ -578,85 +578,22 @@
   background-color: var(--seg);
 }
 
-/* --- l'interruttore delle fisse ----------------------------------------- */
-
-/* **Un bersaglio dichiara le proprie misure, su tutti e due gli assi.**
- * Qui dentro non c'e' testo — il nome accessibile e' `stats.showFixed`, la
- * figura e' la pastiglia — quindi senza queste due righe la larghezza sarebbe
- * quella del disegno, 34 px, e la lingua non c'entrerebbe niente: sarebbe
- * piccolo in tutte e due. */
-.stats__toggle {
-  /* Terza colonna, tutte le righe che ci sono: la didascalia della scala puo'
-   * aggiungerne una seconda, e un interruttore ancorato alla prima resterebbe
-   * appeso in alto invece che al centro di cio' che comanda. `align-self:
-   * center` e non `baseline`: e' una figura, e non ha una linea di base. */
-  grid-area: 1 / 3 / -1 / 4;
-  align-self: center;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  min-block-size: var(--tap-min);
-  min-inline-size: var(--tap-min);
-  /* Il rientro negativo riporta la figura sul bordo destro della colonna
-   * lasciando al bersaglio i suoi 44 px pieni — la stessa mossa del bottone del
-   * budget nella Home. */
-  margin-inline-end: calc(var(--sp-2) * -1);
-  padding-inline-end: var(--sp-2);
-}
-
-/* La pastiglia: **lo stato si legge senza toccare niente**, che e' uno dei tre
- * vincoli del selettore. Acceso e spento differiscono per due cose insieme —
- * riempimento e posizione del pallino — perche' una sola delle due sarebbe
- * invisibile a chi non distingue il verde dal grigio. */
-.stats__switch {
-  position: relative;
-  display: block;
-  inline-size: 2.125rem;
-  block-size: 1.25rem;
-  border-radius: var(--radius-full);
-  background-color: var(--line-strong);
-}
-
-.stats__switch::after {
-  content: "";
-  position: absolute;
-  inset-block: 2px;
-  inset-inline-start: 2px;
-  inline-size: 1rem;
-  border-radius: var(--radius-full);
-  background-color: var(--bg);
-}
-
-.stats__toggle[aria-checked="true"] .stats__switch {
-  background-color: var(--brand);
-}
-
-/* Solo `transform`, mai `inset`: la pastiglia scorre senza toccare il layout, e
- * sotto `prefers-reduced-motion` i token di durata valgono zero — il pallino e'
- * semplicemente gia' dall'altra parte. */
-.stats__toggle[aria-checked="true"] .stats__switch::after {
-  transform: translateX(0.875rem);
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  .stats__switch,
-  .stats__switch::after {
-    transition:
-      transform var(--dur-2) var(--ease-out),
-      background-color var(--dur-2) var(--ease-out);
-  }
-}
-
-/* A e' vuota **perche' l'utente l'ha svuotata**: il periodo ha solo spese fisse
- * e le ha spente. Non e' lo stato vuoto della schermata — quello ha una sua
- * impaginazione e dice un'altra cosa — e' una riga che spiega uno schermo, sotto
- * l'interruttore che lo disfa. */
-.stats__hidden {
-  grid-column: 1 / -1;
-  color: var(--text-muted);
-  font-size: var(--fs-200);
-  max-inline-size: 42ch;
-}
+/* --- l'interruttore delle fisse: tolto il 30 agosto ---------------------- */
+/*
+ * Qui vivevano `.stats__toggle`, `.stats__switch` e `.stats__hidden`, cioe' la
+ * pastiglia acceso/spento nell'intestazione delle fisse e la riga che spiegava
+ * lo schermo vuoto quando la si spegneva in una settimana di sole fisse.
+ *
+ * Sono uscite col comando, non prima: la ragione sta in `stats-view.ts`, sulla
+ * lapide di `showFixed`.
+ *
+ * **Cosa lascia in eredita' alla geometria, e va saputo misurando la densita':**
+ * l'intestazione delle fisse riservava `min-block-size: var(--tap-min)` per
+ * ospitare un bersaglio, e il suo testo ne usava 18,75 su 44. Quella riserva non
+ * c'e' piu'. La didascalia della scala ci entrava **gratis**; adesso costa la
+ * propria riga. E' il prezzo di dichiarare la scala invece di farla dedurre, ed
+ * e' un prezzo che si paga una volta per sezione.
+ */
 
 /* --- gli elenchi e le righe --------------------------------------------- */
 /* **Una griglia sola per schermata-sezione, non una per riga.**

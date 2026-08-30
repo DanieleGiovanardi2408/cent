@@ -501,12 +501,6 @@ export const en: Record<keyof typeof it, string> = {
     'This period is {range}, and nothing you have logged falls inside it: it is all in {history}. The next expense you add today shows up here.',
 
   'stats.variable': 'Day to day',
-  // `stats.fixed` e `stats.perMonthRate` sono uscite con la riga che le leggeva
-  // (la proiezione mensile in testa alle Statistiche, che ripeteva il totale
-  // della parte fisse). Vedi it.ts.
-  // Acceso a ogni apertura, mai ricordato. Spento, la cifra delle fisse resta
-  // sull'intestazione e nella barra divisa. Vedi it.ts.
-  'stats.showFixed': 'Show fixed costs',
 
   'stats.byCategory': 'What it went on',
   // Vedi it.ts: la scheda in testa e' una previsione al mese, questa e' quanto e'
@@ -527,15 +521,6 @@ export const en: Record<keyof typeof it, string> = {
   'stats.scale': 'Full bar = {amount}',
   'stats.byPeriod.weekly': 'Week by week',
   'stats.byPeriod.monthly': 'Month by month',
-  // Il periodo ha **solo** spese fisse e l'utente le ha spente: A resta senza
-  // righe. Non e' lo stato vuoto — i dati ci sono — e non e' un guasto: e' una
-  // conseguenza di un gesto, quindi la frase **nomina il gesto**, altrimenti
-  // sembra che l'app abbia perso qualcosa.
-  //
-  // Non dice cosa fare adesso perche' l'interruttore che lo disfa e' due righe
-  // sopra, acceso in posizione "spento": un'istruzione qui ripeterebbe a parole
-  // un comando che si vede.
-  'stats.hiddenAll': 'Only fixed costs in this period, and you have hidden them.',
 
   /* **La riga del periodo in corso dice quanti giorni ha vissuto.**
    *
