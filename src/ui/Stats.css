@@ -159,46 +159,54 @@
    * col nome lungo diventi piu' alta delle altre. */
   --bar-h: 1.5rem;
 
-  /* **Il lato della ciambella delle quotidiane: 88 px.**
+  /* **Il lato della ciambella: 120 px.**
    *
-   * ## Il numero viene dalla piega di B, non dall'occhio
+   * ## Due vincoli, e il secondo e' nuovo
    *
-   * La ciambella e' l'unica cosa nuova di questa schermata che costa altezza, e
-   * l'altezza qui ha un prezzo scritto: ogni pixel speso in A allontana dalla
-   * piega la **seconda** riga di B, cioe' il termine di paragone senza il quale
-   * *"sto spendendo piu' o meno degli altri periodi"* non ha risposta.
+   * 1. **L'altezza costa**, e il prezzo e' scritto: ogni pixel speso in A
+   *    allontana dalla piega la **seconda** riga di B, cioe' il termine di
+   *    paragone senza il quale *"sto spendendo piu' o meno degli altri
+   *    periodi"* non ha risposta. A 390x844 quella riga finiva a `755,19` con
+   *    una piega a `760`: **4,81 px di margine**, misurati prima di toccare
+   *    niente.
+   * 2. **Il buco deve ospitare il totale della sezione.** Il buco vale
+   *    `120 - 2 x 20 = 80 px` (l'anello e' `PIE_RING`, e perche' non sia piu'
+   *    `--bar-h` sta scritto li'), e `112,00 €` a `--fs-200` tabulari ne misura
+   *    **66,77**: restano 13,2 px, che e' cio' che tiene il numero dentro anche
+   *    con una cifra in piu' o con un font piu' largo del nostro. Un buco vuoto
+   *    e' spazio speso per niente.
    *
-   * Misurato a 390x844 sulla scena dell'export del 26 agosto — un canone, cinque
-   * quotidiane, otto settimane dietro — prima di questa figura:
+   * ## Come i due vincoli stanno insieme
    *
-   *     contenuto di .stats            862 px
-   *     .stats visibile                708 px (da 52 a 760: sotto c'e' --fab-lane)
-   *     seconda riga di B, fondo    662,19 px
-   *     margine dalla piega vera     97,81 px
+   * Perche' la ciambella **non si aggiunge piu' alle righe: le sostituisce.**
+   * Fino al 30 agosto la figura stava dentro l'intestazione (88 px, di cui 53 in
+   * piu' rispetto al testo che attraversava) **sopra** cinque righe da 40. Adesso
+   * la vista `quote` e' l'alternativa alle righe, non un supplemento:
    *
-   * La figura sta nella **colonna 3 dell'intestazione di parte**, che e' vuota da
-   * quando l'interruttore delle fisse se n'e' andato, e attraversa le due righe
-   * di testo — nome + totale, e la scala — che ne occupano 35. Costa quindi
-   * `88 - 35 = 53 px`, non 88: il margine scende da 97,81 a **44,81**.
+   *     intestazione (88 di figura dentro) + 5 righe da 40    101 + 8 + 200 = 309 px
+   *     intestazione (44, col comando) + figura + legenda      56 + 8 + 248 = 312 px
    *
-   * In un blocco suo, fra l'intestazione e l'elenco, costerebbe 88 piu' gli 8 del
-   * passo della sezione — **96** — e il margine sarebbe **1,81 px**, cioe' un
-   * numero che nessuna delle due lingue e nessuno dei due font puo' garantire.
-   * Ed e' la ragione per cui la figura sta dov'e': non e' un'idea di
-   * composizione, e' l'unico posto in cui ci sta.
+   * Tre pixel di differenza su una sezione che ne costava 309, con una figura
+   * di raggio **50 invece di 32** — non e' uno scambio fatto in perdita. E la
+   * sezione delle fisse, che il comando non ce l'ha, ne restituisce **nove**:
+   * la sua intestazione non riserva piu' 44 px per un bersaglio che li' non c'e'.
    *
-   * ## E perche' 88 e non di piu'
+   * ## E perche' non di piu'
    *
-   * Perche' l'anello e' spesso `--bar-h` (24), quindi il buco vale `88 - 48 =
-   * 40 px`: sotto quel lato il buco si chiude e la ciambella torna una torta,
-   * cioe' una figura in cui l'occhio confronta **aree** invece di **archi** —
-   * che e' la cosa che si legge peggio. Sopra, si comprano archi piu' lunghi al
-   * prezzo di pixel che B non ha.
+   * Perche' i nove pixel qui sopra sono gia' quasi tutto il margine dalla piega,
+   * e perche' l'anello e' spesso `--bar-h` (24): il buco cresce col lato, ma il
+   * lato cresce contro la seconda riga di B. 120 e' il piu' grande che tiene il
+   * numero dentro e la riga sopra la piega.
    *
-   * `5.5rem` e non `88px`: e' l'unica misura della schermata che va scalata se
+   * **Va d'accordo con `PIE_BOX` in `Stats.tsx`**, che vale lo stesso numero: il
+   * vuoto fra due fette e' dichiarato in **pixel** (`PIE_GAP`), e lo e' solo
+   * finche' un'unita' di `viewBox` vale un pixel. Cambiare uno solo dei due fa
+   * scalare il vuoto con la figura.
+   *
+   * `8rem` e non `128px`: e' l'unica misura della schermata che va scalata se
    * qualcuno alza la dimensione del testo di sistema, perche' e' l'unica che
-   * divide una riga con del testo. */
-  --pie-size: 5.5rem;
+   * contiene del testo dentro una figura. */
+  --pie-size: 7.5rem;
 
   display: grid;
   /* La barra prende quello che avanza, e mai meno di --plot-min. Il nome si
@@ -262,20 +270,28 @@
   letter-spacing: 0.06em;
 }
 
-.stats__head > .stats__title,
-.stats__head > .stats__partTitle {
+.stats__head > .stats__title {
   grid-column: auto;
   min-inline-size: 0;
 }
 
-/* Dentro la riga del titolo, il nome di parte non cresce e non porta il filo di
- * separazione: non c'e' niente sopra da cui separarsi, ed e' il titolo a cedere
- * lo spazio se non ci sta. */
+/* Dentro la riga del titolo di B, il nome di parte **non cresce**: e' il titolo
+ * a cedere lo spazio se non ci sta.
+ *
+ * ## Qui c'erano tre righe in piu', e sono uscite con cio' che neutralizzavano
+ *
+ * Erano `margin-block-start: 0`, `padding-block-start: 0` e
+ * `border-block-start: none`, e spegnevano il filo fra due parti. Quel filo non
+ * si e' mai applicato a questo elemento — sta su `.stats__partHead`, e B non ne
+ * ha uno — quindi erano **tre dichiarazioni che rispondevano a un selettore che
+ * non poteva vincere**. Sono la stessa cosa di un campo senza produttore, un
+ * piano piu' giu': tenute in vita da chi le legge, non da chi le scrive.
+ *
+ * `grid-column: auto` se n'e' andata per la stessa ragione: `.stats__partTitle`
+ * non dichiara piu' `grid-column: 1 / -1` — quella sta sul `<div>` che lo
+ * contiene in A, e in B non c'e' nessun `<div>`. */
 .stats__head > .stats__partTitle {
   flex: none;
-  margin-block-start: 0;
-  padding-block-start: 0;
-  border-block-start: none;
 }
 
 /* Dentro la riga del titolo di B il nome di parte non deve cedere spazio: la
@@ -322,7 +338,12 @@
  * la seconda parte di A e nient'altro. Il titolo di parte di B segue il titolo
  * di sezione e non ha niente sopra da cui separarsi — la condizione e' scritta
  * nel selettore, non lasciata a una classe in piu'. */
-.stats__rows + .stats__partTitle {
+/* Il selettore e' `... + .stats__partHead`, cioe' **un filo fra due grafici**:
+ * prende la seconda parte di A e nient'altro. Ce ne sono due perche' la prima
+ * parte puo' finire in due modi — con le sue barre o con la sua ciambella — e la
+ * separazione non dipende da quale delle due domande si stava facendo. */
+.stats__rows + .stats__partHead,
+.stats__viz + .stats__partHead {
   margin-block-start: var(--sp-2);
   padding-block-start: var(--sp-3);
   border-block-start: 1px solid var(--line);
@@ -370,10 +391,43 @@
  *
  * `align-items: baseline` sulle prime due celle e non `center`: nome e totale
  * sono due testi di due pesi diversi sulla stessa riga. */
-.stats__partTitle {
+/* **La riga dell'intestazione: il titolo e il suo comando.**
+ *
+ * Il `<div>` esiste per una ragione sola, ed e' scritta in `Stats.tsx`: un
+ * bottone dentro un `<h3>` finisce nel **nome accessibile** dell'intestazione, e
+ * una voce leggerebbe *"Quotidiane 112,00 € Quote Ordine, intestazione"*. Fuori,
+ * il titolo resta il titolo.
+ *
+ * Non tocca le colonne della sezione: le righe sono ancora figlie dirette di
+ * `.stats__section` e la catena di `subgrid` non ci passa attraverso.
+ *
+ * `align-items: center` sul comando e non sulla griglia del titolo: nome e
+ * totale restano su una linea di base condivisa (sono due testi), il comando e'
+ * una figura e si centra su cio' che c'e'. */
+.stats__partHead {
   grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+}
+
+/* **L'intestazione dichiara 44 px dove ospita un bersaglio**, e non li deriva
+ * dal proprio testo.
+ *
+ * `[data-vista]` c'e' esattamente dove c'e' il comando. Un'intestazione
+ * dimensionata dal testo — 18,75 px in italiano, meno in inglese — lascerebbe
+ * che sia la tipografia a decidere se il bersaglio ci sta: e' la stessa mossa
+ * del pavimento sui bersagli, un piano piu' su. Rendere esatta la cosa
+ * misurata, invece di tollerare che dipenda dal font. */
+.stats__partHead[data-vista] {
+  min-block-size: var(--tap-min);
+}
+
+.stats__partTitle {
+  flex: 1 1 auto;
+  min-inline-size: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   column-gap: var(--sp-2);
   align-items: baseline;
   color: var(--text);
@@ -381,21 +435,15 @@
   font-weight: var(--fw-semibold);
 }
 
-/* **L'intestazione delle fisse porta l'interruttore, quindi e' un bersaglio.**
+/* **I 44 px non sono piu' delle fisse.**
  *
- * L'altezza la **dichiara** invece di derivarla dal contenuto: dentro c'e' un
- * bottone da 44 px, e un'intestazione dimensionata dal proprio testo — 18,75 px
- * in italiano, meno in inglese — lascerebbe che sia la tipografia a decidere se
- * il bersaglio ci sta. E' la stessa mossa del pavimento sui bersagli, un piano
- * piu' su: rendere esatta la cosa misurata invece di tollerare che dipenda dal
- * font.
+ * Erano `[data-kind="fixed"]` perche' li' viveva l'interruttore. Adesso il
+ * bersaglio ce l'hanno **tutte le sezioni con due viste**, e la condizione e'
+ * scritta dove sta il fatto: `.stats__partHead[data-vista]`, qui sopra. Legarli
+ * di nuovo alla natura sarebbe la stessa applicazione troppo stretta di un
+ * argomento giusto che la ciambella ha appena finito di sciogliere.
  *
- * `align-items: center` solo qui: le due linee di base che allineano nome e
- * totale non hanno senso per un interruttore, che e' una figura e non un testo. */
-.stats__partTitle[data-kind="fixed"] {
-  align-items: center;
-  min-block-size: var(--tap-min);
-}
+ */
 
 /* La pastiglia che lega l'intestazione al proprio segmento della barra divisa.
  *
@@ -406,7 +454,7 @@
  *
  * `::before` e non un elemento: e' decorazione pura, non ha niente da dire a
  * chi non la vede — il nome accanto lo dice gia'. */
-.stats__partTitle[data-kind] .stats__partName::before {
+.stats__partHead[data-kind] .stats__partName::before {
   content: "";
   display: inline-block;
   inline-size: 0.5rem;
@@ -482,12 +530,12 @@
  * Il segmento delle quotidiane era **nero pieno**: 16,5:1 sul fondo, cioe' la
  * cosa piu' scura della schermata addosso alla quantita' minoritaria. Il peso
  * visivo andava all'inverso della gerarchia che ADR 016 dichiara. */
-.stats__partTitle[data-kind="fixed"],
+.stats__partHead[data-kind="fixed"],
 .stats__seg[data-kind="fixed"] {
   --seg: var(--line-strong);
 }
 
-.stats__partTitle[data-kind="variable"],
+.stats__partHead[data-kind="variable"],
 .stats__seg[data-kind="variable"] {
   --seg: var(--brand);
 }
@@ -565,68 +613,326 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* **La ciambella delle quotidiane.**
+/* --- la vista `quote`: ciambella, totale nel buco, legenda --------------- */
+
+/* **Il blocco che risponde a "quanto pesa cosa".**
  *
- * Sta nella **colonna 3** dell'intestazione — quella lasciata libera
- * dall'interruttore delle fisse — e attraversa le due righe di testo. Il conto
- * dei pixel e la ragione per cui non e' un blocco a se' stanno su `--pie-size`,
- * qui sopra; l'argomento della forma sta in `Stats.tsx`, su `Pie`.
+ * Prende tutte le colonne perche' non ne usa nessuna: la figura si centra e la
+ * legenda ha una griglia sua, con l'importo sul **bordo destro del contenuto** —
+ * lo stesso su cui cadono gli importi delle barre, cosi' la colonna delle cifre
+ * non si sposta commutando vista.
+ *
+ * ## Le misure minime le dichiara anche se non e' un bersaglio dichiarato
+ *
+ * Non ha ruolo e non prende il fuoco — la strada annunciata e' il comando
+ * nell'intestazione — ma per un pollice questo **e'** un bersaglio, e la regola
+ * e' sui bersagli, non sui ruoli. Su tutti e due gli assi: il contenuto dipende
+ * dalla lingua e dai nomi che l'utente scrive, e un blocco largo abbastanza
+ * "perche' dentro c'e' Coffeeshop" e' sopra i 44 per caso.
+ *
+ * `touch-action: manipulation` toglie i 300 ms di attesa del doppio tap su
+ * iOS: senza, il feedback di questo gesto starebbe **fuori** dai 100 ms che
+ * ogni interazione dichiara. */
+.stats__viz {
+  grid-column: 1 / -1;
+  min-block-size: var(--tap-min);
+  min-inline-size: var(--tap-min);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+/* Il riquadro della figura: la ciambella e, sopra di lei, il totale.
+ *
+ * `position: relative` e un figlio assoluto, non una griglia a una cella: il
+ * numero deve stare **esattamente** al centro del buco, che e' il centro del
+ * riquadro, e una griglia lo centrerebbe sul contenuto invece che sulla figura
+ * se un giorno la figura cambiasse rapporto.
+ *
+ * `margin-inline: auto`: la figura sta al centro della colonna, la legenda no —
+ * quella e' un elenco e comincia a sinistra come tutti gli elenchi di questa
+ * app. */
+.stats__donut {
+  position: relative;
+  inline-size: var(--pie-size);
+  block-size: var(--pie-size);
+  margin-inline: auto;
+}
+
+/* La ciambella.
  *
  * Le misure sono **dichiarate su tutti e due gli assi** e non ereditate dal
  * `viewBox`: un SVG senza dimensioni esplicite cade sul default di 300x150 nel
  * frame in cui il foglio non e' ancora applicato, e quel frame e' esattamente
  * quello in cui il CLS si misura.
  *
- * Non porta nessuna transizione. L'unica che questa schermata ha — la larghezza
- * della barra — anima una lunghezza che cambia coi dati; qui non c'e' niente che
- * cambi senza che cambi tutta la schermata, e un cerchio che si compone
- * all'apertura sarebbe decorazione che costa un frame.
- *
- * ## Le due righe flessibili, che sono la riparazione di un difetto misurato
- *
- * La prima forma metteva la figura in `1 / 3 / 3 / 4`, cioe' a cavallo delle due
- * righe di testo. Misurato: la figura alta 88 **gonfia le due righe che
- * attraversa** — 44 e 44 invece di 18,75 e 16,25 — e con
- * `align-items: baseline` ciascun testo si incolla in cima alla propria riga.
- * Il risultato era `Quotidiane 111,00 €` e, **25,25 px di niente piu' sotto**,
- * `Barra intera = 42,00 €`: la legenda staccata dal nome che spiega, e due
- * intestazioni di parte con due spaziature diverse nella stessa schermata,
- * secondo che una ciambella ci sia o no.
- *
- * La riparazione e' `1fr auto auto 1fr` con il testo sulle due righe **in
- * mezzo**: un elemento che attraversa una riga flessibile **non contribuisce**
- * al dimensionamento intrinseco delle righe che attraversa, quindi le due di
- * testo tornano alla propria altezza e i 53 px che avanzano si dividono in parti
- * uguali sopra e sotto. Misurato dopo: testo a 306,94 e 325,69 — adiacenti — con
- * il proprio centro a 324,44, cioe' **esattamente** il centro della figura. E il
- * blocco non cresce di un pixel: intestazione 101, contenuto 915, prima e dopo.
- *
- * `min-block-size` e non `block-size`: a 320 punti il nome puo' andare a capo e
- * la didascalia con lui (37,5 + 32,5 = 70), e un'altezza fissa li' taglierebbe.
- * Sopra gli 88 px comanda il testo, e la figura resta centrata su cio' che c'e'. */
+ * Non porta nessuna transizione. Un cerchio che si compone all'apertura sarebbe
+ * decorazione che costa un frame; la dissolvenza della commutazione sta sul
+ * blocco intero, dove ha un evento che la giustifica. */
 .stats__pie {
-  grid-column: 3;
-  grid-row: 1 / -1;
-  align-self: center;
-  inline-size: var(--pie-size);
-  block-size: var(--pie-size);
+  display: block;
+  inline-size: 100%;
+  block-size: 100%;
 }
 
-.stats__partTitle[data-pie] {
-  grid-template-rows: 1fr auto auto 1fr;
-  min-block-size: var(--pie-size);
+/* **Il numero nel buco.**
+ *
+ * *"Il buco di una ciambella e' spazio gia' speso: o porta un numero o e' un
+ * difetto."* Il numero e' il totale della sezione, cioe' il denominatore di ogni
+ * fetta: senza di lui gli archi sono proporzioni di niente.
+ *
+ * E' HTML e non un `<text>` dentro l'SVG, che e' `aria-hidden`: dentro sarebbe
+ * **una cifra che si vede e non si sente**.
+ *
+ * `pointer-events: none`: la sonda delle sovrapposizioni chiede che
+ * `elementFromPoint` sul centro di un bersaglio restituisca il bersaglio o un
+ * suo discendente, e questo lo e' — ma il gesto deve arrivare al blocco senza
+ * dipendere da quel dettaglio, e un numero non e' una cosa da toccare.
+ *
+ * `--fs-200` e non `--fs-300`: il buco e' largo 80 px e lo stesso `112,00 €` a
+ * 17 px ne misurerebbe 75,7 — dentro, ma con 4 px di margine, cioe' un numero
+ * che la prossima cifra si mangia. A 15 px ne misura 66,77 e ne restano 13,2.
+ * Tabulari come ogni altra cifra della schermata. */
+.stats__donutTotal {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  color: var(--text);
+  font-size: var(--fs-200);
+  font-weight: var(--fw-semibold);
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
 }
 
-/* Le tre celle di testo scendono di una riga: le due flessibili qui sopra
- * esistono per stare **intorno** a loro, non sopra. */
-.stats__partTitle[data-pie] .stats__partName,
-.stats__partTitle[data-pie] .stats__partTotal {
-  grid-row: 2;
+/* **La legenda: una riga per fetta, nello stesso ordine.**
+ *
+ * Sotto e non a lato, e la ragione e' la larghezza: a 375 punti una colonna di
+ * nomi accanto alla figura le lascerebbe meno di 90 px di lato, cioe' un buco
+ * che non tiene piu' il totale. Sotto, ogni riga si prende la larghezza intera e
+ * l'importo cade sul bordo destro del contenuto.
+ *
+ * Tre colonne dichiarate qui e ereditate dalle righe (`subgrid`): la pastiglia
+ * incolonnata, i nomi allineati fra loro, gli importi su **una colonna sola**.
+ * Con una griglia per riga la posizione del nome dipenderebbe da quanto e' largo
+ * l'importo di quella riga. E' lo stesso argomento gia' scritto per `.stat`. */
+.stats__legend {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) max-content;
+  column-gap: var(--sp-2);
+  margin-block-start: var(--sp-2);
 }
 
-.stats__partTitle[data-pie] .stats__partScale {
-  grid-row: 3;
+/* 24 px, e non `--tap-min`: una riga di legenda **non e' un bersaglio** — il
+ * bersaglio e' il blocco che la contiene, e la sonda cerca i comandi per ruolo
+ * (`probe.ts`, l'insieme `COMANDI`), dove `listitem` non c'e'.
+ *
+ * E' una misura di ritmo, e il pavimento vero e' il testo che deve ospitare:
+ * `--fs-200` a `--lh-snug` sono 18,75 px, e 24 lasciano 2,6 px per lato senza
+ * che due nomi si tocchino. E' anche cio' che tiene la vista `quote` dentro il
+ * costo della vista a barre: cinque righe da 24 invece di cinque da 40.
+ *
+ * Un nome che va a capo fa crescere **la sua riga**, come in `.stat`: e' il
+ * verso giusto in cui cedere — si legge tutto, e a pagare e' l'altezza di una
+ * riga sola. */
+.legend {
+  display: grid;
+  grid-template-columns: subgrid;
+  grid-column: 1 / -1;
+  align-items: center;
+  min-block-size: 1.5rem;
 }
+
+/* La pastiglia: lo stesso colore della fetta, e **lo stesso contorno della
+ * barra**, per la stessa ragione misurata — quattro degli otto colori delle
+ * categorie stanno sotto 3:1 sul fondo in tema chiaro, uno in tema scuro. Una
+ * pastiglia da 10 px senza contorno sparirebbe proprio dove serve a riconoscere
+ * quale fetta e'.
+ *
+ * Quadrata con lo stesso raggio da 2 px della barra e della pastiglia di parte:
+ * tre marche di colore nella stessa schermata, una forma sola. */
+.legend__dot {
+  inline-size: 0.625rem;
+  block-size: 0.625rem;
+  border: 1px solid var(--line-strong);
+  border-radius: 2px;
+}
+
+/* Il nome. Due righe e poi i puntini, come `.stat__name`, e per la stessa
+ * ragione: dentro c'e' un nome che l'utente ha scritto o importato, non una
+ * stringa nostra. `overflow-wrap: anywhere` e' parte della riparazione, non una
+ * rifinitura — senza, una parola sola piu' larga della colonna resta su una riga
+ * e `-webkit-box` la taglia a meta' glifo, senza puntini. */
+.legend__name {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  color: var(--text);
+  font-size: var(--fs-200);
+  line-height: var(--lh-snug);
+  overflow-wrap: anywhere;
+}
+
+/* L'importo: **lo stesso carattere e lo stesso peso di `.stat__value`**, sullo
+ * stesso bordo. Commutando vista le cifre non cambiano ne' aspetto ne' colonna:
+ * cambia cio' che sta a sinistra di loro. */
+.legend__value {
+  color: var(--text);
+  font-size: var(--fs-200);
+  font-weight: var(--fw-semibold);
+  font-variant-numeric: tabular-nums;
+  text-align: end;
+}
+
+/* --- il comando a due stati --------------------------------------------- */
+
+/* **Due parole in un guscio, non due icone.**
+ *
+ * ## Il contorno e' dei due segmenti, non del gruppo
+ *
+ * La prima forma aveva un bordo sul gruppo **e** un anello interno sul premuto:
+ * sui tre lati esterni i due cadevano a un pixel di distanza e si leggevano come
+ * un unico bordo spesso e sbilenco. Adesso il contorno ce l'ha ogni segmento, i
+ * due condividono il lato in mezzo (`margin-inline-start: -1px`), e il premuto
+ * **sostituisce il proprio** con quello dell'accento invece di aggiungergliene
+ * un secondo. Un contorno solo, in un posto solo.
+ *
+ * `flex: none`: il comando non cede mai. Cio' che cede e' il nome di parte, che
+ * va a capo e non perde lettere — e' l'asse su cui costa meno. */
+.stats__views {
+  flex: none;
+  display: flex;
+}
+
+/* Ogni segmento **dichiara** le proprie misure minime su tutti e due gli assi.
+ *
+ * Non e' zelo: il contenuto dipende dalla **lingua** — `Quote`/`Ordine` in
+ * italiano, `Shares`/`Ranking` in inglese — e un bottone largo abbastanza perche'
+ * dentro c'e' una parola di sei lettere e' sopra i 44 per caso, non per
+ * costruzione. E' il caso 3 della tassonomia di CLAUDE.md: il rimedio sta nel
+ * CSS, non nel test.
+ *
+ * `min-inline-size` e non `inline-size`: le due parole non sono larghe uguali in
+ * nessuna delle due lingue, e stirarle a una larghezza comune darebbe un comando
+ * piu' largo del necessario proprio dove lo spazio manca (375 punti). */
+.stats__view {
+  min-block-size: var(--tap-min);
+  min-inline-size: var(--tap-min);
+  padding-inline: var(--sp-3);
+  /* `--line-strong` e non `--line`: e' un bordo che conta — delimita un
+   * bersaglio — e `--line` vale 1,19:1 sul fondo in chiaro, cioe' non lo
+   * delimita affatto. */
+  border: 1px solid var(--line-strong);
+  background-color: transparent;
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: var(--fs-100);
+  font-weight: var(--fw-semibold);
+  line-height: var(--lh-snug);
+  touch-action: manipulation;
+  cursor: pointer;
+}
+
+/* Il guscio si chiude sui due capi, e i due segmenti condividono il lato in
+ * mezzo invece di disegnarne due sovrapposti. */
+.stats__view:first-child {
+  border-start-start-radius: var(--radius-1);
+  border-end-start-radius: var(--radius-1);
+}
+
+.stats__view:last-child {
+  margin-inline-start: -1px;
+  border-start-end-radius: var(--radius-1);
+  border-end-end-radius: var(--radius-1);
+}
+
+/* **Lo stato si vede, e non solo dal colore.**
+ *
+ * Superficie propria, contorno interno e testo nell'accento: e' la stessa marca
+ * gia' usata dal selettore del periodo nel foglio del budget
+ * (`.period[data-selected]`), e la ragione e' scritta li' — *"il colore da solo
+ * sparisce a chi ha una carenza cromatica e sotto il sole"*. Qui vale identica:
+ * e' l'unica cosa che dice quale delle due domande si sta guardando.
+ *
+ * `box-shadow` interno e non `border`: un bordo piu' spesso sul premuto
+ * sposterebbe il testo di 1 px a ogni tap, cioe' un salto di layout dentro il
+ * comando che lo produce.
+ *
+ * Contrasti misurati sui token: `--brand` su `--brand-soft` vale **5,5:1** in
+ * chiaro e **7,0:1** in scuro; il non premuto e' `--text-muted` sul fondo, 5,4:1
+ * e 7,3:1. Tutti e quattro sopra AA. */
+.stats__view[aria-pressed="true"] {
+  /* `position` e `z-index` perche' il lato condiviso e' **suo**: senza, il bordo
+   * del vicino grigio si dipingerebbe sopra quello dell'accento e il premuto
+   * avrebbe tre lati verdi e uno grigio. */
+  position: relative;
+  z-index: 1;
+  border-color: var(--brand);
+  /* Il secondo pixel del contorno, e **non e' un bordo piu' spesso**: un bordo
+   * da 2 px sul premuto sposterebbe il testo di 1 px a ogni tap, cioe' un salto
+   * di layout dentro il comando che lo produce. */
+  box-shadow: inset 0 0 0 1px var(--brand);
+  background-color: var(--brand-soft);
+  color: var(--brand);
+}
+
+/* Il feedback nel frame del tap, senza transizione: e' un cambio di superficie,
+ * e una transizione lo metterebbe fuori dai 100 ms che ogni interazione
+ * dichiara. */
+.stats__view:active {
+  background-color: var(--brand-soft);
+}
+
+/* --- la commutazione: 120 ms di dissolvenza ------------------------------ */
+
+/* **Dissolvenza in entrata, non un morph fetta -> barra.**
+ *
+ * Un morph costa, si impunta su iOS, e la prima volta che scatta male sembra
+ * rotto. E non compra niente: le due viste rispondono a **due domande**, non
+ * sono due stati della stessa forma, quindi non c'e' nessuna continuita' da
+ * conservare fra un arco e una barra.
+ *
+ * ## E non e' un incrocio vero, ed e' una rinuncia dichiarata
+ *
+ * Un incrocio vero vuole le due viste **sovrapposte** per 120 ms, cioe' un
+ * riquadro alto quanto la piu' alta delle due: 310 px contro 301, con la
+ * differenza che si richiude a dissolvenza finita — un salto di layout, prodotto
+ * apposta, dentro l'animazione che dovrebbe nasconderne uno. Qui la vista
+ * uscente se ne va nel frame del tap e quella entrante arriva in 120 ms.
+ *
+ * Solo `opacity`. `both` perche' l'elemento e' appena nato e il primo frame
+ * dev'essere gia' trasparente: senza, si vede un lampo a piena opacita' prima
+ * che l'animazione cominci.
+ *
+ * `[data-mossa]` limita tutto questo alle **commutazioni**: al primo disegno
+ * della schermata non c'e' niente da commutare, e una dissolvenza addosso al
+ * primo frame sarebbe decorazione proprio dove l'ordine di pittura chiede di non
+ * metterne. */
+@media (prefers-reduced-motion: no-preference) {
+  .stats__viz[data-mossa],
+  .stats__rows[data-mossa] {
+    animation: stats-swap 120ms ease-out both;
+  }
+}
+
+@keyframes stats-swap {
+  from {
+    opacity: 0;
+  }
+}
+
+/* Il tap che riporta alle quote, dalla parte delle barre: stessa area, stesso
+ * gesto, verso opposto. C'e' solo dove `data-vista` c'e', cioe' dove esiste
+ * davvero una seconda vista — le sezioni sotto soglia e quelle di B non lo
+ * portano, e li' toccare non fa niente perche' non c'e' niente da fare. */
+.stats__rows[data-vista] {
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
 
 /* Il totale della parte. Tabulari come gli importi delle righe che somma: e'
  * incolonnato con loro, e le proporzionali lo farebbero ballare.

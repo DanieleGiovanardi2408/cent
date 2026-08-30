@@ -901,6 +901,14 @@ export const it = {
   // `Casa affitto utenze e condomin` contro `Casa affitto utenze e cond…`. Un
   // importo non tronca mai: la sua colonna e' `max-content`.
   'stats.scale': 'Barra intera = {amount}',
+  // Vedi en.ts per l'argomento. Due sostantivi, non due forme: `Quote` e' quanto
+  // pesa cosa, `Ordine` e' quanto e' grande cosa, in ordine. `Ordine` e non
+  // `Classifica` per una ragione misurata — a 375 punti la colonna del comando e'
+  // quella che non deve cedere, e le due parole devono restare corte uguali:
+  // `Classifica` e' larga il doppio di `Quote` e squilibrerebbe una scelta che
+  // dev'essere simmetrica.
+  'stats.view.shares': 'Quote',
+  'stats.view.ranking': 'Ordine',
   'stats.byPeriod.weekly': 'Settimana per settimana',
   'stats.byPeriod.monthly': 'Mese per mese',
 

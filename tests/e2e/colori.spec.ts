@@ -759,8 +759,14 @@ test('la barra divisa: i due segmenti si vedono, e la legenda porta i loro color
     // pseudo-elemento e non dal nodo: leggerlo dal padre darebbe il colore del
     // testo dell'intestazione, cioe' un numero verde su una cosa che non e'
     // quella misurata.
+    //
+    // `.stats__partHead` e non `.stats__partTitle`: dal 30 agosto la natura sta
+    // sul `<div>` che raccoglie il titolo e il comando delle due viste, non
+    // sull'`<h3>` — un bottone dentro un'intestazione entra nel suo nome
+    // accessibile. La pastiglia e' rimasta dov'era, sul nome; e' il selettore
+    // che la trova ad avere un antenato in piu'.
     const pastiglia = (kind: string): string => {
-      const h = document.querySelector(`.stats__partTitle[data-kind="${kind}"] .stats__partName`)
+      const h = document.querySelector(`.stats__partHead[data-kind="${kind}"] .stats__partName`)
       if (h === null) throw new Error(`nessuna intestazione "${kind}"`)
       return getComputedStyle(h, '::before').backgroundColor
     }
@@ -838,9 +844,9 @@ test('la barra divisa: i due segmenti si vedono, e la legenda porta i loro color
     'la pastiglia delle quotidiane non e\' del colore del proprio segmento',
   ).toEqual(quotidiane)
 
-  // 5. **I due testi che le Statistiche hanno guadagnato**, misurati qui e non
+  // 5. **I testi che le Statistiche hanno guadagnato**, misurati qui e non
   //    nel test AA generale: quello enumera schermate raggiungibili **a
-  //    database vuoto**, e nessuno dei due esiste senza spese. Senza questa
+  //    database vuoto**, e nessuno di loro esiste senza spese. Senza questa
   //    coda resterebbero l'unica copy dell'app che nessuna misura di contrasto
   //    tocca.
   //
@@ -866,7 +872,19 @@ test('la barra divisa: i due segmenti si vedono, e la legenda porta i loro color
         soglia,
       }
     }
-    return [leggi('.stats__hero', 3), leggi('.stats__partScale', 4.5)]
+    return [
+      leggi('.stats__hero', 3),
+      // **I testi della vista `quote`**, che e' quella che si apre da sola:
+      // il totale nel buco (15 px), le due voci della legenda (15 px) e le due
+      // parole del comando — quella premuta su `--brand-soft`, quella spenta sul
+      // fondo. Sono cinque stringhe che prima non esistevano, e quattro di loro
+      // vivono su una superficie che non e' `--bg`.
+      leggi('.stats__donutTotal', 4.5),
+      leggi('.legend__name', 4.5),
+      leggi('.legend__value', 4.5),
+      leggi('.stats__view[aria-pressed="true"]', 4.5),
+      leggi('.stats__view[aria-pressed="false"]', 4.5),
+    ]
   })
   for (const t of testi) {
     const rapporto = arrotonda(contrasto(leggiColore(t.colore), leggiColore(t.dietro)))
@@ -875,4 +893,35 @@ test('la barra divisa: i due segmenti si vedono, e la legenda porta i loro color
       t.soglia,
     )
   }
+
+  // 6. **E la didascalia della scala, che vive nell'altra vista.**
+  //
+  //    `stats.scale` si disegna solo dove ci sono barre da calibrare, quindi in
+  //    vista `quote` non esiste: misurarla richiede di commutare, che e' cio' che
+  //    farebbe chiunque voglia la classifica. Senza questa coda la didascalia
+  //    resterebbe fuori da ogni misura di contrasto — che e' esattamente il buco
+  //    che il punto 5 e' venuto a chiudere, riaperto da una vista nuova.
+  await page.locator('.stats__view[data-vista="ordine"]').first().tap()
+  const scala = await page.evaluate(() => {
+    const el = document.querySelector('.stats__partScale')
+    if (el === null) throw new Error('nessuna didascalia della scala nella vista a barre')
+    const stile = getComputedStyle(el)
+    const fondo = (n: Element): string => {
+      for (let p: Element | null = n; p !== null; p = p.parentElement) {
+        const bg = getComputedStyle(p).backgroundColor
+        if (!/,\s*0\)$/.test(bg) && bg !== 'transparent') return bg
+      }
+      return getComputedStyle(document.body).backgroundColor
+    }
+    return {
+      label: `.stats__partScale "${(el.textContent ?? '').trim()}" ${stile.fontSize}`,
+      colore: stile.color,
+      dietro: fondo(el),
+    }
+  })
+  const rapportoScala = arrotonda(contrasto(leggiColore(scala.colore), leggiColore(scala.dietro)))
+  console.log(`  [${tema}] ${scala.label} = ${rapportoScala}:1 / 4.5`)
+  expect(rapportoScala, `${scala.label} sotto la soglia AA della sua taglia`).toBeGreaterThanOrEqual(
+    4.5,
+  )
 })

@@ -1,6 +1,10 @@
 import { Fragment } from 'preact'
-import { useMemo } from 'preact/hooks'
+import { useMemo, useState } from 'preact/hooks'
 import type { Budget, BudgetPeriod, Category, Expense, RecurringRule } from '../core/types'
+// L'ordine della griglia, non un secondo ordinamento scritto qui: le fette e la
+// legenda seguono `Category.order`, che e' la stessa sequenza che il pollice ha
+// imparato sul tastierino. Vedi `ordineDiGriglia`.
+import { compareCategories } from '../core/categories'
 import type { IsoDate } from '../core/date'
 import { daysLabel, money, periodRangeLabel, t } from './i18n'
 import { statsView } from './stats-view'
@@ -92,7 +96,34 @@ function sliceLabel(row: CategorySlice): string {
   return row.orphan ? t('row.categoryRemoved') : row.name
 }
 
-/* --- la ciambella delle quotidiane -------------------------------------- */
+/* --- le due viste di una sezione ---------------------------------------- */
+
+/**
+ * **Le due domande a cui una sezione sa rispondere**, e fra cui si commuta.
+ *
+ * Non sono due quantita' di dato: sono **due domande sullo stesso dato**, ed e'
+ * per questo che nessuna delle due nasconde niente.
+ *
+ * - `quote` — *"quanto pesa cosa"*. La ciambella, con il totale nel buco e la
+ *   legenda sotto. Le fette stanno **nell'ordine delle categorie**.
+ * - `ordine` — *"quanto e' grande cosa, in ordine"*. Le barre, dalla piu' lunga.
+ *
+ * ## La ragione che questo commento **non** da', perche' e' caduta
+ *
+ * Fino al 30 agosto il tap si giustificava con *"la ciambella mostra le prime N,
+ * le barre tutte"*. Quella ragione e' morta insieme alla coda `Altre`, che non
+ * e' mai stata scritta: **la copertura e' completa in tutte e due le viste**, e
+ * la somma delle fette, la somma delle barre e il numero nel buco sono lo stesso
+ * numero — c'e' un test che li confronta tutti e tre.
+ *
+ * Cio' che resta e' piu' piccolo ed e' vero. Se un giorno non bastera' piu', il
+ * comando si toglie **per quello che e'**, non perche' una giustificazione
+ * inventata avra' smesso di reggere.
+ */
+type Vista = 'quote' | 'ordine'
+
+/** Le due viste, nell'ordine in cui stanno nel controllo. */
+const VISTE: readonly Vista[] = ['quote', 'ordine']
 
 /**
  * **Sotto quante voci la ciambella non si disegna.**
@@ -108,61 +139,79 @@ function sliceLabel(row: CategorySlice): string {
  *   un'altra: **due fette sono una cifra, non una ripartizione.** Un cerchio
  *   diviso in due dice "una e' piu' grande dell'altra" e nient'altro — la stessa
  *   frase che la barra divisa in cima gia' scrive per le due nature, con due
- *   lunghezze affiancate invece che con due angoli. Con una sola fetta dice
- *   "100%", che e' il totale scritto qui accanto.
+ *   lunghezze affiancate invece che con due angoli.
  *
- * E vale **anche quando le barre ci sono**: A puo' essere un grafico (cinque
- * righe in tutto) con la parte quotidiana che ne ha due. Li' le barre restano e
- * la ciambella non si disegna, perche' le due soglie rispondono a due domande.
+ * Sui dati veri del 24–30 agosto e' esattamente il caso delle **fisse**: 507,00 €
+ * di canone e 23,00 € di abbonamento, cioe' `95,7% / 4,3%` — un cerchio con una
+ * **scheggia da 15,6°**. Li' la sezione resta a barre, e il comando non compare.
  *
- * Il numero coincide oggi e puo' smettere di coincidere domani: se qualcuno
- * alzasse `BREAKDOWN_MIN_ROWS` a quattro per le barre, questa non lo seguirebbe
- * senza che qualcuno ne riscriva la ragione.
+ * ## La condizione qui e' il numero di righe, e **non e' piu' la natura**
+ *
+ * Fino al 30 agosto la prima condizione era *"solo le quotidiane"*, con
+ * l'argomento di ADR 016: *"le fisse non sono una ripartizione su cui si decide
+ * qualcosa"*. Quell'argomento **e' sul budget**, e la ciambella non e' il budget:
+ * e' una ripartizione che si guarda. Applicandolo qui si otteneva il risultato
+ * giusto sui dati di oggi — due fisse, nessuna ciambella — **per la ragione
+ * sbagliata**, e la prova e' che con quattro categorie fisse (canone, utenze,
+ * abbonamento, palestra) la regola avrebbe continuato a negare una ripartizione
+ * perfettamente leggibile.
+ *
+ * La condizione vera e' **quante voci ci sono**, e vale identica per le due
+ * nature. Ne segue che con quattro fisse la ciambella compare anche li': e' cio'
+ * che deve succedere.
  */
 const PIE_MIN_SLICES = 3
 
 /**
  * La geometria della ciambella, in unita' del `viewBox`. Alla dimensione di
  * testo di sistema predefinita il disegno e' **1:1** — `--pie-size` vale
- * `5.5rem`, cioe' 88 px — quindi i tre numeri qui sotto sono i pixel veri.
+ * `7.5rem`, cioe' 120 px — quindi i numeri qui sotto sono i pixel veri.
+ *
+ * **I due file devono restare d'accordo**: `PIE_GAP` e' un vuoto in **pixel**, e
+ * lo e' solo finche' l'unita' del `viewBox` vale un pixel. Se qualcuno cambia
+ * `--pie-size` senza cambiare `PIE_BOX`, il vuoto si scala con la figura e
+ * smette di essere il numero scritto qui. C'e' un test che rimisura l'angolo del
+ * vuoto sui pixel dipinti, ed e' li' per questo.
  *
  * Se qualcuno ingrandisce il testo di sistema il riquadro cresce e **cresce
  * tutto insieme**, vuoto compreso: e' il verso giusto, perche' un vuoto da 2 px
- * dentro una figura larga il doppio smetterebbe di separare. E' l'unico posto
- * della schermata in cui il vuoto scala — sulla barra divisa e' `2px` fissi —
- * e la differenza e' che li' il vuoto sta in un box del foglio, qui dentro un
- * sistema di coordinate che si scala per intero.
+ * dentro una figura larga il doppio smetterebbe di separare.
  *
- * - `PIE_BOX` — 88, l'unico numero scelto. Il conto che ce l'ha portato sta in
+ * - `PIE_BOX` — 120, l'unico numero scelto. Il conto che ce l'ha portato sta in
  *   `Stats.css`, su `--pie-size`: e' quanto costa in altezza, misurato contro la
  *   piega di B.
- * - `PIE_RING` — 24, cioe' `--bar-h`. **E' lo stesso inchiostro delle barre e
- *   della barra divisa**, ed e' lo stesso argomento gia' scritto per
- *   `.stats__split`: due spessori diversi nella stessa schermata si leggerebbero
- *   come due tipi di grafico.
+ * - `PIE_RING` — 20, e **non e' piu' `--bar-h`.** Qui c'era scritto *"e' lo
+ *   stesso inchiostro delle barre, e due spessori diversi nella stessa
+ *   schermata si leggerebbero come due tipi di grafico"*. L'argomento era vero
+ *   sotto la sua condizione — la ciambella stava **dentro l'intestazione, a
+ *   fianco delle barre della propria sezione**, e i due spessori si toccavano
+ *   con l'occhio. Adesso la ciambella **sostituisce** quelle barre: nella vista
+ *   `quote` non ce n'e' nessuna a schermo, e cio' che resta a `--bar-h` e' la
+ *   barra divisa in cima, che e' un'altra domanda e ha gia' un'altra forma
+ *   (dritta contro circolare).
+ *
+ *   Il numero si ri-deriva quindi da cio' che la banda deve fare qui: lasciare
+ *   un **buco che tenga il totale**. Con lato 120 e anello 20 il buco vale
+ *   `120 - 40 = 80 px`, e `112,00 €` a `--fs-200` tabulari ne misura **66,77**;
+ *   con l'anello a 24 il buco scenderebbe a 72 e il margine da 13,2 a 5,2 px,
+ *   cioe' un numero che la prossima cifra o il prossimo font si mangia. Il
+ *   rapporto banda/raggio resta 0,33, dentro l'intervallo in cui una ciambella
+ *   si legge come tale invece che come una torta.
  * - `PIE_GAP` — 2, il vuoto nella superficie fra due fette che **si toccano**.
- *   La condizione, riscritta qui perche' e' qui che vale: le barre di A non si
- *   toccano mai fra loro — hanno un contorno e stanno su righe diverse — quindi
- *   li' il vuoto non aveva niente da separare e il rimedio era il contorno. Qui
- *   due fette adiacenti condividono un raggio: senza il vuoto, `Fuori` e
- *   `Coffeeshop` (26,00 e 24,00, due tinte vicine) diventano una macchia sola, e
- *   un contorno aggiungerebbe una terza tinta **proprio sul confine**, cioe'
- *   dove serve leggere dove finisce l'una. E' l'argomento della barra divisa,
- *   che li' vale per un confine solo e qui per cinque.
+ *   La condizione, riscritta qui perche' e' qui che vale: due fette adiacenti
+ *   condividono un raggio, e senza il vuoto `Fuori` e `Coffeeshop` (26,00 e
+ *   24,00, due tinte vicine) diventano una macchia sola. Un contorno
+ *   aggiungerebbe una terza tinta **proprio sul confine**, cioe' dove serve
+ *   leggere dove finisce l'una.
  *
  * Il raggio e' quello **medio** dell'anello, perche' la ciambella si disegna
  * come un cerchio **tratteggiato**: un `<circle>` per fetta, con
  * `stroke-dasharray` a produrre l'arco e `stroke-dashoffset` a metterlo al suo
  * posto. Non ci sono archi scritti a mano (`A`), nessun seno e nessun coseno, e
- * il taglio fra due fette esce **radiale** per costruzione — e' il modo in cui
- * un tratteggio chiude un tratto su un cerchio.
- *
- * Il vuoto misura quindi esattamente `PIE_GAP` sul raggio medio, e si apre a
- * ventaglio: 1,25 px sul bordo interno e 2,75 sull'esterno. E' la stessa cosa
- * che fa un vuoto fra due settori, e non un'approssimazione da correggere.
+ * il taglio fra due fette esce **radiale** per costruzione.
  */
-const PIE_BOX = 88
-const PIE_RING = 24
+const PIE_BOX = 120
+const PIE_RING = 20
 const PIE_GAP = 2
 const PIE_R = (PIE_BOX - PIE_RING) / 2
 const PIE_C = 2 * Math.PI * PIE_R
@@ -185,20 +234,69 @@ interface PieSlice {
 }
 
 /**
- * Le fette di una sezione, oppure `null` se qui la ciambella non si disegna.
+ * La vista `quote` di una sezione: le fette, la legenda che le nomina, e il
+ * totale che sta nel buco. `null` dove questa vista non si disegna.
+ */
+interface Quote {
+  /** Il numero nel buco, ed e' il denominatore di ogni fetta. */
+  readonly totalCents: number
+  /** Le righe **nell'ordine delle fette**: la legenda e' questa, in quest'ordine. */
+  readonly rows: readonly CategorySlice[]
+  /** Le fette, stessa lunghezza e stesso ordine di `rows`. */
+  readonly slices: readonly PieSlice[]
+}
+
+/**
+ * **L'ordine di griglia**, come funzione da riga a posizione.
  *
- * ## Le tre condizioni, e la seconda e' quella che si dimentica
+ * ## Perche' le fette non sono ordinate per importo
  *
- * 1. **Solo le quotidiane.** Le fisse no, e il numero e' `95,7%`: sui dati veri
- *    del 24–30 agosto la parte fissa e' `507,00 €` di canone e `23,00 €` di
- *    abbonamento, cioe' **un cerchio con una scheggia**. E' il caso su cui
- *    `dataviz` ha ragione — due fette sono una cifra, e la cifra e' gia' scritta
- *    sulle due righe qui sotto. Ma la ragione non e' solo la forma: **le fisse
- *    non sono una ripartizione su cui si decide qualcosa** (ADR 016, *"l'affitto
- *    non e' una decisione"*), e la ciambella e' la marca di cio' che si esplora.
- *    Le fisse si controllano, e per controllare due impegni noti bastano due
- *    righe con il loro importo.
- * 2. **Almeno `PIE_MIN_SLICES` voci.** Vedi la costante.
+ * Perche' l'adiacenza fra due fette **dipenderebbe dai dati dell'utente**, e
+ * l'adiacenza e' esattamente cio' che il sistema di colori deve reggere:
+ * `CLAUDE.md` chiede otto tinte *"leggibili anche come aree adiacenti in un
+ * grafico"*. Con l'ordine per importo, misurato sui dati veri, `Spesa` e
+ * `Coffeeshop` non si toccano nella settimana e si toccano nel mese, e la
+ * distanza fra le due tinte cade da ΔE 20,3 a **9,4**: una coppia che nessuna CI
+ * puo' verificare, perche' la CI non ha i dati di nessuno. Con l'ordine di
+ * categoria le coppie adiacenti sono **sempre le stesse otto**, e si controllano
+ * una volta per tutte.
+ *
+ * ## Ed e' l'argomento della griglia stabile, applicato al grafico
+ *
+ * *"Non si riordina mai in base all'ora, al giorno o all'uso recente. Dopo pochi
+ * giorni l'utente tocca per posizione senza leggere l'etichetta."* Una ciambella
+ * che si rimescola ogni settimana chiede di rileggere la legenda ogni volta; una
+ * che porta le categorie nell'ordine del tastierino si riconosce con la stessa
+ * memoria muscolare che gia' esiste.
+ *
+ * **La classifica non si perde**: e' l'altra vista, ed e' a un tap.
+ *
+ * L'aggregato delle spese senza categoria non ha un id e va **in fondo**: non e'
+ * una categoria, quindi non ha un posto in griglia da rispettare.
+ */
+function ordineDiGriglia(categories: readonly Category[]): (row: CategorySlice) => number {
+  const posizione = new Map<string, number>()
+  ;[...categories].sort(compareCategories).forEach((c, i) => posizione.set(c.id, i))
+  // Due ripieghi distinti, e non e' pignoleria: le orfane vanno **dopo** una
+  // categoria che il modello conoscesse senza che questa mappa la veda — un caso
+  // che oggi non esiste (le righe con un nome vengono da `named`) ma che, se
+  // esistesse, non deve produrre un ordine deciso da come sono arrivati i record.
+  const inFondo = categories.length + 1
+  return (row) =>
+    row.orphan ? inFondo : (posizione.get(row.categoryId) ?? categories.length)
+}
+
+/**
+ * Le fette e la legenda di una sezione, oppure `null` se qui la ciambella non si
+ * disegna.
+ *
+ * ## Le tre condizioni
+ *
+ * 1. **Piu' di una riga.** Con una sola, un anello pieno dice "100%", che e' il
+ *    totale scritto qui accanto: resta la riga, con il suo nome e il suo importo,
+ *    e il comando non compare.
+ * 2. **Almeno `PIE_MIN_SLICES` voci.** Vedi la costante — e' li' che sta anche
+ *    la ragione per cui la natura della sezione **non** e' piu' una condizione.
  * 3. **Un totale sopra zero.** Una sezione di sole ricorrenti da zero centesimi
  *    esiste davvero (ha gia' il suo test in `stats-view.test.ts`), e li' non c'e'
  *    nessuna ripartizione: ogni quota sarebbe `0/0`.
@@ -213,10 +311,21 @@ interface PieSlice {
  *
  * Che questa divisione stia qui e non in `stats-view.ts` non contraddice
  * *"questo file non decide niente"*: e' **aritmetica su due campi pubblicati**,
- * non una regola. Il giorno in cui avesse una regola dentro — un pavimento come
- * `BAR_MIN_FRACTION`, un aggregato "Altre" per la coda — quella regola
- * apparterrebbe al modello, e questa funzione sarebbe il posto sbagliato in cui
- * scriverla.
+ * non una regola.
+ *
+ * ## Nessuna coda "Altre", e non e' un rinvio
+ *
+ * Le fette sono **tutte**, sempre. Un aggregato per la coda sarebbe un
+ * meccanismo che nessun dato raggiunge — il tetto e' otto categorie attive, e le
+ * finestre misurate ne hanno cinque e due — cioe' **superficie morta per
+ * costruzione**: non coperta da nessun caso reale, da ri-espandere nella vista a
+ * barre, con i totali che tornano in due modi invece che in uno, e che verrebbe
+ * eseguita per la prima volta **in produzione, sul telefono di un amico**. E' la
+ * stessa regola con cui la fase 5 ha tagliato `RecurringRule.note`: un
+ * meccanismo si spedisce insieme al suo caso, o non si spedisce.
+ *
+ * Con otto fette la piu' piccola **non diventa invisibile, diventa piccola**, e
+ * il suo nome e il suo importo stanno due centimetri sotto, nella legenda.
  *
  * ## Le quote sono esatte, e le fette che non ci stanno spariscono
  *
@@ -225,17 +334,20 @@ interface PieSlice {
  * fetta piu' stretta del vuoto ha `len` zero: **non si disegna affatto**, invece
  * di essere allargata a un minimo visibile. Allargarla direbbe una quota falsa
  * proprio dove la quota e' l'unica cosa che la ciambella aggiunge, e il dato non
- * si perde comunque — sta sulla riga sotto, con il suo importo.
+ * si perde comunque — sta nella legenda, con il suo importo.
  */
-function pieOf(part: BreakdownSection): readonly PieSlice[] | null {
-  if (part.kind !== 'variable') return null
+function quoteOf(
+  part: BreakdownSection,
+  ordine: (row: CategorySlice) => number,
+): Quote | null {
   if (part.single) return null
   if (part.rows.length < PIE_MIN_SLICES) return null
   if (part.totalCents <= 0) return null
 
   const totalCents = part.totalCents
+  const rows = [...part.rows].sort((a, b) => ordine(a) - ordine(b))
   let cumulata = 0
-  return part.rows.map((row) => {
+  const slices = rows.map((row) => {
     const start = cumulata * PIE_C
     cumulata += row.cents / totalCents
     return {
@@ -245,6 +357,7 @@ function pieOf(part: BreakdownSection): readonly PieSlice[] | null {
       start: start + PIE_GAP / 2,
     }
   })
+  return { totalCents, rows, slices }
 }
 
 /**
@@ -464,9 +577,21 @@ function Row({
  */
 function Categories({
   breakdown,
+  categories,
   range,
 }: {
   readonly breakdown: Breakdown
+  /**
+   * Le categorie, e servono per **una cosa sola**: l'ordine delle fette e della
+   * legenda. Non entrano in nessun conto — nomi, colori e importi arrivano gia'
+   * dal modello — e infatti quello che se ne ricava e' una funzione da riga a
+   * posizione, non un secondo elenco da tenere allineato.
+   *
+   * L'ordine sta qui e non in `stats-view.ts` perche' e' **una scelta di
+   * lettura**: la vista `ordine` guarda le stesse righe dalla piu' grande, e il
+   * modello non deve sapere quale delle due si sta guardando.
+   */
+  readonly categories: readonly Category[]
   /**
    * Il confine del periodo che A sta ripartendo, gia' formattato
    * (`periodRangeLabel`). **Non e' una rifinitura del titolo: e' l'unica cosa
@@ -488,6 +613,57 @@ function Categories({
   readonly range: string
 }) {
   const { sections, split, asChart } = breakdown
+
+  /**
+   * **Quale domanda sta facendo ciascuna sezione**, e non e' persistito.
+   *
+   * Le due sezioni sono **indipendenti**: si puo' guardare la ripartizione delle
+   * quotidiane accanto alla classifica delle fisse, perche' sono due domande su
+   * due quantita' diverse e non c'e' nessuna ragione per cui debbano coincidere.
+   *
+   * ## Effimero, e questa e' la ragione
+   *
+   * *"Uno stato che sopravvive e' uno stato che va spiegato."* Uscendo dalle
+   * Statistiche e rientrando si riapre in ciambella: il valore di partenza e'
+   * uno solo, quindi non c'e' nessun caso in cui qualcuno ritrova la schermata
+   * diversa da come se l'aspetta senza aver appena toccato qualcosa. E' lo stesso
+   * argomento con cui il selettore delle fisse tornava acceso a ogni apertura —
+   * quel comando non c'e' piu', l'argomento vale identico.
+   *
+   * Il tipo e' un record sulle due nature e non una mappa: le sezioni sono due,
+   * si chiamano `fixed` e `variable`, e un `Record<BreakdownKind, Vista>` fa
+   * fallire la compilazione il giorno in cui ne comparisse una terza.
+   */
+  const [viste, setViste] = useState<Record<BreakdownSection['kind'], Vista>>({
+    fixed: 'quote',
+    variable: 'quote',
+  })
+
+  /**
+   * **Quali sezioni sono gia' state commutate almeno una volta**, e serve solo
+   * alla dissolvenza.
+   *
+   * La dissolvenza vale su una **commutazione**, non sull'arrivo dei dati: senza
+   * questa marca il grafico si dissolverebbe in entrata anche al primo disegno
+   * della schermata, cioe' una decorazione da 120 ms addosso al primo frame —
+   * che e' proprio il frame che l'ordine di pittura protegge.
+   *
+   * **Per sezione e non un contatore solo**, e la differenza si vede: con un
+   * contatore condiviso, commutando le fisse anche le quotidiane diventerebbero
+   * "gia' mosse" e si dissolverebbero una volta senza che nessuno le abbia
+   * toccate. Le due sezioni sono indipendenti anche qui.
+   */
+  const [mosse, setMosse] = useState<Record<BreakdownSection['kind'], boolean>>({
+    fixed: false,
+    variable: false,
+  })
+
+  const commuta = (kind: BreakdownSection['kind'], vista: Vista): void => {
+    setViste((precedenti) => ({ ...precedenti, [kind]: vista }))
+    setMosse((precedenti) => ({ ...precedenti, [kind]: true }))
+  }
+
+  const ordine = ordineDiGriglia(categories)
   // **Nessuna sezione vuol dire che nel periodo non e' uscito niente**, e allora
   // A non si disegna.
   //
@@ -589,132 +765,164 @@ function Categories({
           // dichiarare: questa intestazione si disegna **senza la propria
           // sezione**, per non lasciare la cifra della divisione senza un nome.
           scale={null}
-          // E nessuna ciambella, per due ragioni indipendenti: e' l'intestazione
-          // delle fisse, e non ha righe da ripartire.
-          pie={null}
+          // E nessun comando: non ha righe da ripartire, quindi non c'e' nessuna
+          // seconda domanda da fare a questa cifra.
+          vista={null}
+          onVista={null}
         />
       ) : null}
 
-      {sections.map((part: BreakdownSection) => (
-        <Fragment key={part.kind}>
-          <PartHead
-            kind={part.kind}
-            // **Il totale di sezione esiste solo quando le sezioni sono due**,
-            // e la condizione va derivata qui perche' qui e' cambiata la stanza.
-            //
-            // Da quando il titolo di A porta il totale del periodo, quel numero
-            // e' gia' a schermo quaranta pixel piu' su. Con **una sezione sola**
-            // il totale della sezione **e'** quello del periodo — non ci sono
-            // altre righe da cui differire — quindi riscriverlo qui e' scriverlo
-            // due volte: misurato su una settimana di sole spese a mano,
-            // `70,00 €` sul titolo e `70,00 €` sull'intestazione. E' lo stesso
-            // argomento che `part.single` fa una riga piu' in basso — *"con una
-            // riga sola il totale e' quella riga"* — applicato un livello sopra,
-            // con "riga" che diventa "sezione".
-            //
-            // Con **due sezioni** il totale del titolo e' la loro somma, e
-            // nessuna delle due la si puo' ricavare guardando: la quota di
-            // ciascuna e' un numero suo, e senza di lei la barra divisa qui sopra
-            // resterebbe una forma senza cifre — cioe' l'etichetta diretta che
-            // `0b` chiede espressamente di scrivere.
-            //
-            // La sorgente e' `split` e non `part.totalCents`: sono la stessa
-            // cifra dalla stessa sorgente (il modello lo dichiara), e leggere
-            // quella che esiste **solo** nel ramo a due sezioni fa fallire la
-            // compilazione se un domani questa condizione tornasse larga.
-            //
-            // Che l'etichetta diretta della barra sia **questa intestazione** e
-            // non una riga sotto la barra e' l'altra meta' della stessa scelta:
-            // una riga in piu' avrebbe ripetuto anche i due **nomi** — `Spese
-            // fisse` sopra `Fisse in questo periodo` a sessanta pixel — e sarebbe
-            // costata una riga sopra B, che e' esattamente cio' che manca al
-            // confronto settimanale per stare sopra la piega. La pastiglia
-            // (`.stats__partName::before`) fa il legame con il segmento.
-            //
-            // Il ramo `single` vince su tutto e per la sua ragione: con una riga
-            // sola il totale **e'** quella riga, ventotto pixel sotto e
-            // incolonnata sullo stesso bordo destro.
-            amount={
-              part.single || split === null
-                ? null
-                : money(part.kind === 'fixed' ? split.fixedCents : split.variableCents)
-            }
-            // **Quanto vale il fondo colonna di questa sezione** (0a).
-            //
-            // Due condizioni, e la seconda non e' quella che sembra.
-            //
-            // `asChart`: senza barre non c'e' nessuna colonna di cui dire la
-            // lunghezza.
-            //
-            // `!part.single`: **non** perche' con una riga sola la cifra sarebbe
-            // ripetuta. Quello e' vero anche con cinque righe, e va detto:
-            // `scaleCents` e' il massimo della sezione e le righe scendono dalla
-            // piu' grande, quindi vale `rows[0].cents` **sempre**. Una
-            // condizione che pretendesse di evitare la ripetizione la
-            // eviterebbe in un caso su due per una ragione che vale in due casi
-            // su due.
-            //
-            // La ragione vera e' un'altra, ed e' quella che discrimina davvero:
-            // **una didascalia della scala calibra le righe che non sono il
-            // riferimento.** Con cinque righe dice a chi legge che le altre
-            // quattro vanno lette contro 42,00 €; con una riga sola non ce ne
-            // sono, e cio' che resterebbe e' `Barra intera = 900,00 €` sopra
-            // `Casa 900,00 €` — informazione zero, rumore certo. C'e' un test
-            // che sorveglia proprio quel caso (*"la parte con una riga sola non
-            // ripete la sua cifra nell'intestazione"*), ed e' scritto sul testo
-            // dipinto dell'intero `<h3>` apposta perche' nessuna classe nuova
-            // possa aggirarlo. Questa condizione lo rispetta perche' ha la sua
-            // ragione, non perche' il test c'e'.
-            //
-            // E la ripetizione che **resta**, nel caso a piu' righe, si accetta
-            // e si dice perche': non e' la cifra ripetuta di DEBITO §5 — due
-            // quantita' **diverse** che coincidono e che nessuna etichetta
-            // distingue — e' una **legenda**, cioe' una cosa il cui unico
-            // mestiere e' dire che significato ha una geometria. Le due
-            // occorrenze stanno in due pesi diversi (13 px muti contro 15
-            // semibold), su due colonne diverse, e dicono due fatti: *"Spesa e'
-            // 42,00 €"* e *"il fondo di questa colonna vale 42,00 €"*.
-            scale={
-              asChart && !part.single
-                ? t('stats.scale', { amount: money(part.scaleCents) })
-                : null
-            }
-            // **La ciambella e' delle quotidiane, e solo di loro.** Le tre
-            // condizioni — quale parte, quante voci, e un totale sopra zero —
-            // stanno su `pieOf`, che e' anche il posto in cui e' scritto perche'
-            // la soglia delle tre voci non e' `BREAKDOWN_MIN_ROWS` malgrado sia
-            // lo stesso numero.
-            pie={pieOf(part)}
-          />
-          <ul class="stats__rows">
-            {part.rows.map((row: CategorySlice) => (
-              // L'aggregato delle orfane e' uno per parte, e le due non si
-              // fondono: "canoni che non si sa piu' a cosa erano" e "spese a mano
-              // che non si sa piu' a cosa erano" sono due fatti. Quindi anche la
-              // sua chiave porta la natura.
-              <Row
-                key={`${part.kind}:${row.orphan ? ORPHAN : row.categoryId}`}
-                label={sliceLabel(row)}
-                // **A non ha righe incomplete, e non e' una svista.** Tutte le
-                // sue barre stanno dentro **lo stesso** periodo, quindi i
-                // giorni mancanti sono gli stessi per tutte e le proporzioni
-                // fra le categorie non ne sono distorte: e' esattamente
-                // l'opposto di B, dove la riga corrente e' l'unica incompleta e
-                // sta accanto a sette periodi finiti.
-                //
-                // Il confine di cui A parla e' nel suo titolo, e i giorni non
-                // ci sono perche' qui non servono a leggere nessuna barra.
-                note={null}
-                open={false}
-                amount={money(row.cents)}
-                fraction={row.fraction}
-                color={fill(row)}
-                bar={asChart}
+      {sections.map((part: BreakdownSection) => {
+        // La vista `quote` si disegna solo dove esiste; dove non esiste la
+        // sezione **e' a barre**, e il comando non compare. Non e' un ripiego
+        // silenzioso: e' l'unico stato che quella sezione ha.
+        const quote = quoteOf(part, ordine)
+        const vista: Vista = quote === null ? 'ordine' : viste[part.kind]
+        return (
+          <Fragment key={part.kind}>
+            <PartHead
+              kind={part.kind}
+              // **Il totale di sezione esiste solo quando le sezioni sono due**,
+              // e la condizione va derivata qui perche' qui e' cambiata la stanza.
+              //
+              // Da quando il titolo di A porta il totale del periodo, quel numero
+              // e' gia' a schermo quaranta pixel piu' su. Con **una sezione sola**
+              // il totale della sezione **e'** quello del periodo — non ci sono
+              // altre righe da cui differire — quindi riscriverlo qui è scriverlo
+              // due volte: misurato su una settimana di sole spese a mano,
+              // `70,00 €` sul titolo e `70,00 €` sull'intestazione. E' lo stesso
+              // argomento che `part.single` fa qui sotto — *"con una riga sola il
+              // totale e' quella riga"* — applicato un livello sopra, con "riga"
+              // che diventa "sezione".
+              //
+              // Con **due sezioni** il totale del titolo e' la loro somma, e
+              // nessuna delle due la si puo' ricavare guardando: la quota di
+              // ciascuna e' un numero suo, e senza di lei la barra divisa qui sopra
+              // resterebbe una forma senza cifre — cioe' l'etichetta diretta che
+              // `0b` chiede espressamente di scrivere.
+              //
+              // **E la terza condizione e' nuova: in vista `quote` il totale sta
+              // nel buco.** Scriverlo anche qui vorrebbe dire la stessa cifra due
+              // volte a centoventi pixel di distanza, che e' esattamente cio' che
+              // le altre due condizioni evitano. Il legame con il segmento della
+              // barra divisa non si perde: la pastiglia resta sul nome, e il
+              // numero sta **dentro la figura di quella sezione**, non altrove.
+              //
+              // La sorgente e' `split` e non `part.totalCents`: sono la stessa
+              // cifra dalla stessa sorgente (il modello lo dichiara), e leggere
+              // quella che esiste **solo** nel ramo a due sezioni fa fallire la
+              // compilazione se un domani questa condizione tornasse larga.
+              amount={
+                part.single || split === null || vista === 'quote'
+                  ? null
+                  : money(part.kind === 'fixed' ? split.fixedCents : split.variableCents)
+              }
+              // **Quanto vale il fondo colonna di questa sezione** (0a).
+              //
+              // Tre condizioni, e la seconda non e' quella che sembra.
+              //
+              // `vista === 'ordine'`: e' la didascalia **delle barre**. In vista
+              // `quote` le barre non ci sono, e una legenda che spiega una
+              // geometria assente e' rumore certo.
+              //
+              // `asChart`: senza barre non c'e' nessuna colonna di cui dire la
+              // lunghezza.
+              //
+              // `!part.single`: **non** perche' con una riga sola la cifra sarebbe
+              // ripetuta. Quello e' vero anche con cinque righe, e va detto:
+              // `scaleCents` e' il massimo della sezione e le righe scendono dalla
+              // piu' grande, quindi vale `rows[0].cents` **sempre**. Una
+              // condizione che pretendesse di evitare la ripetizione la
+              // eviterebbe in un caso su due per una ragione che vale in due casi
+              // su due.
+              //
+              // La ragione vera e' un'altra, ed e' quella che discrimina davvero:
+              // **una didascalia della scala calibra le righe che non sono il
+              // riferimento.** Con cinque righe dice a chi legge che le altre
+              // quattro vanno lette contro 42,00 €; con una riga sola non ce ne
+              // sono, e cio' che resterebbe e' `Barra intera = 900,00 €` sopra
+              // `Casa 900,00 €` — informazione zero, rumore certo. C'e' un test
+              // che sorveglia proprio quel caso (*"la parte con una riga sola non
+              // ripete la sua cifra nell'intestazione"*), ed e' scritto sul testo
+              // dipinto dell'intero `<h3>` apposta perche' nessuna classe nuova
+              // possa aggirarlo. Questa condizione lo rispetta perche' ha la sua
+              // ragione, non perche' il test c'e'.
+              //
+              // E la ripetizione che **resta**, nel caso a piu' righe, si accetta
+              // e si dice perche': non e' la cifra ripetuta di DEBITO §5 — due
+              // quantita' **diverse** che coincidono e che nessuna etichetta
+              // distingue — e' una **legenda**, cioe' una cosa il cui unico
+              // mestiere e' dire che significato ha una geometria.
+              scale={
+                vista === 'ordine' && asChart && !part.single
+                  ? t('stats.scale', { amount: money(part.scaleCents) })
+                  : null
+              }
+              // **Il comando c'e' solo dove ci sono due viste da scegliere**, ed
+              // e' la stessa condizione che decide se il tap sul grafico fa
+              // qualcosa: un comando che dichiara un gesto che non esiste sarebbe
+              // il difetto opposto a quello che il comando ripara.
+              vista={quote === null ? null : vista}
+              onVista={quote === null ? null : (scelta) => commuta(part.kind, scelta)}
+            />
+            {vista === 'quote' && quote !== null ? (
+              // La chiave porta la vista: commutando, Preact **rimonta** invece
+              // di riconciliare, e l'animazione di entrata riparte. E' anche
+              // corretto di suo — le due viste non condividono nessun nodo.
+              <Quote
+                key={`quote:${part.kind}`}
+                quote={quote}
+                mossa={mosse[part.kind]}
+                onTap={() => commuta(part.kind, 'ordine')}
               />
-            ))}
-          </ul>
-        </Fragment>
-      ))}
+            ) : (
+              <ul
+                key={`ordine:${part.kind}`}
+                class="stats__rows"
+                // **Il tap sul grafico, dalla parte delle barre.** Stessa area,
+                // stesso gesto, verso opposto: e' la reversibilita' chiesta al
+                // comando, non una scorciatoia in piu'.
+                //
+                // Non e' un bersaglio dichiarato — non ha ruolo e non prende il
+                // fuoco — ed e' voluto: la strada annunciata, quella che si trova
+                // e che una tastiera percorre, e' il comando nell'intestazione.
+                // Questo e' il gesto che **il comando dichiara**, e un `<ul>` con
+                // dentro dei `<li>` non puo' essere un `<button>` senza smettere
+                // di essere HTML valido.
+                data-vista={quote === null ? undefined : 'ordine'}
+                data-mossa={quote !== null && mosse[part.kind] ? '' : undefined}
+                {...(quote === null ? {} : { onClick: () => commuta(part.kind, 'quote') })}
+              >
+                {part.rows.map((row: CategorySlice) => (
+                  // L'aggregato delle orfane e' uno per parte, e le due non si
+                  // fondono: "canoni che non si sa piu' a cosa erano" e "spese a
+                  // mano che non si sa piu' a cosa erano" sono due fatti. Quindi
+                  // anche la sua chiave porta la natura.
+                  <Row
+                    key={`${part.kind}:${row.orphan ? ORPHAN : row.categoryId}`}
+                    label={sliceLabel(row)}
+                    // **A non ha righe incomplete, e non e' una svista.** Tutte le
+                    // sue barre stanno dentro **lo stesso** periodo, quindi i
+                    // giorni mancanti sono gli stessi per tutte e le proporzioni
+                    // fra le categorie non ne sono distorte: e' esattamente
+                    // l'opposto di B, dove la riga corrente e' l'unica incompleta e
+                    // sta accanto a sette periodi finiti.
+                    //
+                    // Il confine di cui A parla e' nel suo titolo, e i giorni non
+                    // ci sono perche' qui non servono a leggere nessuna barra.
+                    note={null}
+                    open={false}
+                    amount={money(row.cents)}
+                    fraction={row.fraction}
+                    color={fill(row)}
+                    bar={asChart}
+                  />
+                ))}
+              </ul>
+            )}
+          </Fragment>
+        )
+      })}
 
       {/* Qui c'era `stats.hiddenAll`, *"in questo periodo ci sono solo spese
           fisse, e le hai nascoste"*. Diceva la cosa giusta — non *"non c'e'
@@ -820,9 +1028,9 @@ function Split({ split }: { readonly split: BreakdownSplit }) {
 }
 
 /**
- * L'intestazione di una parte di A: **quale dei due tipi di soldi** conta
- * l'elenco qui sotto, la pastiglia che la lega al proprio segmento della barra
- * divisa, e — sulle fisse — l'interruttore.
+ * L'intestazione di una parte di A: **quale dei due tipi di soldi** conta il
+ * grafico qui sotto, la pastiglia che la lega al proprio segmento della barra
+ * divisa, e il comando che sceglie **quale delle due domande** si sta facendo.
  *
  * ## Le due etichette non sono simmetriche, e non e' una svista
  *
@@ -834,12 +1042,19 @@ function Split({ split }: { readonly split: BreakdownSplit }) {
  * caso di una regola disattivata dopo aver generato la spesa. Cioe' quello che
  * l'app stessa consiglia di fare (`toast.ruleInUse`).
  *
- * ## L'interruttore sta qui e non in una riga sua
+ * ## Il comando sta **fuori** dall'`<h3>`, ed e' l'unica ragione del `<div>`
  *
- * Perche' e' **la cosa che nasconde**, e un comando sul proprio oggetto non ha
- * bisogno di dire su cosa agisce. Ed e' anche il conto dei pixel: una riga
- * dedicata sarebbe costata 44 px pieni sopra B, cioe' avrebbe allontanato di
- * un'altra riga il confronto settimanale che gia' non ci sta.
+ * Qui c'era scritto che *"non c'e' un `<div>` a raccogliere titolo ed elenco:
+ * `subgrid` non attraversa un box che non sia lui stesso una griglia"*. Quella
+ * frase parlava del box fra la **sezione e le sue righe**, e resta vera: le
+ * righe sono ancora figlie dirette della sezione.
+ *
+ * Questo `<div>` e' un'altra cosa e non tocca nessuna colonna: raccoglie
+ * l'intestazione e il suo comando, e serve perche' **un bottone dentro un
+ * `<h3>` entra nel nome accessibile dell'intestazione**. Con il comando dentro,
+ * una voce leggerebbe *"Quotidiane 112,00 € Quote Ordine, intestazione di livello
+ * 3"*: il titolo di una sezione che recita i propri comandi. Fuori, l'intestazione
+ * resta la sola cosa che nomina la parte, e il comando si annuncia da se'.
  *
  * **Qui dentro c'era un interruttore, e non c'e' piu'.** Accendeva e spegneva le
  * fisse, con `role="switch"` e la sua etichetta; l'argomento era *"non e' una
@@ -848,19 +1063,16 @@ function Split({ split }: { readonly split: BreakdownSplit }) {
  * Quell'argomento e' morto quando 0a e' stata rovesciata: con la scala di nuovo
  * per sezione **la scala non si rifaceva piu'**, e le righe ricomparivano
  * identiche al pixel. Restava un interruttore che toglieva una sezione, cioe'
- * che **prometteva un potere che non aveva**. Vedi la lapide su `stats-view.ts`,
- * dove sta anche il difetto che la sua rimozione ha chiuso.
- *
- * Non c'e' un `<div>` a raccogliere titolo ed elenco: sarebbe un box in mezzo
- * fra la sezione e le sue colonne, e `subgrid` non attraversa un box che non sia
- * lui stesso una griglia. La separazione fra le due parti sta quindi sul titolo
- * della seconda (`.stats__rows + .stats__partTitle`).
+ * che **prometteva un potere che non aveva**. Il comando di adesso e' l'opposto
+ * per costruzione: non toglie niente a nessuna delle due viste, e c'e' un test
+ * che confronta i due totali proprio per impedirgli di diventare quell'altro.
  */
 function PartHead({
   kind,
   amount,
   scale,
-  pie,
+  vista,
+  onVista,
 }: {
   readonly kind: BreakdownSection['kind']
   /** Il totale della parte, o `null` quando lo porta gia' qualcos'altro. */
@@ -886,88 +1098,227 @@ function PartHead({
    *
    * ## Quando e' `null`
    *
-   * Dove non ci sono barre, e dove la sezione ha una riga sola. Le due
-   * condizioni e la ragione della seconda — che **non** e' quella del totale —
+   * Dove non ci sono barre — compresa la vista `quote`, che le barre non le ha —
+   * e dove la sezione ha una riga sola. Le condizioni e la ragione di ciascuna
    * stanno sul chiamante.
    */
   readonly scale: string | null
   /**
-   * Le fette della ciambella, o `null` dove non se ne disegna una. Le tre
-   * condizioni stanno su `pieOf`.
+   * La vista corrente di questa sezione, oppure `null` dove **non c'e' una
+   * seconda vista da scegliere**: sotto `PIE_MIN_SLICES` voci, con una riga
+   * sola, o su un'intestazione che si disegna senza la propria sezione.
    *
-   * ## Perche' la ciambella sta **dentro** l'intestazione, e non fra lei e le righe
-   *
-   * Perche' li' costa **meno della meta'**, e la differenza e' misurata, non
-   * stimata. La colonna 3 di questa griglia e' vuota da quando l'interruttore
-   * delle fisse se n'e' andato, e le due righe di testo — nome + totale, e la
-   * scala — ne occupano 35 px in tutto: una figura alta 88 messa li' fa crescere
-   * l'intestazione di **53 px**. La stessa figura in un blocco suo fra
-   * l'intestazione e l'elenco ne costerebbe 88 piu' gli 8 del passo della
-   * sezione, cioe' **96**.
-   *
-   * Misurato a 390x844 sulla scena dell'export del 26 agosto — un canone, cinque
-   * quotidiane, otto settimane dietro — la seconda riga di B (il termine di
-   * paragone, cioe' la ragione per cui B esiste) sta a `fondo 662,19` dentro un
-   * `.stats` che si vede fino a **760**: 97,81 px di margine. Un blocco a se'
-   * ne lascerebbe **1,81**; qui dentro ne lascia **44,81**.
-   *
-   * E la scelta alternativa — un blocco a se' con la ciambella piu' piccola —
-   * non e' uno scambio, e' una perdita secca: a parita' di 53 px di costo la
-   * ciambella in un blocco suo sarebbe larga 45, cioe' meta' raggio per le
-   * stesse cinque fette.
-   *
-   * ## E ha senso anche a leggerla
-   *
-   * L'intestazione dice **quanto** (`Quotidiane · 92,00 €`) e **come si leggono
-   * le barre** (`Barra intera = 42,00 €`); la ciambella accanto dice **com'e'
-   * fatto** quel numero, e le righe sotto lo scompongono in cifre. Tre gradini
-   * della stessa frase, e nessuno di loro ripete un numero dell'altro.
+   * `null` e non `'ordine'` con un booleano accanto: due campi per un fatto solo
+   * sarebbero due modi di sapere la stessa cosa, e il chiamante ne scriverebbe
+   * uno e dimenticherebbe l'altro.
    */
-  readonly pie: readonly PieSlice[] | null
+  readonly vista: Vista | null
+  /** Cosa fare quando si sceglie una vista. `null` esattamente quando lo e' `vista`. */
+  readonly onVista: ((scelta: Vista) => void) | null
 }) {
   const fixed = kind === 'fixed'
+  const nome = t(fixed ? 'stats.fixedInPeriod' : 'stats.variable')
   return (
-    // `data-pie` non e' un gancio per i test: e' cio' che dice al foglio di
-    // dare a questa intestazione **due righe flessibili** intorno al testo, cosi'
-    // che le sue due righe restino adiacenti e centrate contro una figura che e'
-    // piu' alta di loro. Senza, la figura gonfia le righe che attraversa e la
-    // didascalia della scala si stacca dal nome che spiega — misurato, 25,25 px
-    // di niente in mezzo. L'argomento e i numeri stanno in `Stats.css`.
-    <h3 class="stats__partTitle" data-kind={kind} data-pie={pie === null ? undefined : ''}>
-      <span class="stats__partName">
-        {t(fixed ? 'stats.fixedInPeriod' : 'stats.variable')}
-      </span>
-      {amount === null ? null : <span class="stats__partTotal">{amount}</span>}
-      {pie === null ? null : <Pie slices={pie} />}
-      {/* La scala sta sulla **seconda riga** dell'intestazione, e non e' una
-          riga in piu' dell'elenco.
-
-          Fino al 30 agosto entrava gratis: l'intestazione delle fisse riservava
-          44 px per l'interruttore e il suo testo ne usava 18,75. Tolto
-          l'interruttore quella riserva non c'e' piu', quindi **adesso la
-          didascalia costa la propria altezza** — 18,75 px per sezione. E' il
-          prezzo di dire la scala invece di farla dedurre, ed e' scritto qui
-          perche' chi misura la densita' sappia da dove viene. */}
-      {scale === null ? null : <span class="stats__partScale">{scale}</span>}
-    </h3>
+    // `data-kind` sta qui e non piu' sull'`<h3>`: e' il colore della pastiglia e
+    // il nome della natura, e adesso deve valere anche per il comando, che
+    // dell'intestazione fa parte pur stando fuori dal titolo.
+    //
+    // `data-vista` non e' un gancio per i test: e' cio' che dice al foglio che
+    // qui dentro c'e' un bersaglio, cioe' che questa riga deve dichiarare
+    // `--tap-min` invece di lasciare che l'altezza la decida la tipografia.
+    <div class="stats__partHead" data-kind={kind} data-vista={vista ?? undefined}>
+      <h3 class="stats__partTitle">
+        <span class="stats__partName">{nome}</span>
+        {amount === null ? null : <span class="stats__partTotal">{amount}</span>}
+        {/* La scala sta sulla **seconda riga** dell'intestazione, e non e' una
+            riga in piu' dell'elenco. Costa la propria altezza — 18,75 px per
+            sezione — ed e' il prezzo di dire la scala invece di farla dedurre.
+            In vista `quote` non c'e': non ci sono barre da calibrare. */}
+        {scale === null ? null : <span class="stats__partScale">{scale}</span>}
+      </h3>
+      {vista === null || onVista === null ? null : (
+        <ViewToggle nome={nome} vista={vista} onVista={onVista} />
+      )}
+    </div>
   )
 }
 
 /**
- * **La ciambella delle quotidiane.** Gli angoli danno la forma a colpo d'occhio,
- * le righe qui sotto danno i valori.
+ * **Il comando a due stati, e la sua ragione e' che il gesto da solo non basta.**
+ *
+ * > *"Un grafico che cambia solo se ti capita di toccarlo e' una funzione che
+ * > nessuno trova."*
+ *
+ * E la prova non e' un'opinione: **il grafico a torta e' stato chiesto due volte
+ * prima che ne esistesse uno**. Una funzione che si scopre per caso viene
+ * richiesta come se non ci fosse, che e' il modo in cui una cosa costruita
+ * diventa una cosa da costruire.
+ *
+ * Il tap sulla figura **resta** e fa la stessa identica cosa. Il comando non lo
+ * sostituisce: **lo dichiara**. Chi lo vede una volta sa che il gesto esiste, e
+ * da li' in poi usa quello che gli viene comodo.
+ *
+ * ## Due parole, non due icone
+ *
+ * *"Le icone sono la cosa che si vibe-codea per prima."* Una ciambella e un
+ * istogramma disegnati a 16 px sono due macchie che chiedono di essere imparate;
+ * due parole si leggono. E le parole nominano **la domanda**, non la forma:
+ * `Quote` e' *"quanto pesa cosa"*, `Ordine` e' *"quanto e' grande cosa, in
+ * ordine"*. Chi legge non deve sapere che forma avra' il disegno per scegliere.
+ *
+ * ## `aria-pressed` e non `role="radio"`
+ *
+ * Sono due bottoni a due stati, e uno dei due e' sempre premuto. Un gruppo di
+ * radio sarebbe piu' preciso sulla semantica e porterebbe con se' l'obbligo di
+ * gestire le frecce da tastiera per essere conforme: due bottoni con
+ * `aria-pressed` si tabulano da soli e non hanno nessun comportamento da
+ * scrivere. La precisione che si perde e' che l'esclusivita' fra i due si legge
+ * dai due stati invece che dal ruolo del gruppo.
+ *
+ * Il gruppo prende il **nome della parte** e non una parola nuova: e' la stessa
+ * scelta gia' fatta per l'etichetta di B (*"la stessa parola sopra gli stessi
+ * soldi"*), ed evita una chiave di dizionario che direbbe una terza volta cio'
+ * che l'intestazione accanto dice gia'.
+ */
+function ViewToggle({
+  nome,
+  vista,
+  onVista,
+}: {
+  readonly nome: string
+  readonly vista: Vista
+  readonly onVista: (scelta: Vista) => void
+}) {
+  return (
+    <div class="stats__views" role="group" aria-label={nome}>
+      {VISTE.map((scelta) => (
+        <button
+          key={scelta}
+          type="button"
+          class="stats__view"
+          data-vista={scelta}
+          aria-pressed={vista === scelta}
+          // Premere quella gia' premuta non e' un errore e non fa niente di
+          // diverso: rimette lo stesso stato. Non si disabilita — un bersaglio
+          // che sparisce dalla sequenza di tabulazione quando e' attivo lascia
+          // il gruppo con un solo elemento raggiungibile, e chi arriva col
+          // tastierino non trova piu' il comando che sta usando.
+          onClick={() => onVista(scelta)}
+        >
+          {t(scelta === 'quote' ? 'stats.view.shares' : 'stats.view.ranking')}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+/**
+ * **La vista `quote`: la ciambella, il totale nel buco, la legenda sotto.**
+ *
+ * ## Il buco porta un numero
+ *
+ * *"Il buco di una ciambella e' spazio gia' speso: o porta un numero o e' un
+ * difetto."* Il numero e' **il totale della sezione**, cioe' il denominatore di
+ * tutte le fette: e' l'unica cifra che rende leggibile ogni arco come una quota
+ * invece che come una forma.
+ *
+ * E' scritto in HTML e non dentro l'SVG: l'SVG e' `aria-hidden`, e un `<text>`
+ * li' dentro sarebbe **una cifra che si vede e non si sente**. Sta sopra la
+ * figura come figlio dello stesso riquadro, non come sovrapposizione: non copre
+ * nessun bersaglio, perche' il bersaglio e' il riquadro stesso e il numero e' un
+ * suo discendente.
+ *
+ * ## Niente etichette dentro le fette, nessuna percentuale scritta
+ *
+ * **L'arco *e'* la percentuale.** Riscriverla in cifre accanto renderebbe la
+ * figura una decorazione della propria didascalia — e sarebbe anche la cosa che
+ * `dataviz` chiama per nome, *"un'etichetta tagliata da un segmento troppo
+ * piccolo"*, su spicchi che qui possono valere il 4%.
+ *
+ * Le linee di richiamo sono la stessa cosa con un filo in piu': su 128 px di
+ * lato non c'e' il margine per farle uscire senza incrociarsi.
+ *
+ * ## La legenda sta **sotto**, e la ragione e' la larghezza
+ *
+ * A lato costerebbe metà dello schermo per una colonna di cinque parole, e su
+ * 375 punti la figura scenderebbe sotto i 90 px di lato. Sotto, la legenda si
+ * prende tutta la riga e l'importo si incolonna sul **bordo destro del
+ * contenuto**, che e' lo stesso bordo su cui stanno gli importi delle barre e
+ * quelli della Home: la colonna delle cifre e' l'unica cosa che questa schermata
+ * promette di tenere ferma fra una vista e l'altra.
+ *
+ * ## E il tap
+ *
+ * Tutto il blocco — figura e legenda insieme — commuta alla vista a barre. Non
+ * e' un bersaglio dichiarato: non ha ruolo, non prende il fuoco, e la strada
+ * annunciata resta il comando nell'intestazione. E' il gesto che quel comando
+ * dichiara. Le misure minime le dichiara lo stesso (`Stats.css`), perche' la
+ * regola e' sui bersagli e questo, per un pollice, lo e'.
+ */
+function Quote({
+  quote,
+  mossa,
+  onTap,
+}: {
+  readonly quote: Quote
+  /**
+   * Se la commutazione e' gia' avvenuta almeno una volta in questa sessione
+   * della schermata. Decide se il blocco entra in dissolvenza: al primo disegno
+   * no, perche' li' non si sta commutando niente — si sta arrivando.
+   */
+  readonly mossa: boolean
+  readonly onTap: () => void
+}) {
+  return (
+    <div class="stats__viz" data-mossa={mossa ? '' : undefined} onClick={onTap}>
+      <div class="stats__donut">
+        <Pie slices={quote.slices} />
+        <p class="stats__donutTotal">{money(quote.totalCents)}</p>
+      </div>
+      {/* La legenda **segue le fette**: stesso array, stesso ordine. E' il
+          vincolo che rende ammissibile una ciambella senza etichette dentro —
+          se i due ordini divergessero, non ci sarebbe piu' nessun modo di sapere
+          quale arco e' quale. */}
+      <ul class="stats__legend">
+        {quote.rows.map((row) => (
+          <li class="legend" key={row.orphan ? ORPHAN : row.categoryId}>
+            {/* La pastiglia porta lo stesso `fill()` della fetta e della barra:
+                un solo posto decide che colore ha una categoria. Il contorno e'
+                lo stesso della barra e per lo stesso motivo — quattro degli otto
+                colori stanno sotto 3:1 sul fondo, e una pastiglia da 10 px senza
+                contorno sparirebbe proprio dove serve riconoscere la fetta. */}
+            <span
+              class="legend__dot"
+              style={{ backgroundColor: fill(row) ?? 'var(--brand)' }}
+            />
+            <span class="legend__name">{sliceLabel(row)}</span>
+            <span class="legend__value">{money(row.cents)}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
+/**
+ * **La ciambella.** Gli angoli danno la forma a colpo d'occhio, la legenda sotto
+ * da' i valori.
  *
  * ## Il vincolo che la rende ammissibile, e che non e' negoziabile
  *
- * > **Si AGGIUNGE alle righe, non le sostituisce.**
+ * > **Nessuna fetta e' l'unico portatore del proprio dato.**
  *
- * Non e' l'unico portatore di niente: ogni fetta ha, a pochi pixel di distanza,
- * una riga con il proprio nome, la propria barra e il proprio importo. **La
- * ciambella puo' fallire senza portarsi via l'informazione** — ed e' esattamente
- * cio' che succede quando una spesa enorme schiaccia le altre in schegge: gli
- * angoli smettono di dire qualcosa e le cifre restano dove sono. Il giorno in
- * cui qualcuno togliesse le righe per far spazio, questa figura andrebbe tolta
- * con loro.
+ * Ogni fetta ha, a pochi pixel di distanza, una riga di legenda con il proprio
+ * nome e il proprio importo. **La ciambella puo' fallire senza portarsi via
+ * l'informazione** — ed e' esattamente cio' che succede quando una spesa enorme
+ * schiaccia le altre in schegge: gli angoli smettono di dire qualcosa e le cifre
+ * restano dove sono. Il giorno in cui qualcuno togliesse la legenda per far
+ * spazio, questa figura andrebbe tolta con lei.
+ *
+ * Fino al 30 agosto quel ruolo lo facevano **le righe con le barre**, perche' la
+ * figura si aggiungeva a loro. Adesso le due si escludono, e il portatore delle
+ * cifre e' passato alla legenda: **la condizione non e' cambiata, e' cambiato
+ * chi la soddisfa.**
  *
  * ## Perche' una forma che la disciplina dei grafici sconsiglia
  *
@@ -975,9 +1326,11 @@ function PartHead({
  * *"niente donut per confrontare valori vicini"* — e tutte e due le volte
  * riguarda casi che qui non ci sono, perche' A e' **divisa in due sezioni**.
  * Sui dati veri del 24–30 agosto le quotidiane valgono `42 / 26 / 24 / 10 / 10
- * su 112`, cioe' **37% · 23% · 21% · 9% · 9%**: nessuna sotto l'8%, nessuna
- * sopra il 40%. Le fisse sono `95,7% / 4,3%`, ed e' li' che la skill ha ragione
- * — infatti li' non si disegna (vedi `pieOf`).
+ * su 112`, cioe' **37,5% · 23,2% · 21,4% · 8,9% · 8,9%**: la piu' piccola e' un
+ * arco di **32°**, nessuna scaglia. Le fisse sono `95,7% / 4,3%` — un cerchio
+ * con una scheggia da 15,6° — ed e' li' che la skill ha ragione: infatti li' non
+ * si disegna, e la condizione che lo impedisce e' il conteggio delle voci
+ * (`PIE_MIN_SLICES`), non la natura della sezione.
  *
  * Resta un punto in cui contraddice davvero: la skill vuole **al massimo sei
  * segmenti** per un part-to-whole, e qui possono essere nove — otto categorie
@@ -988,27 +1341,23 @@ function PartHead({
  * indistinguibile da uno esistente sotto CVD"* — non puo' succedere. Cio' che
  * resta del suo argomento e' che con nove spicchi non si legge piu' quale sia
  * quale, e vale: la risposta e' che qui **non serve leggerlo dalla fetta**,
- * perche' l'ordine delle fette e' l'ordine delle righe e la riga porta il nome.
+ * perche' l'ordine delle fette e' l'ordine della legenda e la legenda porta il
+ * nome, la pastiglia e l'importo di ognuna.
  *
- * ## Nessuna etichetta dentro le fette, e nessuna legenda
+ * ## Nessuna etichetta dentro le fette, nessuna linea di richiamo
  *
- * La legenda **sono le righe qui sotto**, che esistono gia': stesso ordine —
- * dalla piu' grande, in senso orario dalle dodici — e stesso colore. E' la
- * ragione per cui questa forma non costa una riga di legenda, che era meta'
- * dell'obiezione con cui era stata rifiutata. Un'etichetta dentro una fetta
- * sarebbe per giunta la cosa che `dataviz` chiama per nome — *"un'etichetta
- * tagliata da un segmento troppo piccolo"* — su spicchi che qui possono valere
- * l'1%.
+ * Sta su `Quote`, che e' il posto in cui la legenda esiste. In una riga: l'arco
+ * *e'* la percentuale, e ripeterla in cifre renderebbe inutile la figura che la
+ * disegna.
  *
  * ## `aria-hidden`, per lo stesso argomento della barra divisa
  *
- * E' **la forma di cinque numeri che stanno scritti trenta pixel piu' sotto**,
- * non un'informazione in piu': ogni fetta ha una riga con nome e importo, e chi
- * legge lo schermo con la voce le incontra tutte, in quest'ordine, subito dopo.
- * Annunciare la figura vorrebbe dire mettere davanti a quelle cinque righe un
- * oggetto da saltare che non aggiunge nessun fatto — e la quota, che e' l'unica
- * cosa che la ciambella aggiunge a chi guarda, e' **derivabile dagli stessi
- * numeri** che la voce sta per leggere.
+ * E' **la forma di cinque numeri scritti trenta pixel piu' sotto**, non
+ * un'informazione in piu': ogni fetta ha una riga di legenda con nome e importo,
+ * e chi legge lo schermo con la voce le incontra tutte, in quest'ordine, subito
+ * dopo. La quota, che e' l'unica cosa che la ciambella aggiunge a chi guarda, e'
+ * **derivabile dagli stessi numeri** che la voce sta per leggere — a partire dal
+ * totale, che sta nel buco ed e' HTML apposta per non sparire con la figura.
  *
  * Ed e' la stessa scelta gia' presa, nella stessa schermata, per la marca che
  * risponde alla stessa domanda: `.stats__split` e' `aria-hidden` con questo
@@ -1379,6 +1728,7 @@ export function Stats({ phase, expenses, categories, rules, budgets, period, day
           `audit:source`, che e' esattamente la guardia scritta per questo. */}
       <Categories
         breakdown={view.byCategory}
+        categories={categories}
         range={periodRangeLabel(view.period, view.current.range)}
       />
       {/* **L'assenza di B si legge qui, e non dentro `Periods`.**
