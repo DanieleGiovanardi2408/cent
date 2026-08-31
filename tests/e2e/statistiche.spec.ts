@@ -1440,9 +1440,29 @@ test('A ha una scala per sezione, e ogni sezione dichiara quanto vale la sua bar
     ),
   )
   expect(misure).toHaveLength(2)
-  // Le due colonne finiscono nello stesso punto: e' la premessa senza la quale
-  // "riempie la colonna" non vorrebbe dire la stessa cosa nelle due parti.
-  expect(misure[0]!.plot, 'le due parti hanno colonne di larghezza diversa').toBe(misure[1]!.plot)
+  // **Qui c'era `misure[0].plot === misure[1].plot`**, con scritto che era la
+  // premessa senza cui *"riempie la colonna"* non avrebbe voluto dire la stessa
+  // cosa nelle due parti. E' caduta il 31 agosto con la griglia condivisa, e va
+  // detto perche' invece di essere tolta in silenzio.
+  //
+  // Non e' il test ad aver ceduto: e' la premessa a non essere mai stata quella
+  // giusta. Ogni asserzione qui sotto e' gia' una **frazione della colonna della
+  // propria parte** (`b.width / plot`, con `plot` letto dentro ogni
+  // `.stats__rows`), e *"riempie"* vuol dire "riempie la propria" — che e' cio'
+  // che la scala per sezione dichiara sotto ogni parte, `Barra intera = X`.
+  // Confrontare **lunghezze** fra le due parti e' gia' rifiutato dal disegno.
+  //
+  // Le colonne uguali erano un effetto della griglia condivisa, e quella e'
+  // stata tolta perche' faceva dipendere la geometria delle Fisse da cio' che si
+  // vedeva nelle Quotidiane. Cio' che resta condiviso — e che serve davvero — e'
+  // il **bordo destro degli importi**, provato dal test dell'invariante.
+  //
+  // Quel che serve qui e' solo che ogni parte una colonna ce l'abbia: senza,
+  // le frazioni dividerebbero per zero e sarebbero verdi per assurdo.
+  expect(
+    misure.map((m) => m.plot > 0),
+    'una parte non ha colonna del grafico: le frazioni qui sotto non vorrebbero dire niente',
+  ).toEqual([true, true])
 
   // 1. **Due barre piene, una per parte.** Con una scala sola le variabili
   //    starebbero su 507,00 € e la loro riga piu' grande varrebbe il 24%.
@@ -4285,5 +4305,119 @@ test.describe('le frecce del periodo', () => {
     )
     console.log(`\n| frecce | ${misure.map((m) => `${m.w}x${m.h}`).join(' · ')} |\n`)
     expect(misure.filter((m) => Math.min(m.w, m.h) < 44)).toEqual([])
+  })
+})
+
+/**
+ * **La geometria di una parte non dipende dal contenuto di un'altra.**
+ *
+ * Il 31 agosto, sul telefono: toccando la ciambella delle **Quotidiane** le barre
+ * delle **Fisse** si accorciavano. Il dato non era cambiato, la barra si'.
+ *
+ * La causa, misurata a 390x844: A e' **una** sezione con dentro le due parti, e
+ * la prima colonna era `fit-content` sulla griglia della sezione — quindi si
+ * dimensionava sull'etichetta piu' lunga **fra le due parti insieme**. In vista a
+ * ciambella le righe delle Quotidiane non sono nel DOM, quindi la colonna valeva
+ * 61,17 px; aprendo le barre comparivano `Coffeeshop` e `Sigarette` e saliva a
+ * 79,63. La barra di `Casa` passava da **214,27 a 195,81 px**.
+ *
+ * **E' il ritorno di un difetto gia' riparato una volta** dentro una sezione: la
+ * lunghezza della barra funzione della lunghezza dell'etichetta. La riparazione
+ * di allora era locale e non ha retto quando il caso e' rientrato fra due parti;
+ * per questo la seconda volta e' un invariante sorvegliato, e non una riga di CSS
+ * che qualcuno dovra' ricordarsi.
+ */
+test.describe('la geometria di una parte non dipende da un\'altra', () => {
+  const scenaTest = async (page: Page): Promise<void> => {
+    await page.goto('/')
+    await chiudiGuida(page)
+    const nomi = await grigliaDiDefault(page)
+    // **Le etichette delle due parti hanno lunghezze molto diverse**, ed e' la
+    // premessa: con nomi lunghi uguali il test sarebbe verde anche sul difetto.
+    await semina(page, [
+      { categoria: nomi.casa, cents: 50700, fissa: true },
+      { categoria: nomi.trasporti, cents: 2300, fissa: true },
+      { categoria: nomi.coffeeshop, cents: 2400 },
+      { categoria: nomi.spesa, cents: 4200 },
+      { categoria: nomi.fuori, cents: 2600 },
+    ])
+    await apriStatistiche(page)
+  }
+
+  const barreDelleFisse = (page: Page) =>
+    page.locator('.stats__partHead[data-kind="fixed"] + .stats__rows .stat__bar')
+
+  test('le barre delle Fisse non cambiano toccando la ciambella delle Quotidiane', async ({
+    page,
+  }) => {
+    await scenaTest(page)
+    const geo = async () =>
+      barreDelleFisse(page).evaluateAll((n) =>
+        n.map((b) => {
+          const r = b.getBoundingClientRect()
+          return { x: Math.round(r.x * 100) / 100, w: Math.round(r.width * 100) / 100 }
+        }),
+      )
+
+    const prima = await geo()
+    expect(prima.length, 'le fisse non hanno barre: la scena non prova niente').toBe(2)
+
+    // La premessa: le Quotidiane sono in ciambella, quindi le loro etichette non
+    // sono a schermo. Senza questo il tap non cambierebbe l'insieme dei nomi.
+    await expect(page.locator('.stats__partHead[data-kind="variable"] + .stats__viz')).toHaveCount(1)
+    await page.locator('.stats__partHead[data-kind="variable"] + .stats__viz').tap()
+    await expect(page.locator('.stats__partHead[data-kind="variable"] + .stats__rows')).toHaveCount(1)
+
+    const dopo = await geo()
+    console.log(
+      `\n| fisse prima ${prima.map((b) => `${b.x}+${b.w}`).join(' · ')} ` +
+        `| dopo ${dopo.map((b) => `${b.x}+${b.w}`).join(' · ')} |\n`,
+    )
+    expect(
+      dopo,
+      'le barre delle Fisse sono cambiate toccando le Quotidiane: la geometria di una parte dipende dall\'altra',
+    ).toEqual(prima)
+  })
+
+  test('gli importi restano incolonnati fra le due parti', async ({ page }) => {
+    // Cio' che l'occhio incolonna e' il **bordo destro dipinto**, e resta lo
+    // stesso anche con una griglia per parte: l'ultima colonna e' `max-content`
+    // in fondo a una griglia larga quanto la sezione.
+    await scenaTest(page)
+    await page.locator('.stats__partHead[data-kind="variable"] + .stats__viz').tap()
+    const bordi = await page.locator('.stat__value').evaluateAll((n) =>
+      n.map((v) => Math.round(v.getBoundingClientRect().right * 100) / 100),
+    )
+    expect(new Set(bordi).size, `i bordi destri sono ${bordi.join(', ')}`).toBe(1)
+  })
+
+  test('camminando fra le settimane, la geometria di una parte non segue l\'altra', async ({
+    page,
+  }) => {
+    // L'invariante vale anche **fra periodi**: le barre di una settimana non
+    // devono cambiare perche' in un'altra esistono etichette piu' lunghe.
+    await page.goto('/')
+    await chiudiGuida(page)
+    const nomi = await grigliaDiDefault(page)
+    await semina(page, [
+      { categoria: nomi.casa, cents: 50700, fissa: true, giorniFa: 8 },
+      { categoria: nomi.trasporti, cents: 2300, fissa: true, giorniFa: 8 },
+      // Tre quotidiane, non due: sotto `PIE_MIN_SLICES` la ciambella non c'e' e
+      // il tap non avrebbe niente da toccare.
+      { categoria: nomi.coffeeshop, cents: 2400, giorniFa: 8 },
+      { categoria: nomi.spesa, cents: 4200, giorniFa: 8 },
+      { categoria: nomi.sigarette, cents: 1900, giorniFa: 8 },
+    ])
+    await apriStatistiche(page)
+    await page.locator('.pnav__arrow').first().tap()
+
+    const misura = () =>
+      barreDelleFisse(page).evaluateAll((n) =>
+        n.map((b) => Math.round(b.getBoundingClientRect().width * 100) / 100),
+      )
+    const prima = await misura()
+    expect(prima.length).toBe(2)
+    await page.locator('.stats__partHead[data-kind="variable"] + .stats__viz').tap()
+    expect(await misura()).toEqual(prima)
   })
 })

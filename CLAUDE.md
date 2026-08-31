@@ -948,6 +948,37 @@ corso si disegna come uno finito. La forma che torna e' un'altra, e la ragione
 per cui torna e' un'altra: **l'oggetto della cancellazione era la rotaia, non
 l'incompletezza.**
 
+## La geometria di una parte non dipende dal contenuto di un'altra
+
+Se due blocchi della stessa schermata condividono una griglia, e una colonna e'
+dimensionata **sul contenuto** (`fit-content`, `max-content`, `auto`), allora
+**cio' che compare in un blocco cambia la geometria dell'altro** — e lo cambia in
+silenzio, perche' il dato non si e' mosso.
+
+Il caso, misurato a 390x844 il 31 agosto e trovato sul telefono: A e' **una**
+sezione con dentro le Fisse e le Quotidiane. Toccando la ciambella delle
+Quotidiane comparivano `Coffeeshop` e `Sigarette`, la colonna dei nomi passava da
+**61,17 a 79,63 px**, e la barra di `Casa` — sotto l'altra intestazione, con il
+suo importo immutato — passava da **214,27 a 195,81** cominciando 18,46 px piu' a
+destra.
+
+**Era il ritorno di un difetto gia' riparato**, la lunghezza della barra funzione
+della lunghezza dell'etichetta. La prima volta fu riparato *dentro* una sezione,
+e la riparazione locale non ha retto quando lo stesso caso e' rientrato *fra due
+parti*. E' la ragione per cui questa volta e' un invariante e non una riga di CSS:
+
+> **Test**: le barre di una parte hanno la stessa geometria in px al variare di
+> cio' che si vede nelle altre — vista commutata, periodo cambiato.
+
+E la riparazione ha una forma generale: **la griglia appartiene al blocco piu'
+piccolo che ha senso misurare da solo**, non al contenitore che li raccoglie.
+Cio' che si voleva davvero dal contenitore — gli importi incolonnati fra le due
+parti — non si perde, e non per fortuna: l'ultima colonna e' `max-content` in
+fondo a griglie larghe uguali, quindi **il bordo destro dipinto** resta lo stesso.
+Prima di condividere una griglia, chiedersi *quale* proprieta' si sta comprando:
+quasi sempre e' un bordo allineato, e un bordo non ha bisogno di una colonna
+condivisa.
+
 ## Una mutazione che non compila non e' una mutazione
 
 Far fallire apposta un test e' la prova che quel test sorveglia qualcosa. Ma la

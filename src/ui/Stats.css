@@ -249,10 +249,29 @@
    * **va a capo** invece di perdere lettere (`.stat__label`, piu' sotto).
    * L'importo non tronca mai: e' il valore esatto, ed e' quello che rende il
    * grafico una tabella. */
-  grid-template-columns:
-    fit-content(var(--name-max))
-    minmax(var(--plot-min), 1fr)
-    max-content;
+  /* **Le colonne non stanno piu' qui.** Stavano sulla sezione, e A e' **una**
+   * sezione con dentro le due parti: la prima colonna e' `fit-content`, quindi
+   * si dimensionava sull'etichetta piu' lunga **fra le due parti insieme**.
+   *
+   * Il difetto che ne veniva, misurato a 390x844 il 31 agosto: con le
+   * Quotidiane in ciambella le loro righe non sono nel DOM, quindi le sole
+   * etichette erano `Casa` e `Trasporti` e la colonna valeva **61,17 px**;
+   * toccando la ciambella comparivano `Coffeeshop` e `Sigarette` e la colonna
+   * saliva a **79,63**. La barra di `Casa` passava da **214,27 a 195,81 px** e
+   * cominciava 18,46 px piu' a destra — **toccando l'altra sezione**, con il suo
+   * dato immutato.
+   *
+   * E' il ritorno di un difetto gia' riparato una volta *dentro* una sezione:
+   * la lunghezza della barra funzione della lunghezza dell'etichetta. La
+   * riparazione locale non ha retto perche' l'invariante non era scritto.
+   *
+   *     **La geometria di una parte non dipende dal contenuto di un'altra.**
+   *
+   * Le colonne stanno adesso su `.stats__rows`, cioe' **una griglia per parte**.
+   * L'incolonnamento degli importi non si perde, e non e' fortuna: l'ultima
+   * colonna e' `max-content` in fondo a una griglia larga quanto la sezione,
+   * quindi il **bordo destro dipinto** — che e' cio' che l'occhio incolonna, ed
+   * e' quello che il test guarda — resta lo stesso in tutte e due le parti. */
   gap: var(--sp-2);
 }
 
@@ -260,7 +279,7 @@
  * L'attributo sta sulla **sezione** perche' le colonne sono sue: una parte sotto
  * soglia dentro una sezione che ha barre tiene la colonna vuota, che e' il modo
  * onesto di dire "qui le barre non ci sono" senza spostare le altre. */
-.stats__section:not([data-chart]) {
+.stats__section:not([data-chart]) .stats__rows {
   grid-template-columns: minmax(0, 1fr) max-content;
 }
 
@@ -1149,7 +1168,14 @@
 .stats__rows {
   display: grid;
   grid-column: 1 / -1;
-  grid-template-columns: subgrid;
+  /* **Le colonne sono di questa parte, e non della sezione.** Vedi l'argomento
+   * per esteso su `.stats__section`: A e' una sezione sola con due parti, e una
+   * colonna `fit-content` condivisa faceva cambiare la lunghezza delle barre
+   * delle Fisse quando si toccava la ciambella delle Quotidiane. */
+  grid-template-columns:
+    fit-content(var(--name-max))
+    minmax(var(--plot-min), 1fr)
+    max-content;
   /* **Zero, ed era `--sp-2`.** Lo spazio bianco appartiene alle sezioni, non
    * alle righe: due sezioni sono due domande, due righe sono la stessa cosa
    * ripetuta.
