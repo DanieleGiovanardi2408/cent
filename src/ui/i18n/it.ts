@@ -169,6 +169,10 @@ export const it = {
   // e una legenda senza cifra manderebbe a leggere il numero sbagliato due righe
   // sopra.
   'home.week.sustainable': '{amount} sostenibili al giorno',
+  /* Vedi en.ts: la frase col picco non puo' nominare un giorno che non c'e'. */
+  'home.week.aria.empty':
+    'Sette colonne, da lunedì a domenica: questa settimana non è ancora uscito niente.',
+
   'home.week.aria':
     'Sette colonne, da lunedì a domenica: quanto è uscito ogni giorno. Il più alto è {day}, {amount}.',
 

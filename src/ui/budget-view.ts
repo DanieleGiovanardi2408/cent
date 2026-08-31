@@ -660,14 +660,12 @@ export interface Week {
    * Il giorno da etichettare: il piu' alto. A parita' il **primo**, perche' la
    * domanda e' quando parte la mano, non quando si ferma.
    *
-   * **Non e' annullabile**, e il contratto di partenza diceva "`null` se sono
-   * tutti a zero": quel caso non e' un campo vuoto dentro una striscia, e'
-   * l'assenza della striscia. `weekStrip` restituisce `null` esattamente
-   * quando nessun giorno ha un importo positivo, quindi qui un giorno positivo
-   * c'e' sempre. Tenere il `null` avrebbe lasciato uno stato rappresentabile che
-   * nessuno produce, e un ramo di disegno che nessuno esegue.
+   * **`null` a settimana vuota**, da quando la striscia resta anche li'. Non e'
+   * "un giorno a zero": e' l'assenza di un giorno da nominare, e il componente
+   * non etichetta niente. Il contratto diceva "non e' annullabile" perche'
+   * quel caso non arrivava — `weekStrip` usciva prima — e adesso arriva.
    */
-  readonly peak: IsoDate
+  readonly peak: IsoDate | null
 }
 
 /** Quota grezza di un importo sulla scala, con `scale <= 0` che non divide per zero. */
@@ -792,27 +790,25 @@ export function weekStrip(
       peakIndex = i
     }
   }
-  // **La striscia sparisce a settimana vuota, e l'eccezione ha un argomento suo.**
+  // **La striscia resta anche a settimana vuota**, e qui c'era `return null`.
   //
-  // Dal 31 agosto vale la regola *"un blocco non scompare perche' i suoi dati
-  // sono vuoti: tiene il titolo e dice cosa manca"*, e le Statistiche ci si sono
-  // adeguate. Qui no, e la distinzione non e' comodita':
+  // Vale la regola *"un blocco non scompare perche' i suoi dati sono vuoti"*: il
+  // 31 agosto, un lunedi', la Home perdeva la striscia insieme alle righe di
+  // oggi, e sopra restava meta' schermo bianco.
   //
-  // Il precedente che sconsigliava i blocchi a zero — *"otto barre a zero sotto
-  // SETTIMANA PER SETTIMANA e nove occorrenze di `0,00 €`"* — parla di un blocco
-  // che **stampa un importo per riga**. Questa striscia non ne stampa nessuno:
-  // sette colonne con la linea di base e oggi marcato non sono "sette zeri",
-  // sono la settimana che comincia. Il rumore di li' qui non c'e'.
+  // **Il precedente che sconsigliava i blocchi a zero non si applica**, e la
+  // distinzione e' la ragione per cui questa riga e' cambiata invece di
+  // difendersi: quel precedente — *"otto barre a zero sotto SETTIMANA PER
+  // SETTIMANA e nove occorrenze di `0,00 €`"* — parla di un blocco che **stampa
+  // un importo per riga**. Questa striscia non ne stampa nessuno. Sette colonne
+  // con la linea di base e oggi marcato non sono "sette zeri": sono **la
+  // settimana che comincia**, ed e' l'unica cosa che il lunedi' mostra che il
+  // periodo esiste ed e' appena partito.
   //
-  // E cio' che qui manca **e' detto altrove nella stessa schermata**: l'eroe
-  // porta *"Questa settimana · 31 ago – 06 set"* e la riga sotto *"Nessuna spesa
-  // in questo periodo, per ora"*. La Home non tace, quindi non sembra rotta —
-  // che e' esattamente la condizione dell'argomento di quella regola, e qui non
-  // si avvera.
-  //
-  // Il giorno in cui la Home smettesse di dirlo altrove, questa riga cade con
-  // il proprio argomento invece di sopravvivergli.
-  if (peakCents <= 0) return null
+  // Cio' che resta `null` e' il **picco**, che a settimana vuota non esiste: non
+  // e' un giorno a zero, e' l'assenza di un giorno da nominare. Il componente non
+  // lo etichetta, e la scala cade sul sostenibile — o sul pavimento, se non c'e'
+  // nemmeno quello.
 
   const sustainableCents = m.sustainablePaceCents
   // `max(giorno piu' alto, sostenibile)`: la linea deve **stare dentro** la
@@ -826,8 +822,10 @@ export function weekStrip(
   // si appiattisce sulla base. Se il sostenibile e' **zero** — un budget da 0,05
   // € a settimana — sulla base ci sta davvero, ed e' vero.
   //
-  // `peakCents` e' positivo, quindi `scaleCents` lo e': nessuna divisione per
-  // zero, qualunque cosa valga il sostenibile.
+  // **`peakCents` puo' essere zero** da quando la striscia resta a settimana
+  // vuota, quindi `scaleCents` puo' esserlo: la divisione la copre gia'
+  // `columnShare`, che con `scale <= 0` restituisce 0 invece di dividere. Sette
+  // colonne alla base, che e' cio' che una settimana senza spese vale.
   const scaleCents =
     sustainableCents === null ? peakCents : Math.max(peakCents, sustainableCents)
 
@@ -849,6 +847,10 @@ export function weekStrip(
       sustainableCents === null
         ? null
         : { cents: sustainableCents, fraction: columnHeight(columnShare(sustainableCents, scaleCents)) },
-    peak: addDays(start, peakIndex),
+    // **`null` quando non c'e' niente da nominare.** `peakIndex` parte da 0 e
+    // `peakCents` da 0, quindi senza questa condizione una settimana vuota
+    // eleggerebbe il lunedi' a "giorno piu' alto" con 0,00 € — un massimo che
+    // non esiste, annunciato a chi non lo puo' verificare.
+    peak: peakCents > 0 ? addDays(start, peakIndex) : null,
   }
 }

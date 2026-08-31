@@ -114,6 +114,14 @@ export const en: Record<keyof typeof it, string> = {
   // sostenibile non e' il numero della riga sopra: vedi it.ts.
   'home.week.title': 'Day by day',
   'home.week.sustainable': '{amount} a day is sustainable',
+  /* **La stessa descrizione senza il picco.** Da quando la striscia resta anche
+   * a settimana vuota, `week.peak` puo' essere `null`: non e' un giorno a zero,
+   * e' l'assenza di un giorno da nominare. La frase con `{day}` e `{amount}`
+   * direbbe *"il piu' alto e' lunedi, 0,00 €"*, cioe' nominerebbe un massimo che
+   * non esiste — un messaggio che afferma un fatto che lo schermo non conferma. */
+  'home.week.aria.empty':
+    'Seven columns, Monday to Sunday: nothing has gone out yet this week.',
+
   'home.week.aria':
     'Seven columns, Monday to Sunday: what went out each day. The highest is {day}, {amount}.',
 

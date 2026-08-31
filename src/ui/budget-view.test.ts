@@ -730,13 +730,21 @@ describe('la striscia dei sette giorni', () => {
     expect(week?.peak).toBe(MARTEDI)
   })
 
-  it('una settimana di sole ricorrenti non ha striscia', () => {
-    expect(striscia({ today: MERCOLEDI, spese: [fissa(LUNEDI, 90_000)] })).toBeNull()
+  it('una settimana di sole ricorrenti ha la striscia, e le colonne sono a zero', () => {
+    // La striscia conta il **variabile**: una settimana di sole fisse non ha
+    // niente da disegnare. Da quando la striscia resta anche a settimana vuota,
+    // cio' che si prova qui non e' piu' la sua assenza — e' che le fisse non
+    // finiscano nelle colonne.
+    const week = striscia({ today: MERCOLEDI, spese: [fissa(LUNEDI, 90_000)] })
+    expect(week).not.toBeNull()
+    expect(week?.days.map((d) => d.cents)).toEqual([0, 0, 0, 0, 0, 0, 0])
+    expect(week?.peak, 'una settimana senza uscite non ha un giorno da nominare').toBeNull()
   })
 
   it('le cancellate non sono un uscita, ne dentro ne fuori dal budget', () => {
     const morta = makeExpense({ date: LUNEDI, amountCents: 5000, deletedAt: '2026-08-17T10:00:00.000Z' })
-    expect(striscia({ today: MERCOLEDI, spese: [morta] })).toBeNull()
+    const week = striscia({ today: MERCOLEDI, spese: [morta] })
+    expect(week?.days.map((d) => d.cents)).toEqual([0, 0, 0, 0, 0, 0, 0])
   })
 
   /**
@@ -899,26 +907,42 @@ describe('la striscia dei sette giorni', () => {
     expect(weekStrip(m, spese, MERCOLEDI)?.sustainable?.cents).toBe(2857)
   })
 
-  /* --- decisione 3: quando non c e' striscia ----------------------------- */
+  /* --- decisione 3, ROVESCIATA il 31 agosto: la striscia resta sempre ------
+   *
+   * Qui c'erano tre test che provavano **l'assenza** della striscia a settimana
+   * vuota. La decisione e' cambiata: *"un blocco non scompare perche' i suoi
+   * dati sono vuoti"*, e il lunedi' mattina la Home perdeva la striscia insieme
+   * alle righe di oggi lasciando mezzo schermo bianco.
+   *
+   * Il precedente che difendeva l'assenza — *"otto barre a zero e nove
+   * occorrenze di `0,00 €`"* — parla di un blocco che **stampa un importo per
+   * riga**, e questa striscia non ne stampa nessuno: sette colonne con la linea
+   * di base sono la settimana che comincia, non sette zeri.
+   *
+   * I test non sono stati cancellati ma **rovesciati**: provano adesso cio' che
+   * la decisione nuova promette, cioe' che la striscia ci sia e sia onesta —
+   * colonne a zero e **nessun picco da nominare**. */
 
-  it('senza nessuna spesa non c e striscia', () => {
-    expect(striscia({ today: MERCOLEDI })).toBeNull()
-    expect(striscia({ today: MERCOLEDI, budgetCents: 20_000 })).toBeNull()
+  it('senza nessuna spesa la striscia c e, vuota, e senza picco', () => {
+    for (const week of [striscia({ today: MERCOLEDI }), striscia({ today: MERCOLEDI, budgetCents: 20_000 })]) {
+      expect(week).not.toBeNull()
+      expect(week?.days).toHaveLength(7)
+      expect(week?.days.every((d) => d.cents === 0)).toBe(true)
+      expect(week?.peak).toBeNull()
+    }
   })
 
-  /**
-   * Il criterio e' **zero centesimi da disegnare**, non zero spese. Una spesa
-   * da 0,00 € esiste — la scrive un import — e `columnHeight(0)` vale zero,
-   * quindi contarla come "attivita'" produrrebbe sette colonne vuote sotto una
-   * linea: il telaio di un grafico senza dati.
-   */
-  it('una settimana di soli importi a zero non fa sette colonne vuote', () => {
+  it('a settimana vuota le sette colonne stanno tutte sulla base', () => {
+    // `columnHeight(0)` vale zero: nessuna colonna disegnata sopra la linea di
+    // base. E' la differenza fra "il telaio di un grafico senza dati" e "sette
+    // giorni che non hanno ancora niente" — la seconda e' cio' che si vuole.
     const week = striscia({
       today: MERCOLEDI,
       budgetCents: 20_000,
       spese: [spesa(LUNEDI, 0), spesa(MARTEDI, 0), spesa(MERCOLEDI, 0)],
     })
-    expect(week).toBeNull()
+    expect(week?.days.map((d) => d.fraction)).toEqual([0, 0, 0, 0, 0, 0, 0])
+    expect(week?.peak).toBeNull()
   })
 
   it('ma un solo centesimo basta: la striscia c e', () => {

@@ -1669,16 +1669,24 @@ test('il pavimento della colonna: --strip-h regge il contratto del modello', asy
 })
 
 /**
- * **Con niente da disegnare la striscia non c'e'**, e non e' un dettaglio: sette
- * colonne a zero sono il telaio di un grafico senza dati, che occupa senza
- * informare.
+ * **La striscia c'e' sempre, e la coda non si muove quando arrivano i dati.**
  *
- * E il fatto che possa mancare **senza spostare niente** e' la ragione per cui
- * vive dentro la coda: e' l'altra meta' dell'invariante che `LANDMARKS`
- * dichiara. Il test lo prova nel modo che cade se la coda smettesse di essere
- * l'ultima: misura dove comincia `.days` con e senza striscia.
+ * Qui c'era scritto il contrario — *"con niente da disegnare la striscia non
+ * c'e'"*, perche' sette colonne a zero sarebbero il telaio di un grafico senza
+ * dati. **La decisione e' stata rovesciata il 31 agosto**: il lunedi' mattina la
+ * Home perdeva la striscia insieme alle righe di oggi e restava mezzo schermo
+ * bianco, e vale *"un blocco non scompare perche' i suoi dati sono vuoti"*.
+ *
+ * Il precedente che difendeva l'assenza parla di un blocco che **stampa un
+ * importo per riga**; questa striscia non ne stampa nessuno.
+ *
+ * Cio' che il test sorveglia **non cambia**: che l'arrivo dei dati non sposti la
+ * coda. E' l'altra meta' dell'invariante che `LANDMARKS` dichiara, e adesso e'
+ * una domanda piu' severa — prima la striscia compariva dal nulla, adesso
+ * cambia soltanto contenuto, quindi un pixel di spostamento e' un difetto e non
+ * l'effetto di un blocco che nasce.
  */
-test('la striscia non c\'e\' finche\' non c\'e\' niente da disegnare, e la coda non si muove', async ({
+test('la striscia c\'e\' anche a settimana vuota, e i dati non spostano la coda', async ({
   page,
 }) => {
   await fissaOrologio(page)
@@ -1696,7 +1704,9 @@ test('la striscia non c\'e\' finche\' non c\'e\' niente da disegnare, e la coda 
       ) / 100
     })
 
-  await expect(page.locator('.week')).toHaveCount(0)
+  // A settimana vuota la striscia c'e', con sette colonne e nessuna dipinta.
+  await expect(page.locator('.week')).toBeVisible()
+  await expect(page.locator('.week__col')).toHaveCount(7)
   const senza = await codaTop()
 
   await seedOn(page, [[todayIso(), 1250]])
@@ -1705,7 +1715,10 @@ test('la striscia non c\'e\' finche\' non c\'e\' niente da disegnare, e la coda 
   const con = await codaTop()
 
   expect(senza).toBeGreaterThan(0)
-  expect(con, 'la striscia che arriva ha spostato la coda: allora non e\' nella coda').toBe(senza)
+  expect(
+    con,
+    'l\'arrivo dei dati ha spostato la coda: la striscia cambia contenuto, non ingombro',
+  ).toBe(senza)
 })
 
 /**

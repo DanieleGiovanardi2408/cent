@@ -394,10 +394,14 @@ function WeekStrip({ week, day }: { readonly week: Week; readonly day: IsoDate }
       <ol
         class="week__cols"
         role="img"
-        aria-label={t('home.week.aria', {
-          day: dayHeading(week.peak, day),
-          amount: money(peakCents),
-        })}
+        aria-label={
+          week.peak === null
+            ? t('home.week.aria.empty')
+            : t('home.week.aria', {
+                day: dayHeading(week.peak, day),
+                amount: money(peakCents),
+              })
+        }
       >
         {week.days.map((bar, index) => (
           <li class="week__col" key={bar.date}>
