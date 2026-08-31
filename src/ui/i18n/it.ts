@@ -151,6 +151,11 @@ export const it = {
   'home.invite.strong': 'quanto puoi spendere oggi.',
   'home.budget.set': 'Imposta un budget',
   'home.budget.change': 'Cambia il budget',
+  /* Vedi en.ts per l'argomento delle tre qui sotto. */
+  'home.pace.current': 'finora questa settimana, {amount} al giorno',
+  'home.pace.previous': 'la settimana scorsa, {amount} al giorno',
+  'home.previous.line': '{range} · {spent} su {budget}',
+
   'home.blank.title': 'Oggi non hai segnato niente',
   'home.blank.text':
     'Tocca il + qui sotto, digita l’importo e scegli la categoria. Sono due tap: si fa in cassa, con una mano.',

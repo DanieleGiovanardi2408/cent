@@ -113,6 +113,11 @@
   --rows-since: 2;
   --rows-fixed: 1;
   --rows-pace: 1;
+  /* Il ritmo vero, la riga nuova sotto la disponibilita'. Una riga: porta un
+   * importo e una finestra, e a 320 punti in inglese sta ancora su una — se un
+   * giorno non ci stesse, questo numero e' il posto dove dirlo, e il test della
+   * riserva cade prima che lo scopra un utente. */
+  --rows-real: 1;
   --rows-invite: 2;
 
   /* **Il corpo del blocco del budget**: la parte che cambia contenuto fra i due
@@ -133,88 +138,18 @@
    * senza che nessuno dovesse ricordarsi di girare una somma. */
   --body-min: max(
     calc(
-      var(--rows-allowance) * var(--line-allowance) + var(--sp-2) + var(--rows-since) *
-        var(--line-note)
+      var(--rows-allowance) * var(--line-allowance) + var(--sp-1) + var(--rows-real) *
+        var(--line-pace) + var(--sp-2) + var(--rows-since) * var(--line-note)
     ),
     calc(var(--rows-invite) * var(--line-pace) + var(--sp-2) + var(--rows-pace) * var(--line-pace))
   );
 
-  /* Il blocco intero: aria, corpo, la nota delle fisse, il bottone, aria.
-   *
-   * **Il bottone e' dentro la riserva, e prima stava fuori.** Sotto il riquadro
-   * galleggiava fra due margini che non appartenevano a niente, pur riguardando
-   * il blocco sopra di lui; adesso e' l'ultima riga del blocco, e la sua altezza
-   * (`--tap-min`, che il bottone **dichiara**) e' un termine della somma come
-   * tutte le altre. Rispetto a prima e' uscita la barra del periodo
-   * (`--track-h` e il suo gap, vedi `Home.tsx`) ed e' entrato il bottone.
-   *
-   * I due `var(--sp-3)` sono l'aria in cima e in fondo, e stanno **dentro** la
-   * riserva perche' `box-sizing: border-box` mette il padding dentro
-   * `min-block-size`. Scriverli fuori dalla somma l'avrebbe resa piu' corta del
-   * blocco di 24 px, cioe' inutile: e' il tipo di errore che non si vede finche'
-   * il contenuto non arriva al limite.
-   *
-   * Misurato a 390 punti: **183,25 px** (erano 198,25 finche' l'invito prendeva
-   * tre righe, e 204,75 quando riquadro e bottone erano due blocchi separati).
-   * A 320 punti: **204,5**, erano 220,75.
-   *
-   * ## Lo spazio che avanza, e dove cade — che e' la parte che si sbaglia
-   *
-   * La riserva del corpo copre adesso lo stato **con** budget piu' alto —
-   * disponibilita' a due righe e nota di ADR 010, 83 px a 390 punti. Lo stato con
-   * budget **tipico** — una riga di disponibilita', nessuna nota — ne prende
-   * 21,25. **Avanzano 61,75 px, sempre, in quello che e' lo stato piu' comune
-   * dell'app.**
-   *
-   * Erano 76,75, e i 15 recuperati sono venuti dall'unica strada che li fa
-   * scendere davvero: **ridurre cio' che va riservato** (l'invito da tre righe a
-   * due, vedi `--rows-invite`). Non da un `max()` diverso, che sposta il numero
-   * senza toccare il fatto.
-   *
-   * Quelli che restano non sono riparabili spostando niente, e le due voci che li
-   * producono sono state rimisurate una per una:
-   *
-   * - **`--rows-allowance: 2`** — "Puoi spendere ~18.000,00 € al giorno per 5
-   *   giorni" va a capo a 390 punti. Misurato, non stimato;
-   * - **`--rows-since: 2`** — la frase di ADR 010 e' 64 caratteri in italiano
-   *   ("Budget attivo da lunedì 17 ago · prima avevi già speso 9.999,98 €") e 75
-   *   in inglese, contro un tetto di 42ch. Per starci in una riga dovrebbe
-   *   perdere o il giorno o l'importo, cioe' i due fatti per cui esiste — e
-   *   togliere il `max-inline-size` non basta: a 390 punti la colonna vale ~54
-   *   caratteri, a 320 ~43. Va a capo comunque.
-   *
-   * Le due si presentano **insieme** — un budget grande nato a periodo iniziato le
-   * ha tutte e due — quindi la riserva le somma, e 83 e' il pavimento onesto.
-   * Resta debito (`docs/DEBITO.md`, voce 7) con la sua condizione riscritta.
-   *
-   * Quello che si puo' decidere e' **dove cadono**, e le tre possibilita' sono
-   * state provate a schermo, non dedotte:
-   *
-   * - *fra la riga grande e il bottone* — cioe' corpo in alto e piede in fondo:
-   *   il bottone finiva a 120 px dalla riga che lo riguarda, con niente in
-   *   mezzo. E' il difetto del bottone che galleggia, spostato di venti pixel
-   *   invece che riparato;
-   * - *dopo il bottone, prima del filo*: il bottone tornava attaccato alla sua
-   *   riga, e **il gate anti-CLS e' caduto** — con tutto in alto, la posizione
-   *   del bottone dipende da quante righe ha il testo sopra di lui, quindi si
-   *   spostava di 75-83 px fra guscio e dati. Su un bersaglio toccabile e' peggio
-   *   di uno spostamento qualunque: e' un bottone che si muove sotto il pollice
-   *   nei primi 40 ms;
-   * - **sopra la riga grande** (questa): il corpo e' ancorato in basso, quindi
-   *   il gruppo "disponibilita' + note + bottone" resta compatto e lo spazio si
-   *   apre fra il blocco del numero e il blocco del budget. E' l'unica delle tre
-   *   in cui l'aria cade **fra due sezioni** invece che dentro una, ed e' anche
-   *   l'unica in cui ogni cosa che compare — la seconda riga della
-   *   disponibilita', la nota di ADR 010 — cresce verso l'alto senza spostare
-   *   niente.
-   *
-   * La meta' del difetto che si poteva chiudere e' chiusa; l'altra meta' resta in
-   * `docs/DEBITO.md` (voce 7), con la condizione riscritta su cio' che oggi la
-   * regge davvero. */
-  --slot-min: calc(
-    var(--sp-3) + var(--body-min) + var(--sp-2) + var(--rows-fixed) * var(--line-note) +
-      var(--sp-2) + var(--tap-min) + var(--sp-3)
-  );
+  /* **Qui c'era `--slot-min`**, la riserva che teneva fermo il bottone del
+   * budget mentre il testo sopra di lui cambiava altezza. E' uscita col suo
+   * oggetto: da M7/D il bottone sta **sopra** il testo variabile, quindi sopra
+   * di lui c'e' solo l'eroe — che non dipende dai dati, misurato a 0 px di
+   * escursione su tre larghezze e due lingue. Una riserva che non protegge piu'
+   * niente e' aria, e su questa schermata ne costava 118 px. */
 
   /* **Lo stato vuoto della coda non riserva niente, e la riserva che c'era non
    * proteggeva nessuno.**
@@ -389,15 +324,26 @@
  *
  * Il conto dello spazio che avanza, e perche' cade qui e non altrove, sta su
  * `--slot-min`. */
-.slot {
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-2);
-  min-block-size: var(--slot-min);
-  padding-block: var(--sp-3);
+/* **`.slot` non c'e' piu', e con lei `--slot-min`.**
+ *
+ * Teneva insieme il corpo variabile e il piede col bottone, e la sua altezza
+ * minima era la **riserva** che impediva al bottone di muoversi quando il corpo
+ * cambiava. Misurata: il bottone stava fermo, e la riserva costava **118 px di
+ * aria** su una schermata che il lunedi' finiva a 405 su 800.
+ *
+ * Adesso il piede sta **sopra** il testo variabile (decisione D di M7): sopra il
+ * bottone resta solo l'eroe, che non dipende dai dati — 0 px di escursione a
+ * 390, 375 e 320 punti, nelle due lingue, con importi fino a `12.500,00 €`. Il
+ * bottone e' fermo **per costruzione**, e la riserva non ha piu' niente da
+ * proteggere.
+ *
+ * `--slot-min` e' uscita con lei invece di restare come variabile che nessuno
+ * legge. Restano `--body-min` e le sue compagne? No: erano gli addendi di quel
+ * calcolo, e sono uscite insieme. */
+.slot__foot {
+  padding-block-start: var(--sp-3);
 }
 
-.slot__body,
 .slot__foot {
   display: flex;
   flex-direction: column;
@@ -1018,4 +964,53 @@
   .home {
     --fs-hero: 2.5rem;
   }
+}
+
+/* --- il ritmo, e la riga del periodo prima ------------------------------- */
+/*
+ * `.rates` ha preso il posto di `.slot__body`, e **non ha riserva**: sta sotto
+ * il bottone (decisione D di M7), quindi cio' che cresce qui dentro non sposta
+ * nessun bersaglio toccabile. E' la ragione per cui la riserva e' potuta uscire.
+ */
+/* **La riserva e' qui adesso, e la sua ragione e' cambiata.**
+ *
+ * Stava su `.slot` e teneva fermo il **bottone**. Con D il bottone non ne ha piu'
+ * bisogno — sopra di lui c'e' solo l'eroe — ma la riserva ne proteggeva anche
+ * un'altra, e me n'ero accorto misurando: senza, `.days` si sposta di **67,75 px**
+ * all'arrivo dei dati, e li' dentro ci sono righe toccabili.
+ *
+ * Quindi resta, spostata sotto il bottone e sull'altezza del **piu' alto dei due
+ * stati** (`--body-min`, che il `max()` gia' calcolava). Cio' che cambia e'
+ * quanto ne avanza: prima lo stato comune ne lasciava 118 px di aria, adesso il
+ * ritmo vero occupa una riga che prima non c'era e ne avanzano molti meno.
+ *
+ * **Il guadagno viene dal contenuto, non dalla riserva.** Va scritto perche' la
+ * proiezione era un'altra: avevo previsto 118 px liberati da D, e D da solo ne
+ * libera zero — sposta soltanto dove cade l'aria. */
+.rates {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+  min-block-size: var(--body-min);
+}
+
+/* Il ritmo vero. Piu' spento della riga del consentito e subito sotto: e' il suo
+ * termine di paragone, non una seconda affermazione. Tabulari perche' i due
+ * numeri si leggono uno sopra l'altro e devono incolonnarsi. */
+.pace {
+  color: var(--text-muted);
+  font-size: var(--fs-200);
+  line-height: var(--lh-snug);
+  font-variant-numeric: tabular-nums;
+}
+
+/* La settimana scorsa contro il suo budget, dove stava il vuoto sotto il titolo
+ * orfano. Stesso peso del ritmo: sono tutti e due fatti sul passato, e nessuno
+ * dei due deve gridare. */
+.blank__prev {
+  margin-block-start: var(--sp-2);
+  color: var(--text-muted);
+  font-size: var(--fs-200);
+  line-height: var(--lh-snug);
+  font-variant-numeric: tabular-nums;
 }

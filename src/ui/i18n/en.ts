@@ -106,6 +106,28 @@ export const en: Record<keyof typeof it, string> = {
   'home.invite.strong': 'how much you can spend today.',
   'home.budget.set': 'Set a budget',
   'home.budget.change': 'Change the budget',
+  /* --- **Il ritmo vero, accanto a quello consentito** -----------------------
+   *
+   * La Home diceva *"puoi spendere ~35,71 € al giorno"* e taceva su quanto si
+   * sta spendendo davvero. Il confronto e' l'informazione piu' utile che l'app
+   * possiede, e i dati c'erano gia'.
+   *
+   * **Si dice come un fatto.** Nessun aggettivo, nessun punto esclamativo,
+   * nessun allarme: un'app che sgrida si smette di aprire, e un'app che nasconde
+   * mente. Il numero, e la finestra a cui appartiene.
+   *
+   * Due chiavi e non una perche' il periodo di riferimento cambia: a settimana
+   * cominciata e' **questa**, il lunedi' e' **quella prima** — e dirlo e'
+   * obbligatorio, altrimenti sarebbe un ritmo attribuito a giorni che non sono
+   * ancora stati vissuti. */
+  'home.pace.current': 'so far this week, {amount} a day',
+  'home.pace.previous': 'last week, {amount} a day',
+
+  /* La riga del periodo prima, dove stava il titolo orfano *"Oggi non hai
+   * segnato niente"* seguito dal vuoto. Un **fatto**, non una proiezione, e
+   * nella stessa unita' dell'eroe: quanto e' uscito, contro quale tetto. */
+  'home.previous.line': '{range} · {spent} of {budget}',
+
   'home.blank.title': 'Nothing written down today',
   'home.blank.text':
     'Tap the + below, type the amount and pick the category. Two taps: it works at the till, with one hand.',

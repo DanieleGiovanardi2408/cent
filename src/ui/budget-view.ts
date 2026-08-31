@@ -9,8 +9,8 @@
  * senza DOM, quindi hanno un test.
  */
 
-import { budgetSpent, countsTowardBudget, resolveBudget } from '../core/budget'
-import type { BudgetMetrics } from '../core/budget'
+import { budgetSpent, computeBudgetMetrics, countsTowardBudget, periodRange, resolveBudget } from '../core/budget'
+import type { BudgetMetrics, PeriodRange } from '../core/budget'
 import { addDays, daysBetween, isAfter, isBefore, startOfWeek } from '../core/date'
 import type { IsoDate } from '../core/date'
 import { sumCents } from '../core/money'
@@ -742,6 +742,62 @@ function columnHeight(quota: number): number {
  * data, non l'orologio), quindi zerarle qui farebbe **sette colonne che non
  * sommano al numero grande scritto sopra di loro**, nella stessa schermata.
  */
+/**
+ * **Il periodo prima, e come e' andato contro il suo budget.**
+ *
+ * ## Perche' esiste
+ *
+ * Il lunedi' mattina la Home non ha niente da dire sul presente — zero speso,
+ * zero giorni vissuti — e quello che possiede e' **tre settimane di storia che
+ * non usa**. Diceva *"puoi spendere ~35,71 € al giorno"* e taceva sul fatto che
+ * il ritmo vero della settimana prima era quasi il doppio.
+ *
+ * Non e' una funzione nuova: sono dati che ci sono gia', nella stessa finestra e
+ * **nella stessa unita'** — quotidiane contro quotidiane, le fisse non entrano,
+ * perche' e' `computeBudgetMetrics` a calcolarlo e il budget le esclude per
+ * ADR 016.
+ *
+ * ## Cosa restituisce, e cosa no
+ *
+ * `null` quando non c'e' un periodo prima **con qualcosa dentro**: mandare
+ * l'utente a guardare una settimana vuota non e' un'informazione. E `null` anche
+ * senza budget: la riga confronta lo speso **con un tetto**, e senza tetto
+ * resterebbe una cifra sola senza il termine di paragone che la rende leggibile.
+ *
+ * Il ritmo e' `spentCents / daysTotal` e **non** `currentPaceCents`: quello
+ * divide per i giorni **vissuti**, e su un periodo chiuso i due coincidono — ma
+ * solo per costruzione, e scriverlo esplicito toglie una coincidenza da un
+ * numero che va confrontato con un altro.
+ */
+export function previousPeriod(
+  expenses: readonly Expense[],
+  budgets: readonly Budget[],
+  period: BudgetPeriod,
+  today: IsoDate,
+): PreviousPeriod | null {
+  const corrente = periodRange(period, today)
+  const primaDentro = addDays(corrente.start, -1)
+  const m = computeBudgetMetrics({ expenses, budgets, period, onDate: primaDentro, today })
+  if (m.budgetCents === null) return null
+  if (m.spentCents <= 0) return null
+  return {
+    range: m.range,
+    spentCents: m.spentCents,
+    budgetCents: m.budgetCents,
+    paceCents: Math.round(m.spentCents / m.daysTotal),
+  }
+}
+
+/** Il periodo prima: quanto e' uscito, contro quale tetto, a che ritmo. */
+export interface PreviousPeriod {
+  readonly range: PeriodRange
+  /** Le sole quotidiane, come ovunque nel budget (ADR 016). */
+  readonly spentCents: Cents
+  readonly budgetCents: Cents
+  /** Speso diviso i giorni **del periodo**, non quelli vissuti: il periodo e' chiuso. */
+  readonly paceCents: Cents
+}
+
 export function weekStrip(
   m: BudgetMetrics,
   expenses: readonly Expense[],

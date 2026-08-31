@@ -157,7 +157,12 @@ const LANDMARKS: readonly Mark[] = [
   { sel: '.hero__label', box: false, height: false },
   { sel: '.hero__value', box: false, height: true },
   { sel: '.hero__note', box: false, height: false },
-  { sel: '.slot', box: true, height: true },
+  // `.slot` non c'e' piu': il piede e il testo variabile sono due blocchi
+  // separati da M7/D, e il piede sta **sopra**. I due che lo sostituiscono si
+  // guardano tutti e due, con l'altezza, perche' la riserva e' passata dall'uno
+  // all'altro e il gate deve vedere se qualcuno la perde.
+  { sel: '.slot__foot', box: true, height: true },
+  { sel: '.rates', box: true, height: true },
   { sel: '.budget', box: false, height: false },
   { sel: '.days', box: true, height: false },
   { sel: '.fab', box: true, height: false },
@@ -678,7 +683,10 @@ test.describe('la Home non salta, con budget e 5.000 spese, sforando', () => {
     // **Nessuna parafrasi del fatto gia' detto**, in nessuna delle righe del
     // riquadro. Le tre frasi tolte sono nominate una per una: un controllo sul
     // testo nuovo sarebbe verde anche rimettendole accanto.
-    const riquadro = (await page.locator('.slot').innerText()).replace(/\s+/g, ' ')
+    // `.slot` era il riquadro intero; adesso il testo variabile e' `.rates` e il
+    // bottone sta sopra, in `.slot__foot`. Le tre frasi che questo test vieta
+    // vivevano tutte nel testo, quindi si guarda quello.
+    const riquadro = (await page.locator('.rates').innerText()).replace(/\s+/g, ' ')
     expect(riquadro).not.toContain('budget del periodo è finito')
     expect(riquadro).not.toContain('è in più')
     expect(riquadro).not.toContain('Sopra ritmo')
@@ -1307,7 +1315,11 @@ interface Riserva {
  */
 async function misuraRiserva(page: Page): Promise<Riserva> {
   return page.evaluate(() => {
-    const slot = document.querySelector('.slot')
+    // **Il riquadro adesso e' `.rates`**, e non piu' `.slot`: da M7/D il piede
+    // col bottone e' un blocco a se' e sta **sopra** il testo variabile. La
+    // riserva e' passata con l'oggetto che protegge — non piu' il bottone, che
+    // sta fermo per costruzione, ma la coda, che senza si spostava di 67,75 px.
+    const slot = document.querySelector('.rates')
     const home = document.querySelector('.home')
     if (!(slot instanceof HTMLElement) || home === null) {
       throw new Error('il riquadro non e\' in pagina: non c\'e' + ' niente da misurare')
@@ -1328,17 +1340,13 @@ async function misuraRiserva(page: Page): Promise<Riserva> {
     // veniva assorbita dalla riserva interna. Trovato rileggendo, non da un
     // rosso: e' precisamente la classe di difetto che questo file esiste per
     // sorvegliare, comparsa dentro il file stesso.
-    const body = slot.querySelector('.slot__body')
-    if (!(body instanceof HTMLElement)) {
-      throw new Error('il corpo del riquadro non e\' in pagina: la misura sarebbe falsa')
-    }
+    // **Le riserve erano due e adesso e' una.** `.slot__body` aveva la propria
+    // per tenere fermo il bottone; il bottone non e' piu' sotto di lei, quindi
+    // quella e' uscita. Resta questa, e toglierla basta a leggere il naturale.
     const primaSlot = slot.style.minBlockSize
-    const primaBody = body.style.minBlockSize
     slot.style.minBlockSize = '0px'
-    body.style.minBlockSize = '0px'
     const naturale = px(slot.getBoundingClientRect().height)
     slot.style.minBlockSize = primaSlot
-    body.style.minBlockSize = primaBody
 
     const righe: Record<string, number> = {}
     // **I nipoti, non i figli.** Il riquadro adesso ha due contenitori — il
@@ -1537,7 +1545,7 @@ test('una riga di troppo sfonda la riserva, cioe\' il gate cade ancora', async (
   // finche' non va a capo un'altra volta.
   const dopo = await page.evaluate(() => {
     const since = document.querySelector('.since')
-    const slot = document.querySelector('.slot')
+    const slot = document.querySelector('.rates')
     if (since === null || !(slot instanceof HTMLElement)) throw new Error('scena sbagliata')
     // Il `Range` si rifa' a ogni giro: sostituire il testo distrugge il nodo che
     // il precedente aveva selezionato, e un range morto misura zero righe —

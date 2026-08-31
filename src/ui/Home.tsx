@@ -7,7 +7,16 @@ import type { Budget, Category, Expense } from '../core/types'
 import type { AppPhase } from '../app/boot'
 import { ArchiveError } from './Blank'
 import { ExpenseRow } from './ExpenseRow'
-import { activePeriod, allowanceCopy, budgetStart, heroCopy, paceParts, startNote, weekStrip } from './budget-view'
+import {
+  activePeriod,
+  allowanceCopy,
+  budgetStart,
+  heroCopy,
+  paceParts,
+  previousPeriod,
+  startNote,
+  weekStrip,
+} from './budget-view'
 import type { Week } from './budget-view'
 import { dayHeading, money, periodName, periodRangeLabel, t, weekdayShortLabel } from './i18n'
 import './Home.css'
@@ -137,6 +146,10 @@ export function Home({
       // Una passata sola sulle 5.000 spese, dentro lo stesso memo delle altre
       // due: la striscia non aggiunge un ricalcolo, aggiunge un giro.
       week: weekStrip(metrics, expenses, day),
+      // Il periodo prima: serve al ritmo di riferimento del lunedi' e alla riga
+      // che prende il posto del titolo orfano in coda. Una passata sola, dentro
+      // lo stesso memo.
+      previous: previousPeriod(expenses, budgets, period, day),
     }
   }, [expenses, budgets, day])
 
@@ -151,6 +164,26 @@ export function Home({
   const since = startNote(metrics, view.start)
   const hasBudget = metrics.budgetCents !== null
   const todayRows = view.today?.expenses ?? []
+
+  /**
+   * **Il ritmo vero**, che e' il termine di paragone del consentito.
+   *
+   * A settimana cominciata e' quello in corso (`currentPaceCents`, speso sui
+   * giorni **vissuti**); il lunedi' non esiste ancora — zero speso su un giorno
+   * — e al suo posto va quello del periodo prima, **detto come tale**.
+   *
+   * La soglia e' `daysLived > 1` e non `> 0`: al primo giorno il ritmo sarebbe
+   * lo speso di oggi, cioe' non un ritmo ma un totale con un'altra etichetta.
+   */
+  const ritmo = useMemo(() => {
+    if (!ready || !hasBudget) return null
+    if (metrics.daysLived > 1 && metrics.currentPaceCents !== null) {
+      return t('home.pace.current', { amount: money(metrics.currentPaceCents) })
+    }
+    return view.previous === null
+      ? null
+      : t('home.pace.previous', { amount: money(view.previous.paceCents) })
+  }, [ready, hasBudget, metrics, view.previous])
 
   return (
     <div class="home">
@@ -179,69 +212,70 @@ export function Home({
           L'altezza e' riservata in CSS per il piu' alto dei due stati, cosi' il
           passaggio da uno all'altro — e dal guscio a entrambi — non sposta la
           coda di un pixel. */}
-      <section class="slot">
-        {/* Il corpo sta in alto, il piede in fondo (`margin-block-start: auto`).
-            Lo spazio che avanza dalla riserva si raccoglie **fra i due**, cioe'
-            sotto la riga grande dove si legge come aria tipografica, invece che
-            fra l'ultima nota e il bottone dove si leggeva come un bottone che
-            galleggia. */}
-        {/* Il corpo e' **ancorato in basso**, e non e' un gusto: e' cio' che
-            tiene fermo il bottone. La sua altezza e' riservata per lo stato piu'
-            alto (senza budget), quindi cio' che gli sta dentro cresce verso
-            l'alto — la riga della disponibilita' che passa a due righe, la nota
-            di ADR 010 che compare — senza spostare di un pixel ne' la nota delle
-            fisse, ne' il bottone, ne' la coda. */}
-        <div class="slot__body">
-          {!ready ? null : hasBudget ? (
-            <>
-              {/* Il livello 2: **una riga**, dove ce n'erano tre. La
-                  disponibilita' col suo numero di giorni dentro; sforati, il
-                  passo contro il sostenibile. Mai le due cose insieme —
-                  l'argomento sta su `allowanceCopy`. */}
-              <p class="allowance" data-tone={allowance.over ? 'over' : undefined}>
-                {allowance.text}
-              </p>
+      {/* **Il piede prima del corpo, ed e' la decisione D di M7.**
 
-              {/* Perche' i numeri sono quelli, nel periodo in cui il budget e'
-                  nato (ADR 010). Compare per un periodo solo e poi sparisce da
-                  sola, e sta **attaccata alla riga che spiega**: e' la
-                  giustificazione di quel numero, non una nota di sezione. */}
-              {since === null ? null : <p class="since">{since}</p>}
-            </>
-          ) : (
-            <>
-              {/* Due pezzi e non tre: la coda che diceva *"invece di quanto hai
-                  gia' speso"* e' uscita, e con lei la terza riga che la riserva
-                  del riquadro doveva coprire in inglese. L'argomento sta in
-                  `i18n/it.ts`, sopra la chiave. */}
-              <p class="invite">
-                {t('home.invite.before')}
-                <b>{t('home.invite.strong')}</b>
-              </p>
-              <Pace metrics={metrics} />
-            </>
-          )}
-        </div>
+          Qui c'era `.slot` con il corpo in alto e il piede in fondo, e in mezzo
+          una riserva (`--slot-min`, 183,25 px) che teneva fermo il bottone
+          mentre cio' che gli stava sopra cambiava altezza. Misurato: `.budget`
+          non si muoveva di un pixel, ma la riserva spendeva **118 px di aria**
+          — 73,75 sopra la riga del ritmo e 32,25 sotto — su una schermata che il
+          lunedi' finiva a 405 px su 800.
 
-        <div class="slot__foot">
-          {/* Il livello 3: cosa **non** c'e' dentro il numero grande
-              (ADR 016 §2), in tutti e due gli stati — senza budget il numero
-              grande e' lo speso, che le fisse le esclude identicamente.
+          D toglie la riserva **e la sua ragione**: sopra il bottone resta solo
+          l'eroe, e l'eroe non dipende dai dati. Misurato a 390, 375 e 320 punti,
+          in italiano e in inglese, con importi da `0,00 €` a `12.500,00 €`:
+          **escursione 0 px in tutte e sei le caselle**, con la coda dell'eroe
+          sempre su una riga. Il bottone sta fermo per costruzione invece che per
+          riserva, e i 118 px tornano al contenuto.
 
-              L'altezza e' riservata anche da vuota: la riga compare e sparisce
-              a seconda che nel periodo sia scattata o no una regola — settimana
-              del canone si', quella dopo no — e senza riserva il bottone
-              salirebbe di una riga a settimane alterne. */}
-          <p class="slot__fixed">{ready ? hero.fixed ?? '' : ''}</p>
+          Il costo, dichiarato: il bottone del budget e' adesso **il secondo
+          blocco** della schermata, sopra le righe che si leggono di piu'. E' il
+          prezzo di D, e si vede. */}
+      <div class="slot__foot">
+        {/* Cosa **non** c'e' dentro il numero grande (ADR 016 §2). L'altezza
+            resta riservata anche da vuota: la riga compare a settimane alterne
+            — quella del canone si', la dopo no — e sta **sopra** il bottone,
+            quindi senza riserva il bottone salirebbe di una riga. E' la stessa
+            ragione di prima, su una superficie molto piu' piccola. */}
+        <p class="slot__fixed">{ready ? hero.fixed ?? '' : ''}</p>
 
-          {/* Un bottone solo, sempre nello stesso posto, che cambia solo la
-              parola. Sta **dentro** il blocco di cui parla: attaccato all'ultima
-              nota, non sospeso fra due vuoti. */}
-          <button type="button" class="budget" disabled={!ready} onClick={onEditBudget}>
-            {t(hasBudget && ready ? 'home.budget.change' : 'home.budget.set')}
-          </button>
-        </div>
-      </section>
+        <button type="button" class="budget" disabled={!ready} onClick={onEditBudget}>
+          {t(hasBudget && ready ? 'home.budget.change' : 'home.budget.set')}
+        </button>
+      </div>
+
+      {/* **Il ritmo, e adesso sono due.** Quello consentito era gia' qui; quello
+          vero non stava da nessuna parte, ed e' il confronto che rende utile il
+          primo. Sotto il bottone, dove puo' cambiare altezza senza spostare
+          niente che sia toccabile. */}
+      <div class="rates">
+        {!ready ? null : hasBudget ? (
+          <>
+            <p class="allowance" data-tone={allowance.over ? 'over' : undefined}>
+              {allowance.text}
+            </p>
+
+            {/* Il ritmo vero. A settimana cominciata e' quello di **questa**;
+                il lunedi', quando non esiste ancora, quello di **quella prima**
+                — e la frase lo dice, perche' un ritmo attribuito a giorni non
+                ancora vissuti sarebbe un numero inventato.
+
+                Nessun tono: e' un fatto, e si dice come un fatto. Un'app che
+                sgrida si smette di aprire. */}
+            {ritmo === null ? null : <p class="pace">{ritmo}</p>}
+
+            {since === null ? null : <p class="since">{since}</p>}
+          </>
+        ) : (
+          <>
+            <p class="invite">
+              {t('home.invite.before')}
+              <b>{t('home.invite.strong')}</b>
+            </p>
+            <Pace metrics={metrics} />
+          </>
+        )}
+      </div>
 
       {/* La coda. **E' l'unico blocco della Home senza altezza riservata**, ed
           e' l'ultimo: cio' che compare e sparisce qui dentro non ha niente sotto
@@ -297,6 +331,34 @@ export function Home({
                   Il titolo resta sempre: *"Oggi non hai segnato niente"* e' un
                   fatto sui dati, non un'istruzione. */}
               {coach ? <p class="blank__text">{t('home.blank.text')}</p> : null}
+
+              {/* **La settimana scorsa, dove il titolo restava orfano.**
+
+                  Tolto il tutorial a chi ha gia' imparato, *"Oggi non hai
+                  segnato niente"* era diventato un titolo senza corpo seguito
+                  dal vuoto: la riparazione di ieri ha tolto l'istruzione e ha
+                  lasciato la cornice.
+
+                  Al suo posto un **fatto**, non una proiezione, e nella stessa
+                  unita' dell'eroe: quanto e' uscito nel periodo prima, contro
+                  quale tetto. Sui dati veri e' `24–30 ago · 424,00 € su
+                  250,00 €`, cioe' il 70% oltre — e si dice cosi', senza
+                  aggettivo e senza allarme. Chi ha speso troppo lo sa gia'
+                  leggendo i due numeri; chi legge un rimprovero smette di
+                  aprire l'app.
+
+                  Non c'e' quando non c'e' un periodo prima con qualcosa dentro,
+                  o quando non c'e' un budget: senza tetto resterebbe una cifra
+                  sola, senza il termine di paragone che la rende leggibile. */}
+              {view.previous === null ? null : (
+                <p class="blank__prev">
+                  {t('home.previous.line', {
+                    range: periodRangeLabel(view.period, view.previous.range),
+                    spent: money(view.previous.spentCents),
+                    budget: money(view.previous.budgetCents),
+                  })}
+                </p>
+              )}
             </div>
           ) : null
         ) : (
