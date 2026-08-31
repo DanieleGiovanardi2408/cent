@@ -372,7 +372,8 @@ function ChartArt({ categories }: { readonly categories: readonly Category[] }) 
   // Quattro quote fisse: e' un'illustrazione, non una misura, e i numeri non
   // devono somigliare a quelli di nessuno. Sommano a 1.
   const quote = [0.4, 0.28, 0.19, 0.13]
-  const tinte = categories.slice(0, quote.length).map((c) => c.color)
+  const categorie = categories.slice(0, quote.length)
+  const tinte = categorie.map((c) => c.color)
 
   const [barre, setBarre] = useState(false)
   useEffect(() => {
@@ -401,6 +402,17 @@ function ChartArt({ categories }: { readonly categories: readonly Category[] }) 
         <ul class="mock__rows">
           {quote.map((q, i) => (
             <li class="mock__row" key={i}>
+              {/* **Il nome, e prima non c'era.** Lo stato "barre" mostrava
+                  quattro importi incolonnati senza barre e senza nomi, mentre la
+                  schermata vera ha tre colonne: nome, barra colorata, importo.
+                  Insegnava un gesto e ne faceva vedere il risultato sbagliato —
+                  ed e' la prima cosa che vede un amico su un'installazione
+                  pulita.
+
+                  Stessa regola gia' applicata a `.mock__emoji` e alla ciambella
+                  qui accanto: **il finto deve somigliare al vero**. I nomi sono
+                  quelli delle categorie vere, come i colori. */}
+              <span class="mock__cat-name">{categorie[i]?.name ?? ''}</span>
               <span class="mock__track">
                 <span
                   class="stat__bar"

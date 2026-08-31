@@ -471,15 +471,29 @@
 .demo--chart {
   position: relative;
   display: grid;
-  place-items: center;
-  block-size: 132px;
+  /* **La colonna si dichiara**, e non si lascia dimensionare dal contenuto: una
+   * colonna implicita vale il `max-content` di cio' che contiene, e dentro
+   * l'elenco delle barre c'e' un `1fr` che di `max-content` non ne ha — le barre
+   * collassavano a un trattino dentro un blocco largo 158 su 326 disponibili. */
+  grid-template-columns: minmax(0, 1fr);
+  align-items: center;
+  /* **`justify-items: center` no**: restringerebbe l'elenco delle barre al suo
+   * contenuto, e la colonna del grafico — che e' `1fr` — resterebbe di pochi
+   * pixel. La ciambella si centra da se', essendo un `svg` con la sua larghezza. */
+  justify-items: stretch;
+  block-size: 148px;
 }
 
 .mock__pie {
   display: block;
+  justify-self: center;
 }
 
 .mock__rows {
+  /* `place-items: center` sul contenitore restringerebbe l'elenco al suo
+   * contenuto, e la colonna del grafico — che e' `1fr` — resterebbe di pochi
+   * pixel: le barre collassavano a un trattino. */
+  justify-self: stretch;
   inline-size: 100%;
   display: flex;
   flex-direction: column;
@@ -487,10 +501,27 @@
   padding-inline: var(--sp-3);
 }
 
+/* **Tre colonne come la schermata vera**: nome, barra, importo. Erano due — la
+ * barra e l'importo — e mancava proprio la colonna che la schermata vera ha per
+ * prima. Il finto deve somigliare al vero.
+ *
+ * La griglia e non un flex: le tre colonne devono **incolonnarsi fra le righe**,
+ * che e' cio' che si vede nella schermata vera e che un flex non garantisce. */
 .mock__row {
-  display: flex;
+  display: grid;
+  grid-template-columns: fit-content(34%) minmax(0, 1fr) max-content;
+  column-gap: var(--sp-2);
   align-items: center;
-  gap: var(--sp-2);
+}
+
+/* Va a capo come nella schermata vera, invece di troncare: li' i nomi arrivano
+ * dall'utente e `.stat__name` li manda a due righe. Un finto che tronca dove il
+ * vero va a capo insegna una forma che non esiste. */
+.mock__cat-name {
+  overflow-wrap: anywhere;
+  color: var(--text);
+  font-size: var(--fs-100);
+  line-height: var(--lh-snug);
 }
 
 /* La traccia e la barra sono quelle vere: `.stat__bar` e' la stessa classe delle
@@ -505,8 +536,6 @@
 }
 
 .mock__rows .mock__amount {
-  flex: none;
-  min-inline-size: 4.5em;
   text-align: end;
   color: var(--text-muted);
   font-size: var(--fs-100);

@@ -199,54 +199,53 @@ import type { Cents } from '../core/money'
 export const TREND_PERIODS = 8
 
 /**
- * Sotto quante categorie con spesa **A** smette di essere un grafico.
+ * **Quante righe servono perche' una parte sia un grafico: tre, e la soglia e'
+ * della PARTE.**
  *
- * **Tre, e l'argomento e' la domanda di A: "come si ripartisce".** Due
- * categorie non sono una ripartizione — sono due importi, e la barra piu' corta
- * non aggiunge niente a un numero gia' scritto accanto; una sola e' il bar
- * chart a una barra, l'anti-esempio da manuale. Sotto la soglia le stesse righe
- * si leggono senza barra: nome e importo.
+ *     0 righe  -> la parte non c'e' (un fatto sui dati)
+ *     1 riga   -> nome e importo. Il bar chart a una barra e' l'anti-esempio
+ *                 da manuale, e il numero e' gia' scritto accanto
+ *     2 righe  -> nome e importo, incolonnati a destra. Due numeri si
+ *                 confrontano leggendoli
+ *     3+ righe -> ciambella con leggenda, e le barre a un tap
  *
- * La soglia esiste perche' il caso vuoto e' stato disegnato per primo: partendo
- * dai dati pieni, questo stato sarebbe arrivato come un grafico degenere invece
- * che come una forma sua.
+ * ## Il 31 agosto la soglia e' passata dallo schermo alla parte, e la ragione
  *
- * **Si applica all'insieme delle righe visibili, non per sezione — e ci resta
- * anche adesso che la scala e' tornata alla sezione.** La simmetria e' la prima
- * cosa che viene in mente: *"ogni sezione misura i propri soldi con la propria
- * scala, quindi ha il proprio minimo"*. E' esattamente la mossa da non fare, e la
- * ragione non e' estetica — **una delle due meta' della simmetria ha una misura
- * contro, l'altra no.**
+ * Contava le righe di **tutta A insieme**, con questo argomento: *"la soglia per
+ * sezione era la causa misurata del difetto piu' grosso della fase — due righe
+ * di fisse restavano senza barra mentre valevano 530,00 € su 642,00 €, e la
+ * barra piu' lunga dello schermo ne valeva 42,00: il peso visivo inverso agli
+ * importi"*.
  *
- * **La soglia per sezione era la causa misurata del difetto piu' grosso della
- * fase.** Due righe di fisse cadevano sotto il minimo e restavano senza barra
- * mentre valevano 530,00 € su 642,00 €, e la barra piu' lunga della schermata ne
- * valeva 42,00 — il peso visivo inverso agli importi. Nella stessa scena la scala
- * per sezione non produceva **nessun** difetto misurato: e' per questo che una e'
- * tornata e l'altra no. Il conto sta in cima al file.
+ * **Quel difetto ha ricevuto due rimedi nello stesso commit** (`118848d`): la
+ * soglia sull'insieme **e** la barra divisa in cima, che dice la proporzione fra
+ * le due nature. Spediti insieme, e nessuno ha verificato se ne bastasse uno.
  *
- * E l'argomento tiene **senza appoggiarsi alla scala**, che e' cio' che lo rende
- * riusabile: `asChart` non risponde a *"quanto e' lunga questa barra"* ma a
- * **"c'e' una ripartizione da leggere su questo schermo"** — e uno schermo e' uno,
- * quante che siano le unita' di misura che ci stanno sopra.
+ * Ne bastava uno. La barra in cima da' alle fisse il loro peso — 530 su 954 e'
+ * il 55% della striscia — **indipendentemente da quante righe abbiano**. La
+ * soglia sull'insieme non aggiunge niente a quel peso, e in cambio produce il
+ * difetto opposto: con due righe soltanto, `507,00 €` contro `23,00 €` sono una
+ * barra piena e una briciola piu' alta che larga, che si legge come un
+ * distintivo e non come una misura. La riga *"Barra intera = 507,00 €"* era la
+ * confessione che quelle due barre da sole non si leggono.
  *
- * Ne segue che sotto soglia **A intera** perde le barre, non una meta': con due
- * righe in croce non c'e' nessuna ripartizione da leggere, e dividerle in due
- * intestazioni non ne fa nascere una.
+ * E' la stessa forma gia' vista due volte questa settimana — *una decisione vale
+ * dove vale il suo argomento* — in una variante che merita il nome suo:
+ * **due rimedi per un difetto, spediti insieme, e quello meno giustificato
+ * sopravvive senza che nessuno lo riesamini.**
  *
- * **Non e' la stessa soglia di `TREND_MIN_ROWS`, e le due non si unificano.**
- * Qui c'era scritto *"due barre non sono un confronto"*, che e' falso quindici
- * righe piu' sotto: per B due barre **sono** il confronto. Sono due domande
- * diverse con due minimi diversi, e ognuno tiene accanto l'argomento della
- * propria domanda invece di uno solo che ne serve una e contraddice l'altra.
+ * ## Perche' una sola costante, e non due
  *
- * **E non differiscono solo nel numero: differiscono nell'effetto.** Sotto
- * questa soglia una sezione di A **tiene le righe e perde le barre**, perche'
- * due categorie non sono una ripartizione ma sono due fatti da leggere — nome e
- * importo. Sotto `TREND_MIN_ROWS` **B non c'e' affatto**, perche' la sua unica
- * riga non e' un confronto ridotto: e' una cifra che sta gia' in testa alla
- * stessa schermata. Due domande, due comportamenti, scritti accanto perche' chi
- * legge non li prenda per un'incoerenza.
+ * C'era anche `PIE_MIN_SLICES` in `Stats.tsx`, sempre 3, sempre per parte: *"sotto
+ * tre voci non c'e' ciambella"*. Con la scala qui sopra le due soglie **scattano
+ * nello stesso punto e dicono la stessa cosa** — *questa parte ha abbastanza
+ * righe per essere un grafico* — e la ciambella e le barre sono le due viste
+ * dello stesso grafico, non due grafici con due minimi. Due numeri uguali con
+ * due nomi sono due posti in cui divergere.
+ *
+ * **Non si unifica invece con `TREND_MIN_ROWS`**, e l'argomento di allora regge
+ * intatto: per B due barre **sono** il confronto, e sotto la sua soglia B non
+ * c'e' affatto invece di perdere le barre. Due domande, due minimi, due effetti.
  */
 export const BREAKDOWN_MIN_ROWS = 3
 
@@ -700,6 +699,17 @@ export type BreakdownKind = 'fixed' | 'variable'
  * dove niente garantirebbe che siano lo stesso campo.
  */
 interface SectionShape {
+  /**
+   * **Questa parte si disegna come grafico**: tre righe o piu'.
+   *
+   * Sotto, le stesse righe restano — nome e importo — e non c'e' niente da
+   * commutare: nessuna ciambella, nessuna didascalia della scala, nessun gesto
+   * da annunciare. La soglia e la sua storia stanno su `BREAKDOWN_MIN_ROWS`.
+   *
+   * Sta qui e non sui due rami dell'unione per la ragione scritta qui sopra: e'
+   * lo stesso campo, e nei due rami niente lo garantirebbe.
+   */
+  readonly asChart: boolean
   readonly kind: BreakdownKind
   /**
    * **Quanto vale una barra piena in questa sezione**: l'importo della riga piu'
@@ -939,31 +949,13 @@ export interface Breakdown {
    * l'utente non ha mai avuto notizia.
    */
   readonly previous: BreakdownPrevious | null
-  /**
-   * **A e' un grafico, oppure e' un elenco di righe** — nome e importo, senza
-   * barre — e la decisione e' presa **sull'insieme delle righe visibili**, non
-   * per sezione.
+  /* **`asChart` non e' piu' qui: e' sulla sezione.**
    *
-   * La soglia e' `BREAKDOWN_MIN_ROWS` e porta il proprio argomento; qui sta il
-   * campo, e sta su `Breakdown` e non su `BreakdownSection` perche' e' li' che
-   * era la causa misurata del difetto piu' grosso della fase: due righe di fisse
-   * sotto soglia restavano senza barra mentre valevano 530,00 € su 642,00 €.
-   *
-   * "Visibili" comprende il selettore: spegnendo le fisse restano solo le
-   * quotidiane, e se sono meno di tre A smette di essere un grafico. E' la stessa
-   * regola, applicata a cio' che c'e' a schermo — l'unica cosa di cui la soglia
-   * ha mai parlato.
-   *
-   * **Si calcola su `present`**, cioe' su un fatto sui dati. Per un giorno si e'
-   * calcolato su cio' che il selettore lasciava a schermo, ed era l'ultimo
-   * mestiere rimasto a quel campo: tolto il selettore, questa soglia non ha piu'
-   * bisogno di sapere cosa qualcuno stia guardando.
-   *
-   * **Ha due valori veri, in B no**: A sotto soglia esiste lo stesso — nome e
-   * importo si leggono senza barra — mentre B sotto la propria soglia non esiste
-   * affatto, e infatti `Trend` un campo cosi' non ce l'ha.
-   */
-  readonly asChart: boolean
+   * Contava le righe di **tutta A insieme**; dal 31 agosto la soglia e' della
+   * parte, perche' due righe di fisse disegnate come barre sono una barra piena
+   * e una briciola — un distintivo, non una misura. L'argomento per esteso, con
+   * la data e i due rimedi spediti insieme che l'hanno tenuta viva un giorno di
+   * troppo, sta su `BREAKDOWN_MIN_ROWS`. */
   /**
    * La proporzione fisse/quotidiane del periodo, o `null` dove non c'e' niente
    * da dividere. L'argomento sta su `BreakdownSplit`.
@@ -1399,9 +1391,16 @@ function sectionOf(source: SectionSource): BreakdownSection {
   // sta su `BreakdownSection`.
   const only = rows[0]
   if (rows.length === 1 && only !== undefined) {
-    return { kind: source.kind, scaleCents, single: true, rows: [only] }
+    return { kind: source.kind, scaleCents, asChart: false, single: true, rows: [only] }
   }
-  return { kind: source.kind, scaleCents, single: false, rows, totalCents: source.totalCents }
+  return {
+    kind: source.kind,
+    scaleCents,
+    asChart: rows.length >= BREAKDOWN_MIN_ROWS,
+    single: false,
+    rows,
+    totalCents: source.totalCents,
+  }
 }
 
 /**
@@ -1559,7 +1558,6 @@ export function statsView(input: StatsInput): StatsView {
     // sezione lasciava senza barre la meta' che pesava 530,00 € su 642,00 €.
     // L'argomento sta su `BREAKDOWN_MIN_ROWS`, la tabella misurata in cima al
     // file.
-    asChart: present.reduce((n, part) => n + part.tallies.length, 0) >= BREAKDOWN_MIN_ROWS,
     // **Dalle metriche, e fuori dal selettore.** Fuori perche' e' cio' che dice
     // all'utente cosa sta nascondendo: sparendo con le righe, spegnere le fisse
     // toglierebbe 530,00 € dallo schermo senza lasciare traccia, che e' ADR 016

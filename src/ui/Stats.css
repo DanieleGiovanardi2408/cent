@@ -279,7 +279,11 @@
  * L'attributo sta sulla **sezione** perche' le colonne sono sue: una parte sotto
  * soglia dentro una sezione che ha barre tiene la colonna vuota, che e' il modo
  * onesto di dire "qui le barre non ci sono" senza spostare le altre. */
-.stats__section:not([data-chart]) .stats__rows {
+/* **Senza grafico la parte e' due colonne**: nome e importo, con lo spazio in
+ * mezzo. L'attributo sta sull'elenco perche' dal 31 agosto la soglia e' della
+ * **parte**: due parti nella stessa sezione possono avere due risposte — le
+ * fisse con due righe non sono un grafico, le quotidiane con cinque si'. */
+.stats__rows:not([data-chart]) {
   grid-template-columns: minmax(0, 1fr) max-content;
 }
 

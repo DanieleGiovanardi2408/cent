@@ -125,42 +125,16 @@ type Vista = 'quote' | 'ordine'
  * come superficie che nessuno legge: le due viste adesso non hanno un ordine,
  * hanno **un gesto che le scambia**. */
 
-/**
- * **Sotto quante voci la ciambella non si disegna.**
+/* **`PIE_MIN_SLICES` non c'e' piu': era `BREAKDOWN_MIN_ROWS` con un altro nome.**
  *
- * Vale **tre**, che e' anche il valore di `BREAKDOWN_MIN_ROWS` in
- * `stats-view.ts`, e **non e' la stessa decisione**. Sono due costanti apposta:
- * unificarle richiederebbe cancellare uno dei due argomenti, che e' esattamente
- * la difesa che serve.
+ * Tutte e due valevano 3, tutte e due per parte, e dal 31 agosto scattano nello
+ * stesso punto e dicono la stessa cosa — *questa parte ha abbastanza righe per
+ * essere un grafico*. La ciambella e le barre sono le **due viste dello stesso
+ * grafico**, non due grafici con due minimi: due numeri uguali con due nomi sono
+ * due posti in cui divergere.
  *
- * - `BREAKDOWN_MIN_ROWS` governa **le barre sull'insieme delle righe di A**, e la
- *   sua ragione e' che due righe non sono un grafico ma due fatti da leggere.
- * - Questa governa **la ciambella dentro una sezione**, e la sua ragione e'
- *   un'altra: **due fette sono una cifra, non una ripartizione.** Un cerchio
- *   diviso in due dice "una e' piu' grande dell'altra" e nient'altro — la stessa
- *   frase che la barra divisa in cima gia' scrive per le due nature, con due
- *   lunghezze affiancate invece che con due angoli.
- *
- * Sui dati veri del 24–30 agosto e' esattamente il caso delle **fisse**: 507,00 €
- * di canone e 23,00 € di abbonamento, cioe' `95,7% / 4,3%` — un cerchio con una
- * **scheggia da 15,6°**. Li' la sezione resta a barre, e il comando non compare.
- *
- * ## La condizione qui e' il numero di righe, e **non e' piu' la natura**
- *
- * Fino al 30 agosto la prima condizione era *"solo le quotidiane"*, con
- * l'argomento di ADR 016: *"le fisse non sono una ripartizione su cui si decide
- * qualcosa"*. Quell'argomento **e' sul budget**, e la ciambella non e' il budget:
- * e' una ripartizione che si guarda. Applicandolo qui si otteneva il risultato
- * giusto sui dati di oggi — due fisse, nessuna ciambella — **per la ragione
- * sbagliata**, e la prova e' che con quattro categorie fisse (canone, utenze,
- * abbonamento, palestra) la regola avrebbe continuato a negare una ripartizione
- * perfettamente leggibile.
- *
- * La condizione vera e' **quante voci ci sono**, e vale identica per le due
- * nature. Ne segue che con quattro fisse la ciambella compare anche li': e' cio'
- * che deve succedere.
- */
-const PIE_MIN_SLICES = 3
+ * La condizione arriva adesso dal modello (`part.asChart`), che e' anche il posto
+ * in cui sta scritta la scala 0/1/2/3+ con la sua data. */
 
 /**
  * La geometria della ciambella, in unita' del `viewBox`. Alla dimensione di
@@ -335,7 +309,7 @@ interface Quote {
  */
 function quoteOf(part: BreakdownSection): Quote | null {
   if (part.single) return null
-  if (part.rows.length < PIE_MIN_SLICES) return null
+  if (!part.asChart) return null
   if (part.totalCents <= 0) return null
 
   const totalCents = part.totalCents
@@ -609,7 +583,7 @@ function Categories({
    */
   readonly range: string
 }) {
-  const { sections, split, asChart, previous } = breakdown
+  const { sections, split, previous } = breakdown
 
   /**
    * **Quale domanda sta facendo ciascuna sezione**, e non e' persistito.
@@ -702,7 +676,11 @@ function Categories({
     // nessuna barra, mentre la barra piu' lunga dello schermo ne valeva 129 — e
     // quella non torna indietro. "Questa parte ha poche righe" non e' una
     // domanda che qualcuno possa fare a una parte per volta.
-    <section class="stats__section" data-chart={asChart ? '' : undefined}>
+    // `data-chart` non e' piu' della sezione: da quando la soglia e' della parte
+    // (`BREAKDOWN_MIN_ROWS`), due parti nella stessa sezione possono avere due
+    // risposte — le fisse con due righe non sono un grafico, le quotidiane con
+    // cinque si'. L'attributo sta quindi su ogni elenco di righe.
+    <section class="stats__section">
       {/* **La domanda, la sua risposta in grande, e la divisione subito sotto.**
 
           Il totale c'era gia' — era `.stats__titleTotal`, 17 px in coda al
@@ -880,7 +858,7 @@ function Categories({
               // distingue — e' una **legenda**, cioe' una cosa il cui unico
               // mestiere e' dire che significato ha una geometria.
               scale={
-                vista === 'ordine' && asChart && !part.single
+                vista === 'ordine' && part.asChart && !part.single
                   ? t('stats.scale', { amount: money(part.scaleCents) })
                   : null
               }
@@ -905,6 +883,7 @@ function Categories({
               <ul
                 key={`ordine:${part.kind}`}
                 class="stats__rows"
+                data-chart={part.asChart ? '' : undefined}
                 // **Il tap sul grafico, dalla parte delle barre.** Stessa area,
                 // stesso gesto, verso opposto: e' la reversibilita' chiesta al
                 // comando, non una scorciatoia in piu'.
@@ -955,7 +934,7 @@ function Categories({
                     amount={money(row.cents)}
                     fraction={row.fraction}
                     color={fill(row)}
-                    bar={asChart}
+                    bar={part.asChart}
                   />
                 ))}
               </ul>
@@ -1511,7 +1490,7 @@ function Periods({ trend, period }: { readonly trend: Trend; readonly period: Bu
     />
   )
   return (
-    <section class="stats__section" data-chart="">
+    <section class="stats__section">
       {/* **Il titolo e cio' che conta stanno sulla stessa riga**, e non e'
           compattamento fine a se stesso: erano due blocchi impilati per due
           pezzi della stessa frase — *"settimana per settimana"* e *"delle
@@ -1590,7 +1569,9 @@ function Periods({ trend, period }: { readonly trend: Trend; readonly period: Bu
              finito. Mettere la riga in cima non porta sopra la piega una barra
              incompleta muta: ci porta **la barra e la sua dichiarazione insieme**,
              per la prima volta. */}
-      <ul class="stats__rows">
+      {/* B e' sempre un grafico quando c'e': `TREND_MIN_ROWS` decide se la
+          sezione esiste, non se ha le barre. */}
+      <ul class="stats__rows" data-chart="">
         {riga(trend.current, true)}
         {[...trend.closed].reverse().map((bar) => riga(bar, false))}
       </ul>

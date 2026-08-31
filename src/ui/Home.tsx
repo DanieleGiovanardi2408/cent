@@ -212,37 +212,6 @@ export function Home({
           L'altezza e' riservata in CSS per il piu' alto dei due stati, cosi' il
           passaggio da uno all'altro — e dal guscio a entrambi — non sposta la
           coda di un pixel. */}
-      {/* **Il piede prima del corpo, ed e' la decisione D di M7.**
-
-          Qui c'era `.slot` con il corpo in alto e il piede in fondo, e in mezzo
-          una riserva (`--slot-min`, 183,25 px) che teneva fermo il bottone
-          mentre cio' che gli stava sopra cambiava altezza. Misurato: `.budget`
-          non si muoveva di un pixel, ma la riserva spendeva **118 px di aria**
-          — 73,75 sopra la riga del ritmo e 32,25 sotto — su una schermata che il
-          lunedi' finiva a 405 px su 800.
-
-          D toglie la riserva **e la sua ragione**: sopra il bottone resta solo
-          l'eroe, e l'eroe non dipende dai dati. Misurato a 390, 375 e 320 punti,
-          in italiano e in inglese, con importi da `0,00 €` a `12.500,00 €`:
-          **escursione 0 px in tutte e sei le caselle**, con la coda dell'eroe
-          sempre su una riga. Il bottone sta fermo per costruzione invece che per
-          riserva, e i 118 px tornano al contenuto.
-
-          Il costo, dichiarato: il bottone del budget e' adesso **il secondo
-          blocco** della schermata, sopra le righe che si leggono di piu'. E' il
-          prezzo di D, e si vede. */}
-      <div class="slot__foot">
-        {/* Cosa **non** c'e' dentro il numero grande (ADR 016 §2). L'altezza
-            resta riservata anche da vuota: la riga compare a settimane alterne
-            — quella del canone si', la dopo no — e sta **sopra** il bottone,
-            quindi senza riserva il bottone salirebbe di una riga. E' la stessa
-            ragione di prima, su una superficie molto piu' piccola. */}
-        <p class="slot__fixed">{ready ? hero.fixed ?? '' : ''}</p>
-
-        <button type="button" class="budget" disabled={!ready} onClick={onEditBudget}>
-          {t(hasBudget && ready ? 'home.budget.change' : 'home.budget.set')}
-        </button>
-      </div>
 
       {/* **Il ritmo, e adesso sono due.** Quello consentito era gia' qui; quello
           vero non stava da nessuna parte, ed e' il confronto che rende utile il
@@ -275,6 +244,29 @@ export function Home({
             <Pace metrics={metrics} />
           </>
         )}
+      </div>
+
+      {/* **Il piede dopo il ritmo, ed e' la correzione di M7/D.**
+
+          D metteva il bottone subito sotto l'eroe — *testo variabile sotto il
+          bottone* — perche' li' nulla di variabile gli sta sopra. Il numero che
+          l'aveva scelta misurava la **stabilita'** e taceva sulla **gerarchia**:
+          a schermo, *"Cambia il budget"* diventava il secondo blocco della Home,
+          sopra le due righe che si leggono di piu'.
+
+          La stabilita' non si perde tornando qui sotto, e non e' un compromesso:
+          `.rates` porta la propria riserva (`--body-min`), quindi il bottone e'
+          fermo lo stesso — e la riserva serviva comunque, perche' senza `.days`
+          si sposta di 67,75 px. Il bottone e' tornato al suo posto **senza
+          rinunciare a niente**, perche' cio' che D prometteva era gia' pagato da
+          un'altra parte. */}
+      <div class="slot__foot">
+        {/* Cosa **non** c'e' dentro il numero grande (ADR 016 §2). */}
+        <p class="slot__fixed">{ready ? hero.fixed ?? '' : ''}</p>
+
+        <button type="button" class="budget" disabled={!ready} onClick={onEditBudget}>
+          {t(hasBudget && ready ? 'home.budget.change' : 'home.budget.set')}
+        </button>
       </div>
 
       {/* La coda. **E' l'unico blocco della Home senza altezza riservata**, ed

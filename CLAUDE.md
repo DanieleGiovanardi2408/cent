@@ -948,6 +948,47 @@ corso si disegna come uno finito. La forma che torna e' un'altra, e la ragione
 per cui torna e' un'altra: **l'oggetto della cancellazione era la rotaia, non
 l'incompletezza.**
 
+## Una metrica sola si nomina insieme a cio' che NON copre
+
+Quando una scelta di layout si decide su **una** metrica, la metrica va scritta
+insieme alla domanda a cui **non** risponde. Altrimenti il numero, che e' giusto,
+fa passare per verificata una scelta che e' stata verificata a meta'.
+
+Il caso: M7/D fu scelta su *"`.hero` ha escursione 0 px, quindi il bottone sotto
+di lui sta fermo"*. Il numero era vero e misurava la **stabilita'**; taceva sulla
+**gerarchia**. A schermo il risultato era *"Cambia il budget"* — un'azione rara,
+dipinta col token del FAB — promosso a secondo blocco della Home, sopra le due
+righe piu' utili. Nessuna misura l'aveva detto perche' nessuna misura guardava li'.
+
+## Prima di togliere un meccanismo si misura cosa cade, non si rilegge cosa diceva
+
+> Una motivazione scritta dice **perche' un meccanismo e' stato aggiunto**, non
+> tutto quello che nel frattempo tiene su.
+
+L'analisi di M7 aveva preso il messaggio di `8161b89` come l'elenco completo di
+cio' che la riserva della Home reggeva. Quel messaggio parlava del **bottone**, ed
+era vero. Ma nel frattempo la riserva reggeva anche **la coda**: togliendola,
+`.days` si sposta di 67,75 px all'arrivo dei dati, e li' dentro ci sono righe
+toccabili. La proiezione *"D libera 118 px"* era sbagliata di tutti e 118.
+
+Un meccanismo si toglie **dopo averlo tolto per finta e misurato cosa si muove**.
+La documentazione dice l'intenzione; solo la misura dice l'effetto.
+
+### E il corollario che ne e' uscito il giorno dopo: due rimedi per un difetto
+
+Quando un difetto riceve **due rimedi nello stesso commit**, quasi nessuno torna
+a chiedersi se ne bastasse uno — e quello meno giustificato sopravvive per anni
+producendo i propri difetti.
+
+`118848d` ha chiuso *"le fisse non hanno peso visivo"* con **due** cose insieme:
+la barra divisa in cima **e** la soglia del grafico spostata sull'insieme delle
+righe. La barra bastava: da' alle fisse il loro peso qualunque sia il numero di
+righe. La soglia sull'insieme, in cambio, disegnava due righe come barre — una
+piena e una briciola, cioe' un distintivo e non una misura.
+
+Quando si spediscono due rimedi insieme, si scrive **quale dei due si crede
+sufficiente**. Se non lo si sa, e' il momento di misurarlo, non fra un mese.
+
 ## La geometria di una parte non dipende dal contenuto di un'altra
 
 Se due blocchi della stessa schermata condividono una griglia, e una colonna e'

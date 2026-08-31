@@ -178,6 +178,28 @@ test('la guida si mostra al primo avvio, ha tre schede, e chiuderla e\' definiti
   await expect(disegnata).toHaveCount(4)
   const tinteGuida = await disegnata.evaluateAll((n) => n.map((c) => getComputedStyle(c).stroke))
   expect(new Set(tinteGuida).size, 'le fette della guida non hanno quattro colori distinti').toBe(4)
+
+  // **E lo stato "barre" ha le tre colonne della schermata vera.**
+  //
+  // Ne aveva due — barra e importo — e mancava proprio la prima che si vede sul
+  // vero: il nome. Insegnava un gesto e ne mostrava il risultato sbagliato, alla
+  // prima cosa che vede un amico su un'installazione pulita.
+  //
+  // L'illustrazione si alterna da sola: si aspetta lo stato a barre invece di
+  // dare per scontato quale sia in scena.
+  await expect(page.locator('.mock__rows')).toBeVisible({ timeout: 4000 })
+  await expect(page.locator('.mock__row')).toHaveCount(4)
+  const colonne = await page.locator('.mock__row').first().evaluate((r) => ({
+    nome: (r.querySelector('.mock__cat-name')?.textContent ?? '').trim(),
+    barra: r.querySelectorAll('.stat__bar').length,
+    importo: (r.querySelector('.mock__amount')?.textContent ?? '').trim(),
+  }))
+  expect(colonne.barra, 'la riga finta non ha la barra').toBe(1)
+  expect(colonne.importo, 'la riga finta non ha l\'importo').toMatch(/\d/)
+  expect(
+    colonne.nome,
+    'la riga finta non ha il nome della categoria: il finto non somiglia al vero',
+  ).not.toBe('')
   await check('guida, scheda 3', page)
 
   // --- "Inizia" chiude, e la chiusura e' uno **stato**: niente guida al

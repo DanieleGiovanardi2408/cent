@@ -1673,15 +1673,22 @@ test('con le sole spese a mano A ha una parte sola e nessuna riga di separazione
  * **bordo destro dipinto** invece della colonna calcolata: e' cio' che l'occhio
  * incolonna, ed e' vero anche se un giorno le colonne cambiassero numero.
  */
-test('dentro A o tutte le righe hanno la barra o nessuna, e gli importi restano incolonnati', async ({
+test('dentro una PARTE o tutte le righe hanno la barra o nessuna, e gli importi restano incolonnati', async ({
   page,
 }) => {
   await page.goto('/')
   await chiudiGuida(page)
-  // La scena che al vecchio test dava il caso misto: tre fisse e due variabili.
-  // Cinque righe in tutto, cioe' **sopra** la soglia dell'insieme — quindi
-  // adesso le barre ci sono su tutte e cinque, comprese le due che prima erano
-  // una tabella.
+  // **Tre fisse e due variabili, e adesso e' il caso misto — di proposito.**
+  //
+  // Questo test asseriva l'invariante su **tutta A**: cinque righe stavano sopra
+  // la soglia dell'insieme, quindi le barre c'erano su tutte e cinque. Dal 31
+  // agosto la soglia e' della **parte**, e questa scena e' esattamente quella
+  // che le fa rispondere diversamente: le fisse sono un grafico, le due
+  // variabili no.
+  //
+  // L'invariante non e' sparito, si e' **ristretto al posto in cui vale**: dentro
+  // una parte, o tutte le righe hanno la barra o nessuna. Fra due parti no, ed e'
+  // il punto della scala 0/1/2/3+ (`BREAKDOWN_MIN_ROWS`).
   await semina(page, [
     { categoria: 'Casa', cents: 50700, fissa: true },
     { categoria: 'Trasporti', cents: 28000, fissa: true },
@@ -1701,16 +1708,29 @@ test('dentro A o tutte le righe hanno la barra o nessuna, e gli importi restano 
 
   const pieno = await conta()
   expect(pieno.righe, 'la scena a cinque righe non e\' in pagina').toBe(5)
-  expect(
-    pieno.barre,
-    `A ha ${pieno.barre} barre su ${pieno.righe} righe: la soglia e' tornata a guardare la parte`,
-  ).toBe(pieno.righe)
 
-  // E le due fisse sotto le tre righe di soglia adesso hanno la barra: e' il
-  // difetto misurato che 0a chiude — 530 € su 818 senza nessuna barra, sotto un
-  // titolo che chiede dove sono finiti i soldi.
+  // **Dentro ogni parte: tutte o nessuna.** E' l'invariante, ristretto al posto
+  // in cui vale.
   const elenchi = sezione.locator('.stats__rows')
-  await expect(elenchi.nth(1).locator('.stat__bar')).toHaveCount(2)
+  await expect(elenchi).toHaveCount(2)
+  for (const i of [0, 1]) {
+    const c = await elenchi.nth(i).evaluate((el) => ({
+      righe: el.querySelectorAll('.stat').length,
+      barre: el.querySelectorAll('.stat__bar').length,
+    }))
+    expect(
+      c.barre === 0 || c.barre === c.righe,
+      `la parte ${i} ha ${c.barre} barre su ${c.righe} righe: dentro una parte o tutte o nessuna`,
+    ).toBe(true)
+  }
+
+  // E le due parti rispondono **diversamente**, che e' la premessa senza cui il
+  // controllo qui sopra sarebbe verde anche sulla soglia vecchia.
+  await expect(elenchi.nth(0).locator('.stat__bar'), 'le tre fisse non hanno le barre').toHaveCount(3)
+  await expect(
+    elenchi.nth(1).locator('.stat__bar'),
+    'le due variabili hanno le barre: due righe non sono un grafico',
+  ).toHaveCount(0)
 
   // **L'altro verso dell'invariante**, e senza di lui il primo passerebbe anche
   // se le barre non sparissero mai: due sole categorie in tutto stanno sotto la
@@ -3486,7 +3506,16 @@ test('sotto tre voci non c\'e\' ciambella, e nemmeno il comando', async ({ page 
     quotidiane.locator('+ .stats__rows .stat'),
     'le quotidiane non sono due: la scena non prova la soglia',
   ).toHaveCount(2)
-  await expect(quotidiane.locator('+ .stats__rows .stat__bar')).toHaveCount(2)
+  // **E non hanno nemmeno le barre**, dal 31 agosto: due righe non sono un
+  // grafico ne' come ciambella ne' come barre. Una barra piena e una briciola
+  // sono un distintivo, non una misura, e la riga *"Barra intera = …"* era la
+  // confessione che da sole non si leggono. La scala 0/1/2/3+ sta su
+  // `BREAKDOWN_MIN_ROWS`, con la data e il motivo.
+  await expect(quotidiane.locator('+ .stats__rows .stat__bar')).toHaveCount(0)
+  await expect(
+    quotidiane.locator('.stats__partScale'),
+    'una parte senza grafico dichiara una scala che non ha',
+  ).toHaveCount(0)
   await expect(quotidiane.locator('+ .stats__viz')).toHaveCount(0)
   // E il gesto non c'e': sotto la soglia la sezione ha **una vista sola**, quindi
   // il tap non deve portare da nessuna parte. Si chiede il bersaglio dichiarato,
@@ -4334,9 +4363,13 @@ test.describe('la geometria di una parte non dipende da un\'altra', () => {
     const nomi = await grigliaDiDefault(page)
     // **Le etichette delle due parti hanno lunghezze molto diverse**, ed e' la
     // premessa: con nomi lunghi uguali il test sarebbe verde anche sul difetto.
+    // **Tre fisse e non due**, dal 31 agosto: sotto le tre righe una parte non
+    // ha barre, e questo test le misura. Con due, misurerebbe zero barre e
+    // sarebbe verde per assenza.
     await semina(page, [
       { categoria: nomi.casa, cents: 50700, fissa: true },
       { categoria: nomi.trasporti, cents: 2300, fissa: true },
+      { categoria: nomi.sigarette, cents: 1200, fissa: true },
       { categoria: nomi.coffeeshop, cents: 2400 },
       { categoria: nomi.spesa, cents: 4200 },
       { categoria: nomi.fuori, cents: 2600 },
@@ -4351,6 +4384,10 @@ test.describe('la geometria di una parte non dipende da un\'altra', () => {
     page,
   }) => {
     await scenaTest(page)
+    // Le Fisse a barre: con tre righe sono un grafico, e un grafico si apre in
+    // ciambella. E' anche la scena vera — le barre delle Fisse guardate mentre
+    // si tocca l'altra sezione.
+    await page.locator('.stats__partHead[data-kind="fixed"] + .stats__viz').tap()
     const geo = async () =>
       barreDelleFisse(page).evaluateAll((n) =>
         n.map((b) => {
@@ -4360,7 +4397,7 @@ test.describe('la geometria di una parte non dipende da un\'altra', () => {
       )
 
     const prima = await geo()
-    expect(prima.length, 'le fisse non hanno barre: la scena non prova niente').toBe(2)
+    expect(prima.length, 'le fisse non hanno barre: la scena non prova niente').toBe(3)
 
     // La premessa: le Quotidiane sono in ciambella, quindi le loro etichette non
     // sono a schermo. Senza questo il tap non cambierebbe l'insieme dei nomi.
@@ -4402,6 +4439,7 @@ test.describe('la geometria di una parte non dipende da un\'altra', () => {
     await semina(page, [
       { categoria: nomi.casa, cents: 50700, fissa: true, giorniFa: 8 },
       { categoria: nomi.trasporti, cents: 2300, fissa: true, giorniFa: 8 },
+      { categoria: nomi.sigarette, cents: 1200, fissa: true, giorniFa: 8 },
       // Tre quotidiane, non due: sotto `PIE_MIN_SLICES` la ciambella non c'e' e
       // il tap non avrebbe niente da toccare.
       { categoria: nomi.coffeeshop, cents: 2400, giorniFa: 8 },
@@ -4410,13 +4448,14 @@ test.describe('la geometria di una parte non dipende da un\'altra', () => {
     ])
     await apriStatistiche(page)
     await page.locator('.pnav__arrow').first().tap()
+    await page.locator('.stats__partHead[data-kind="fixed"] + .stats__viz').tap()
 
     const misura = () =>
       barreDelleFisse(page).evaluateAll((n) =>
         n.map((b) => Math.round(b.getBoundingClientRect().width * 100) / 100),
       )
     const prima = await misura()
-    expect(prima.length).toBe(2)
+    expect(prima.length).toBe(3)
     await page.locator('.stats__partHead[data-kind="variable"] + .stats__viz').tap()
     expect(await misura()).toEqual(prima)
   })

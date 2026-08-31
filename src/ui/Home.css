@@ -445,9 +445,23 @@
   margin-inline-start: calc(var(--sp-3) * -1);
   padding-inline: var(--sp-3);
   border-radius: var(--radius-2);
-  color: var(--brand);
+  /* **Non piu' `--brand` e non piu' semibold.**
+   *
+   * Era dipinto **con lo stesso token del FAB** (`.fab { background-color:
+   * var(--brand) }`), che e' l'azione primaria dell'app, e in semibold a 15 px:
+   * a schermo si leggeva come un titolo, e competeva con l'eroe sopra e col `+`
+   * sotto.
+   *
+   * Cambiare il budget e' un'azione **rara**. Scende a `--text` e a peso medio:
+   * resta un bersaglio — 44 px dichiarati, raggio, e `--brand-soft` sotto il
+   * dito — senza chiedere l'attenzione che spetta al numero grande e al `+`.
+   *
+   * Non prende un bordo, e non e' una dimenticanza: *gerarchia prima di
+   * decorazione* (`8161b89`) — nessuna ombra, nessun bordo, nessuna card. Il
+   * peso lo fa il peso. */
+  color: var(--text);
   font-size: var(--fs-200);
-  font-weight: var(--fw-semibold);
+  font-weight: var(--fw-medium);
 }
 
 /* Nessuna transizione: il colore cambia nel frame del tap. */

@@ -239,11 +239,12 @@ function invariantiDiA(v: Ready) {
     expect(variabili.totalCents).toBe(v.current.spentCents)
   }
 
-  const tutte = v.byCategory.sections.flatMap((s) => s.rows)
-  // La soglia guarda cio' che si vede, **tutto insieme**. E' l'unica delle due
-  // regole per sezione che non e' tornata con 0a, e la ragione e' che era la
-  // causa misurata del difetto: l'argomento sta su `BREAKDOWN_MIN_ROWS`.
-  expect(v.byCategory.asChart).toBe(tutte.length >= BREAKDOWN_MIN_ROWS)
+  // **La soglia e' della parte**, dal 31 agosto: ogni sezione risponde sulle
+  // proprie righe, e due parti nella stessa schermata possono rispondere
+  // diversamente. L'argomento, con la data, sta su `BREAKDOWN_MIN_ROWS`.
+  for (const s of v.byCategory.sections) {
+    expect(s.asChart).toBe(s.rows.length >= BREAKDOWN_MIN_ROWS)
+  }
 
   // **`previous` c'e' se e solo se A e' vuota**, e non e' una rifinitura: e' cio'
   // che tiene in piedi la sezione il lunedi' mattina. Un `previous` su una
@@ -520,26 +521,32 @@ describe('la soglia del grafico vale sull insieme delle righe visibili', () => {
     makeExpense({ date: OGGI, categoryId: 'c-casa', amountCents: 50000, source: 'recurring' }),
   ]
 
-  it('due fisse non perdono le barre perche sono due: A ne ha cinque', () => {
+  it('due fisse sotto tre variabili: ognuna risponde sulle proprie righe', () => {
     const v = ready({ expenses: [...dueFisse, ...tre] })
-    // Qui c'era `asChart: false` sulle fisse, con accanto la ragione per cui
-    // andava bene: ogni sezione fa la propria domanda, quindi ha il proprio
-    // minimo. **La ragione contro non e' che la scala sia una** — non lo e' piu' —
-    // e' che quella forma lasciava senza barre la meta' che pesava 530,00 € su
-    // 642,00 €. `asChart` non chiede quanto e' lunga una barra: chiede se su
-    // questo schermo c'e' una ripartizione da leggere, e cinque righe lo sono.
+    // **Questo test diceva il contrario, e la decisione e' cambiata il 31 agosto.**
+    // Le due fisse tenevano le barre perche' la soglia contava le righe di tutta
+    // A insieme, e la ragione scritta era che senza barre quella meta' — 530,00 €
+    // su 642,00 € — sarebbe rimasta senza peso visivo.
+    //
+    // Quel peso adesso ce l'ha **la barra divisa in cima**, che dice la
+    // proporzione fra le due nature indipendentemente da quante righe abbiano.
+    // I due rimedi erano nati insieme (`118848d`) e nessuno aveva verificato se
+    // ne bastasse uno: ne bastava uno, e quello sull'insieme produceva il difetto
+    // opposto — due righe disegnate come barre sono una piena e una briciola,
+    // cioe' un distintivo e non una misura.
     expect(sezione(v, 'fixed')?.rows).toHaveLength(2)
+    expect(sezione(v, 'fixed')?.asChart, 'due righe non sono un grafico').toBe(false)
     expect(sezione(v, 'variable')?.rows).toHaveLength(BREAKDOWN_MIN_ROWS)
-    expect(v.byCategory.asChart).toBe(true)
-    // E la riga da 500,00 € ha la barra che le tocca: e' la piu' grande della sua
-    // sezione, e la sezione dichiara che il fondo colonna vale 500,00 €.
+    expect(sezione(v, 'variable')?.asChart, 'tre righe lo sono').toBe(true)
+    // Le lunghezze restano calcolate: `asChart` dice al componente di non
+    // disegnarle, non al modello di non saperle.
     expect(sezione(v, 'fixed')?.rows[0]?.cents).toBe(50000)
     expect(sezione(v, 'fixed')?.rows[0]?.fraction).toBe(1)
     expect(sezione(v, 'fixed')?.scaleCents).toBe(50000)
     invariantiDiA(v)
   })
 
-  it('e vale anche a parti invertite: due variabili sotto tre fisse tengono le barre', () => {
+  it('e a parti invertite: due variabili sotto tre fisse, e la risposta si scambia', () => {
     const v = ready({
       expenses: [
         ...tre.map((e) => ({ ...e, source: 'recurring' as const })),
@@ -547,8 +554,11 @@ describe('la soglia del grafico vale sull insieme delle righe visibili', () => {
         makeExpense({ date: OGGI, categoryId: 'c-spesa', amountCents: 300 }),
       ],
     })
+    // La premessa che rende il test una prova: la risposta segue **le righe**,
+    // non la natura della parte.
     expect(sezione(v, 'variable')?.rows).toHaveLength(2)
-    expect(v.byCategory.asChart).toBe(true)
+    expect(sezione(v, 'variable')?.asChart).toBe(false)
+    expect(sezione(v, 'fixed')?.asChart).toBe(true)
     invariantiDiA(v)
   })
 
@@ -564,7 +574,7 @@ describe('la soglia del grafico vale sull insieme delle righe visibili', () => {
     // ne fanno diventare tre. E' anche il caso piu' comune del primo giorno —
     // l'affitto e un caffe'.
     expect(v.byCategory.sections).toHaveLength(2)
-    expect(v.byCategory.asChart).toBe(false)
+    expect(v.byCategory.sections.every((s) => !s.asChart)).toBe(true)
     // Due categorie non sono una ripartizione, ma **due periodi sono** un
     // confronto: se le due soglie fossero un numero solo, uno dei due test
     // sulle soglie cadrebbe.
@@ -1173,9 +1183,9 @@ describe('le spese la cui categoria non esiste piu', () => {
       ],
     })
     expect(sezione(v, 'variable')?.rows).toHaveLength(BREAKDOWN_MIN_ROWS)
-    // La soglia conta le righe **visibili**, e l'aggregato delle orfane e' una di
-    // quelle: sono spesa vera, e senza di loro il totale non tornerebbe.
-    expect(v.byCategory.asChart).toBe(true)
+    // La soglia conta le righe della **parte**, e l'aggregato delle orfane e' una
+    // di quelle: sono spesa vera, e senza di loro il totale non tornerebbe.
+    expect(sezione(v, 'variable')?.asChart).toBe(true)
   })
 
   it('un aggregato da zero centesimi non divide per zero', () => {
