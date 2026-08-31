@@ -25,8 +25,8 @@ sa gia', e per questo non puo' invecchiare. I giudizi — cosa e' in volo, cosa
 aspetta una persona — stanno sotto, scritti a mano e timbrati con lo SHA a cui
 sono stati rivisti.
 
-- **Ultimo commit**: `cdd9b21` — fix: fra la barra e il testo torna lo spazio — ricaduta della mia riparazione
-- **Data**: 31/08/2026 15:52
+- **Ultimo commit**: `0e8b381` — feat: la scala 0/1/2/3+, il bottone al suo posto, e il finto che somiglia al vero
+- **Data**: 31/08/2026 16:49
 - **Ramo**: `main`
 - **Pushato**: **no: 1 commit non pushati su `origin/main`**
 - **Albero di lavoro**: pulito
@@ -52,7 +52,7 @@ sono stati rivisti.
 ## In volo adesso
 
 <!-- JUDGMENT rivisto=2d9f75e -->
-> Rivisto a `2d9f75e`, 17 commit fa. **Da riguardare.**
+> Rivisto a `2d9f75e`, 19 commit fa. **Da riguardare.**
 
 **Fase 6 sul ramo `fase-6-wip`, tredici commit sopra `origin/main`.** Il ramo e'
 spinto a ogni rientro.
