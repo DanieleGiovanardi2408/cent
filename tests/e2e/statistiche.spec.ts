@@ -4421,3 +4421,70 @@ test.describe('la geometria di una parte non dipende da un\'altra', () => {
     expect(await misura()).toEqual(prima)
   })
 })
+
+/**
+ * **Fra la barra e il testo c'e' dello spazio, su tutti e due i lati.**
+ *
+ * Trovato sul telefono: la barra di `Casa` finiva esattamente dove cominciava
+ * `507,00 €`, e quella di `Trasporti` cominciava esattamente dove finiva la
+ * parola. Misurato a 390 punti, `column-gap` valeva **`normal`**, cioe' zero.
+ *
+ * **E' una ricaduta della riparazione del giorno prima**: i gutter stavano sulla
+ * sezione e `subgrid` li ereditava; portando le colonne sulle righe, l'eredita'
+ * e' finita insieme alla griglia condivisa. Un difetto introdotto da una
+ * correzione, nella stessa zona, per la seconda volta in due giorni — e per
+ * questo adesso c'e' un test invece di una riga di CSS.
+ *
+ * Si misurano i **bordi dipinti**, non `column-gap`: e' cio' che l'occhio vede,
+ * ed e' vero anche se un giorno lo spazio arrivasse da un padding invece che da
+ * un gap.
+ */
+test('fra la barra e il testo resta spazio, in tutte e due le sezioni', async ({ page }) => {
+  await page.goto('/')
+  await chiudiGuida(page)
+  const nomi = await grigliaDiDefault(page)
+  await semina(page, [
+    { categoria: nomi.casa, cents: 50700, fissa: true },
+    { categoria: nomi.trasporti, cents: 2300, fissa: true },
+    { categoria: nomi.spesa, cents: 4200 },
+    { categoria: nomi.fuori, cents: 2600 },
+    { categoria: nomi.coffeeshop, cents: 2400 },
+  ])
+  await apriStatistiche(page)
+  // Tutte e due le sezioni a barre: e' li' che le tre colonne coesistono.
+  await mostraLeBarre(page)
+
+  const MINIMO = 4
+  const stretti = await page.evaluate((minimo) => {
+    const fuori: string[] = []
+    for (const riga of document.querySelectorAll('.stat')) {
+      const nome = riga.querySelector('.stat__name')
+      const plot = riga.querySelector('.stat__plot')
+      const valore = riga.querySelector('.stat__value')
+      const barra = riga.querySelector('.stat__bar')
+      if (nome === null || plot === null || valore === null) continue
+      const etichetta = (nome.textContent ?? '').trim()
+      const sinistra = plot.getBoundingClientRect().left - nome.getBoundingClientRect().right
+      // A destra si guarda la **traccia**, non la barra: una barra corta lascia
+      // spazio per conto suo, e misurarla renderebbe il test verde su ogni riga
+      // che non riempie. Cio' che deve stare lontano dall'importo e' la colonna.
+      const destra = valore.getBoundingClientRect().left - plot.getBoundingClientRect().right
+      const r = (n: number): number => Math.round(n * 100) / 100
+      if (sinistra < minimo) fuori.push(`${etichetta}: a sinistra ${r(sinistra)}px`)
+      if (destra < minimo) fuori.push(`${etichetta}: a destra ${r(destra)}px`)
+      // E la barra piena non deve sfondare la propria traccia.
+      if (barra !== null && barra.getBoundingClientRect().right > plot.getBoundingClientRect().right + 0.5) {
+        fuori.push(`${etichetta}: la barra esce dalla traccia`)
+      }
+    }
+    return fuori
+  }, MINIMO)
+
+  expect(
+    stretti,
+    `fra la barra e il testo servono almeno ${MINIMO}px: senza, la barra tocca le parole`,
+  ).toEqual([])
+
+  // La premessa: se le righe fossero zero il giro sarebbe verde per assenza.
+  await expect(page.locator('.stat')).toHaveCount(5)
+})

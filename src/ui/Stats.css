@@ -1176,6 +1176,25 @@
     fit-content(var(--name-max))
     minmax(var(--plot-min), 1fr)
     max-content;
+
+  /* **I gutter fra le colonne, tornati qui insieme alle colonne.**
+   *
+   * Stavano sulla sezione (`gap: var(--sp-2)`) e `subgrid` li **ereditava**.
+   * Portando le colonne sulle righe l'eredita' e' finita e `column-gap` e'
+   * tornato a `normal`, cioe' **zero**: misurato a 390 punti, la barra di `Casa`
+   * cominciava esattamente dove finiva la parola e finiva esattamente dove
+   * cominciava `507,00 €`. Nessuno spazio, da nessuna delle due parti.
+   *
+   * E' la **seconda volta in due giorni** che una riparazione ne introduce
+   * un'altra nella stessa zona, e la regola che ne segue e' piu' stretta di
+   * *"la verifica si riesegue"*: spostando una proprieta' da un contenitore a un
+   * figlio si porta anche **cio' che il figlio ereditava**. `subgrid` eredita i
+   * gap, e non lo dice da nessuna parte.
+   *
+   * `row-gap` resta zero, e per la ragione qui sotto: quella e' una decisione
+   * sua, non un effetto. */
+  column-gap: var(--sp-2);
+
   /* **Zero, ed era `--sp-2`.** Lo spazio bianco appartiene alle sezioni, non
    * alle righe: due sezioni sono due domande, due righe sono la stessa cosa
    * ripetuta.
