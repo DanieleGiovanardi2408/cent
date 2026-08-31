@@ -882,6 +882,12 @@ export const it = {
 
   /* Vedi en.ts per l'argomento. La sezione resta in piedi e dice cosa manca,
    * invece di sparire — che e' come si legge un'app rotta. */
+  /* Vedi en.ts per l'argomento delle quattro qui sotto. */
+  'stats.nav.prev': 'Periodo precedente',
+  'stats.nav.next': 'Periodo successivo',
+  'stats.chart.toRanking': 'Mostra gli importi esatti di {name}',
+  'stats.chart.toShares': 'Mostra le quote di {name}',
+
   'stats.period.empty': 'In questo periodo non hai ancora segnato niente.',
   'stats.period.previous': '{range} · {amount}',
 
@@ -912,8 +918,10 @@ export const it = {
   // quella che non deve cedere, e le due parole devono restare corte uguali:
   // `Classifica` e' larga il doppio di `Quote` e squilibrerebbe una scelta che
   // dev'essere simmetrica.
-  'stats.view.shares': 'Quote',
-  'stats.view.ranking': 'Ordine',
+  /* Qui c'erano `stats.view.shares` e `stats.view.ranking`, le due parole del
+   * comando a due stati. Il comando non c'e' piu': il gesto e' il tap sul
+   * grafico, e sullo schermo non resta nessun controllo che faccia la stessa
+   * cosa. A insegnarlo e' la guida. */
   'stats.byPeriod.weekly': 'Settimana per settimana',
   'stats.byPeriod.monthly': 'Mese per mese',
 

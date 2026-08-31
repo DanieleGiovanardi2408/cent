@@ -867,102 +867,9 @@
 
 /* --- il comando a due stati --------------------------------------------- */
 
-/* **Due parole in un guscio, non due icone.**
- *
- * ## Il contorno e' dei due segmenti, non del gruppo
- *
- * La prima forma aveva un bordo sul gruppo **e** un anello interno sul premuto:
- * sui tre lati esterni i due cadevano a un pixel di distanza e si leggevano come
- * un unico bordo spesso e sbilenco. Adesso il contorno ce l'ha ogni segmento, i
- * due condividono il lato in mezzo (`margin-inline-start: -1px`), e il premuto
- * **sostituisce il proprio** con quello dell'accento invece di aggiungergliene
- * un secondo. Un contorno solo, in un posto solo.
- *
- * `flex: none`: il comando non cede mai. Cio' che cede e' il nome di parte, che
- * va a capo e non perde lettere — e' l'asse su cui costa meno. */
-.stats__views {
-  flex: none;
-  display: flex;
-}
-
-/* Ogni segmento **dichiara** le proprie misure minime su tutti e due gli assi.
- *
- * Non e' zelo: il contenuto dipende dalla **lingua** — `Quote`/`Ordine` in
- * italiano, `Shares`/`Ranking` in inglese — e un bottone largo abbastanza perche'
- * dentro c'e' una parola di sei lettere e' sopra i 44 per caso, non per
- * costruzione. E' il caso 3 della tassonomia di CLAUDE.md: il rimedio sta nel
- * CSS, non nel test.
- *
- * `min-inline-size` e non `inline-size`: le due parole non sono larghe uguali in
- * nessuna delle due lingue, e stirarle a una larghezza comune darebbe un comando
- * piu' largo del necessario proprio dove lo spazio manca (375 punti). */
-.stats__view {
-  min-block-size: var(--tap-min);
-  min-inline-size: var(--tap-min);
-  padding-inline: var(--sp-3);
-  /* `--line-strong` e non `--line`: e' un bordo che conta — delimita un
-   * bersaglio — e `--line` vale 1,19:1 sul fondo in chiaro, cioe' non lo
-   * delimita affatto. */
-  border: 1px solid var(--line-strong);
-  background-color: transparent;
-  color: var(--text-muted);
-  font-family: inherit;
-  font-size: var(--fs-100);
-  font-weight: var(--fw-semibold);
-  line-height: var(--lh-snug);
-  touch-action: manipulation;
-  cursor: pointer;
-}
-
-/* Il guscio si chiude sui due capi, e i due segmenti condividono il lato in
- * mezzo invece di disegnarne due sovrapposti. */
-.stats__view:first-child {
-  border-start-start-radius: var(--radius-1);
-  border-end-start-radius: var(--radius-1);
-}
-
-.stats__view:last-child {
-  margin-inline-start: -1px;
-  border-start-end-radius: var(--radius-1);
-  border-end-end-radius: var(--radius-1);
-}
-
-/* **Lo stato si vede, e non solo dal colore.**
- *
- * Superficie propria, contorno interno e testo nell'accento: e' la stessa marca
- * gia' usata dal selettore del periodo nel foglio del budget
- * (`.period[data-selected]`), e la ragione e' scritta li' — *"il colore da solo
- * sparisce a chi ha una carenza cromatica e sotto il sole"*. Qui vale identica:
- * e' l'unica cosa che dice quale delle due domande si sta guardando.
- *
- * `box-shadow` interno e non `border`: un bordo piu' spesso sul premuto
- * sposterebbe il testo di 1 px a ogni tap, cioe' un salto di layout dentro il
- * comando che lo produce.
- *
- * Contrasti misurati sui token: `--brand` su `--brand-soft` vale **5,5:1** in
- * chiaro e **7,0:1** in scuro; il non premuto e' `--text-muted` sul fondo, 5,4:1
- * e 7,3:1. Tutti e quattro sopra AA. */
-.stats__view[aria-pressed="true"] {
-  /* `position` e `z-index` perche' il lato condiviso e' **suo**: senza, il bordo
-   * del vicino grigio si dipingerebbe sopra quello dell'accento e il premuto
-   * avrebbe tre lati verdi e uno grigio. */
-  position: relative;
-  z-index: 1;
-  border-color: var(--brand);
-  /* Il secondo pixel del contorno, e **non e' un bordo piu' spesso**: un bordo
-   * da 2 px sul premuto sposterebbe il testo di 1 px a ogni tap, cioe' un salto
-   * di layout dentro il comando che lo produce. */
-  box-shadow: inset 0 0 0 1px var(--brand);
-  background-color: var(--brand-soft);
-  color: var(--brand);
-}
-
-/* Il feedback nel frame del tap, senza transizione: e' un cambio di superficie,
- * e una transizione lo metterebbe fuori dai 100 ms che ogni interazione
- * dichiara. */
-.stats__view:active {
-  background-color: var(--brand-soft);
-}
+/* Qui c'erano `.stats__views` e `.stats__view`, il comando a due stati.
+ * Non c'e' piu': il gesto e' il tap sul grafico, e sullo schermo non resta
+ * nessun controllo che faccia la stessa cosa. Il gesto lo insegna la guida. */
 
 /* --- la commutazione: 120 ms di dissolvenza ------------------------------ */
 
@@ -1681,4 +1588,75 @@
   .stat__bar {
     transition: inline-size var(--dur-2) var(--ease-out);
   }
+}
+
+/* --- le frecce del periodo ------------------------------------------------ */
+/*
+ * Sta in cima e prima di tutto, e si disegna in **ogni** stato della schermata:
+ * anche su un periodo intermedio senza spese, altrimenti chi ci atterra resta
+ * chiuso li' dentro.
+ *
+ * `grid-column: 1 / -1` come gli altri blocchi: appartiene alla stessa colonna,
+ * non e' una barra sovrapposta. Non copre niente, quindi non e' una
+ * sovrapposizione e non ha bisogno di una fascia riservata.
+ */
+.pnav {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+}
+
+/* **Il bersaglio dichiara le proprie misure su tutti e due gli assi**, e non le
+ * deriva dal glifo. Il glifo e' un `svg` da 20 px: lasciarlo dimensionare
+ * darebbe un bersaglio da 20, cioe' meta' del minimo, e il numero misurato
+ * dipenderebbe da un disegno invece che da una costante nostra. */
+.pnav__arrow {
+  flex: none;
+  display: grid;
+  place-items: center;
+  min-inline-size: var(--tap-min);
+  min-block-size: var(--tap-min);
+  border-radius: var(--radius-2);
+  color: var(--text);
+}
+
+.pnav__arrow svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.pnav__arrow:active {
+  background-color: var(--surface-sunken);
+}
+
+/* Spenta e non nascosta: il limite si **vede**, invece di far sparire un
+ * controllo che un istante prima c'era. Un bersaglio che scompare fa cercare
+ * l'errore nel proprio dito. */
+.pnav__arrow:disabled {
+  color: var(--text-muted);
+  opacity: 0.4;
+}
+
+/* L'etichetta prende lo spazio in mezzo e sta centrata: le due frecce restano
+ * agli estremi, dove il pollice le trova senza guardare. */
+.pnav__label {
+  flex: 1;
+  min-inline-size: 0;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: var(--fs-200);
+  font-weight: var(--fw-semibold);
+  line-height: var(--lh-snug);
+}
+
+/* Sul periodo corrente e' `--text`: e' lo stato in cui si apre la schermata, e
+ * il posto in cui si torna. Gli altri periodi sono una visita, e lo dicono
+ * essendo piu' spenti. */
+.pnav__label[data-corrente] {
+  color: var(--text);
 }

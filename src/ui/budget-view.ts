@@ -792,6 +792,26 @@ export function weekStrip(
       peakIndex = i
     }
   }
+  // **La striscia sparisce a settimana vuota, e l'eccezione ha un argomento suo.**
+  //
+  // Dal 31 agosto vale la regola *"un blocco non scompare perche' i suoi dati
+  // sono vuoti: tiene il titolo e dice cosa manca"*, e le Statistiche ci si sono
+  // adeguate. Qui no, e la distinzione non e' comodita':
+  //
+  // Il precedente che sconsigliava i blocchi a zero — *"otto barre a zero sotto
+  // SETTIMANA PER SETTIMANA e nove occorrenze di `0,00 €`"* — parla di un blocco
+  // che **stampa un importo per riga**. Questa striscia non ne stampa nessuno:
+  // sette colonne con la linea di base e oggi marcato non sono "sette zeri",
+  // sono la settimana che comincia. Il rumore di li' qui non c'e'.
+  //
+  // E cio' che qui manca **e' detto altrove nella stessa schermata**: l'eroe
+  // porta *"Questa settimana · 31 ago – 06 set"* e la riga sotto *"Nessuna spesa
+  // in questo periodo, per ora"*. La Home non tace, quindi non sembra rotta —
+  // che e' esattamente la condizione dell'argomento di quella regola, e qui non
+  // si avvera.
+  //
+  // Il giorno in cui la Home smettesse di dirlo altrove, questa riga cade con
+  // il proprio argomento invece di sopravvivergli.
   if (peakCents <= 0) return null
 
   const sustainableCents = m.sustainablePaceCents

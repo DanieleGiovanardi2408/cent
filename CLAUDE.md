@@ -948,6 +948,25 @@ corso si disegna come uno finito. La forma che torna e' un'altra, e la ragione
 per cui torna e' un'altra: **l'oggetto della cancellazione era la rotaia, non
 l'incompletezza.**
 
+## Una mutazione che non compila non e' una mutazione
+
+Far fallire apposta un test e' la prova che quel test sorveglia qualcosa. Ma la
+prova vale **solo se il test e' girato**: se la mutazione rompe `tsc`, la build si
+ferma prima della suite e cio' che si legge non e' un test rosso — e' il
+compilatore. Il rosso c'e', il significato no.
+
+**Il silenzio di `tsc` non e' un test verde, e il suo rosso non e' un test rosso.**
+
+E' successo due volte nella stessa sessione, tutte e due nella stessa forma:
+togliendo una condizione, la variabile che quella condizione leggeva restava
+inutilizzata e `TS6133` fermava la build. La mutazione va riscritta perche'
+**compili** — `(condizione || true)` invece di cancellare la condizione — cosi'
+il codice mutato arriva davvero al browser.
+
+Corollario operativo: dopo una mutazione, si guarda **quale** riga e' rossa. Se
+il messaggio nomina un file `.ts` e un codice `TS…`, la mutazione va rifatta. Se
+nomina il test e la sua asserzione, allora e' una prova.
+
 ## Dopo una correzione, la verifica si riesegue — non si deduce
 Il posto piu' probabile in cui trovare il prossimo difetto e' **dentro la
 correzione appena fatta**. Una correzione tocca il codice in un punto delicato

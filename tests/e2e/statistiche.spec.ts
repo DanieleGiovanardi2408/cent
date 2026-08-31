@@ -300,14 +300,16 @@ async function svuota(page: Page): Promise<void> {
  * sotto invece di un ciclo infinito.
  */
 async function mostraLeBarre(page: Page): Promise<void> {
-  const daPremere = page.locator('.stats__view[data-vista="ordine"][aria-pressed="false"]')
-  const quante = await daPremere.count()
+  // Il comando a due stati non c'e' piu': si commuta **toccando il grafico**,
+  // che e' il gesto vero. Si tocca ogni ciambella finche' non ne resta nessuna.
+  const ciambelle = page.locator('.stats__viz')
+  const quante = await ciambelle.count()
   for (let i = 0; i < quante; i += 1) {
-    if ((await daPremere.count()) === 0) break
-    await daPremere.first().tap()
+    if ((await ciambelle.count()) === 0) break
+    await ciambelle.first().tap()
   }
   await expect(
-    page.locator('.stats__view[data-vista="quote"][aria-pressed="true"]'),
+    page.locator('.stats__viz'),
     'una sezione di A e\' rimasta in ciambella: le barre che questo test misura non ci sono',
   ).toHaveCount(0)
 }
@@ -1701,7 +1703,7 @@ test('dentro A o tutte le righe hanno la barra o nessuna, e gli importi restano 
   // Niente `mostraLeBarre` qui, e non e' una dimenticanza: due sezioni con una
   // riga ciascuna non hanno nessuna seconda vista da scegliere, quindi non c'e'
   // nessun comando da toccare. Il ramo e' gia' quello che questa meta' misura.
-  await expect(page.locator('.stats__view')).toHaveCount(0)
+  await expect(page.locator('.stats__viz')).toHaveCount(0)
   const vuoto = await conta()
   expect(vuoto.righe, 'la scena a due righe non e\' in pagina').toBe(2)
   expect(vuoto.barre, 'sotto soglia A disegna ancora delle barre').toBe(0)
@@ -2964,7 +2966,10 @@ for (const lingua of [
           // Le due parole del comando: sono le uniche etichette della schermata
           // che **cambiano lunghezza fra le due lingue senza avere dove andare a
           // capo**, e stanno nella colonna che a 320 punti non deve cedere.
-          comandi: [...document.querySelectorAll('.stats__view')].filter(tagliato).map(testo),
+          // Qui c'erano le due parole del comando. Il comando non c'e' piu': cio'
+          // che resta di scritto dall'app nella vista a quote e' il totale nel
+          // buco e la leggenda, che sono gia' misurati qui sotto.
+          comandi: [] as string[],
           // Il totale nel buco: se non ci sta, il buco smette di portare il
           // numero per cui esiste.
           buchi: [...document.querySelectorAll('.stats__donutTotal')].filter(tagliato).map(testo),
@@ -3463,9 +3468,12 @@ test('sotto tre voci non c\'e\' ciambella, e nemmeno il comando', async ({ page 
   ).toHaveCount(2)
   await expect(quotidiane.locator('+ .stats__rows .stat__bar')).toHaveCount(2)
   await expect(quotidiane.locator('+ .stats__viz')).toHaveCount(0)
+  // E il gesto non c'e': sotto la soglia la sezione ha **una vista sola**, quindi
+  // il tap non deve portare da nessuna parte. Si chiede il bersaglio dichiarato,
+  // che e' il modo in cui il gesto si annuncia da quando il comando non c'e' piu'.
   await expect(
-    quotidiane.locator('.stats__view'),
-    'una sezione con una vista sola offre un comando che non porta da nessuna parte',
+    quotidiane.locator('+ .stats__rows[role="button"]'),
+    'una sezione con una vista sola annuncia un gesto che non porta da nessuna parte',
   ).toHaveCount(0)
 
   // E le fisse, che di voci ne hanno tre, la ciambella ce l'hanno: senza questa
@@ -3503,7 +3511,8 @@ test('commutare una sezione non tocca l\'altra', async ({ page }) => {
   const fisse = page.locator('.stats__partHead[data-kind="fixed"]')
   const quotidiane = page.locator('.stats__partHead[data-kind="variable"]')
 
-  await fisse.locator('.stats__view[data-vista="ordine"]').tap()
+  // Si tocca la ciambella delle fisse: e' il gesto, e non c'e' nessun comando.
+  await fisse.locator('+ .stats__viz').tap()
 
   // Le fisse sono passate alle barre: tre righe con la loro barra, nessuna
   // ciambella, e la didascalia della scala — che e' la legenda delle barre e
@@ -3515,9 +3524,9 @@ test('commutare una sezione non tocca l\'altra', async ({ page }) => {
   // Le quotidiane no: sono rimaste dove stavano, ciambella compresa.
   await expect(quotidiane.locator('+ .stats__viz .stats__pie')).toHaveCount(1)
   await expect(quotidiane.locator('.stats__partScale')).toHaveCount(0)
-  await expect(
-    quotidiane.locator('.stats__view[data-vista="quote"]'),
-  ).toHaveAttribute('aria-pressed', 'true')
+  // Commutare una sezione non tocca l'altra: le quotidiane hanno ancora la loro
+  // ciambella, che e' l'asserzione qui sopra, e **non** hanno le barre.
+  await expect(quotidiane.locator('+ .stats__rows .stat__bar')).toHaveCount(0)
 })
 
 /**
@@ -3605,8 +3614,9 @@ test('uscendo e rientrando, le Statistiche si riaprono in ciambella', async ({ p
     { categoria: 'Coffeeshop', cents: 2400 },
   ])
 
-  const quote = page.locator('.stats__view[data-vista="quote"]')
-  await expect(quote).toHaveAttribute('aria-pressed', 'true')
+  // Si apre in ciambella: e' lo stato di partenza, e non c'e' nessun comando a
+  // dichiararlo — lo dice la figura.
+  await expect(page.locator('.stats__pie')).toHaveCount(1)
 
   await mostraLeBarre(page)
   await expect(page.locator('.stat__bar')).toHaveCount(3)
@@ -3616,10 +3626,10 @@ test('uscendo e rientrando, le Statistiche si riaprono in ciambella', async ({ p
   await apriStatistiche(page)
 
   await expect(
-    quote,
+    page.locator('.stats__pie'),
     'le Statistiche si sono riaperte a barre: la vista e\' sopravvissuta all\'uscita',
-  ).toHaveAttribute('aria-pressed', 'true')
-  await expect(page.locator('.stats__pie')).toHaveCount(1)
+  ).toHaveCount(1)
+  await expect(page.locator('.stat__bar')).toHaveCount(0)
 })
 
 /**
@@ -3634,7 +3644,7 @@ test('uscendo e rientrando, le Statistiche si riaprono in ciambella', async ({ p
  * comprende tutte e due, e la legenda e' la meta' che si toccherebbe per sbaglio
  * se l'area fosse la sola ciambella.
  */
-test('il tap sul grafico commuta la vista, e il comando lo dice', async ({ page }) => {
+test('il tap sul grafico commuta la vista, in tutti e due i versi', async ({ page }) => {
   await page.goto('/')
   await chiudiGuida(page)
   await semina(page, [
@@ -3643,21 +3653,24 @@ test('il tap sul grafico commuta la vista, e il comando lo dice', async ({ page 
     { categoria: 'Coffeeshop', cents: 2400 },
   ])
 
-  const quote = page.locator('.stats__view[data-vista="quote"]')
-  const ordine = page.locator('.stats__view[data-vista="ordine"]')
-
+  // **Il gesto e' l'unica strada**, e si prende da dentro la figura: un tap su
+  // una voce della leggenda e' un tap sul grafico.
   await page.locator('.stats__legend .legend').first().tap()
   await expect(page.locator('.stat__bar')).toHaveCount(3)
-  await expect(
-    ordine,
-    'il comando non dice in quale vista si e\' finiti dopo un tap sul grafico',
-  ).toHaveAttribute('aria-pressed', 'true')
-  await expect(quote).toHaveAttribute('aria-pressed', 'false')
+  await expect(page.locator('.stats__pie'), 'la ciambella e\' rimasta').toHaveCount(0)
 
   // E indietro, dallo stesso posto: l'elenco delle barre e' la stessa area.
   await page.locator('.stats__rows[data-vista]').first().tap()
   await expect(page.locator('.stats__pie')).toHaveCount(1)
-  await expect(quote).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.locator('.stat__bar')).toHaveCount(0)
+
+  // **E lo dice**, adesso che non c'e' piu' un comando a dirlo: il nome
+  // accessibile del gesto cambia col verso, cosi' chi non vede la figura sa
+  // dove il tap lo porta.
+  await expect(page.locator('.stats__viz')).toHaveAttribute(
+    'aria-label',
+    new RegExp(dizionario['stats.chart.toRanking'].replace('{name}', '.*')),
+  )
 })
 
 /**
@@ -3811,9 +3824,8 @@ test('la sequenza delle categorie e\' la stessa in ciambella, legenda e barre', 
   ).toEqual(inLegenda)
 
   // 3. Le barre, nell'altra vista. Si commuta col comando, come farebbe chiunque.
-  await page.locator('.stats__partHead[data-kind="variable"] .stats__view[data-vista="ordine"]')
-    .first()
-    .tap()
+  // Si commuta col gesto: il comando non c'e' piu'.
+  await page.locator('.stats__partHead[data-kind="variable"] + .stats__viz').tap()
   const righe = page.locator('.stats__rows[data-vista="ordine"], .stats__rows').last()
   const inBarre = (await righe.locator('.stat__name').allInnerTexts()).map((n) => n.trim())
 
@@ -4159,4 +4171,119 @@ test('una settimana appena cominciata: A resta, e porta il periodo prima', async
   //    riga del confronto. Due sezioni, A e B, come quando A ha le righe.
   await expect(page.locator('.stats__section')).toHaveCount(2)
   await expect(page.locator('.stats__section').last()).toContainText('77,00')
+})
+
+/**
+ * **Le frecce del periodo: si cammina all'indietro, e non oltre i dati.**
+ *
+ * Il 31 agosto le Statistiche sapevano guardare **una sola settimana**, quella
+ * corrente, e il lunedi' si presentavano vuote a chi aveva speso fino a domenica.
+ * La riparazione dello stato vuoto ha tolto lo spavento; queste frecce sono cio'
+ * che serviva davvero — l'uscita che quello stato nomina.
+ */
+test.describe('le frecce del periodo', () => {
+  const scena = async (page: Page): Promise<void> => {
+    await page.goto('/')
+    await chiudiGuida(page)
+    const nomi = await grigliaDiDefault(page)
+    // Due settimane con dati e la corrente vuota: e' la scena di chi apre il
+    // lunedi', ed e' anche la sola in cui "indietro si spegne" e' verificabile
+    // senza dover contare fino a otto.
+    await semina(page, [
+      { categoria: nomi.spesa, cents: 4200, giorniFa: 8 },
+      { categoria: nomi.fuori, cents: 2600, giorniFa: 9 },
+      { categoria: nomi.svago, cents: 1500, giorniFa: 15 },
+    ])
+    await apriStatistiche(page)
+  }
+
+  test('sulla settimana corrente avanti e spenta, e l\'etichetta lo dice', async ({ page }) => {
+    await scena(page)
+    const frecce = page.locator('.pnav__arrow')
+    await expect(frecce).toHaveCount(2)
+    // Non si naviga nel futuro: una settimana che non e' ancora successa non ha
+    // uno stato vuoto, ha un non-senso.
+    await expect(frecce.last()).toBeDisabled()
+    await expect(frecce.first()).toBeEnabled()
+    await expect(page.locator('.pnav__label')).toHaveText(dizionario['period.weekly'])
+  })
+
+  test('indietro cambia il periodo, e i totali sono quelli di quelle date', async ({ page }) => {
+    await scena(page)
+    await page.locator('.pnav__arrow').first().tap()
+
+    // L'etichetta non e' piu' "Questa settimana", ed e' un intervallo.
+    await expect(page.locator('.pnav__label')).not.toHaveText(dizionario['period.weekly'])
+    // I 68,00 € della settimana scorsa: 42 + 26. Il terzo (15,00 €) sta due
+    // settimane indietro e **non** deve entrare — e' la premessa che rende il
+    // numero una prova invece di una somma qualunque.
+    await expect(page.locator('.stats__hero')).toHaveText(/68,00/)
+    await expect(page.locator('.pnav__arrow').last()).toBeEnabled()
+  })
+
+  test('l\'etichetta usa lo stesso formato che stampa il confronto sotto', async ({ page }) => {
+    // Non un secondo formato per la stessa cosa: chi legge "24–30 ago" in cima
+    // deve ritrovare quella riga identica in "Settimana per settimana".
+    await scena(page)
+    await page.locator('.pnav__arrow').first().tap()
+    const inCima = (await page.locator('.pnav__label').innerText()).trim()
+    const nelConfronto = await page.locator('.period__label, .stats__section .stat__name').allInnerTexts()
+    expect(
+      nelConfronto.map((x) => x.trim()),
+      `"${inCima}" non compare fra le righe del confronto: sono due formati`,
+    ).toContain(inCima)
+  })
+
+  test('indietro si spegne alla settimana della prima spesa', async ({ page }) => {
+    await scena(page)
+    const indietro = page.locator('.pnav__arrow').first()
+    // La prima spesa e' 15 giorni fa: due passi indietro e si e' arrivati.
+    await indietro.tap()
+    await expect(indietro).toBeEnabled()
+    await indietro.tap()
+    await expect(
+      indietro,
+      'si puo\' camminare oltre la prima spesa: quelle settimane sono rumore',
+    ).toBeDisabled()
+  })
+
+  test('uscendo e rientrando si riparte dalla settimana corrente', async ({ page }) => {
+    await scena(page)
+    await page.locator('.pnav__arrow').first().tap()
+    await expect(page.locator('.pnav__label')).not.toHaveText(dizionario['period.weekly'])
+
+    await page.getByRole('button', { name: /^Home$/ }).click()
+    await expect(page.locator('.stats')).toHaveCount(0)
+    await apriStatistiche(page)
+
+    await expect(
+      page.locator('.pnav__label'),
+      'la settimana guardata e\' sopravvissuta all\'uscita: lo stato doveva essere effimero',
+    ).toHaveText(dizionario['period.weekly'])
+  })
+
+  test('le frecce ci sono anche su un periodo senza spese, e non ci si resta chiusi', async ({
+    page,
+  }) => {
+    // **Il caso che sarebbe stato un vicolo cieco**: se le frecce vivessero
+    // dentro il ramo con le righe, chi atterra su una settimana vuota resterebbe
+    // li' senza il controllo che lo riporta indietro.
+    await scena(page)
+    await expect(page.locator('.stats__emptyText')).toHaveCount(1)
+    await expect(page.locator('.pnav__arrow')).toHaveCount(2)
+    await page.locator('.pnav__arrow').first().tap()
+    await expect(page.locator('.stats__hero')).toHaveText(/68,00/)
+  })
+
+  test('ogni freccia e\' 44x44, e non li deriva dal glifo', async ({ page }) => {
+    await scena(page)
+    const misure = await page.locator('.pnav__arrow').evaluateAll((nodi) =>
+      nodi.map((n) => {
+        const r = n.getBoundingClientRect()
+        return { w: Math.round(r.width * 100) / 100, h: Math.round(r.height * 100) / 100 }
+      }),
+    )
+    console.log(`\n| frecce | ${misure.map((m) => `${m.w}x${m.h}`).join(' · ')} |\n`)
+    expect(misure.filter((m) => Math.min(m.w, m.h) < 44)).toEqual([])
+  })
 })

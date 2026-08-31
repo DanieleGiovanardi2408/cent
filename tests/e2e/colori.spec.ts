@@ -1009,8 +1009,10 @@ test('la barra divisa: i due segmenti si vedono, e la legenda porta i loro color
       leggi('.stats__donutTotal', 4.5),
       leggi('.legend__name', 4.5),
       leggi('.legend__value', 4.5),
-      leggi('.stats__view[aria-pressed="true"]', 4.5),
-      leggi('.stats__view[aria-pressed="false"]', 4.5),
+      // Qui c'erano le due parole del comando a due stati. Il comando non c'e'
+      // piu' — si tocca il grafico — e con lui se ne sono andate le uniche due
+      // stringhe della vista `quote` che vivevano su una superficie diversa da
+      // `--bg`. Cio' che resta di scritto e' misurato dalle tre righe qui sopra.
     ]
   })
   for (const t of testi) {
@@ -1028,7 +1030,7 @@ test('la barra divisa: i due segmenti si vedono, e la legenda porta i loro color
   //    farebbe chiunque voglia la classifica. Senza questa coda la didascalia
   //    resterebbe fuori da ogni misura di contrasto — che e' esattamente il buco
   //    che il punto 5 e' venuto a chiudere, riaperto da una vista nuova.
-  await page.locator('.stats__view[data-vista="ordine"]').first().tap()
+  await page.locator('.stats__viz').first().tap()
   const scala = await page.evaluate(() => {
     const el = document.querySelector('.stats__partScale')
     if (el === null) throw new Error('nessuna didascalia della scala nella vista a barre')
