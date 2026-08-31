@@ -25,16 +25,16 @@ sa gia', e per questo non puo' invecchiare. I giudizi — cosa e' in volo, cosa
 aspetta una persona — stanno sotto, scritti a mano e timbrati con lo SHA a cui
 sono stati rivisti.
 
-- **Ultimo commit**: `0e8b381` — feat: la scala 0/1/2/3+, il bottone al suo posto, e il finto che somiglia al vero
-- **Data**: 31/08/2026 16:49
+- **Ultimo commit**: `53740b8` — feat: una lingua sola per la Home, le Fisse piu' leggere, e la build a schermo
+- **Data**: 31/08/2026 18:37
 - **Ramo**: `main`
 - **Pushato**: **no: 1 commit non pushati su `origin/main`**
 - **Albero di lavoro**: pulito
 
 - **Test unitari**: 755 in 25 file, tutti verdi
-- **Test e2e dichiarati**: 410 in 14 file, su 4 progetti (iphone-se, iphone-14, landscape, dark)
-- **Test e2e eseguiti**: 392 passati, 18 saltati, in 2.7 minuti. I saltati sono condizionali (ADR 013): solo un'esecuzione li vede.
-- **Bundle iniziale**: 58.8 KB gzip su 60.0 KB (1.2 KB di margine)
+- **Test e2e dichiarati**: 413 in 14 file, su 4 progetti (iphone-se, iphone-14, landscape, dark)
+- **Test e2e eseguiti**: 395 passati, 18 saltati, in 2.7 minuti. I saltati sono condizionali (ADR 013): solo un'esecuzione li vede.
+- **Bundle iniziale**: 59.1 KB gzip su 60.0 KB (0.9 KB di margine)
 
 - **Schema del database**: 5. La scala delle migrazioni:
   - **1** — Schema iniziale: expenses, categories, recurringRules, budgets, settings
@@ -52,7 +52,7 @@ sono stati rivisti.
 ## In volo adesso
 
 <!-- JUDGMENT rivisto=2d9f75e -->
-> Rivisto a `2d9f75e`, 19 commit fa. **Da riguardare.**
+> Rivisto a `2d9f75e`, 21 commit fa. **Da riguardare.**
 
 **Fase 6 sul ramo `fase-6-wip`, tredici commit sopra `origin/main`.** Il ramo e'
 spinto a ogni rientro.
