@@ -44,6 +44,8 @@ import { probe, report } from './probe'
 import type { Target } from './probe'
 import type { Page } from '@playwright/test'
 import { STEPS } from '../../src/ui/guide-steps'
+import { it as dizionario } from '../../src/ui/i18n/it'
+import { en as inglese } from '../../src/ui/i18n/en'
 
 /**
  * L'atteso della tabella **si deriva**, non si ricopia.
@@ -116,7 +118,7 @@ async function celle(page: Page): Promise<readonly { kind: string; text: string;
   )
 }
 
-test('la guida si mostra al primo avvio, ha due schede, e chiuderla e\' definitivo', async ({
+test('la guida si mostra al primo avvio, ha tre schede, e chiuderla e\' definitivo', async ({
   page,
 }, testInfo) => {
   const viewport = `${testInfo.project.use.viewport?.width}x${testInfo.project.use.viewport?.height}`
@@ -131,7 +133,7 @@ test('la guida si mostra al primo avvio, ha due schede, e chiuderla e\' definiti
   //     darlo per scontato.
   await expect(page.locator('.guide')).toBeVisible()
   await expect(page.locator('.app')).toHaveAttribute('aria-hidden', 'true')
-  await expect(page.locator('.guide__step')).toHaveText('Passo 1 di 2')
+  await expect(page.locator('.guide__step')).toHaveText('Passo 1 di 3')
   await expect(page.locator('.guide__title')).toHaveText('L’importo si riempie da destra')
   await expect(page.locator('.guide__text')).toHaveText('Per 23 € digita 2 3 0 0.')
   await check('guida, scheda 1 (ramo animato)', page)
@@ -146,11 +148,12 @@ test('la guida si mostra al primo avvio, ha due schede, e chiuderla e\' definiti
   //     parole diverse.
   await expect(page.locator('.guide__skip')).toBeVisible()
   await page.locator('.guide__next').tap()
-  await expect(page.locator('.guide__step')).toHaveText('Passo 2 di 2')
+  await expect(page.locator('.guide__step')).toHaveText('Passo 2 di 3')
   await expect(page.locator('.guide__title')).toHaveText('Toccare una categoria salva la spesa')
   await expect(page.locator('.guide__text')).toContainText('non c’è un tasto Salva')
-  await expect(page.locator('.guide__skip')).toHaveCount(0)
-  await expect(page.locator('.guide__next')).toHaveText('Inizia')
+  // "Salta" c'e' ancora: la scheda 2 non e' piu' l'ultima.
+  await expect(page.locator('.guide__skip')).toBeVisible()
+  await expect(page.locator('.guide__next')).toHaveText('Avanti')
 
   // I chip della scheda 2 sono le categorie **vere**, e non sono bersagli: se
   // fossero `.cat` risponderebbero al selettore con cui `install.spec.ts` conta
@@ -159,6 +162,23 @@ test('la guida si mostra al primo avvio, ha due schede, e chiuderla e\' definiti
   await expect(page.locator('.mock__cat').first()).toContainText('Spesa')
   await expect(page.locator('.guide .cat')).toHaveCount(0)
   await check('guida, scheda 2', page)
+
+  // --- Scheda 3: **il grafico che si tocca**, che e' la sola strada che insegna
+  //     quel gesto da quando il comando a due stati non c'e' piu'.
+  await page.locator('.guide__next').tap()
+  await expect(page.locator('.guide__step')).toHaveText('Passo 3 di 3')
+  await expect(page.locator('.guide__title')).toHaveText(dizionario['guide.chart.title'])
+  await expect(page.locator('.guide__skip')).toHaveCount(0)
+  await expect(page.locator('.guide__next')).toHaveText('Inizia')
+
+  // **La ciambella finta e' quella vera**: stessa geometria e i colori delle
+  // categorie dell'utente, non un disegno a parte. Se la ciambella cambiasse
+  // forma, questa cambierebbe con lei — e' la stessa regola di `.mock__emoji`.
+  const disegnata = page.locator('.mock__pie circle')
+  await expect(disegnata).toHaveCount(4)
+  const tinteGuida = await disegnata.evaluateAll((n) => n.map((c) => getComputedStyle(c).stroke))
+  expect(new Set(tinteGuida).size, 'le fette della guida non hanno quattro colori distinti').toBe(4)
+  await check('guida, scheda 3', page)
 
   // --- "Inizia" chiude, e la chiusura e' uno **stato**: niente guida al
   //     ricaricamento. E' il punto di ADR 009 — la guida non e' agganciata
@@ -178,7 +198,7 @@ test('la guida si mostra al primo avvio, ha due schede, e chiuderla e\' definiti
   await expect(page.locator('.prefs')).toBeVisible()
   await page.locator('.prefs__action', { hasText: 'Rivedi la guida' }).tap()
   await expect(page.locator('.guide')).toBeVisible()
-  await expect(page.locator('.guide__step')).toHaveText('Passo 1 di 2')
+  await expect(page.locator('.guide__step')).toHaveText('Passo 1 di 3')
   await expect.poll(() => guidaChiusaSuDisco(page)).toBe(false)
 
   console.log(`\n${rows.join('\n')}\n`)
@@ -418,7 +438,7 @@ test.describe('in inglese', () => {
   test('gli importi della guida parlano la lingua di chi guarda', async ({ page }) => {
     await page.goto('./')
     await expect(page.locator('.guide')).toBeVisible()
-    await expect(page.locator('.guide__step')).toHaveText('Step 1 of 2')
+    await expect(page.locator('.guide__step')).toHaveText('Step 1 of 3')
     await expect(page.locator('.guide__title')).toHaveText('Amounts fill in from the right')
     await expect(page.locator('.guide__text')).toHaveText('For €23, type 2 3 0 0.')
     await expect(page.locator('.guide__skip')).toHaveText('Skip')
@@ -434,6 +454,10 @@ test.describe('in inglese', () => {
     await page.locator('.guide__next').tap()
     await expect(page.locator('.guide__title')).toHaveText('Tapping a category saves the expense')
     await expect(page.locator('.guide__text')).toContainText('no Save button')
+    await expect(page.locator('.guide__next')).toHaveText('Next')
+
+    await page.locator('.guide__next').tap()
+    await expect(page.locator('.guide__title')).toHaveText(inglese['guide.chart.title'])
     await expect(page.locator('.guide__next')).toHaveText('Start')
   })
 

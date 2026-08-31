@@ -487,7 +487,7 @@ export const it = {
   //
   // Le stringhe inglesi sono l'originale (vedi en.ts): qui c'e' la traduzione.
   'guide.label': 'Come si usa Cent',
-  'guide.step': 'Passo {index} di 2',
+  'guide.step': 'Passo {index} di 3',
   'guide.skip': 'Salta',
   'guide.next': 'Avanti',
   'guide.start': 'Inizia',
@@ -498,6 +498,10 @@ export const it = {
   // "salva la spesa", non "salva la categoria": in Impostazioni le categorie si
   // salvano davvero, quindi la lettura sbagliata e' disponibile e va chiusa
   // nominando l'oggetto.
+  /* Vedi en.ts. */
+  'guide.chart.title': 'Tocca un grafico per vedere gli importi',
+  'guide.chart.text': 'Le quote a colpo d\u2019occhio, le cifre esatte al tocco. Tocca di nuovo per tornare.',
+
   'guide.save.title': 'Toccare una categoria salva la spesa',
   'guide.save.text':
     'È quella la conferma: non c’è un tasto Salva. Categoria sbagliata? Annulla, subito dopo.',

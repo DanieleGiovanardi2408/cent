@@ -210,11 +210,11 @@ const PIE_MIN_SLICES = 3
  * posto. Non ci sono archi scritti a mano (`A`), nessun seno e nessun coseno, e
  * il taglio fra due fette esce **radiale** per costruzione.
  */
-const PIE_BOX = 120
-const PIE_RING = 20
-const PIE_GAP = 2
-const PIE_R = (PIE_BOX - PIE_RING) / 2
-const PIE_C = 2 * Math.PI * PIE_R
+export const PIE_BOX = 120
+export const PIE_RING = 20
+export const PIE_GAP = 2
+export const PIE_R = (PIE_BOX - PIE_RING) / 2
+export const PIE_C = 2 * Math.PI * PIE_R
 
 /**
  * Una fetta, gia' in unita' di tratteggio: **niente da decidere in JSX**.

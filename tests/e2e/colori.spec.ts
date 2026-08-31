@@ -643,6 +643,10 @@ test('le otto categorie: etichetta AA, e i pixel confermano l\'aritmetica', asyn
   // usare `chiudiGuida`, e si rifa' cio' che quella garantisce: la sparizione
   // **e** la scrittura sul disco, perche' un `reload()` che precedesse la
   // scrittura rifarebbe comparire la guida a meta' scena.
+  // **Due tap, non uno**: da quando la guida ha tre schede, il bottone della
+  // seconda dice "Avanti" e non "Inizia". Si cammina fino all'ultima e si chiude
+  // di li', invece di dare per scontato quante schede ci siano.
+  await page.locator('.guide__next').tap()
   await page.locator('.guide__next').tap()
   await expect(page.locator('.guide')).toHaveCount(0)
   await expect

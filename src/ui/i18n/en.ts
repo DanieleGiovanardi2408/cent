@@ -341,7 +341,7 @@ export const en: Record<keyof typeof it, string> = {
   // l'unico punto dell'app in cui l'italiano suonava meglio dell'inglese, cioe'
   // il segno che l'originale non era l'originale.
   'guide.label': 'How Cent works',
-  'guide.step': 'Step {index} of 2',
+  'guide.step': 'Step {index} of 3',
   'guide.skip': 'Skip',
   'guide.next': 'Next',
   'guide.start': 'Start',
@@ -352,6 +352,12 @@ export const en: Record<keyof typeof it, string> = {
   'guide.amount.text': 'For €23, type 2 3 0 0.',
   // "saves the expense", non "saves it": senza l'oggetto, "it" si legge come la
   // categoria — e in Settings le categorie si salvano per davvero.
+  /* La terza scheda: il gesto sul grafico. Il titolo dice **cosa si fa**, il
+   * testo **cosa si ottiene** — le due domande a cui il grafico risponde, non i
+   * nomi delle due forme. */
+  'guide.chart.title': 'Tap a chart to see the amounts',
+  'guide.chart.text': 'Shares at a glance, exact figures on tap. Tap again to go back.',
+
   'guide.save.title': 'Tapping a category saves the expense',
   'guide.save.text':
     'That’s the confirmation — no Save button. Wrong one? Undo, right after.',
