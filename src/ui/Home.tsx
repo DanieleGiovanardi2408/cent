@@ -503,7 +503,20 @@ function WeekStrip({ week, day }: { readonly week: Week; readonly day: IsoDate }
                 <span
                   class="week__peak"
                   data-edge={index === 0 ? 'start' : index === 6 ? 'end' : undefined}
-                  style={`--h:${bar.fraction}`}
+                  /* **`--h` e' il piu' alto fra la colonna e la linea**, non la
+                     colonna.
+
+                     L'etichetta si posiziona **sopra** cio' che rappresenta;
+                     quando la linea del sostenibile sta piu' in alto della
+                     colonna — cioe' ogni volta che si e' spesa meno del passo —
+                     l'etichetta finiva **dentro la linea**. Misurato con una
+                     giornata a 31,00 € contro 35,71 €: etichetta 451,25–467,50,
+                     linea 459,70–460,70. Da fuori si legge come una barra
+                     tagliata, ed e' cosi' che e' stata segnalata.
+
+                     La regola e' che l'etichetta sta sopra **quello che c'e'**,
+                     e in quella colonna c'e' anche la linea. */
+                  style={`--h:${Math.max(bar.fraction, week.sustainable?.fraction ?? 0)}`}
                 >
                   {money(bar.cents)}
                 </span>

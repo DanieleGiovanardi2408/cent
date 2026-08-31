@@ -567,8 +567,16 @@
    * motivo delle `--line-*` qui sopra: `lh` risponderebbe al font di `.week`,
    * non a quello dei figli. */
   --day-h: calc(var(--fs-100) * var(--lh-snug));
-  /* Quanto stacca l'etichetta del picco dalla cima della sua colonna. */
-  --peak-gap: 2px;
+  /* **Quanto stacca l'etichetta da cio' che le sta sotto**, che dal 31 agosto e'
+   * il piu' alto fra la colonna e la linea del sostenibile (vedi `Home.tsx`).
+   *
+   * Da 2 px a 4: sopra una colonna 2 bastavano — l'etichetta e la cima della
+   * barra sono due masse piene e il distacco si vede. Sopra la **linea** no:
+   * misurato, restava 1 px fra il tratteggio e la base del testo, cioe' una
+   * separazione che a schermo non si legge come tale. 4 px e' il primo gradino
+   * della scala di spaziatura, ed e' il minimo che stacca un testo da un tratto
+   * di 1 px. */
+  --peak-gap: 4px;
 
   display: block;
   padding-block: var(--sp-3) var(--sp-4);
@@ -861,14 +869,28 @@
   position: absolute;
   inset-inline: 0;
   inset-block-end: calc(
-    var(--day-h) + var(--sp-1) + var(--at) * var(--strip-h) - 2px
+    var(--day-h) + var(--sp-1) + var(--at) * var(--strip-h)
   );
-  block-size: 4px;
-  background-image: linear-gradient(
-    to bottom,
-    var(--bg) 0 1px,
-    var(--text-muted) 1px 3px,
-    var(--bg) 3px 4px
+  /* **Tratteggiata e sottile, e prima era un tratto pieno da 2 px.**
+   *
+   * Una linea di riferimento **non e' un dato**: deve stare sotto le barre nella
+   * gerarchia visiva, e qui era il tratto piu' pesante del grafico. Una linea
+   * continua e spessa si legge come un **bordo**, cioe' come qualcosa che
+   * taglia; una tratteggiata si legge come un riferimento.
+   *
+   * Da 4 px di scatola (1 di fondo, 2 di tratto, 1 di fondo) a 1 px di tratto,
+   * e il colore scende da `--text-muted` a `--line-strong`, che e' il token dei
+   * bordi che contano — meno di un testo, piu' di un filo.
+   *
+   * Il tratteggio e' un `repeating-linear-gradient` e non un `border-top:
+   * dashed`: il bordo tratteggiato del browser non dichiara il passo, e a
+   * larghezze diverse produce trattini di lunghezze diverse. Qui il passo e' 6 px
+   * — 3 di tratto e 3 di vuoto — e resta lo stesso su ogni viewport. */
+  block-size: 1px;
+  background-image: repeating-linear-gradient(
+    to right,
+    var(--line-strong) 0 3px,
+    transparent 3px 6px
   );
 }
 

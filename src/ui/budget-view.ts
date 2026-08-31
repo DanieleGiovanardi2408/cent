@@ -932,8 +932,28 @@ export function weekStrip(
   // vuota, quindi `scaleCents` puo' esserlo: la divisione la copre gia'
   // `columnShare`, che con `scale <= 0` restituisce 0 invece di dividere. Sette
   // colonne alla base, che e' cio' che una settimana senza spese vale.
-  const scaleCents =
-    sustainableCents === null ? peakCents : Math.max(peakCents, sustainableCents)
+  // **Il tetto della scala non e' il piu' alto dei due: e' il piu' alto piu' un
+  // margine.**
+  //
+  // Senza, la colonna piu' alta riempie la cella per costruzione, e sopra non
+  // resta niente: l'etichetta dell'importo — che sta **sopra** la colonna — deve
+  // uscire dalla striscia, e li' incontra la linea del sostenibile. Misurato il
+  // 31 agosto con una giornata a 31,00 € e la linea a 35,71 €: l'etichetta
+  // occupava 442,56–458,81 e la linea 448,69–452,69, cioe' **la linea passava
+  // dentro il testo** per tutti e 4 i suoi pixel. Da fuori si legge come una
+  // barra tagliata, e infatti e' cosi' che e' stata segnalata.
+  //
+  // Il margine e' del 15%: abbastanza perche' l'etichetta ci stia (16,25 px di
+  // riga su una striscia di 80 fanno il 20%, ma l'etichetta e' **sopra** la
+  // colonna e la colonna piu' alta arriva all'87%), e poco abbastanza da non
+  // schiacciare le colonne basse. Non e' un numero tondo scelto a occhio: e'
+  // quello che tiene l'etichetta fuori dalla linea nel caso peggiore, che e'
+  // **la colonna piu' alta uguale al sostenibile** — li' etichetta e linea
+  // vogliono lo stesso posto.
+  const HEADROOM = 1.15
+  const scaleCents = Math.round(
+    (sustainableCents === null ? peakCents : Math.max(peakCents, sustainableCents)) * HEADROOM,
+  )
 
   const days = cents.map((value, index) => {
     const date = addDays(start, index)

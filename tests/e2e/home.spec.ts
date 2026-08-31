@@ -1944,3 +1944,111 @@ test('la riga che spiega i due tap tace dopo tre spese, il titolo no', async ({ 
   // E l'istruzione non c'e' piu'.
   await expect(page.locator('.blank__text')).toHaveCount(0)
 })
+
+/**
+ * **La linea del sostenibile e' un riferimento, non un dato.**
+ *
+ * Sul telefono, con ~31,00 € spesi contro una linea a 35,71 €, la barra sembrava
+ * **tagliata dalla linea**. Misurato: a collidere non era la barra — che finiva
+ * 8,8 px sotto — ma **l'etichetta dell'importo**, che si posiziona sopra la
+ * colonna e finiva dentro il tratto (etichetta 442,56–458,81, linea
+ * 448,69–452,69, cioe' tutti e quattro i suoi pixel dentro il testo).
+ *
+ * Tre riparazioni, e questo test sorveglia le prime due:
+ *
+ * 1. l'etichetta sta sopra **il piu' alto fra la colonna e la linea**, non sopra
+ *    la colonna;
+ * 2. il tetto della scala e' il piu' alto **piu' un margine**, cosi' sopra la
+ *    colonna piu' alta resta sempre aria;
+ * 3. la linea e' **tratteggiata e sottile** — una linea continua e spessa si
+ *    legge come un bordo, cioe' come qualcosa che taglia.
+ */
+test.describe('la linea del sostenibile', () => {
+  const scena = async (page: Page, oggiCents: number): Promise<void> => {
+    await page.clock.install({ time: new Date('2026-09-02T14:00:00+02:00') })
+    await page.goto('./')
+    await expect(page.locator('.budget')).toBeEnabled()
+    await chiudiGuida(page)
+    await seedOn(page, [['2026-09-02', oggiCents]])
+    await page.evaluate(async () => {
+      const db: IDBDatabase = await new Promise((res, rej) => {
+        const r = indexedDB.open('cent')
+        r.onsuccess = () => res(r.result)
+        r.onerror = () => rej(r.error)
+      })
+      await new Promise<void>((res, rej) => {
+        const tx = db.transaction('budgets', 'readwrite')
+        tx.objectStore('budgets').put({
+          id: 'b1',
+          createdAt: 1,
+          updatedAt: 1,
+          period: 'weekly',
+          amountCents: 25_000,
+          effectiveFrom: '2026-01-01',
+        })
+        tx.oncomplete = () => res()
+        tx.onerror = () => rej(tx.error)
+      })
+      db.close()
+    })
+    await page.reload()
+    await expect(page.locator('.week__line')).toBeVisible()
+  }
+
+  const geometria = (page: Page) =>
+    page.evaluate(() => {
+      const box = (s: string): { top: number; bottom: number; w: number } | null => {
+        const e = document.querySelector(s)
+        if (e === null) return null
+        const r = e.getBoundingClientRect()
+        const n = (v: number): number => Math.round(v * 100) / 100
+        return { top: n(r.top), bottom: n(r.bottom), w: n(r.width) }
+      }
+      const cols = document.querySelector('.week__cols')!.getBoundingClientRect()
+      return { linea: box('.week__line'), peak: box('.week__peak'), colsW: Math.round(cols.width * 100) / 100 }
+    })
+
+  // 25.000 su 7 giorni = 3.571 al giorno. Il 90% e' 3.214.
+  test('con la colonna al 90% della linea, etichetta e linea non si sovrappongono', async ({
+    page,
+  }) => {
+    await scena(page, 3214)
+    const g = await geometria(page)
+    const sovrapposizione =
+      Math.min(g.peak!.bottom, g.linea!.bottom) - Math.max(g.peak!.top, g.linea!.top)
+    console.log(
+      `\n| etichetta ${g.peak!.top}–${g.peak!.bottom} | linea ${g.linea!.top}–${g.linea!.bottom} | ` +
+        `${sovrapposizione > 0 ? `sovrapposte ${sovrapposizione}` : `separate ${-sovrapposizione}`}px |\n`,
+    )
+    expect(
+      sovrapposizione,
+      'la linea passa dentro l\'etichetta dell\'importo: da fuori sembra una barra tagliata',
+    ).toBeLessThan(0)
+  })
+
+  // Il 120% e' 4.285: la colonna supera la linea, ed e' il caso informativo.
+  test('con la colonna al 120% la linea resta visibile su tutta la larghezza', async ({ page }) => {
+    await scena(page, 4285)
+    const g = await geometria(page)
+    console.log(`\n| linea larga ${g.linea!.w} su ${g.colsW} di colonne |\n`)
+
+    // **Il superamento si legge come un superamento.** La linea attraversa la
+    // colonna e non le si ferma davanti: se qualcuno la disegnasse prima delle
+    // barre, il caso in cui questa linea dice qualcosa sarebbe l'unico in cui
+    // sparisce. E' la ragione per cui non ha nessun `z-index` — l'ordine del DOM
+    // basta gia'.
+    expect(
+      g.linea!.w,
+      'la linea non copre tutta la striscia: sotto la colonna che la supera si interrompe',
+    ).toBeCloseTo(g.colsW, 0)
+
+    // E la colonna che supera **non riempie la cella**: sopra di lei resta l'aria
+    // in cui sta l'etichetta.
+    const cima = await page.evaluate(() => {
+      const cella = document.querySelectorAll('.week__cell')[2]!.getBoundingClientRect()
+      const ink = document.querySelectorAll('.week__ink')[2]!.getBoundingClientRect()
+      return Math.round((ink.top - cella.top) * 100) / 100
+    })
+    expect(cima, 'la colonna piu\' alta arriva a filo: l\'etichetta non ha dove stare').toBeGreaterThan(4)
+  })
+})

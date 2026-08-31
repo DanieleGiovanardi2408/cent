@@ -800,8 +800,12 @@ describe('la striscia dei sette giorni', () => {
   it('senza budget la scala e il giorno piu alto, e quella colonna e piena', () => {
     const week = striscia({ today: MERCOLEDI, spese: [spesa(LUNEDI, 1000), spesa(MARTEDI, 4000)] })
     expect(week?.sustainable).toBeNull()
-    expect(week?.scaleCents).toBe(4000)
-    expect(week?.days[1]?.fraction).toBe(1)
+    expect(week?.scaleCents).toBe(4600)
+    // **Non piu' 1**: dal 31 agosto il tetto della scala e' il piu' alto piu' un
+    // margine del 15%, cosi' sopra la colonna piu' alta resta aria e l'etichetta
+    // dell'importo ha dove stare. L'argomento sta su `HEADROOM`, in
+    // `budget-view.ts`, col caso misurato che l'ha prodotto.
+    expect(week?.days[1]?.fraction).toBeCloseTo(alto(1 / 1.15), 2)
   })
 
   /**
@@ -817,10 +821,10 @@ describe('la striscia dei sette giorni', () => {
       budgetCents: 20_000, // 2857 al giorno
       spese: [spesa(LUNEDI, 200), spesa(MARTEDI, 300)],
     })
-    expect(week?.scaleCents).toBe(2857)
+    expect(week?.scaleCents).toBe(3286)
     expect(week?.sustainable?.cents).toBe(2857)
-    expect(week?.sustainable?.fraction).toBe(1)
-    expect(week?.days[1]?.fraction).toBeCloseTo(alto(300 / 2857), 12)
+    expect(week?.sustainable?.fraction).toBeCloseTo(alto(1 / 1.15), 2)
+    expect(week?.days[1]?.fraction).toBeCloseTo(alto(300 / (week?.scaleCents ?? 1)), 12)
     // Nessuna colonna arriva in cima: e' il fatto, e si vede.
     expect(week?.days.every((d) => d.fraction < 1)).toBe(true)
   })
@@ -836,10 +840,10 @@ describe('la striscia dei sette giorni', () => {
       budgetCents: 20_000, // 2857 al giorno
       spese: [spesa(SABATO, 28_570), spesa(LUNEDI, 2857)],
     })
-    expect(week?.scaleCents).toBe(28_570)
-    expect(week?.sustainable?.fraction).toBeCloseTo(alto(0.1), 12)
+    expect(week?.scaleCents).toBe(32_856)
+    expect(week?.sustainable?.fraction).toBeCloseTo(alto(2857 / (week?.scaleCents ?? 1)), 12)
     expect(week?.sustainable?.fraction).toBeGreaterThan(PAVIMENTO)
-    expect(week?.days[5]?.fraction).toBe(1)
+    expect(week?.days[5]?.fraction).toBeCloseTo(alto(1 / 1.15), 2)
   })
 
   /**
@@ -855,7 +859,7 @@ describe('la striscia dei sette giorni', () => {
       budgetCents: 20_000, // 2857 al giorno
       spese: [spesa(MARTEDI, 2857), spesa(SABATO, 5000)],
     })
-    expect(week?.scaleCents).toBe(5000)
+    expect(week?.scaleCents).toBe(5750)
     expect(week?.days[1]?.fraction).toBe(week?.sustainable?.fraction)
     // E un centesimo sopra il sostenibile sta sopra la linea, non a pari.
     const sopra = striscia({
@@ -881,7 +885,7 @@ describe('la striscia dei sette giorni', () => {
       spese: [spesa(LUNEDI, 1), spesa(SABATO, 90_000)],
     })
     expect(week?.days[0]?.fraction).toBeGreaterThanOrEqual(PAVIMENTO)
-    expect(week?.days[0]?.fraction).toBeCloseTo(alto(1 / 90_000), 12)
+    expect(week?.days[0]?.fraction).toBeCloseTo(alto(1 / (week?.scaleCents ?? 1)), 12)
   })
 
   it('un giorno senza spese non prende inchiostro: zero resta zero', () => {
@@ -900,12 +904,22 @@ describe('la striscia dei sette giorni', () => {
     expect(due).toBeGreaterThan(uno)
     // La differenza e' esatta: la traslazione e' la stessa per tutte, la scala
     // e' quella della striscia.
-    expect(due - uno).toBeCloseTo((1 - PAVIMENTO) * (1 / 90_000), 15)
+    // Un centesimo **sulla scala**, che dal 31 agosto porta il margine del 15%:
+    // scritto come divisione e non come numero, cosi' resta vero se il margine
+    // cambia — cio' che si prova qui e' che la traslazione sia la stessa per
+    // tutte, non quanto valga il tetto.
+    expect(due - uno).toBeCloseTo((1 - PAVIMENTO) * (1 / (week?.scaleCents ?? 1)), 15)
   })
 
-  it('la colonna piu alta arriva esattamente in cima, non a 0,999', () => {
+  it('la colonna piu alta lascia aria sopra di se, e la quota e esatta', () => {
+    // **Non arriva piu' in cima**, e non e' un difetto di arrotondamento: dal 31
+    // agosto il tetto e' il piu' alto **piu' il 15%**, cosi' l'etichetta
+    // dell'importo ha dove stare senza finire dentro la linea del sostenibile.
+    // La quota resta esatta — e' l'importo sulla scala — e si scrive cosi'
+    // invece che con un numero, che sarebbe il margine ricopiato.
     const week = striscia({ today: DOMENICA, spese: [spesa(LUNEDI, 3), spesa(SABATO, 7)] })
-    expect(week?.days[5]?.fraction).toBe(1)
+    expect(week?.days[5]?.fraction).toBeCloseTo(alto(7 / (week?.scaleCents ?? 1)), 12)
+    expect(week?.days[5]?.fraction, 'la colonna piu\' alta riempie: niente aria per l\'etichetta').toBeLessThan(1)
   })
 
   /**
@@ -917,7 +931,7 @@ describe('la striscia dei sette giorni', () => {
     const week = striscia({ today: MERCOLEDI, budgetCents: 5, spese: [spesa(LUNEDI, 1000)] })
     expect(week?.sustainable?.cents).toBe(0)
     expect(week?.sustainable?.fraction).toBe(0)
-    expect(week?.scaleCents).toBe(1000)
+    expect(week?.scaleCents).toBe(1150)
   })
 
   /**
@@ -1061,7 +1075,7 @@ describe('la striscia dei sette giorni', () => {
     expect(week?.days[6]?.date).toBe(DOMENICA)
     // 80.000 / 31 giorni di agosto = 2580, arrotondato verso il basso.
     expect(week?.sustainable?.cents).toBe(2580)
-    expect(week?.scaleCents).toBe(2580)
+    expect(week?.scaleCents).toBe(2967)
   })
 
   /**
