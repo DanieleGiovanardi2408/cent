@@ -202,12 +202,15 @@ export const TREND_PERIODS = 8
  * **Quante righe servono perche' una parte sia un grafico: tre, e la soglia e'
  * della PARTE.**
  *
- *     0 righe  -> la parte non c'e' (un fatto sui dati)
- *     1 riga   -> nome e importo. Il bar chart a una barra e' l'anti-esempio
- *                 da manuale, e il numero e' gia' scritto accanto
- *     2 righe  -> nome e importo, incolonnati a destra. Due numeri si
- *                 confrontano leggendoli
- *     3+ righe -> ciambella con leggenda, e le barre a un tap
+ *     0 righe  -> la parte non c'e'. E' un fatto sui dati, non una scelta.
+ *     1 riga   -> nome e importo, niente grafico. Il bar chart a una barra e'
+ *                 l'anti-esempio da manuale, e il numero e' gia' scritto
+ *                 accanto. **31 agosto**, e non e' mai stato in discussione.
+ *     2 righe  -> **una barra impilata** con la leggenda sotto. **31 agosto,
+ *                 sera**, dopo che la stessa cosa era stata chiesta tre volte.
+ *                 Vedi qui sotto.
+ *     3+ righe -> ciambella con leggenda, e le barre a un tap. **30 agosto**,
+ *                 col comando; il gesto e' arrivato il 31.
  *
  * ## Il 31 agosto la soglia e' passata dallo schermo alla parte, e la ragione
  *
@@ -233,6 +236,30 @@ export const TREND_PERIODS = 8
  * dove vale il suo argomento* — in una variante che merita il nome suo:
  * **due rimedi per un difetto, spediti insieme, e quello meno giustificato
  * sopravvive senza che nessuno lo riesamini.**
+ *
+ * ## Le due righe: niente grafico durava un giorno, e la ragione per cui e' caduta
+ *
+ * Il 31 agosto la parte a due righe e' rimasta **senza grafico**: due numeri si
+ * confrontano leggendoli, e una barra piena accanto a una briciola e' un
+ * distintivo. L'argomento era vero e la conclusione sbagliata, e la sera dello
+ * stesso giorno e' stata rovesciata.
+ *
+ * **Il difetto non era disegnarle: era come venivano disegnate.** Con due tracce
+ * e la scala della parte, `507,00 €` riempie e `23,00 €` resta un moncone di
+ * ~13 px piu' alto che largo. Su **una traccia sola divisa in due** lo stesso
+ * 4,3% e' un segmento visibile, e la figura torna a dire una proporzione invece
+ * di una gerarchia.
+ *
+ * E il dispositivo non e' nuovo: e' **la barra in cima allo schermo, un livello
+ * piu' giu'**. Quella divide 954,00 € in fisse e quotidiane; questa divide i
+ * 530,00 € delle fisse in `Casa` e `Trasporti`. Chi ha imparato a leggere la
+ * prima legge questa senza imparare niente.
+ *
+ * **Come ci si e' arrivati, e vale piu' della forma**: la stessa cosa era stata
+ * chiesta **tre volte**. La prima e' stata letta come un'osservazione, la seconda
+ * girata in *"rendiamo quelle righe piu' leggere"*, e solo la terza e' stata
+ * eseguita. Un'obiezione ripetuta non e' una spiegazione mal riuscita: e' una
+ * risposta che non ha risposto.
  *
  * ## Perche' una sola costante, e non due
  *

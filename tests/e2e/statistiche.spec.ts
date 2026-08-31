@@ -1298,7 +1298,7 @@ test('le spese senza categoria sono una riga sola, e non spostano le colonne', a
   expect(colori.barre[2]).toBe(colori.neutro)
 })
 
-test('sotto tre categorie restano le righe e spariscono le barre', async ({ page }) => {
+test('con due categorie in tutto la parte e\' una barra impilata', async ({ page }) => {
   await page.goto('/')
   await chiudiGuida(page)
   await semina(page, [
@@ -1307,21 +1307,26 @@ test('sotto tre categorie restano le righe e spariscono le barre', async ({ page
   ])
 
   const sezione = page.locator('.stats__section').first()
-  await expect(sezione.locator('.stat')).toHaveCount(2)
-  // Due barre non sono una ripartizione: sono due numeri disegnati lunghi.
-  await expect(sezione.locator('.stat__bar')).toHaveCount(0)
-  // Ma i due numeri si leggono lo stesso, ed e' il punto: la riga sopravvive
-  // alla barra perche' il grafico **e'** la tabella.
-  await expect(sezione.locator('.stat__value').first()).toHaveText(/40,00|40\.00/)
 
-  // Il totale resta, perche' le righe ci sono sempre: senza barre questa e' una
-  // tabella, e una tabella con un totale e' ancora una risposta. Sta sul titolo
-  // perche' la sezione e' una sola (vedi il test delle orfane, sopra).
+  // **Una traccia divisa in due, e non due tracce.** Questo test asseriva il
+  // contrario — righe senza barre — perche' fino alla sera del 31 agosto due
+  // valori non avevano nessuna figura. La forma C l'ha rovesciato: il difetto
+  // non era disegnarle, era che con due tracce e la scala della parte una
+  // riempie e l'altra e' un moncone.
+  await expect(sezione.locator('.stats__stack')).toHaveCount(1)
+  await expect(sezione.locator('.stats__stackSeg')).toHaveCount(2)
+  await expect(sezione.locator('.stat')).toHaveCount(0)
+
+  // I due numeri si leggono lo stesso, nella leggenda: e' lo stesso posto in cui
+  // li mette la ciambella, un gradino piu' su nella scala.
+  await expect(sezione.locator('.legend')).toHaveCount(2)
+  await expect(sezione.locator('.legend__value').first()).toHaveText(/40,00|40\.00/)
+
   await expect(page.locator('.stats__hero')).toHaveText(/60,00/)
   await expect(sezione.locator('.stats__partTotal')).toHaveCount(0)
 
-  // E **nessuna frase** su cosa sia in scala: senza barre parlerebbe di una cosa
-  // che non e' a schermo, e con le barre lo dice gia' la prima, lunga il 100%.
+  // E **nessuna frase** su cosa sia in scala: il totale di una barra impilata e'
+  // il totale della parte, gia' scritto sopra.
   await expect(page.locator('.stats')).not.toContainText('in scala')
 })
 
@@ -1707,13 +1712,18 @@ test('dentro una PARTE o tutte le righe hanno la barra o nessuna, e gli importi 
     }))
 
   const pieno = await conta()
-  expect(pieno.righe, 'la scena a cinque righe non e\' in pagina').toBe(5)
+  // **Tre righe, non cinque**: le due variabili non sono piu' un elenco ma una
+  // barra impilata (forma C, 31 agosto sera). Le righe contate sono quelle della
+  // parte che le ha ancora.
+  expect(pieno.righe, 'la scena non ha le tre righe delle fisse').toBe(3)
 
   // **Dentro ogni parte: tutte o nessuna.** E' l'invariante, ristretto al posto
   // in cui vale.
+  // **Un elenco solo**: la parte a due righe non ha righe, ha una barra
+  // impilata. L'invariante vale su ogni elenco che esiste.
   const elenchi = sezione.locator('.stats__rows')
-  await expect(elenchi).toHaveCount(2)
-  for (const i of [0, 1]) {
+  await expect(elenchi).toHaveCount(1)
+  for (const i of [0]) {
     const c = await elenchi.nth(i).evaluate((el) => ({
       righe: el.querySelectorAll('.stat').length,
       barre: el.querySelectorAll('.stat__bar').length,
@@ -1724,13 +1734,14 @@ test('dentro una PARTE o tutte le righe hanno la barra o nessuna, e gli importi 
     ).toBe(true)
   }
 
-  // E le due parti rispondono **diversamente**, che e' la premessa senza cui il
-  // controllo qui sopra sarebbe verde anche sulla soglia vecchia.
+  // E le due parti hanno **due figure diverse**, che e' la premessa senza cui il
+  // controllo qui sopra sarebbe verde anche sulla soglia vecchia: le tre fisse
+  // sono un elenco di barre, le due variabili una barra impilata.
   await expect(elenchi.nth(0).locator('.stat__bar'), 'le tre fisse non hanno le barre').toHaveCount(3)
   await expect(
-    elenchi.nth(1).locator('.stat__bar'),
-    'le due variabili hanno le barre: due righe non sono un grafico',
-  ).toHaveCount(0)
+    page.locator('.stats__partHead[data-kind="variable"] + .stats__stack'),
+    'le due variabili non hanno la barra impilata',
+  ).toHaveCount(1)
 
   // **L'altro verso dell'invariante**, e senza di lui il primo passerebbe anche
   // se le barre non sparissero mai: due sole categorie in tutto stanno sotto la
@@ -3505,7 +3516,7 @@ test('la ciambella dipende da quante voci ha la sezione, non dalla natura', asyn
  * difetto per cui l'interruttore delle fisse e' stato tolto — *"prometteva un
  * potere che non aveva"* — e vale identico al contrario.
  */
-test('sotto tre voci non c\'e\' ciambella, e nemmeno il comando', async ({ page }) => {
+test('sotto tre voci c\'e\' la barra impilata, non la ciambella', async ({ page }) => {
   await page.goto('/')
   await chiudiGuida(page)
   await semina(page, [
@@ -3518,29 +3529,35 @@ test('sotto tre voci non c\'e\' ciambella, e nemmeno il comando', async ({ page 
 
   const quotidiane = page.locator('.stats__partHead[data-kind="variable"]')
 
-  // La premessa: due voci nelle quotidiane, altrimenti non si sta provando la
-  // soglia. Sono a barre, perche' e' l'unica vista che quella sezione ha.
+  // **Due voci: la barra impilata, non la ciambella.** Dalla sera del 31 agosto
+  // la parte a due righe ha una figura — una traccia sola divisa in due, con la
+  // leggenda sotto — e non piu' due tracce con una barra piena e una briciola.
+  // La scala 0/1/2/3+ sta su `BREAKDOWN_MIN_ROWS`, con le date e i motivi.
+  const impilata = quotidiane.locator('+ .stats__stack')
+  await expect(impilata, 'le quotidiane a due voci non hanno la barra impilata').toHaveCount(1)
   await expect(
-    quotidiane.locator('+ .stats__rows .stat'),
-    'le quotidiane non sono due: la scena non prova la soglia',
+    impilata.locator('.stats__stackSeg'),
+    'la barra impilata non ha due segmenti: la scena non prova la soglia',
   ).toHaveCount(2)
-  // **E non hanno nemmeno le barre**, dal 31 agosto: due righe non sono un
-  // grafico ne' come ciambella ne' come barre. Una barra piena e una briciola
-  // sono un distintivo, non una misura, e la riga *"Barra intera = …"* era la
-  // confessione che da sole non si leggono. La scala 0/1/2/3+ sta su
-  // `BREAKDOWN_MIN_ROWS`, con la data e il motivo.
-  await expect(quotidiane.locator('+ .stats__rows .stat__bar')).toHaveCount(0)
+  await expect(impilata.locator('.legend')).toHaveCount(2)
+
+  // **Nessuna ciambella e nessun elenco di righe**: la barra impilata prende il
+  // posto di tutte e due.
+  await expect(quotidiane.locator('+ .stats__viz')).toHaveCount(0)
+  await expect(quotidiane.locator('+ .stats__rows')).toHaveCount(0)
+
+  // **E nessuna didascalia della scala.** Era *"Barra intera = 507,00 €"*, cioe'
+  // la confessione che due barre separate non si leggevano; il totale di una
+  // barra impilata e' il totale della parte, gia' scritto nell'intestazione.
   await expect(
     quotidiane.locator('.stats__partScale'),
-    'una parte senza grafico dichiara una scala che non ha',
+    'una barra impilata dichiara una scala che non le serve',
   ).toHaveCount(0)
-  await expect(quotidiane.locator('+ .stats__viz')).toHaveCount(0)
-  // E il gesto non c'e': sotto la soglia la sezione ha **una vista sola**, quindi
-  // il tap non deve portare da nessuna parte. Si chiede il bersaglio dichiarato,
-  // che e' il modo in cui il gesto si annuncia da quando il comando non c'e' piu'.
+
+  // E il gesto non c'e': con una figura sola non c'e' niente da commutare.
   await expect(
-    quotidiane.locator('+ .stats__rows[role="button"]'),
-    'una sezione con una vista sola annuncia un gesto che non porta da nessuna parte',
+    impilata.locator('[role="button"]'),
+    'la barra impilata annuncia un gesto che non porta da nessuna parte',
   ).toHaveCount(0)
 
   // E le fisse, che di voci ne hanno tre, la ciambella ce l'hanno: senza questa
@@ -4543,5 +4560,86 @@ test('fra la barra e il testo resta spazio, in tutte e due le sezioni', async ({
   ).toEqual([])
 
   // La premessa: se le righe fossero zero il giro sarebbe verde per assenza.
-  await expect(page.locator('.stat')).toHaveCount(5)
+  // Tre e non cinque — le due fisse sono una barra impilata e non un elenco —
+  // e il conto sta qui perche' e' quello che rende la misura una prova.
+  await expect(page.locator('.stat')).toHaveCount(3)
+})
+
+/**
+ * **La barra impilata dice una proporzione, e i suoi segmenti sono le quote.**
+ *
+ * E' la forma C, scelta il 31 agosto sera dopo che la stessa cosa era stata
+ * chiesta **tre volte**. Il difetto non era disegnare due valori: era che con due
+ * tracce e la scala della parte `507,00 €` riempie e `23,00 €` resta un moncone
+ * di ~13 px piu' alto che largo — un distintivo, non una misura.
+ *
+ * Su una traccia sola il 4,3% e' un segmento visibile, e la figura torna a dire
+ * una proporzione. Il dispositivo non e' nuovo: e' **la barra in cima allo
+ * schermo, un livello piu' giu'** — quella divide il periodo fra fisse e
+ * quotidiane, questa divide le fisse fra le sue categorie.
+ */
+test('i segmenti della barra impilata sono le quote, nei colori della leggenda', async ({
+  page,
+}) => {
+  await page.goto('/')
+  await chiudiGuida(page)
+  const nomi = await grigliaDiDefault(page)
+  // I dati veri di Daniele: 507,00 € e 23,00 €, cioe' 95,7% e 4,3%. La sproporzione
+  // **e' la scena**: su due tracce e' quella che produce il moncone.
+  await semina(page, [
+    { categoria: nomi.casa, cents: 50700, fissa: true },
+    { categoria: nomi.trasporti, cents: 2300, fissa: true },
+    { categoria: nomi.spesa, cents: 4200 },
+    { categoria: nomi.fuori, cents: 2600 },
+    { categoria: nomi.coffeeshop, cents: 2400 },
+  ])
+  await apriStatistiche(page)
+
+  const stack = page.locator('.stats__partHead[data-kind="fixed"] + .stats__stack')
+  await expect(stack).toHaveCount(1)
+
+  const misura = await stack.evaluate((el) => {
+    const barra = el.querySelector('.stats__stackBar')!.getBoundingClientRect()
+    const segs = [...el.querySelectorAll('.stats__stackSeg')].map((s) => {
+      const r = s.getBoundingClientRect()
+      return { quota: r.width / barra.width, largo: Math.round(r.width * 100) / 100,
+               colore: getComputedStyle(s).backgroundColor }
+    })
+    const pastiglie = [...el.querySelectorAll('.legend__dot')].map(
+      (d) => getComputedStyle(d).backgroundColor,
+    )
+    return { segs, pastiglie, barra: Math.round(barra.width * 100) / 100 }
+  })
+
+  console.log(
+    `\n| barra ${misura.barra}px | ${misura.segs.map((s) => `${(s.quota * 100).toFixed(1)}% = ${s.largo}px`).join(' · ')} |\n`,
+  )
+
+  // 1. **Le quote sono gli importi.** La tolleranza copre i 2 px di vuoto fra i
+  //    segmenti, che si prendono dalla larghezza dipinta.
+  expect(misura.segs).toHaveLength(2)
+  expect(misura.segs[0]!.quota).toBeCloseTo(50700 / 53000, 1)
+  expect(misura.segs[1]!.quota).toBeCloseTo(2300 / 53000, 1)
+
+  // 2. **Il segmento piccolo si vede**, ed e' il punto della forma C — ma va
+  //    detto per quello che e', non piu' di cosi'.
+  //
+  //    Misurato: **15,44 px** su una barra alta 24. Non e' "piu' largo che
+  //    alto": e' ancora piu' alto che largo, e scriverlo sarebbe stato falso. Il
+  //    guadagno e' altrove, ed e' doppio — la stessa quota su una traccia intera
+  //    vale **una volta e mezzo** il moncone che la scala della parte produceva
+  //    (4,3% di 358 contro 4,5% di ~214), e soprattutto sta **dentro una figura
+  //    continua**: si legge come una fetta di qualcosa invece che come una
+  //    marca isolata accanto a una barra piena.
+  //
+  //    Il pavimento e' 12 px, cioe' meta' dell'altezza: sotto, il segmento
+  //    tornerebbe la scheggia che la forma C e' venuta a togliere.
+  expect(
+    misura.segs[1]!.largo,
+    'il segmento del 4,3% e\' una scheggia: e\' tornato a essere un distintivo',
+  ).toBeGreaterThan(12)
+
+  // 3. **I colori sono quelli della leggenda**, che e' l'unica cosa che dice
+  //    quale segmento e' quale: senza il capo, la figura non si legge.
+  expect(misura.segs.map((s) => s.colore)).toEqual(misura.pastiglie)
 })

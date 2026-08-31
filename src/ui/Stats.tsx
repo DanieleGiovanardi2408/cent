@@ -868,7 +868,12 @@ function Categories({
               // il difetto opposto a quello che il comando ripara.
               vista={quote === null ? null : vista}
             />
-            {vista === 'quote' && quote !== null ? (
+            {!part.asChart && !part.single ? (
+              // **Due righe: la barra impilata.** Sotto la soglia del grafico
+              // ma sopra la riga sola — vedi `BREAKDOWN_MIN_ROWS` per la scala
+              // intera e le date.
+              <Stacked key={`stack:${part.kind}`} part={part} />
+            ) : vista === 'quote' && quote !== null ? (
               // La chiave porta la vista: commutando, Preact **rimonta** invece
               // di riconciliare, e l'animazione di entrata riparte. E' anche
               // corretto di suo — le due viste non condividono nessun nodo.
@@ -1042,6 +1047,62 @@ function Split({ split }: { readonly split: BreakdownSplit }) {
         data-kind="variable"
         style={{ flexBasis: pct(1 - split.fixedFraction) }}
       />
+    </div>
+  )
+}
+
+/**
+ * **La barra impilata di una parte a due righe.**
+ *
+ * E' la forma C della scelta del 31 agosto: al posto di due tracce con dentro
+ * una barra piena e un moncone, **una traccia sola divisa in due segmenti**, con
+ * la leggenda sotto — pastiglia, nome, importo — come gia' fa la ciambella.
+ *
+ * ## Perche' e' lo stesso dispositivo, un livello piu' giu'
+ *
+ * La barra in cima allo schermo divide 954,00 € in fisse e quotidiane; questa
+ * divide i 530,00 € delle fisse in `Casa` e `Trasporti`. Chi ha imparato a
+ * leggere la prima legge questa senza imparare niente di nuovo — ed e' la stessa
+ * ragione per cui la ciambella riusa la leggenda invece di etichettare le fette.
+ *
+ * ## E il 4,3% smette di essere un distintivo
+ *
+ * Con due tracce e la scala della sezione, `Trasporti` a 23,00 € su 507,00 €
+ * diventa un moncone piu' alto che largo. Su una traccia intera lo stesso 4,3%
+ * e' un segmento di ~13 px a 390 punti: piccolo, e **leggibile come piccolo**,
+ * che e' esattamente cio' che il dato dice.
+ *
+ * Sparisce anche `stats.scale` — *"Barra intera = 507,00 €"* — che era la
+ * confessione che quelle due barre da sole non si leggevano: il totale di una
+ * barra impilata e' il totale della parte, gia' scritto nell'intestazione.
+ */
+function Stacked({ part }: { readonly part: BreakdownSection }) {
+  const totale = part.rows.reduce((n, r) => n + r.cents, 0)
+  return (
+    <div class="stats__stack">
+      {/* `aria-hidden` come la barra in cima: la figura non aggiunge niente a
+          cio' che la leggenda dice gia' in parole e in cifre. */}
+      <div class="stats__stackBar" aria-hidden="true">
+        {part.rows.map((row) => (
+          <span
+            class="stats__stackSeg"
+            key={row.orphan ? ORPHAN : row.categoryId}
+            style={{
+              flexBasis: pct(totale > 0 ? row.cents / totale : 0),
+              backgroundColor: fill(row) ?? 'var(--brand)',
+            }}
+          />
+        ))}
+      </div>
+      <ul class="stats__legend">
+        {part.rows.map((row) => (
+          <li class="legend" key={row.orphan ? ORPHAN : row.categoryId}>
+            <span class="legend__dot" style={{ backgroundColor: fill(row) ?? 'var(--brand)' }} />
+            <span class="legend__name">{sliceLabel(row)}</span>
+            <span class="legend__value">{money(row.cents)}</span>
+          </li>
+        ))}
+      </ul>
     </div>
   )
 }

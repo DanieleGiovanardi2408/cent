@@ -1255,31 +1255,14 @@
   min-block-size: 2.5rem;
 }
 
-/* **Una parte senza grafico e' il dettaglio di una quota, e si legge cosi'.**
+/* Qui c'erano le righe compatte della parte senza grafico — passo 28 invece di
+ * 40, nome piu' spento — nate quando due righe non avevano nessuna figura e il
+ * blocco era un'intestazione con due righe e un vuoto in mezzo.
  *
- * Dal 31 agosto due righe non sono un grafico (`BREAKDOWN_MIN_ROWS`), e le barre
- * sono sparite. Guardato sul telefono, il blocco delle Fisse era diventato
- * un'intestazione e due righe con un vuoto largo in mezzo — accanto alle
- * Quotidiane, dove quel vuoto e' pieno di barre, si leggeva come una tabella
- * rotta invece che come una scelta.
- *
- * Le barre non tornano. Cambia **cosa sono quelle righe**: non il soggetto della
- * schermata — quello sono le Quotidiane — ma il dettaglio di una quota che la
- * barra in cima ha gia' mostrato. Quindi piu' compatte (il passo cade da 40 a 28
- * px, che e' il minimo che tiene due righe distinte senza toccarsi) e piu'
- * leggere: il nome scende a `--text-muted`, l'importo resta `--text` perche' e'
- * il dato.
- *
- * **Non e' un bersaglio**: quelle righe non si toccano — la parte non ha una
- * seconda vista — quindi il pavimento dei 44 px non le riguarda, ed e' la
- * ragione per cui il passo puo' scendere. */
-.stats__rows:not([data-chart]) .stat {
-  min-block-size: 1.75rem;
-}
-
-.stats__rows:not([data-chart]) .stat__name {
-  color: var(--text-muted);
-}
+ * Non servono piu': dal 31 agosto sera la parte a due righe **ha una figura** —
+ * la barra impilata — e le sue voci stanno nella leggenda, che ha gia' il suo
+ * passo. Sono uscite col caso che le aveva prodotte invece di restare come una
+ * regola che non si applica a niente. */
 
 /* L'etichetta: **due righe, poi i puntini**.
  *
@@ -1734,4 +1717,34 @@
  * essendo piu' spenti. */
 .pnav__label[data-corrente] {
   color: var(--text);
+}
+
+/* --- la barra impilata di una parte a due righe (forma C) ---------------- */
+/*
+ * Stessa altezza e stesso raggio della barra in cima allo schermo: e' lo stesso
+ * dispositivo un livello piu' giu', e due dispositivi che si somigliano ma non
+ * coincidono sono peggio di due diversi.
+ */
+.stats__stack {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+.stats__stackBar {
+  display: flex;
+  gap: 2px;
+  block-size: var(--bar-h);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+/* `flex-basis` e non `inline-size`, come la barra in cima: i segmenti si
+ * dividono cio' che resta **dopo** i vuoti, e le quote restano esatte l'una
+ * rispetto all'altra invece di traboccare. */
+.stats__stackSeg {
+  flex-grow: 0;
+  flex-shrink: 1;
+  min-inline-size: 2px;
 }
