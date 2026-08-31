@@ -25,15 +25,15 @@ sa gia', e per questo non puo' invecchiare. I giudizi — cosa e' in volo, cosa
 aspetta una persona — stanno sotto, scritti a mano e timbrati con lo SHA a cui
 sono stati rivisti.
 
-- **Ultimo commit**: `a1d02bb` — feat: la Home dice il ritmo vero, e il bottone non ha piu' bisogno di una riserva
-- **Data**: 31/08/2026 14:46
+- **Ultimo commit**: `cdd9b21` — fix: fra la barra e il testo torna lo spazio — ricaduta della mia riparazione
+- **Data**: 31/08/2026 15:52
 - **Ramo**: `main`
-- **Pushato**: **no: 2 commit non pushati su `origin/main`**
+- **Pushato**: **no: 1 commit non pushati su `origin/main`**
 - **Albero di lavoro**: pulito
 
 - **Test unitari**: 755 in 25 file, tutti verdi
-- **Test e2e dichiarati**: 407 in 14 file, su 4 progetti (iphone-se, iphone-14, landscape, dark)
-- **Test e2e eseguiti**: 389 passati, 18 saltati, in 2.7 minuti. I saltati sono condizionali (ADR 013): solo un'esecuzione li vede.
+- **Test e2e dichiarati**: 410 in 14 file, su 4 progetti (iphone-se, iphone-14, landscape, dark)
+- **Test e2e eseguiti**: 392 passati, 18 saltati, in 2.7 minuti. I saltati sono condizionali (ADR 013): solo un'esecuzione li vede.
 - **Bundle iniziale**: 58.8 KB gzip su 60.0 KB (1.2 KB di margine)
 
 - **Schema del database**: 5. La scala delle migrazioni:
@@ -52,7 +52,7 @@ sono stati rivisti.
 ## In volo adesso
 
 <!-- JUDGMENT rivisto=2d9f75e -->
-> Rivisto a `2d9f75e`, 15 commit fa. **Da riguardare.**
+> Rivisto a `2d9f75e`, 17 commit fa. **Da riguardare.**
 
 **Fase 6 sul ramo `fase-6-wip`, tredici commit sopra `origin/main`.** Il ramo e'
 spinto a ogni rientro.
