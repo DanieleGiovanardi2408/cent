@@ -76,6 +76,7 @@ const LOCALES: Record<Language, string> = { it: 'it-IT', en: 'en-GB' }
  */
 interface Formats {
   readonly money: Intl.NumberFormat
+  readonly rate: Intl.NumberFormat
   readonly dayLong: Intl.DateTimeFormat
   readonly dayWithYear: Intl.DateTimeFormat
   readonly dayShort: Intl.DateTimeFormat
@@ -92,6 +93,16 @@ function buildFormats(locale: string): Formats {
       currency: 'EUR',
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
+    }),
+    /* I ritmi, all'euro intero. **Non e' `money` con altre opzioni**: e' un
+     * secondo formato perche' sono due cose diverse — un fatto e una guida — e
+     * l'argomento sta su `rate()`. Zero decimali in tutte e due le direzioni,
+     * cosi' `36 €` non diventa `36,00 €` in un locale e `36` in un altro. */
+    rate: new Intl.NumberFormat(locale, {
+      style: 'currency',
+      currency: 'EUR',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
     }),
     dayLong: new Intl.DateTimeFormat(locale, {
       weekday: 'long',
@@ -312,6 +323,33 @@ export function variants(key: Key): readonly string[] {
  * virgole spacca il campo, e in inglese le migliaia fanno lo stesso. Per il CSV
  * resta `(cents / 100).toFixed(2)`, che non dipende dal locale — e non deve.
  */
+/**
+ * **Un ritmo, arrotondato all'euro intero.**
+ *
+ * La distinzione e' una regola e non una preferenza, e va letta cosi':
+ *
+ * - **Un importo registrato si scrive al centesimo, sempre.** E' una cosa che
+ *   e' successa: 42,00 € sono quarantadue euro, e nasconderne i centesimi
+ *   vorrebbe dire riscrivere un fatto.
+ * - **Un ritmo derivato si scrive all'euro.** *"Al giorno: 36 €"* non e' un
+ *   importo, e' una **guida**: viene da una divisione (budget su giorni) e le
+ *   sue ultime due cifre non significano niente. `~35,71 €` fingeva una
+ *   precisione che nessuno usa, e il `~` la confessava — ma un tilde e'
+ *   notazione da programmatore, non lingua.
+ *
+ * Il criterio, per il prossimo numero dubbio: **se il numero e' stato scritto da
+ * qualcuno, centesimi; se e' il risultato di una divisione fatta dall'app,
+ * euro.**
+ *
+ * `Math.round` e non un troncamento: 35,71 € al giorno diventa 36 e non 35, ed e'
+ * il verso onesto — arrotondare per difetto darebbe una guida piu' generosa del
+ * budget che la produce.
+ */
+export function rate(cents: Cents): string {
+  assertCents(cents)
+  return formats.rate.format(Math.round(cents / 100))
+}
+
 export function money(cents: Cents): string {
   assertCents(cents)
   return formats.money.format(cents / 100)

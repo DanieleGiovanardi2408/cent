@@ -3085,13 +3085,31 @@ for (const lingua of [
           titoli: [...document.querySelectorAll('.stats__title')].filter(troncato).map(testo),
           valori: [...document.querySelectorAll('.stat__value')].filter(troncato).map(testo),
           scroll: stats.scrollWidth - stats.clientWidth,
-          altezze: [
+          // **Le altezze si contano dentro ogni parte, non su tutta A.**
+          //
+          // Dal 31 agosto una parte sotto le tre righe non e' un grafico, e le
+          // sue righe sono piu' compatte: 28 px contro 40. Non e' una
+          // disuguaglianza da riparare, e' la scelta — quelle righe sono il
+          // dettaglio di una quota, non il soggetto della schermata.
+          //
+          // Cio' che deve restare vero e' che **dentro una parte** il passo sia
+          // uno solo: due righe alte diverse nella stessa colonna sono un
+          // difetto, due parti con due passi sono una gerarchia.
+          altezze: [...document.querySelectorAll('.stats__rows')].flatMap((elenco) => [
             ...new Set(
-              [...document.querySelectorAll('.stat')].map(
+              [...elenco.querySelectorAll('.stat')].map(
                 (r) => Math.round(r.getBoundingClientRect().height * 100) / 100,
               ),
             ),
-          ],
+          ]),
+          altezzePerParte: [...document.querySelectorAll('.stats__rows')].map(
+            (elenco) =>
+              new Set(
+                [...elenco.querySelectorAll('.stat')].map(
+                  (r) => Math.round(r.getBoundingClientRect().height * 100) / 100,
+                ),
+              ).size,
+          ),
         }
       })
 
@@ -3102,9 +3120,9 @@ for (const lingua of [
       expect(misura.valori, 'un importo e\' stato tagliato').toEqual([])
       expect(misura.scroll, 'le Statistiche scorrono di lato').toBeLessThanOrEqual(0)
       expect(
-        misura.altezze,
-        `le righe non sono piu' alte uguali: ${JSON.stringify(misura.altezze)}`,
-      ).toHaveLength(1)
+        misura.altezzePerParte.filter((n) => n > 1),
+        `dentro una parte le righe hanno passi diversi: ${JSON.stringify(misura.altezze)}`,
+      ).toEqual([])
     })
 
     /**

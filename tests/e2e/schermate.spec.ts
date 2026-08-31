@@ -341,3 +341,40 @@ test('in barra ci stanno: nessun bersaglio dipinto sopra un altro, a sei larghez
   console.log(`\n${misure.join('\n')}\n`)
   expect(guasti, 'in barra qualcosa e\' dipinto sopra qualcos\'altro').toEqual([])
 })
+
+/**
+ * **In fondo alle Impostazioni c'e' scritto quale build si sta guardando.**
+ *
+ * L'aggiornamento e' `prompt` (ADR 005): chi non lo accetta resta su una build
+ * vecchia, e finora non c'era modo di saperlo dallo schermo. E' gia' costato un
+ * giro di messaggi — una schermata giudicata su una build diversa da quella
+ * pubblicata — e per il test degli amici *"quale build hai visto"* deve avere
+ * una risposta.
+ *
+ * Il test **non ricopia il commit**: lo confronta con la sua forma. Ricopiarlo
+ * vorrebbe dire riscrivere il test a ogni commit, cioe' un test che si aggiorna
+ * da solo e non sorveglia piu' niente.
+ */
+test('le Impostazioni dicono quale build si sta guardando', async ({ page }) => {
+  await page.goto('/')
+  await chiudiGuida(page)
+  await page.locator('.app__action').tap()
+  await expect(page.locator('.prefs')).toBeVisible()
+
+  const riga = page.locator('.prefs__build')
+  await expect(riga).toBeVisible()
+  const testo = (await riga.innerText()).trim()
+  console.log(`\n| build a schermo | ${testo} |\n`)
+
+  // `cent · <commit> · <data>`: il nome, sette caratteri esadecimali (o `dev`
+  // fuori da un clone), e una data ISO.
+  expect(
+    testo,
+    'la riga della build non ha la forma "cent · <commit> · <data>"',
+  ).toMatch(/^cent · ([0-9a-f]{7,}|dev) · (\d{4}-\d{2}-\d{2}|sviluppo)$/)
+
+  // **E non e' un bersaglio.** E' un fatto in fondo alla pagina: se diventasse
+  // toccabile entrerebbe nel conteggio dei bersagli di `install.spec.ts`, e la
+  // sonda delle sovrapposizioni comincerebbe a guardarlo.
+  await expect(page.locator('button.prefs__build, a.prefs__build')).toHaveCount(0)
+})

@@ -18,7 +18,7 @@ import {
   weekStrip,
 } from './budget-view'
 import type { Week } from './budget-view'
-import { dayHeading, money, periodName, periodRangeLabel, t, weekdayShortLabel } from './i18n'
+import { dayHeading, money, periodName, periodRangeLabel, rate, t, weekdayShortLabel } from './i18n'
 import './Home.css'
 
 /**
@@ -178,11 +178,11 @@ export function Home({
   const ritmo = useMemo(() => {
     if (!ready || !hasBudget) return null
     if (metrics.daysLived > 1 && metrics.currentPaceCents !== null) {
-      return t('home.pace.current', { amount: money(metrics.currentPaceCents) })
+      return { label: t('home.pace.current'), value: rate(metrics.currentPaceCents) }
     }
     return view.previous === null
       ? null
-      : t('home.pace.previous', { amount: money(view.previous.paceCents) })
+      : { label: t('home.pace.previous'), value: rate(view.previous.paceCents) }
   }, [ready, hasBudget, metrics, view.previous])
 
   return (
@@ -200,7 +200,11 @@ export function Home({
         {/* Da quale budget viene il numero, e quanto e' gia' uscito. Prima
             questa riga aveva un gemello in geometria — la barra del periodo, il
             cui `aria-label` era **questa stessa frase**. Il gemello e' uscito. */}
-        <p class="hero__note">{ready ? hero.note : ''}</p>
+        {/* Resta **una sola prosa** qui: *"nessun budget impostato per questo
+            periodo"*, che e' uno stato. Le due cifre che stavano qui —
+            `di 250,00 € · 0,00 € spesi` — sono scese nel blocco dei numeri, dove
+            hanno un'etichetta e una colonna. */}
+        <p class="hero__note">{ready && hero.note !== null ? hero.note : ''}</p>
       </section>
 
       {/* Il blocco del budget: cambia contenuto ma non misura. Con budget tiene
@@ -217,12 +221,37 @@ export function Home({
           vero non stava da nessuna parte, ed e' il confronto che rende utile il
           primo. Sotto il bottone, dove puo' cambiare altezza senza spostare
           niente che sia toccabile. */}
+      {/* **Una grammatica sola per i numeri: etichetta e valore.**
+
+          Qui c'erano quattro scritture diverse in quattro righe — un frammento
+          minuscolo col punto mediano, una frase in seconda persona con un tilde,
+          un frammento con la virgola, e un numero ripetuto tre righe piu' giu'.
+          Nessuna sbagliata da sola; insieme non erano una lingua.
+
+          Adesso ogni cifra della Home sta nella stessa griglia a due colonne, e
+          i valori si incolonnano fra righe che prima appartenevano a blocchi
+          diversi. La prosa resta dove c'e' uno **stato** e non una cifra. */}
       <div class="rates">
         {!ready ? null : hasBudget ? (
           <>
-            <p class="allowance" data-tone={allowance.over ? 'over' : undefined}>
-              {allowance.text}
-            </p>
+            {hero.rows.map((r) => (
+              <p class="rates__row" key={r.label}>
+                <span class="rates__label">{r.label}</span>
+                <span class="rates__value">{r.value}</span>
+              </p>
+            ))}
+
+            {allowance.amount === null ? null : (
+              <p class="rates__row" data-tone={allowance.over ? 'over' : undefined}>
+                <span class="rates__label">{allowance.amount.label}</span>
+                <span class="rates__value">{allowance.amount.value}</span>
+              </p>
+            )}
+            {allowance.text === '' ? null : (
+              <p class="allowance" data-tone={allowance.over ? 'over' : undefined}>
+                {allowance.text}
+              </p>
+            )}
 
             {/* Il ritmo vero. A settimana cominciata e' quello di **questa**;
                 il lunedi', quando non esiste ancora, quello di **quella prima**
@@ -231,7 +260,12 @@ export function Home({
 
                 Nessun tono: e' un fatto, e si dice come un fatto. Un'app che
                 sgrida si smette di aprire. */}
-            {ritmo === null ? null : <p class="pace">{ritmo}</p>}
+            {ritmo === null ? null : (
+              <p class="rates__row rates__row--soft">
+                <span class="rates__label">{ritmo.label}</span>
+                <span class="rates__value">{ritmo.value}</span>
+              </p>
+            )}
 
             {since === null ? null : <p class="since">{since}</p>}
           </>
@@ -432,13 +466,13 @@ function WeekStrip({ week, day }: { readonly week: Week; readonly day: IsoDate }
     <section class="week">
       <div class="week__head">
         <h2 class="week__title">{t('home.week.title')}</h2>
-        {/* La legenda della linea, col suo numero. Senza cifra manderebbe a
-            leggere quella della riga della disponibilita', che e' un'altra
-            velocita': `rimanente / giorni rimanenti` contro `budget / giorni`. */}
+        {/* **La legenda perde il numero e tiene la parola.** Portava
+            `35,71 € sostenibili al giorno`, e quella cifra sta gia' tre righe
+            sopra come `Al giorno`: un numero si dice una volta sola. Cio' che
+            una legenda deve dire e' **quale** linea e' quella, e per questo
+            resta il campione (il tratto in `::before`) con la sua parola. */}
         {week.sustainable === null ? null : (
-          <p class="week__legend">
-            {t('home.week.sustainable', { amount: money(week.sustainable.cents) })}
-          </p>
+          <p class="week__legend">{t('home.week.sustainable')}</p>
         )}
       </div>
 

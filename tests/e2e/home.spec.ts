@@ -817,9 +817,16 @@ test('la Home dice quanto resta e quanto al giorno, e sono numeri veri', async (
   // 700,00 € su cinque giorni: 140,00 € al giorno.
   await expect(page.locator('.hero__label')).toHaveText('Restano')
   await expect(page.locator('.hero__value')).toHaveText('700,00 €')
-  await expect(page.locator('.allowance')).toContainText('Puoi spendere ~')
-  await expect(page.locator('.allowance')).toContainText('140,00')
-  await expect(page.locator('.allowance')).toContainText('al giorno')
+  // **Etichetta e valore**, dal 31 agosto: i numeri della Home non si raccontano
+  // piu' in seconda persona, e il tilde — notazione da programmatore — se n'e'
+  // andato col ritmo arrotondato all'euro.
+  await expect(page.locator('.rates__row').first()).toBeVisible()
+  await expect(page.locator('.rates')).not.toContainText('~')
+  // Il ritmo e' una riga della griglia: l'etichetta dice a cosa si riferisce, il
+  // valore porta la cifra — arrotondata all'euro, perche' e' una divisione.
+  const ritmo = page.locator('.rates__row').nth(2)
+  await expect(ritmo).toContainText('140 €')
+  await expect(ritmo).toContainText('giorni')
 
   // Una spesa vera dal FAB: il residuo scende nello stesso frame, senza attese.
   await page.locator('.fab').tap()
@@ -856,10 +863,12 @@ test('l ultimo giorno del periodo la Home dice un totale, non un ritmo', async (
   await chiudiGuida(page)
   await setBudget(page, '70000', 'A settimana')
 
-  const allowance = page.locator('.allowance')
-  await expect(allowance).toContainText('Puoi spendere')
+  // L'ultimo giorno **non e' un ritmo**: e' tutto il residuo, e resta al
+  // centesimo mentre gli altri ritmi si arrotondano all'euro (vedi `rate()`).
+  const allowance = page.locator('.rates__row').nth(2)
+  await expect(allowance).toBeVisible()
   await expect(allowance).toContainText('700,00')
-  await expect(allowance).toContainText('oggi')
+  await expect(allowance).toContainText('Oggi')
   // Le due cose che mentivano: la tilde e "al giorno".
   await expect(allowance).not.toContainText('~')
   await expect(allowance).not.toContainText('al giorno')
@@ -867,7 +876,7 @@ test('l ultimo giorno del periodo la Home dice un totale, non un ritmo', async (
   // che si contraddicevano a due righe di distanza — "Puoi spendere ~128,55 €
   // al giorno" e "Ultimo giorno del periodo" — e adesso e' una sola, che non
   // puo' contraddirsi.
-  await expect(allowance).toContainText('ultimo giorno del periodo')
+  await expect(allowance).toContainText('ultimo giorno')
   await expect(page.locator('.allowance__sub')).toHaveCount(0)
 })
 
@@ -1440,10 +1449,56 @@ async function statiDelRiquadro(
   // dettaglio piu' lungo delle due lingue.
   await page.clock.setFixedTime(new Date('2026-08-23T10:00:00+02:00'))
   await page.reload()
-  await expect(page.locator('.allowance')).toBeVisible()
+  await expect(page.locator('.rates__row').nth(2)).toBeVisible()
   const ultimoGiorno = await misuraRiserva(page)
 
-  return { 'senza budget': senzaBudget, 'meta settimana': metaSettimana, 'ultimo giorno': ultimoGiorno }
+  // **Lo stato piu' alto, e non e' quello che viene in mente.** Il budget nato a
+  // meta' periodo **e gia' sforato**: convivono tre righe della griglia, la prosa
+  // che prende il posto del ritmo, e la nota del periodo iniziato. Misurato,
+  // 147,25 px a 390 — piu' del caso "importi larghissimi", perche' li' la prosa
+  // e' una sola.
+  //
+  // Non c'era, e la riserva dimensionata su di lui faceva sembrare che avanzasse
+  // 23,75 px: il test misurava lo stato piu' alto **fra quelli che conosceva**.
+  // Il budget si scrive **sul disco** e non dal foglio: il foglio e' gia' stato
+  // usato due volte in questa scena, e riaprirlo per cambiare un importo che c'e'
+  // gia' e' una danza fragile che non prova niente di questo test. Le spese di
+  // prima si sostituiscono da sole: `seedOn` usa id fissi.
+  await page.clock.setFixedTime(new Date('2026-08-26T10:00:00+02:00'))
+  await seedOn(page, [['2026-08-24', 24_000], ['2026-08-24', 0]])
+  await page.evaluate(async () => {
+    const db: IDBDatabase = await new Promise((res, rej) => {
+      const r = indexedDB.open('cent')
+      r.onsuccess = () => res(r.result)
+      r.onerror = () => rej(r.error)
+    })
+    await new Promise<void>((res, rej) => {
+      const tx = db.transaction('budgets', 'readwrite')
+      const store = tx.objectStore('budgets')
+      store.clear()
+      store.put({
+        id: 'tardi',
+        createdAt: 1,
+        updatedAt: 1,
+        period: 'weekly',
+        amountCents: 20_000,
+        effectiveFrom: '2026-08-26',
+      })
+      tx.oncomplete = () => res()
+      tx.onerror = () => rej(tx.error)
+    })
+    db.close()
+  })
+  await page.reload()
+  await expect(page.locator('.since')).toBeVisible()
+  const sforatoTardi = await misuraRiserva(page)
+
+  return {
+    'senza budget': senzaBudget,
+    'meta settimana': metaSettimana,
+    'ultimo giorno': ultimoGiorno,
+    'sforato a meta settimana': sforatoTardi,
+  }
 }
 
 const LINGUE = [
@@ -1515,17 +1570,44 @@ test('una riga di troppo sfonda la riserva, cioe\' il gate cade ancora', async (
     'la riserva e\' dimensionata sulla larghezza piu\' stretta dei telefoni: e\' li\' che si prova',
   )
 
-  await page.clock.install({ time: new Date('2026-08-19T10:00:00+02:00') })
+  // **La scena e' quella piu' alta, e non e' piu' quella degli importi larghi.**
+  //
+  // Era `99.999,99 € a settimana con 10.000 € spesi prima`: li' la prosa e' una
+  // sola, e da quando i numeri sono righe di griglia quello stato non e' piu' il
+  // massimo. Il massimo e' il budget **nato a meta' periodo e gia' sforato**: tre
+  // righe di griglia, la prosa che prende il posto del ritmo, **e** la nota del
+  // periodo iniziato — 147,25 px contro 123,5.
+  //
+  // Misurando la scena vecchia il test vedeva 23,75 px di avanzo e chiamava in
+  // causa la riserva, che invece e' giusta: stava misurando **lo stato piu' alto
+  // fra quelli che conosceva**.
+  await page.clock.install({ time: new Date('2026-08-26T10:00:00+02:00') })
   await page.goto('./')
   await expect(page.locator('.budget')).toBeEnabled()
   await chiudiGuida(page)
-  await seedOn(page, [
-    ['2026-08-17', 499_999],
-    ['2026-08-18', 499_999],
-  ])
+  await seedOn(page, [['2026-08-24', 24_000]])
+  await page.evaluate(async () => {
+    const db: IDBDatabase = await new Promise((res, rej) => {
+      const r = indexedDB.open('cent')
+      r.onsuccess = () => res(r.result)
+      r.onerror = () => rej(r.error)
+    })
+    await new Promise<void>((res, rej) => {
+      const tx = db.transaction('budgets', 'readwrite')
+      tx.objectStore('budgets').put({
+        id: 'tardi',
+        createdAt: 1,
+        updatedAt: 1,
+        period: 'weekly',
+        amountCents: 20_000,
+        effectiveFrom: '2026-08-26',
+      })
+      tx.oncomplete = () => res()
+      tx.onerror = () => rej(tx.error)
+    })
+    db.close()
+  })
   await page.reload()
-  await expect(page.locator('.budget')).toBeEnabled()
-  await setBudget(page, '9999999', 'A settimana')
   await expect(page.locator('.since')).toBeVisible()
 
   const prima = await misuraRiserva(page)

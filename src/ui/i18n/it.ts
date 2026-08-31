@@ -126,7 +126,15 @@ export const it = {
   // dove si e' e lascia al numero il quanto.
   'hero.over': 'Oltre il budget',
   'hero.noBudget': 'nessun budget impostato per questo periodo',
-  'hero.note': 'di {budget} · {spent} spesi',
+  /* **Etichetta e valore, e il punto mediano non incolla piu' due frammenti.**
+   *
+   * Era `di 250,00 € · 0,00 € spesi`: due frammenti minuscoli tenuti insieme da
+   * un `·` che qui non separava dati ma reggeva mezza frase. Adesso sono due
+   * righe della stessa griglia di tutta la Home — etichetta a sinistra, valore a
+   * destra — e il `·` resta dov'e' un separatore vero, cioe' fra due dati
+   * (`24–30 ago · 424,00 €`). */
+  'hero.budget': 'Budget',
+  'hero.spentLabel': 'Speso',
 
   // L'invito dello stato senza budget, e **la sua lunghezza e' una misura di
   // layout**, non una questione di gusto.
@@ -152,8 +160,8 @@ export const it = {
   'home.budget.set': 'Imposta un budget',
   'home.budget.change': 'Cambia il budget',
   /* Vedi en.ts per l'argomento delle tre qui sotto. */
-  'home.pace.current': 'finora questa settimana, {amount} al giorno',
-  'home.pace.previous': 'la settimana scorsa, {amount} al giorno',
+  'home.pace.current': 'Finora questa settimana',
+  'home.pace.previous': 'La settimana scorsa',
   'home.previous.line': '{range} · {spent} su {budget}',
 
   'home.blank.title': 'Oggi non hai segnato niente',
@@ -173,7 +181,10 @@ export const it = {
   // disponibilita' (`rimanente / giorni rimanenti`). Sono due velocita' diverse,
   // e una legenda senza cifra manderebbe a leggere il numero sbagliato due righe
   // sopra.
-  'home.week.sustainable': '{amount} sostenibili al giorno',
+  /* **Il numero non si ripete.** Era `35,71 € sostenibili al giorno`, e quella
+   * cifra sta gia' tre righe sopra come `Al giorno`. Resta la parola, che e' cio'
+   * che la legenda deve dire: **quale** linea e' quella. */
+  'home.week.sustainable': 'sostenibile',
   /* Vedi en.ts: la frase col picco non puo' nominare un giorno che non c'e'. */
   'home.week.aria.empty':
     'Sette colonne, da lunedì a domenica: questa settimana non è ancora uscito niente.',
@@ -188,8 +199,15 @@ export const it = {
   'allowance.closed': 'Questo periodo è chiuso: il prossimo riparte da capo.',
   'allowance.late.weekly': 'Questa settimana era già iniziata: il budget vale pieno {from}.',
   'allowance.late.monthly': 'Questo mese era già iniziato: il budget vale pieno {from}.',
-  'allowance.last': 'Puoi spendere {amount} oggi, ultimo giorno del periodo',
-  'allowance.main': 'Puoi spendere ~{amount} al giorno per {days}',
+  'allowance.last': 'Oggi, ultimo giorno',
+  /* **Un numero non si racconta in seconda persona.**
+   *
+   * Era `Puoi spendere ~35,71 € al giorno per 7 giorni`: una frase, un tilde e
+   * una precisione al centesimo su una divisione. Adesso e' un'etichetta e un
+   * valore, come ogni altro numero della schermata; il ritmo si arrotonda
+   * all'euro (vedi `rate()`), e i giorni che restano stanno nell'etichetta —
+   * dove qualificano la cifra invece di allungare una frase. */
+  'allowance.main': 'Al giorno, per {days}',
   // I giorni che restano **senza un passo accanto**: il periodo e' sforato ed e'
   // il primo giorno, quindi `currentPaceCents` e' `null` (una media su un giorno
   // appena iniziato non e' un passo, vedi `budget.ts`). Non dice "Restano": la

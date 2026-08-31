@@ -240,6 +240,19 @@ export function Settings({
           {t('settings.guide.again')}
         </button>
       </section>
+
+      {/* **Quale build si sta guardando.**
+          
+          L'aggiornamento e' `prompt` (ADR 005): chi non lo accetta resta su una
+          build vecchia, e finora non c'era modo di saperlo dallo schermo. E'
+          gia' costato un giro di messaggi — una schermata giudicata su una build
+          diversa da quella pubblicata — e per il test degli amici *"quale build
+          hai visto"* deve avere una risposta.
+          
+          Non e' un bersaglio e non e' un'impostazione: e' un fatto, in fondo,
+          nel corpo piu' piccolo. Si seleziona col dito perche' la si dovra'
+          leggere ad alta voce o incollare in un messaggio. */}
+      <p class="prefs__build">{`cent · ${__COMMIT__} · ${__BUILD_DATE__}`}</p>
     </div>
   )
 }

@@ -298,12 +298,18 @@ describe('quanto puoi spendere al giorno', () => {
     const copy = frase(
       metrics({ today: MERCOLEDI, budgetCents: 20_000, spese: [spesa(LUNEDI, 5000)] }),
     )
-    // **I giorni stanno nella stessa riga del numero**, e non in un
-    // sottotitolo: la riga di dettaglio non c'e' piu' perche' riformulava, e
-    // l'unico fatto che aggiungeva — quanti giorni copre quella media — e'
-    // finito dentro la frase che lo reggeva gia'.
-    expect(copy.text).toContain('30,00')
-    expect(copy.text).toContain('5 giorni')
+    // **Etichetta e valore, e non piu' una frase.** I numeri della Home hanno
+    // una grammatica sola dal 31 agosto: la seconda persona resta dove c'e' uno
+    // stato, non dove c'e' una cifra. I giorni che la media copre stanno
+    // nell'**etichetta**, dove qualificano il valore.
+    //
+    // E il ritmo si arrotonda all'euro: viene da una divisione, e le sue ultime
+    // due cifre non significano niente. `30,00 €` diventa `30 €`, senza tilde —
+    // che era notazione da programmatore. L'argomento sta su `rate()`.
+    expect(norm(copy.amount?.value ?? '')).toBe('30 €')
+    expect(copy.amount?.value, 'il ritmo porta ancora i centesimi').not.toContain(',')
+    expect(copy.amount?.label).toContain('5 giorni')
+    expect(copy.text, 'un ritmo non e\' una frase').toBe('')
     expect(copy.over).toBe(false)
   })
 
@@ -316,12 +322,16 @@ describe('quanto puoi spendere al giorno', () => {
    */
   it('l ultimo giorno e un totale, non un ritmo: niente tilde e niente "al giorno"', () => {
     const copy = frase(metrics({ today: DOMENICA, budgetCents: 20_000 }))
-    expect(norm(copy.text)).toBe('Puoi spendere 200,00 € oggi, ultimo giorno del periodo')
-    expect(copy.text).not.toContain('~')
-    expect(copy.text).not.toContain('al giorno')
-    // E il "1 giorni" non compare: con un giorno solo la frase non conta
+    // **E resta al centesimo**, unico fra i valori di questa riga: non e' un
+    // ritmo, e' tutto il residuo disponibile adesso. La regola di `rate()` dice
+    // *euro dove c'e' una divisione*, e qui la divisione e' per uno.
+    expect(norm(copy.amount?.value ?? '')).toBe('200,00 €')
+    expect(norm(copy.amount?.label ?? '')).toBe('Oggi, ultimo giorno')
+    expect(copy.amount?.label).not.toContain('~')
+    expect(copy.amount?.label).not.toContain('al giorno')
+    // E il "1 giorni" non compare: con un giorno solo l'etichetta non conta
     // giorni, dice qual e'.
-    expect(copy.text).not.toContain('1 giorni')
+    expect(copy.amount?.label).not.toContain('1 giorni')
   })
 
   /**
@@ -333,7 +343,7 @@ describe('quanto puoi spendere al giorno', () => {
     const m = metrics({ today: DOMENICA, budgetCents: 20_000, spese: [spesa(LUNEDI, 7145)] })
     expect(m.daysRemaining).toBe(1)
     expect(m.dailyAllowanceCents).toBe(m.remainingCents)
-    expect(norm(frase(m).text)).toBe('Puoi spendere 128,55 € oggi, ultimo giorno del periodo')
+    expect(norm(frase(m).amount?.value ?? ''), 'l\'ultimo giorno e\' un totale: centesimi').toBe('128,55 €')
   })
 
   it('col residuo negativo non promette un tetto negativo: dice che il budget e finito', () => {
@@ -369,9 +379,15 @@ describe('quanto puoi spendere al giorno', () => {
     const copy = frase(
       metrics({ today: MERCOLEDI, budgetCents: 20_000, spese: [spesa(LUNEDI, 19_997)] }),
     )
-    // Nessuna promessa di `~0,00 € al giorno`: la riga passa al passo, che e'
+    // Nessuna promessa di `0 € al giorno`: la riga passa al passo, che e'
     // l'unico numero ancora azionabile.
-    expect(copy.text).not.toContain('Puoi spendere')
+    //
+    // Si guarda `amount === null` e non una stringa: dal 31 agosto il ritmo e'
+    // etichetta+valore, e cercare *"Puoi spendere"* sarebbe cercare una frase
+    // che **non esiste piu' in nessun ramo** — un test verde per assenza, cioe'
+    // quello che questo file esiste per non essere.
+    expect(copy.amount, 'lo sforo promette ancora un tetto al giorno').toBeNull()
+    expect(copy.text, 'lo sforo non dice niente').not.toBe('')
     expect(copy.over).toBe(true)
   })
 
@@ -383,12 +399,21 @@ describe('quanto puoi spendere al giorno', () => {
     expect(copy.over).toBe(true)
   })
 
-  it('un centesimo al giorno e ancora una disponibilita, e si dice', () => {
+  it('un centesimo al giorno e ancora una disponibilita, e arrotondato fa 0 €', () => {
     // Il confine dall'altra parte: 5 centesimi su 5 giorni fanno 1 al giorno.
     const copy = frase(
       metrics({ today: MERCOLEDI, budgetCents: 20_000, spese: [spesa(LUNEDI, 19_995)] }),
     )
-    expect(copy.text).toContain('0,01')
+    // **`0 €`, e non `0,01 €`.** E' la conseguenza voluta di `rate()`: un ritmo
+    // e' una guida, e la guida con cinque centesimi in cinque giorni e' *"circa
+    // niente al giorno"*. `0,01 €` era preciso e inutile.
+    //
+    // Cio' che il test difende non e' la cifra ma **il ramo**: qui c'e' ancora
+    // una disponibilita', quindi la riga e' quella del ritmo e non quella dello
+    // sforo. Se il confine si spostasse, `over` diventerebbe `true` e questo
+    // cadrebbe — che e' l'unica cosa che aveva senso proteggere.
+    expect(norm(copy.amount?.value ?? '')).toBe('0 €')
+    expect(copy.amount?.label, 'non e\' piu\' la riga del ritmo').toContain('giorni')
     expect(copy.over).toBe(false)
   })
 
@@ -568,8 +593,10 @@ describe('il budget nato a meta periodo', () => {
     const start = budgetStart(m, spese)
     expect(start.beforeCents).toBe(0)
     expect(startNote(m, start)).toBeNull()
-    // La riga utile resta quella, e non e' toccata da questa correzione.
-    expect(allowanceCopy(m, start).text).toContain('Puoi spendere')
+    // La riga utile resta quella, e non e' toccata da questa correzione. Si
+    // guarda il **ramo** — c'e' un tetto al giorno da nominare — e non una
+    // frase che dal 31 agosto non esiste piu': i numeri sono etichetta+valore.
+    expect(allowanceCopy(m, start).amount, 'non e\' il ramo del ritmo').not.toBeNull()
   })
 
   it('col residuo negativo per le sole spese di prima, dice il fatto e non la colpa', () => {

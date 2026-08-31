@@ -164,3 +164,18 @@
 .pick:disabled {
   opacity: 0.45;
 }
+
+/* La riga della build, in fondo alle Impostazioni. Non e' una voce e non e' un
+ * bersaglio: e' un fatto, e lo dice essendo piu' piccola e piu' spenta di tutto
+ * il resto. `user-select: text` perche' la si legge ad alta voce o la si
+ * incolla in un messaggio — e' l'unico testo dell'app per cui questo serve. */
+.prefs__build {
+  margin-block-start: var(--sp-6);
+  text-align: center;
+  color: var(--text-muted);
+  font-size: var(--fs-100);
+  line-height: var(--lh-snug);
+  font-variant-numeric: tabular-nums;
+  user-select: text;
+  -webkit-user-select: text;
+}

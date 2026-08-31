@@ -1255,6 +1255,32 @@
   min-block-size: 2.5rem;
 }
 
+/* **Una parte senza grafico e' il dettaglio di una quota, e si legge cosi'.**
+ *
+ * Dal 31 agosto due righe non sono un grafico (`BREAKDOWN_MIN_ROWS`), e le barre
+ * sono sparite. Guardato sul telefono, il blocco delle Fisse era diventato
+ * un'intestazione e due righe con un vuoto largo in mezzo — accanto alle
+ * Quotidiane, dove quel vuoto e' pieno di barre, si leggeva come una tabella
+ * rotta invece che come una scelta.
+ *
+ * Le barre non tornano. Cambia **cosa sono quelle righe**: non il soggetto della
+ * schermata — quello sono le Quotidiane — ma il dettaglio di una quota che la
+ * barra in cima ha gia' mostrato. Quindi piu' compatte (il passo cade da 40 a 28
+ * px, che e' il minimo che tiene due righe distinte senza toccarsi) e piu'
+ * leggere: il nome scende a `--text-muted`, l'importo resta `--text` perche' e'
+ * il dato.
+ *
+ * **Non e' un bersaglio**: quelle righe non si toccano — la parte non ha una
+ * seconda vista — quindi il pavimento dei 44 px non le riguarda, ed e' la
+ * ragione per cui il passo puo' scendere. */
+.stats__rows:not([data-chart]) .stat {
+  min-block-size: 1.75rem;
+}
+
+.stats__rows:not([data-chart]) .stat__name {
+  color: var(--text-muted);
+}
+
 /* L'etichetta: **due righe, poi i puntini**.
  *
  * Era una riga sola con `text-overflow: ellipsis`, ed e' il punto in cui le tre

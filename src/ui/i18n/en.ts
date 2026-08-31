@@ -96,7 +96,9 @@ export const en: Record<keyof typeof it, string> = {
   // nominare lo stato.
   'hero.over': 'Over budget',
   'hero.noBudget': 'no budget set for this period',
-  'hero.note': 'of {budget} · {spent} spent',
+  /* Vedi it.ts: etichetta e valore, e il punto mediano torna a separare dati. */
+  'hero.budget': 'Budget',
+  'hero.spentLabel': 'Spent',
 
   // Due righe, e la ragione sta in it.ts: **e' l'inglese a decidere la riserva**
   // del riquadro, quindi e' questa frase che va misurata prima di allungarla.
@@ -120,8 +122,8 @@ export const en: Record<keyof typeof it, string> = {
    * cominciata e' **questa**, il lunedi' e' **quella prima** — e dirlo e'
    * obbligatorio, altrimenti sarebbe un ritmo attribuito a giorni che non sono
    * ancora stati vissuti. */
-  'home.pace.current': 'so far this week, {amount} a day',
-  'home.pace.previous': 'last week, {amount} a day',
+  'home.pace.current': 'So far this week',
+  'home.pace.previous': 'Last week',
 
   /* La riga del periodo prima, dove stava il titolo orfano *"Oggi non hai
    * segnato niente"* seguito dal vuoto. Un **fatto**, non una proiezione, e
@@ -135,7 +137,7 @@ export const en: Record<keyof typeof it, string> = {
   // La striscia dei sette giorni. La legenda porta la cifra perche' il passo
   // sostenibile non e' il numero della riga sopra: vedi it.ts.
   'home.week.title': 'Day by day',
-  'home.week.sustainable': '{amount} a day is sustainable',
+  'home.week.sustainable': 'sustainable',
   /* **La stessa descrizione senza il picco.** Da quando la striscia resta anche
    * a settimana vuota, `week.peak` puo' essere `null`: non e' un giorno a zero,
    * e' l'assenza di un giorno da nominare. La frase con `{day}` e `{amount}`
@@ -152,8 +154,8 @@ export const en: Record<keyof typeof it, string> = {
   'allowance.closed': 'This period is over: the next one starts from scratch.',
   'allowance.late.weekly': 'This week had already started: the budget counts in full {from}.',
   'allowance.late.monthly': 'This month had already started: the budget counts in full {from}.',
-  'allowance.last': 'You can spend {amount} today, the last day of the period',
-  'allowance.main': 'You can spend ~{amount} a day for {days}',
+  'allowance.last': 'Today, the last day',
+  'allowance.main': 'A day, for {days}',
   // Sforato **il primo giorno**: non c'e' ancora un passo da mostrare accanto ai
   // giorni. Non dice "Left": quella parola sta sopra il numero grande e li'
   // sono soldi.

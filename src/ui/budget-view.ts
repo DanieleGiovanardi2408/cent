@@ -16,7 +16,7 @@ import type { IsoDate } from '../core/date'
 import { sumCents } from '../core/money'
 import type { Cents } from '../core/money'
 import type { Budget, BudgetPeriod, Expense } from '../core/types'
-import { daysLabel, fromDayLabel, money, t } from './i18n'
+import { daysLabel, fromDayLabel, money, rate, t } from './i18n'
 
 /**
  * Il periodo che la Home mostra: **quello dell'ultimo budget impostato**.
@@ -106,11 +106,35 @@ export interface Segment {
   readonly strong?: true
 }
 
+/** Un'etichetta e il suo valore: la grammatica unica dei numeri della Home. */
+export interface LabelledAmount {
+  readonly label: string
+  readonly value: string
+}
+
 export interface HeroCopy {
   /** Cosa e' il numero grande. Una parola, sopra il numero. */
   readonly label: string
   readonly value: string
-  readonly note: string
+  /**
+   * **La prosa sotto il numero grande**, e ne resta una sola: *"nessun budget
+   * impostato per questo periodo"*. E' uno **stato**, non un numero, ed e' per
+   * questo che qui la seconda persona e la frase compiuta vanno bene.
+   *
+   * Con un budget e' `null`, e cio' che c'era — `di 250,00 € · 0,00 € spesi` —
+   * e' diventato `rows`: due etichette con i loro valori, nella stessa grammatica
+   * di tutta la schermata.
+   */
+  readonly note: string | null
+  /**
+   * **Le righe etichetta+valore sotto il numero grande.** Vuote dove non c'e' un
+   * budget, perche' li' non ci sono due cifre da nominare ma uno stato da dire.
+   *
+   * Sono dati e non stringhe formattate a coppie perche' il valore deve poter
+   * finire nella **stessa colonna** degli altri numeri della Home: una frase
+   * gia' composta non si incolonna.
+   */
+  readonly rows: readonly LabelledAmount[]
   /**
    * **Cosa non c'e' dentro il numero grande**: le spese fisse del periodo
    * (ADR 016 §2). `null` quando non ce n'e' nessuna.
@@ -159,6 +183,7 @@ export function heroCopy(m: BudgetMetrics): HeroCopy {
       label: t('hero.spent'),
       value: money(m.spentCents),
       note: t('hero.noBudget'),
+      rows: [],
       fixed,
       over: false,
     }
@@ -175,7 +200,11 @@ export function heroCopy(m: BudgetMetrics): HeroCopy {
     // identico adesso. Cambia solo cio' che lo nomina.
     label: t(over ? 'hero.over' : 'hero.remaining'),
     value: money(m.remainingCents),
-    note: t('hero.note', { budget: money(m.budgetCents), spent: money(m.spentCents) }),
+    note: null,
+    rows: [
+      { label: t('hero.budget'), value: money(m.budgetCents) },
+      { label: t('hero.spentLabel'), value: money(m.spentCents) },
+    ],
     fixed,
     over,
   }
@@ -289,6 +318,17 @@ export function startNote(m: BudgetMetrics, start: BudgetStart): string | null {
 
 export interface AllowanceCopy {
   /**
+   * **La riga in forma etichetta+valore**, `null` dove non c'e' un valore da
+   * incolonnare.
+   *
+   * Gli stati che restano prosa sono quelli che dicono **uno stato** e non un
+   * numero — il periodo chiuso, il budget nato a meta' settimana, i giorni che
+   * restano quando la disponibilita' non esiste. Li' la seconda persona e la
+   * frase compiuta sono giuste; la regola vieta di raccontare **le cifre** in
+   * seconda persona, non di parlare.
+   */
+  readonly amount: LabelledAmount | null
+  /**
    * **Il livello 3 della Home: una riga sola, e l'unica azionabile.**
    *
    * Erano due — `main` in 20px e `sub` in 13px — e la seconda non aggiungeva un
@@ -372,7 +412,7 @@ export interface AllowanceCopy {
  */
 export function allowanceCopy(m: BudgetMetrics, start: BudgetStart): AllowanceCopy {
   if (m.daysRemaining === 0) {
-    return { text: t('allowance.closed'), over: false }
+    return { text: t('allowance.closed'), amount: null, over: false }
   }
   const daily = m.dailyAllowanceCents
   const exhausted = daily === null || daily === 0 || m.remainingCents === null || m.remainingCents < 0
@@ -389,6 +429,7 @@ export function allowanceCopy(m: BudgetMetrics, start: BudgetStart): AllowanceCo
       text: t(m.period === 'weekly' ? 'allowance.late.weekly' : 'allowance.late.monthly', {
         from: fromDayLabel(m.period, addDays(m.range.end, 1)),
       }),
+      amount: null,
       over: false,
     }
   }
@@ -400,7 +441,7 @@ export function allowanceCopy(m: BudgetMetrics, start: BudgetStart): AllowanceCo
     // soli. **E' uno stato raggiungibile**, non un ramo teorico: basta spendere
     // in un giorno piu' del budget dell'intera settimana.
     if (m.currentPaceCents === null || m.sustainablePaceCents === null) {
-      return { text: t('allowance.left', { days }), over: true }
+      return { text: t('allowance.left', { days }), amount: null, over: true }
     }
     // I giorni **davanti**, perche' sono la cosa su cui si puo' ancora
     // decidere; i due passi dietro, perche' dicono di quanto si sta andando
@@ -413,6 +454,7 @@ export function allowanceCopy(m: BudgetMetrics, start: BudgetStart): AllowanceCo
         pace: money(m.currentPaceCents),
         sustainable: money(m.sustainablePaceCents),
       }),
+      amount: null,
       over: true,
     }
   }
@@ -427,10 +469,18 @@ export function allowanceCopy(m: BudgetMetrics, start: BudgetStart): AllowanceCo
   // "per oggi, che e' l'ultimo giorno". Due frasi che si contraddicono nello
   // spazio di due righe. Adesso la riga e' una sola e il caso ha una frase sua.
   if (m.daysRemaining === 1) {
-    return { text: t('allowance.last', { amount: money(daily) }), over: false }
+    return {
+      text: '',
+      amount: { label: t('allowance.last'), value: money(daily) },
+      over: false,
+    }
   }
   return {
-    text: t('allowance.main', { amount: money(daily), days: daysLabel(m.daysRemaining) }),
+    text: '',
+    // **Il ritmo si arrotonda all'euro** (`rate()`): viene da una divisione, e
+    // le sue ultime due cifre non significano niente. L'ultimo giorno no — li'
+    // non e' un ritmo ma tutto il residuo, e resta al centesimo.
+    amount: { label: t('allowance.main', { days: daysLabel(m.daysRemaining) }), value: rate(daily) },
     over: false,
   }
 }

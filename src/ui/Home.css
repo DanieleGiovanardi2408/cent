@@ -60,7 +60,8 @@
    * motivo: lo stesso numero, scritto a mano. */
   --line-allowance: calc(var(--fs-300) * var(--lh-snug)); /* .allowance */
   --line-note: calc(var(--fs-100) * var(--lh-snug)); /* .since, .fixed */
-  --line-pace: calc(var(--fs-200) * var(--lh-body)); /* .pace, .invite */
+  --line-pace: calc(var(--fs-200) * var(--lh-body)); /* .invite */
+  --line-amount: calc(var(--fs-200) * var(--lh-snug)); /* .rates__row */
 
   /* **Quante** righe ciascuna puo' prendere. Sono i numeri misurati, in
    * italiano e in inglese, su tutti gli stati del riquadro:
@@ -113,6 +114,11 @@
   --rows-since: 2;
   --rows-fixed: 1;
   --rows-pace: 1;
+  /* **Le righe etichetta+valore del blocco dei numeri**, dal 31 agosto: Budget,
+   * Speso, il ritmo consentito, il ritmo vero. Erano due frasi di due taglie
+   * diverse; adesso sono quattro righe della stessa griglia, e la riserva le
+   * conta come quattro. */
+  --rows-amount: 4;
   /* Il ritmo vero, la riga nuova sotto la disponibilita'. Una riga: porta un
    * importo e una finestra, e a 320 punti in inglese sta ancora su una — se un
    * giorno non ci stesse, questo numero e' il posto dove dirlo, e il test della
@@ -136,11 +142,29 @@
    * all'accorciamento dell'invito vinceva la seconda con 98, ed e' esattamente
    * per questo che il `max()` sta scritto per esteso: il vincitore e' cambiato
    * senza che nessuno dovesse ricordarsi di girare una somma. */
+  /* **Lo stato piu' alto, misurato e non stimato: 147,25 px a 390 punti.**
+   *
+   * Non e' quello che viene in mente — non e' "quattro righe di numeri" — ed e'
+   * per questo che gli addendi stanno scritti invece di un totale: e' il budget
+   * **nato a meta' periodo e gia' sforato**, dove convivono tre righe della
+   * griglia (Budget, Speso, il ritmo vero), la **prosa** dello sforo che prende
+   * il posto del ritmo consentito, e la nota del periodo iniziato.
+   *
+   *     3 righe griglia   3 x 18,75 = 56,25
+   *     prosa dello sforo 2 x 21,25 = 42,50
+   *     nota del periodo  2 x 16,25 = 32,50
+   *     quattro distacchi 4 x  4,00 = 16,00
+   *                                   ------
+   *                                   147,25
+   *
+   * L'altro ramo — quattro righe di griglia e nessuna prosa — vale 87, e ci sta
+   * dentro. Quello senza budget vale 94, e pure. */
   --body-min: max(
     calc(
-      var(--rows-allowance) * var(--line-allowance) + var(--sp-1) + var(--rows-real) *
-        var(--line-pace) + var(--sp-2) + var(--rows-since) * var(--line-note)
+      3 * var(--line-amount) + var(--rows-allowance) * var(--line-allowance) +
+        var(--rows-since) * var(--line-note) + 4 * var(--sp-1)
     ),
+    calc(var(--rows-amount) * var(--line-amount) + 3 * var(--sp-1)),
     calc(var(--rows-invite) * var(--line-pace) + var(--sp-2) + var(--rows-pace) * var(--line-pace))
   );
 
@@ -1001,21 +1025,70 @@
  * **Il guadagno viene dal contenuto, non dalla riserva.** Va scritto perche' la
  * proiezione era un'altra: avevo previsto 118 px liberati da D, e D da solo ne
  * libera zero — sposta soltanto dove cade l'aria. */
+/* **La griglia unica dei numeri della Home**: etichetta a sinistra, valore a
+ * destra, e i valori nella stessa colonna fra righe che prima appartenevano a
+ * blocchi diversi. E' la forma che rende vera la regola *"una sola grammatica
+ * per i numeri"*: una frase gia' composta non si incolonna. */
 .rates {
-  display: flex;
-  flex-direction: column;
-  gap: var(--sp-1);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
+  align-items: baseline;
+  row-gap: var(--sp-1);
+  column-gap: var(--sp-3);
   min-block-size: var(--body-min);
 }
 
 /* Il ritmo vero. Piu' spento della riga del consentito e subito sotto: e' il suo
  * termine di paragone, non una seconda affermazione. Tabulari perche' i due
  * numeri si leggono uno sopra l'altro e devono incolonnarsi. */
-.pace {
-  color: var(--text-muted);
+/* Una riga della griglia: `display: contents` perche' le due celle devono
+ * finire nelle colonne della **griglia della sezione**, non in una griglia loro
+ * — altrimenti ogni riga si incolonnerebbe da sola e la colonna dei valori non
+ * esisterebbe. */
+.rates__row {
+  display: contents;
+}
+
+/* **Cio' che non e' etichetta+valore attraversa tutte e due le colonne.**
+ *
+ * Sono le righe di **prosa** — l'invito senza budget, la frase dello sforo, la
+ * nota del budget nato a meta' periodo — e senza questa riga finivano nella
+ * prima colonna, larga `1fr`, con il passo accanto in `max-content`: `.invite`
+ * misurava **225 px** invece di 45, cioe' andava a capo cinque volte in una
+ * colonna che non era la sua. */
+.rates > .invite,
+.rates > .pace,
+.rates > .allowance,
+.rates > .since {
+  grid-column: 1 / -1;
+}
+
+.rates__label {
+  color: var(--text);
+  font-size: var(--fs-200);
+  line-height: var(--lh-snug);
+}
+
+.rates__value {
+  text-align: end;
+  color: var(--text);
   font-size: var(--fs-200);
   line-height: var(--lh-snug);
   font-variant-numeric: tabular-nums;
+}
+
+/* Il ritmo vero: e' il **termine di paragone** di quello consentito, non una
+ * seconda affermazione, e lo dice essendo piu' spento. */
+.rates__row--soft .rates__label,
+.rates__row--soft .rates__value {
+  color: var(--text-muted);
+}
+
+/* Sforati, la riga porta il tono: e' l'unico posto della Home in cui un numero
+ * cambia colore, e lo fa perche' cambia di segno. */
+.rates__row[data-tone='over'] .rates__label,
+.rates__row[data-tone='over'] .rates__value {
+  color: var(--over);
 }
 
 /* La settimana scorsa contro il suo budget, dove stava il vuoto sotto il titolo
