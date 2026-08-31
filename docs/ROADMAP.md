@@ -25,16 +25,16 @@ sa gia', e per questo non puo' invecchiare. I giudizi — cosa e' in volo, cosa
 aspetta una persona — stanno sotto, scritti a mano e timbrati con lo SHA a cui
 sono stati rivisti.
 
-- **Ultimo commit**: `53740b8` — feat: una lingua sola per la Home, le Fisse piu' leggere, e la build a schermo
+- **Ultimo commit**: `afd6e30` — docs: i fatti dopo la lingua della Home
 - **Data**: 31/08/2026 18:37
 - **Ramo**: `main`
-- **Pushato**: **no: 1 commit non pushati su `origin/main`**
-- **Albero di lavoro**: pulito
+- **Pushato**: si, `origin/main` e' allo stesso commit
+- **Albero di lavoro**: **non pulito**, ci sono modifiche non committate
 
 - **Test unitari**: 755 in 25 file, tutti verdi
 - **Test e2e dichiarati**: 413 in 14 file, su 4 progetti (iphone-se, iphone-14, landscape, dark)
-- **Test e2e eseguiti**: 395 passati, 18 saltati, in 2.7 minuti. I saltati sono condizionali (ADR 013): solo un'esecuzione li vede.
-- **Bundle iniziale**: 59.1 KB gzip su 60.0 KB (0.9 KB di margine)
+- **Test e2e eseguiti**: non misurato — l'ultima esecuzione e' piu' vecchia dei sorgenti — va rilanciata
+- **Bundle iniziale**: non misurato — `dist/` e' piu' vecchio dei sorgenti — va ricostruito
 
 - **Schema del database**: 5. La scala delle migrazioni:
   - **1** — Schema iniziale: expenses, categories, recurringRules, budgets, settings
@@ -52,7 +52,7 @@ sono stati rivisti.
 ## In volo adesso
 
 <!-- JUDGMENT rivisto=2d9f75e -->
-> Rivisto a `2d9f75e`, 21 commit fa. **Da riguardare.**
+> Rivisto a `2d9f75e`, 22 commit fa. **Da riguardare.**
 
 **Fase 6 sul ramo `fase-6-wip`, tredici commit sopra `origin/main`.** Il ramo e'
 spinto a ogni rientro.
@@ -122,6 +122,44 @@ qui sopra rischiano di **tacere un difetto**, e si spedisce. I *giudizi* di ques
 meta' rischiano di **dichiarare aperto cio' che e' chiuso**, e si rifa' lavoro che
 esiste. Sono due guasti diversi, e il secondo e' quello che una lista scritta a
 mano produce da sola.
+
+### Due difetti trovati dentro i test, 31 agosto
+
+Non sono aneddoti: sono la stessa forma, e la forma e' che **una verifica puo'
+essere giusta e guardare l'oggetto sbagliato**.
+
+1. **La riserva della Home era calcolata su uno stato che non era il piu' alto.**
+   Ho preso "quattro righe di numeri" per il massimo; il massimo e' il budget
+   **nato a meta' periodo e gia' sforato** — tre righe di griglia, la prosa che
+   prende il posto del ritmo, e la nota del periodo — 147,25 px contro 123,5. E
+   la **controprova**, il test che esiste per dimostrare che il gate cade ancora,
+   puntava a una scena che non era nemmeno lei la piu' alta: vedeva 23,75 px di
+   avanzo e dava la colpa alla riserva, mentre stava misurando *lo stato piu'
+   alto fra quelli che conosceva*.
+
+   E' la stessa forma del difetto del giorno prima — le barre delle Fisse che
+   cambiavano toccando le Quotidiane — spostata **dentro un test**.
+
+2. **`.amount` era gia' preso**, dal foglio del budget, e l'ho riusato per le
+   righe della Home. L'ha trovato **Playwright in modalita' strict** — *"resolved
+   to 4 elements"* — e non una rilettura, un `grep` o una revisione. Una classe
+   nuova si cerca prima di scriverla, e il costo di non farlo lo paga un test in
+   un punto che non c'entra niente.
+
+### Il bundle: la leva dei dizionari non serve (B1/B2, 31 agosto)
+
+- **B1.** Il service worker precarica **tutto**: `globPatterns:
+  ['**/*.{js,css,html,svg,woff2}']`, verificato leggendo il precache in
+  `dist/sw.js`. Spezzare `en.ts` in un chunk a richiesta non abbassa i byte della
+  prima installazione — e nemmeno il numero riportato, perche' `scripts/size.mjs`
+  somma **tutti** i `.js`/`.css` di `dist/`, non il solo chunk d'ingresso.
+- **B2.** E se lo si escludesse dal precache, chi cambia lingua **da offline**
+  resterebbe senza testi: l'import dinamico fallirebbe. Su un'app offline-first
+  e' un prezzo che nessuno ha chiesto di pagare.
+
+Quindi la leva **non esiste**, e la discussione e' se alzare il tetto. La ragione
+del 60,0 e' adesso scritta accanto al numero in `CLAUDE.md`: alzarlo si puo', in
+silenzio no.
 
 ### Dieci rilievi da uno sguardo, 29 agosto
 

@@ -51,7 +51,26 @@ decisione sbagliata. Tutto il resto dell'app e' secondario a questo flusso.
 - Zero altre dipendenze runtime senza una ADR scritta in `docs/adr/`.
 
 ## Performance budget (verificabile)
-- Bundle JS iniziale < 60 KB gzip. Se si supera, si taglia.
+- **Primo caricamento < 60 KB gzip, JS + CSS insieme.** Se si supera, si taglia —
+  oppure si alza il tetto **con la ragione scritta accanto**, mai in silenzio.
+
+  **Il numero e' nostro, e la ragione e' di prodotto**: la prima persona che
+  aprira' questa app lo fara' su una connessione dati estera, in Erasmus, con un
+  piano che si paga a megabyte. Sessanta chilobyte sono circa un secondo su una
+  3G lenta, ed e' il tempo entro cui una PWA smette di sembrare un sito e comincia
+  a sembrare un'app. Non e' una soglia di performance astratta: e' quanto siamo
+  disposti a far pagare a qualcuno per la prima apertura.
+
+  Questa riga diceva *"JS"* e lo script misura **JS + CSS** (`scripts/size.mjs`,
+  `npm run size`): il documento si allinea allo script e non viceversa, perche' e'
+  lo script che gira ed e' **piu' severo** di quanto il documento dichiarasse.
+
+  **E misura `dist/` intero, non il solo chunk d'ingresso.** Spezzare un modulo in
+  un chunk a richiesta non abbassa questo numero, e non abbassa nemmeno i byte
+  della prima installazione: `globPatterns: ['**/*.{js,css,html,svg,woff2}']`
+  mette **ogni** file nel precache del service worker. Verificato leggendo
+  `dist/sw.js`. Il service worker resta fuori dal conto — arriva dopo il primo
+  frame — ed e' l'unica esclusione.
 - FCP < 1.0s, TTI < 1.5s su 4G simulata. CLS = 0.
 - Ogni interazione (tap -> feedback) < 100 ms. Optimistic UI sempre.
 - Liste fluide a 60fps con 5.000 spese in archivio.
