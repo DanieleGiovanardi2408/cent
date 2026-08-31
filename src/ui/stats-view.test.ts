@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { makeBudget, makeCategory, makeExpense, makeRule } from '../core/testing'
+import { addDays } from '../core/date'
 import { sumCents } from '../core/money'
 import type { Cents } from '../core/money'
 import type { Budget, Category, Expense, RecurringRule } from '../core/types'
@@ -243,6 +244,27 @@ function invariantiDiA(v: Ready) {
   // regole per sezione che non e' tornata con 0a, e la ragione e' che era la
   // causa misurata del difetto: l'argomento sta su `BREAKDOWN_MIN_ROWS`.
   expect(v.byCategory.asChart).toBe(tutte.length >= BREAKDOWN_MIN_ROWS)
+
+  // **`previous` c'e' se e solo se A e' vuota**, e non e' una rifinitura: e' cio'
+  // che tiene in piedi la sezione il lunedi' mattina. Un `previous` su una
+  // sezione piena sarebbe una cifra di un altro periodo accanto a una che parla
+  // di questo.
+  if (v.byCategory.sections.length === 0) {
+    const prev = v.byCategory.previous
+    if (prev !== null) {
+      // Il periodo prima confina con quello guardato: la sua fine e' il giorno
+      // prima dell'inizio del corrente. Se divergessero, la frase manderebbe
+      // l'utente in un periodo che non e' quello che sta per raggiungere.
+      expect(addDays(prev.range.end, 1)).toBe(v.current.range.start)
+      // Non e' un'uscita verso un secondo vuoto: mandare l'utente in un periodo
+      // altrettanto spoglio sarebbe mandarlo in un'altra stanza vuota.
+      // (Che il totale sia quello di **A** — fisse comprese, non quello di B —
+      // lo prova la scena nominata piu' sotto, dove i due numeri differiscono.)
+      expect(prev.totalCents).toBeGreaterThan(0)
+    }
+  } else {
+    expect(v.byCategory.previous).toBeNull()
+  }
 
   const { split } = v.byCategory
   const fisseCents = v.current.recurringSpentCents
@@ -2306,5 +2328,105 @@ describe('un budget piu giovane dei dati', () => {
     )
     expect(prima.fraction).toBeGreaterThanOrEqual(BAR_MIN_FRACTION)
     invariantiDiA(v)
+  })
+})
+
+describe('il lunedi mattina: A resta in piedi e porta l uscita', () => {
+  /**
+   * **La scena che ha prodotto la riparazione.** Il 31 agosto, un lunedi', le
+   * Statistiche si sono aperte senza la sezione A — niente titolo, niente numero
+   * grande, niente ciambella — e chi guardava ha creduto di aver perso i dati.
+   *
+   * Le spese stanno **tutte nella settimana prima**, e ce n'e' una fissa: e' la
+   * premessa che rende il test una prova invece di una descrizione, perche' A
+   * conta tutto e B conta solo il variabile. Se `previous.totalCents` venisse da
+   * B — la strada comoda, le righe erano gia' li' — questo test cadrebbe.
+   */
+  const LUNEDI = '2026-08-31'
+  const scena = [
+    makeExpense({ amountCents: 4200, date: '2026-08-25', categoryId: 'c1' }),
+    makeExpense({ amountCents: 3500, date: '2026-08-27', categoryId: 'c2' }),
+    makeExpense({ amountCents: 2800, date: '2026-08-28', categoryId: 'c1' }),
+    // La fissa: sta in A e **non** in B.
+    makeExpense({
+      amountCents: 50000,
+      date: '2026-08-25',
+      categoryId: 'c2',
+      source: 'recurring',
+      recurringId: 'r1',
+    }),
+  ]
+  const vista = (): Ready => {
+    const v = statsView({
+      expenses: scena,
+      categories: [makeCategory({ id: 'c1', name: 'Casa' }), makeCategory({ id: 'c2', name: 'Svago' })],
+      rules: [],
+      budgets: [],
+      period: 'weekly',
+      day: LUNEDI,
+    })
+    if (v.kind !== 'ready') throw new Error(`la vista e' "${v.kind}", non "ready"`)
+    return v
+  }
+
+  it('non e blank ne outside: le spese ci sono, ed e il periodo a essere vuoto', () => {
+    // `blank` sarebbe "non hai mai speso" e `outside` "non c'e' niente da
+    // nessuna parte": tutte e due false qui, e tutte e due direbbero all'utente
+    // una cosa che lo schermo non conferma.
+    expect(vista().kind).toBe('ready')
+  })
+
+  it('A non ha sezioni, e proprio per questo porta il periodo prima', () => {
+    const v = vista()
+    expect(v.byCategory.sections).toHaveLength(0)
+    expect(v.byCategory.previous).not.toBeNull()
+  })
+
+  it('il totale del periodo prima e quello di A: le fisse sono dentro', () => {
+    // 42 + 35 + 28 + 500 = 605,00 €. Il totale di **B** per la stessa settimana
+    // sarebbe 105,00 €, ed e' esattamente la cifra che si otterrebbe leggendo le
+    // righe gia' pronte del trend. La differenza e' la premessa del test.
+    const prev = vista().byCategory.previous
+    expect(prev?.totalCents).toBe(60500)
+    expect(prev?.totalCents).not.toBe(10500)
+  })
+
+  it('il periodo prima confina con quello guardato', () => {
+    const v = vista()
+    expect(v.byCategory.previous?.range.start).toBe('2026-08-24')
+    expect(v.byCategory.previous?.range.end).toBe('2026-08-30')
+    expect(v.current.range.start).toBe(LUNEDI)
+  })
+
+  it('con le spese dentro il periodo, previous non c e', () => {
+    // La premessa rovesciata: se `previous` comparisse anche a sezioni piene,
+    // sarebbe una cifra di un altro periodo accanto a una che parla di questo.
+    const v = statsView({
+      expenses: [...scena, makeExpense({ amountCents: 900, date: LUNEDI, categoryId: 'c1' })],
+      categories: [makeCategory({ id: 'c1', name: 'Casa' }), makeCategory({ id: 'c2', name: 'Svago' })],
+      rules: [],
+      budgets: [],
+      period: 'weekly',
+      day: LUNEDI,
+    })
+    if (v.kind !== 'ready') throw new Error('non e ready')
+    expect(v.byCategory.sections.length).toBeGreaterThan(0)
+    expect(v.byCategory.previous).toBeNull()
+  })
+
+  it('senza un periodo prima con qualcosa dentro, previous e null', () => {
+    // Prima spesa in assoluto dentro il periodo corrente, e niente prima: non
+    // si nomina un intervallo di cui l'utente non ha mai avuto notizia.
+    const v = statsView({
+      expenses: [makeExpense({ amountCents: 900, date: '2026-08-20', categoryId: 'c1' })],
+      categories: [makeCategory({ id: 'c1', name: 'Casa' })],
+      rules: [],
+      budgets: [],
+      period: 'weekly',
+      day: LUNEDI,
+    })
+    // Due settimane indietro: il periodo **immediatamente** prima e' vuoto.
+    if (v.kind !== 'ready') throw new Error(`la vista e' "${v.kind}"`)
+    expect(v.byCategory.previous).toBeNull()
   })
 })

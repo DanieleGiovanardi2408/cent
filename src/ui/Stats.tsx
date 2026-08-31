@@ -567,9 +567,20 @@ function Row({
  */
 function Categories({
   breakdown,
+  period,
   range,
 }: {
   readonly breakdown: Breakdown
+  /**
+   * La forma del periodo, per **formattare il confine di quello precedente**
+   * nello stato vuoto della sezione. Non entra in nessun conto.
+   *
+   * Sta qui e non pre-formattato come `range` perche' l'intervallo da scrivere
+   * arriva dal modello (`previous.range`) e non e' noto al chiamante: e' lo
+   * stesso motivo per cui `Periods` riceve `period` e chiama `periodRangeLabel`
+   * per ogni riga invece di ricevere otto stringhe.
+   */
+  readonly period: BudgetPeriod
   /* `categories` stava qui, e serviva a **una cosa sola**: riordinare le fette
    * per `Category.order`. Quell'ordinamento non c'e' piu' (vedi il commento su
    * `quoteOf`), e il prop se n'e' andato con lui invece di restare come elenco
@@ -594,7 +605,7 @@ function Categories({
    */
   readonly range: string
 }) {
-  const { sections, split, asChart } = breakdown
+  const { sections, split, asChart, previous } = breakdown
 
   /**
    * **Quale domanda sta facendo ciascuna sezione**, e non e' persistito.
@@ -645,20 +656,25 @@ function Categories({
     setMosse((precedenti) => ({ ...precedenti, [kind]: true }))
   }
 
-  // **Nessuna sezione vuol dire che nel periodo non e' uscito niente**, e allora
-  // A non si disegna.
+  // **Nessuna sezione vuol dire che nel periodo non e' uscito niente — e A resta
+  // lo stesso in piedi, a dirlo.**
   //
-  // Questa riga e' stata `sections.length === 0 && showFixed` per un giorno, e la
-  // congiunzione copriva un vicolo cieco: con l'interruttore spento in una
-  // settimana di sole fisse le sezioni erano zero **per scelta di lettura**, e
-  // uscire qui avrebbe fatto sparire anche l'interruttore — l'utente chiuso fuori
-  // dai propri dati dentro l'unico ramo in cui il comando che li riaccende non si
-  // disegna.
+  // Qui c'era `if (sections.length === 0) return null`, e il 31 agosto — un
+  // lunedi' — ha prodotto il difetto peggiore della fase: le Statistiche si sono
+  // aperte **senza titolo, senza numero grande, senza ciambella e senza
+  // leggenda**. I dati c'erano tutti, era la settimana nuova a essere vuota, ma
+  // chi ha guardato ha creduto che l'app avesse dimenticato tutto.
   //
-  // Tolto il selettore, quel ramo **non e' piu' raggiungibile**: zero sezioni ha
-  // una causa sola, ed e' un fatto sui dati. La congiunzione se n'e' andata con la
-  // seconda causa invece di restare a difendersi da una possibilita' morta.
-  if (sections.length === 0) return null
+  // **Una sezione che sparisce si legge come un'app rotta; una sezione che dice
+  // di essere vuota si legge come un'app che funziona.** Da qui la regola in
+  // `CLAUDE.md`: un blocco della schermata non scompare perche' i suoi dati sono
+  // vuoti — tiene il titolo e la sua cornice e dice cosa manca. Scompare solo se
+  // la funzione a cui appartiene non esiste per questo utente, che e' un'assenza
+  // strutturale e non un vuoto temporaneo.
+  //
+  // Lo stato `outside` non copre questo caso e non deve: quello e' lo stato di
+  // **tutta la schermata** quando non c'e' niente da nessuna parte. Qui sotto c'e'
+  // ancora B, con dentro il totale che rassicura.
 
   // Il totale del periodo, che e' cio' che rendeva monco `DOVE SONO FINITI ·
   // 24–30 AGO`: finiti *quanto?* Viene dalla divisione quando c'e', perche' li'
@@ -723,6 +739,32 @@ function Categories({
         <span class="stats__titleRange">{range}</span>
       </h2>
       {totalCents === null ? null : <p class="stats__hero">{money(totalCents)}</p>}
+
+      {/* **Lo stato vuoto della sezione, non della schermata.**
+
+          Prende il posto del numero grande — che qui non esiste, perche'
+          `sectionsTotal` di zero sezioni e' `null` e non `0,00 €`. La differenza
+          non e' di stile: `0,00 €` sotto "Dove sono finiti" e' un'affermazione
+          sui soldi, e in una settimana appena cominciata sarebbe **vera e
+          inutile**, oltre che identica a quella di chi ha davvero speso zero
+          dopo aver speso.
+
+          L'uscita e' il periodo prima, quando ce n'e' uno con qualcosa dentro:
+          il suo confine e il suo totale, che e' il conto di **A** — fisse
+          comprese — e non quello di B. Vedi `BreakdownPrevious`. */}
+      {sections.length > 0 ? null : (
+        <div class="stats__empty">
+          <p class="stats__emptyText">{t('stats.period.empty')}</p>
+          {previous === null ? null : (
+            <p class="stats__emptyPrev">
+              {t('stats.period.previous', {
+                range: periodRangeLabel(period, previous.range),
+                amount: money(previous.totalCents),
+              })}
+            </p>
+          )}
+        </div>
+      )}
 
       {split === null ? null : <Split split={split} />}
 
@@ -1709,6 +1751,7 @@ export function Stats({ phase, expenses, categories, rules, budgets, period, day
           `audit:source`, che e' esattamente la guardia scritta per questo. */}
       <Categories
         breakdown={view.byCategory}
+        period={view.period}
         range={periodRangeLabel(view.period, view.current.range)}
       />
       {/* **L'assenza di B si legge qui, e non dentro `Periods`.**

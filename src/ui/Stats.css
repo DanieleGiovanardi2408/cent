@@ -108,6 +108,41 @@
  *
  * `--lh-tight` e `--tracking-tight` come la Home: un numero grande con
  * l'interlinea del corpo si porta dietro aria che non serve a nessuno. */
+/* **Lo stato vuoto della sezione**, dove starebbe il numero grande.
+ *
+ * Prende `grid-column: 1 / -1` come l'eroe e come il titolo: e' un blocco della
+ * stessa colonna, non un intruso. Non prende la sua **taglia**, ed e' voluto —
+ * una frase a `--fs-600` griderebbe un'assenza, e cio' che questa sezione deve
+ * fare e' il contrario: dire con calma che qui non e' ancora caduto niente,
+ * mentre la settimana prima e' li' sotto a dimostrare che i dati ci sono.
+ *
+ * L'altezza non e' fissata a quella dell'eroe: il guscio di questa schermata non
+ * promette un numero grande in quel punto — `stats.blank` e `stats.outside` gia'
+ * ci mettono del testo — quindi non c'e' nessun salto da evitare inchiodando una
+ * misura. */
+.stats__empty {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+
+.stats__emptyText {
+  color: var(--text);
+  font-size: var(--fs-300);
+  line-height: var(--lh-snug);
+}
+
+/* Il periodo prima. Piu' piccolo e piu' spento del testo sopra: e' l'uscita, non
+ * l'affermazione — e i due numeri che porta (confine e importo) sono tabulari
+ * perche' e' cosi' che questa schermata scrive gli importi dappertutto. */
+.stats__emptyPrev {
+  color: var(--text-muted);
+  font-size: var(--fs-200);
+  line-height: var(--lh-snug);
+  font-variant-numeric: tabular-nums;
+}
+
 .stats__hero {
   grid-column: 1 / -1;
   color: var(--text);

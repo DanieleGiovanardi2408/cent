@@ -510,6 +510,26 @@ export const en: Record<keyof typeof it, string> = {
   'stats.outside.text':
     'This period is {range}, and nothing you have logged falls inside it: it is all in {history}. The next expense you add today shows up here.',
 
+  /* --- **La sezione non sparisce perche' e' vuota** -------------------------
+   *
+   * Il 31 agosto, un lunedi', le Statistiche si sono aperte **senza la sezione
+   * A**: niente titolo, niente numero grande, niente ciambella. I dati c'erano
+   * tutti — era la settimana nuova a essere vuota — ma una sezione che sparisce
+   * si legge come un'app rotta, e chi guardava ha creduto di aver perso tutto.
+   *
+   * Queste due stringhe sono la sezione che **resta in piedi e dice cosa manca**.
+   * Non ripetono `stats.outside.*`: quello e' lo stato di **tutta la schermata**
+   * quando non c'e' niente da nessuna parte, e parla dello Storico perche' li'
+   * non c'e' nient'altro da offrire. Qui sotto c'e' ancora "Settimana per
+   * settimana", quindi l'uscita e' **il periodo prima**, che e' anche dove si
+   * arriva con la freccia. */
+  'stats.period.empty': 'Nothing logged in this period yet.',
+  /* Il periodo prima, con il suo totale. Due segnaposto e nessuna parola in
+   * mezzo che li spieghi: l'intervallo e' gia' un'etichetta che questa
+   * schermata stampa altrove, e il numero e' un importo. Aggiungere "invece"
+   * o "prima" direbbe una relazione che l'ordine gia' dice. */
+  'stats.period.previous': '{range} · {amount}',
+
   'stats.variable': 'Day to day',
 
   'stats.byCategory': 'What it went on',

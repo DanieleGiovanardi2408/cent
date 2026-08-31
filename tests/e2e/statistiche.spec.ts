@@ -4105,3 +4105,58 @@ test('la ciambella non ha voce: i nomi e gli importi li porta la legenda', async
   await expect(voci.first()).toContainText(dizionario['cat.default.groceries'])
   await expect(voci.first()).toContainText(/42,00/)
 })
+
+/**
+ * **Il lunedi' mattina: la sezione resta in piedi e dice cosa manca.**
+ *
+ * Il 31 agosto le Statistiche si sono aperte **senza la sezione A** — niente
+ * titolo, niente numero grande, niente ciambella — e chi guardava ha creduto che
+ * l'app avesse dimenticato tutto. I dati c'erano: era la settimana nuova a essere
+ * vuota, e `Categories` usciva con `null` a zero sezioni.
+ *
+ * La scena non tocca l'orologio: si semina **solo nella settimana prima**, che
+ * produce lo stesso stato — periodo corrente vuoto, periodi prima pieni.
+ *
+ * **La spesa e' a mano e non fissa**, ed e' la premessa che separa questo stato
+ * da `outside`: una fissa non entra in B, quindi con quella la vista sarebbe
+ * `outside` (l'altro test, poco sopra) e questo sarebbe verde su una scena in cui
+ * il caso non esiste.
+ */
+test('una settimana appena cominciata: A resta, e porta il periodo prima', async ({ page }) => {
+  await page.goto('/')
+  await chiudiGuida(page)
+  const nomi = await grigliaDiDefault(page)
+  await semina(page, [
+    { categoria: nomi.spesa, cents: 4200, giorniFa: 8 },
+    { categoria: nomi.svago, cents: 3500, giorniFa: 9 },
+  ])
+  await apriStatistiche(page)
+
+  // 1. **La sezione c'e'.** E' l'asserzione che sarebbe caduta prima: il titolo
+  //    e il suo confine, cioe' la cornice che non deve sparire.
+  // Due titoli: quello di A e quello di B. Si prende **il primo**, che e' A —
+  // per posizione e non per testo, perche' cercarlo col testo userebbe come
+  // premessa proprio cio' che si verifica.
+  await expect(page.locator('.stats__title')).toHaveCount(2)
+  await expect(page.locator('.stats__title').first()).toContainText(dizionario['stats.byCategory'])
+
+  // 2. **Nessun numero grande a zero.** `0,00 €` sotto "Dove sono finiti" sarebbe
+  //    vero e inutile, e identico a quello di chi ha speso zero dopo aver speso.
+  await expect(page.locator('.stats__hero')).toHaveCount(0)
+
+  // 3. La frase, e l'uscita.
+  await expect(page.locator('.stats__emptyText')).toHaveText(dizionario['stats.period.empty'])
+  const prev = page.locator('.stats__emptyPrev')
+  await expect(prev).toHaveCount(1)
+  await expect(prev).toContainText('77,00')
+
+  // 4. **E non e' lo stato di chi non ha mai speso**, che e' l'altra meta' della
+  //    riparazione: quel testo non deve comparire da nessuna parte.
+  await expect(page.locator('.stats')).not.toContainText(dizionario['stats.blank.text'])
+
+  // 5. **B e' ancora li' con i suoi dati**, ed e' cio' che rende la frase
+  //    verificabile: il totale che l'uscita nomina si ritrova a schermo, in una
+  //    riga del confronto. Due sezioni, A e B, come quando A ha le righe.
+  await expect(page.locator('.stats__section')).toHaveCount(2)
+  await expect(page.locator('.stats__section').last()).toContainText('77,00')
+})

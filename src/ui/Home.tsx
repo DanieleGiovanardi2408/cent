@@ -91,6 +91,12 @@ import './Home.css'
 
 interface Props {
   readonly phase: AppPhase
+  /**
+   * La riga che spiega come si salva e' accesa: **le prime tre spese e basta**.
+   * Arriva da `App` invece di essere riderivata qui, cosi' questo foglio e
+   * quello dell'inserimento non possono dire cose diverse sullo stesso utente.
+   */
+  readonly coach: boolean
   readonly expenses: readonly Expense[]
   readonly categories: readonly Category[]
   readonly budgets: readonly Budget[]
@@ -100,7 +106,16 @@ interface Props {
   readonly onEditBudget: () => void
 }
 
-export function Home({ phase, expenses, categories, budgets, day, onPick, onEditBudget }: Props) {
+export function Home({
+  phase,
+  expenses,
+  categories,
+  budgets,
+  day,
+  coach,
+  onPick,
+  onEditBudget,
+}: Props) {
   const ready = phase === 'ready'
 
   const view = useMemo(() => {
@@ -265,7 +280,23 @@ export function Home({ phase, expenses, categories, budgets, day, onPick, onEdit
           ready ? (
             <div class="blank">
               <p class="blank__title">{t('home.blank.title')}</p>
-              <p class="blank__text">{t('home.blank.text')}</p>
+              {/* **Il tutorial dei due tap tace dopo tre spese**, come la riga
+                  del foglio (`coach`), e per lo stesso argomento — *e' un'
+                  istruzione, non un valore*.
+
+                  Questa condizione non c'era, e il difetto non era del lunedi':
+                  era **di ogni mattina**. `todayRows.length === 0` e' vero tutti
+                  i giorni finche' non si segna la prima spesa, quindi chi usa
+                  l'app da settimane si sentiva spiegare *"Tocca il + qui sotto,
+                  digita l'importo e scegli la categoria"* ogni volta che
+                  apriva. La decisione di far tacere la riga dopo tre spese
+                  esisteva gia' — in `AddSheet` — e **non nominava quel foglio**:
+                  vale ovunque valga il suo argomento, e questa e' la seconda
+                  stanza in cui vale.
+
+                  Il titolo resta sempre: *"Oggi non hai segnato niente"* e' un
+                  fatto sui dati, non un'istruzione. */}
+              {coach ? <p class="blank__text">{t('home.blank.text')}</p> : null}
             </div>
           ) : null
         ) : (

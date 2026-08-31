@@ -49,6 +49,8 @@
 import { chiudiGuida, expect, test } from './installed'
 import { fontPronto, TEST_FONT } from './font'
 import { fissaOrologio, giornoDichiarato } from './clock'
+import { addDays } from '../../src/core/date'
+import { it as dizionario } from '../../src/ui/i18n/it'
 import type { Page } from '@playwright/test'
 // Il pavimento della colonna vive nel modello e il suo denominatore e' un
 // **contratto su `--strip-h`**, che sta in `Home.css`. I due file non si vedono,
@@ -1796,4 +1798,46 @@ test('l\'intestazione di oggi esiste solo dove c\'e\' qualcosa da intestare', as
     vuoto.stacco,
     `il messaggio di giornata vuota parte a ${vuoto.stacco}px dal bordo del suo blocco e le righe di oggi a ${conRighe}: il vuoto e' tornato a stare in un posto suo invece che al posto delle righe`,
   ).toBe(conRighe)
+})
+
+/**
+ * **Il tutorial dei due tap tace dopo tre spese, e prima non taceva mai.**
+ *
+ * `home.blank.text` — *"Tocca il + qui sotto, digita l'importo e scegli la
+ * categoria. Sono due tap: si fa in cassa, con una mano."* — si mostrava ogni
+ * volta che `todayRows.length === 0`, cioe' **ogni mattina** finche' non si
+ * segnava la prima spesa del giorno. Chi usa l'app da settimane si sentiva
+ * spiegare come si usa a ogni apertura. Non era un difetto del lunedi': era di
+ * tutti i giorni, e il lunedi' l'ha solo reso visibile.
+ *
+ * La decisione di far tacere quella riga dopo tre spese **esisteva gia'**, in
+ * `AddSheet` (`coach`), e il suo argomento — *e' un'istruzione, non un valore* —
+ * non nominava quel foglio. E' "una decisione vale dove vale il suo argomento",
+ * e questa e' la seconda stanza in cui vale.
+ *
+ * **Il titolo resta sempre**: *"Oggi non hai segnato niente"* e' un fatto sui
+ * dati, non un'istruzione, e chi ha speso zero oggi deve leggerlo.
+ */
+test('la riga che spiega i due tap tace dopo tre spese, il titolo no', async ({ page }) => {
+  await fissaOrologio(page)
+  await page.goto('./')
+  await chiudiGuida(page)
+
+  // 1. Installazione nuova: il titolo **e** l'istruzione.
+  await expect(page.locator('.blank__title')).toHaveText(dizionario['home.blank.title'])
+  await expect(page.locator('.blank__text')).toHaveText(dizionario['home.blank.text'])
+
+  // 2. Tre spese a mano — la stessa soglia del foglio — datate **prima di oggi**,
+  //    cosi' che "oggi" resti vuoto: e' il caso vero, una mattina qualunque di
+  //    chi usa gia' l'app. Con tre spese di oggi il blocco non si disegnerebbe
+  //    affatto, e il test sarebbe verde per assenza.
+  const ieri = addDays(giornoDichiarato(), -1)
+  await seedOn(page, [[ieri, 1000], [ieri, 1200], [ieri, 1500]])
+  await page.reload()
+  await settled(page)
+
+  // 3. Il titolo c'e' ancora: oggi non ha segnato niente, ed e' vero.
+  await expect(page.locator('.blank__title')).toHaveText(dizionario['home.blank.title'])
+  // E l'istruzione non c'e' piu'.
+  await expect(page.locator('.blank__text')).toHaveCount(0)
 })

@@ -880,6 +880,11 @@ export const it = {
   'stats.outside.text':
     'Questo periodo è {range}, e nessuna delle tue spese ci cade dentro: le trovi tutte nello {history}. La prossima spesa che segni oggi compare qui.',
 
+  /* Vedi en.ts per l'argomento. La sezione resta in piedi e dice cosa manca,
+   * invece di sparire — che e' come si legge un'app rotta. */
+  'stats.period.empty': 'In questo periodo non hai ancora segnato niente.',
+  'stats.period.previous': '{range} · {amount}',
+
   'stats.variable': 'Quotidiane',
 
   'stats.byCategory': 'Dove sono finiti',
