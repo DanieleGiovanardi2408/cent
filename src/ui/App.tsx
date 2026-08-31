@@ -95,7 +95,7 @@ const TOAST_MS = { plain: 4000, action: 6000 } as const
  * piu' nessun canale** che gli dica come si salva, in un'app dove il salvataggio
  * non ha un tasto. Un lato dell'errore e' gratis, l'altro no.
  */
-const COACH_UNTIL = 3
+export const COACH_UNTIL = 3
 
 /**
  * Quante spese l'utente ha salvato **con le proprie mani**, fino al tetto che
@@ -112,7 +112,7 @@ const COACH_UNTIL = 3
  * Si ferma al tetto: con 5.000 spese in archivio non c'e' nessun motivo di
  * contarle tutte per rispondere a una domanda che e' "sono almeno tre?".
  */
-function savedByHand(expenses: readonly Expense[], stopAt: number): number {
+export function savedByHand(expenses: readonly Expense[], stopAt: number): number {
   let count = 0
   for (const expense of expenses) {
     if (expense.source !== 'manual' || !isLive(expense)) continue
@@ -1418,6 +1418,11 @@ export function App() {
           {view === 'home' ? (
             <Home
               phase={app.phase}
+              /* La stessa riga che tace nel foglio dopo tre spese tace anche
+                 qui, e per lo stesso motivo: e' un'istruzione, non un valore.
+                 Passata invece di riderivata, cosi' i due posti non possono
+                 dire cose diverse sullo stesso utente. */
+              coach={coach}
               expenses={app.data?.expenses ?? []}
               categories={app.data?.categories ?? []}
               budgets={app.data?.budgets ?? []}

@@ -180,6 +180,7 @@ import type { BudgetMetrics, PeriodRange } from '../core/budget'
 import { addDays, isBefore } from '../core/date'
 import type { IsoDate } from '../core/date'
 import type { Budget, BudgetPeriod, Category, Expense, RecurringRule } from '../core/types'
+import { sumCents } from '../core/money'
 import type { Cents } from '../core/money'
 
 /**
@@ -870,6 +871,13 @@ export interface BreakdownSplit {
   readonly fixedFraction: number
 }
 
+/** Il periodo prima di quello guardato, con il totale che A gli attribuisce. */
+export interface BreakdownPrevious {
+  readonly range: PeriodRange
+  /** Tutte le spese vive di quel periodo, fisse comprese: e' il conto di A. */
+  readonly totalCents: Cents
+}
+
 export interface Breakdown {
   /**
    * Le sezioni con almeno una riga, nell'ordine: fisse, poi variabili.
@@ -899,6 +907,38 @@ export interface Breakdown {
    * mai per questa via (vedi `statsView`).
    */
   readonly sections: readonly BreakdownSection[]
+  /**
+   * **Il periodo precedente, e quanto ci e' caduto** — presente **solo** quando
+   * `sections` e' vuoto, `null` in ogni altro caso.
+   *
+   * ## Perche' esiste, e chi l'ha chiesto
+   *
+   * La mattina del 31 agosto — un lunedi' — le Statistiche si sono presentate
+   * senza la sezione A: niente titolo, niente numero grande, niente ciambella.
+   * Non era una perdita di dati, era una settimana nuova; ma **una sezione che
+   * sparisce si legge come un'app rotta**, e chi guardava ha creduto che l'app
+   * avesse dimenticato tutto.
+   *
+   * La riparazione e' che la sezione **resta in piedi e dice cosa manca**. Per
+   * dirlo in modo utile le serve un'uscita, e l'uscita e' il periodo prima: *"in
+   * 31 ago – 06 set non hai ancora segnato niente; in 24–30 ago erano 126,00 €"*.
+   *
+   * ## Perche' non si legge da B
+   *
+   * B ha gia' le righe dei periodi chiusi coi loro totali, e riusarle sarebbe
+   * costato zero. **Ma B conta solo il variabile**, e A conta tutto (ADR 016 §1):
+   * la stessa settimana vale 126,00 € in B e 656,00 € in A se ci e' caduto il
+   * canone. Una cifra presa da li' e messa sotto il titolo di A sarebbe **la
+   * risposta a un'altra domanda**, scritta dove nessuno puo' accorgersene.
+   *
+   * ## `null` quando non c'e' un periodo prima
+   *
+   * Prima spesa in assoluto dentro il periodo corrente: non esiste un periodo
+   * chiuso da nominare, e la sezione dice soltanto che qui non c'e' ancora
+   * niente. Non si inventa un intervallo a zero: sarebbe un periodo di cui
+   * l'utente non ha mai avuto notizia.
+   */
+  readonly previous: BreakdownPrevious | null
   /**
    * **A e' un grafico, oppure e' un elenco di righe** — nome e importo, senza
    * barre — e la decisione e' presa **sull'insieme delle righe visibili**, non
@@ -1132,6 +1172,21 @@ export interface StatsInput {
   readonly budgets: readonly Budget[]
   readonly period: BudgetPeriod
   readonly day: IsoDate
+  /**
+   * **Il periodo che si sta guardando**, quando non e' quello di oggi.
+   *
+   * Assente vuol dire "oggi", che e' il caso di ogni chiamata prima delle
+   * frecce. Non sostituisce `day` e non deve: `day` resta **oggi**, e serve a
+   * tutto cio' che dipende da dove sta il presente — quanti giorni sono passati
+   * dentro il periodo, quali colonne sono future, quale riga di B e' quella in
+   * corso. Sono due fatti diversi, e confonderli farebbe leggere una settimana
+   * chiusa come se fosse a meta'.
+   *
+   * E' per questo che `computeBudgetMetrics` prende gia' `onDate` e `today`
+   * separati: questa navigazione non aggiunge un concetto, **usa quello che il
+   * dominio aveva gia'**.
+   */
+  readonly anchor?: IsoDate
     /**
    * **`showFixed` non c'e' piu', e con lui l'interruttore.**
    *
@@ -1368,6 +1423,45 @@ function breakdownSplit(fixedCents: Cents, variableCents: Cents): BreakdownSplit
   return { fixedCents, variableCents, fixedFraction: fixedCents / (fixedCents + variableCents) }
 }
 
+/**
+ * **Fin dove si puo' camminare all'indietro**, e cioe' il periodo che contiene la
+ * prima spesa mai registrata. `null` quando non ce n'e' nessuna.
+ *
+ * Si esporta perche' le frecce vivono **fuori** dai rami di `StatsView`: devono
+ * disegnarsi anche sullo stato vuoto di un periodo intermedio, altrimenti chi ci
+ * atterra resta chiuso dentro una settimana senza spese — un controllo che puo'
+ * cancellare se stesso non e' un controllo, ed e' lo stesso argomento con cui
+ * l'interruttore delle fisse fu tolto.
+ *
+ * Guarda le spese **vive**: una lapide non e' un giorno in cui si e' speso, e far
+ * camminare l'utente fino a una settimana le cui uniche spese sono cancellate lo
+ * porterebbe in un periodo che lo Storico non conferma.
+ */
+export function firstPeriodStart(
+  expenses: readonly Expense[],
+  period: BudgetPeriod,
+): IsoDate | null {
+  let prima: IsoDate | null = null
+  for (const e of alive(expenses)) {
+    if (prima === null || isBefore(e.date, prima)) prima = e.date
+  }
+  return prima === null ? null : periodRange(period, prima).start
+}
+
+/**
+ * Il periodo `quanti` passi indietro rispetto a quello che contiene `from`.
+ *
+ * Un passo si fa **dal confine**, non sottraendo sette giorni: il giorno prima
+ * dell'inizio di un periodo sta nel periodo precedente, e vale identico per la
+ * settimana e per il mese — dove sottrarre trenta giorni sbaglierebbe di uno a
+ * febbraio e di uno a marzo, nella direzione opposta.
+ */
+export function shiftPeriod(from: IsoDate, period: BudgetPeriod, quanti: number): IsoDate {
+  let giorno = from
+  for (let i = 0; i < quanti; i += 1) giorno = addDays(periodRange(period, giorno).start, -1)
+  return giorno
+}
+
 export function statsView(input: StatsInput): StatsView {
   const expenses = alive(input.expenses)
   if (expenses.length === 0) return { kind: 'blank' }
@@ -1381,7 +1475,11 @@ export function statsView(input: StatsInput): StatsView {
       today: input.day,
     })
 
-  const current = metricsOf(input.day)
+  // Il periodo guardato: l'ancora quando c'e', oggi altrimenti. `today` dentro
+  // le metriche resta `input.day` (vedi `metricsOf`), quindi una settimana
+  // passata si legge come **chiusa** e non come una a meta'.
+  const anchor = input.anchor ?? input.day
+  const current = metricsOf(anchor)
   const named = new Map(input.categories.map((c) => [c.id, c]))
 
   /* --- A: due sezioni, due scale ------------------------------------------ */
@@ -1432,8 +1530,31 @@ export function statsView(input: StatsInput): StatsView {
   // `scaleCents`. Il `reduce` su tutte le righe visibili che stava qui era la
   // scala unica di A, ed e' caduto con lei — l'argomento sta in cima al file, la
   // misura che l'ha deciso pure.
+  // Il periodo prima, e serve **solo** quando A e' vuota: e' l'uscita dello stato
+  // vuoto della sezione. Si calcola qui e non nel componente perche' e' un conto
+  // sulle spese, e il componente non ne fa.
+  //
+  // `previousRange` viene da `trendRanges`, cioe' **la stessa funzione che
+  // costruisce B**: due modi di dire "il periodo prima" divergerebbero il giorno
+  // in cui uno dei due cambia, e nessuno se ne accorgerebbe. L'ultimo dei chiusi
+  // e' quello che confina con il corrente, per costruzione di quella funzione.
+  const previous = ((): BreakdownPrevious | null => {
+    if (present.length > 0) return null
+    const { closed } = trendRanges(input.period, anchor)
+    const range = closed[closed.length - 1]
+    if (range === undefined) return null
+    const dentro = expenses.filter(
+      (e) => !isBefore(e.date, range.start) && !isBefore(range.end, e.date),
+    )
+    // Zero spese nel periodo prima non e' un'uscita: e' un secondo vuoto, e
+    // mandarci l'utente sarebbe mandarlo in un'altra stanza spoglia.
+    if (dentro.length === 0) return null
+    return { range, totalCents: sumCents(dentro.map((e) => e.amountCents)) }
+  })()
+
   const byCategory: Breakdown = {
     sections: present.map((part) => sectionOf(part)),
+    previous,
     // La soglia conta le righe **a schermo**, tutte insieme: applicata per
     // sezione lasciava senza barre la meta' che pesava 530,00 € su 642,00 €.
     // L'argomento sta su `BREAKDOWN_MIN_ROWS`, la tabella misurata in cima al
@@ -1454,7 +1575,12 @@ export function statsView(input: StatsInput): StatsView {
   // esiste nessun elenco che contenga la riga di oggi insieme alle altre —
   // tranne dove le lunghezze devono stare sulla stessa scala, che e' l'unico
   // posto in cui rimetterle insieme significa qualcosa.
-  const { closed: closedRanges, current: currentRange } = trendRanges(input.period, input.day)
+  // **B segue l'ancora**, cosi' la riga "in corso" del confronto e' il periodo
+  // che A sta ripartendo. Con B fermo a oggi la schermata mostrerebbe una
+  // settimana in cima e un confronto che finisce su un'altra, e l'occhio
+  // dovrebbe invertire una mappa fra due elementi della stessa schermata — che
+  // e' il difetto che il test sull'ordine delle sezioni gia' vieta.
+  const { closed: closedRanges, current: currentRange } = trendRanges(input.period, anchor)
   const measured = (range: PeriodRange) => ({ range, m: metricsOf(range.start) })
   const closedMeasured = closedRanges.map(measured)
   const currentMeasured = measured(currentRange)

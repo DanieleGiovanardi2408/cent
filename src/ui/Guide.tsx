@@ -5,6 +5,7 @@ import { reducedMotion } from './motion'
 import './sheet.css'
 import './Guide.css'
 import { STEPS, STEP_MS } from './guide-steps'
+import { PIE_BOX, PIE_C, PIE_GAP, PIE_R, PIE_RING } from './Stats'
 
 /**
  * La guida al primo avvio. **Due schede**, non tre.
@@ -66,7 +67,11 @@ export function Guide({ categories, onDone }: Props) {
     dialog.current?.focus({ preventScroll: true })
   }, [])
 
-  const last = card === 1
+  // Tre schede da quando esiste il gesto sul grafico: l'ultima insegna che le
+  // Statistiche si toccano. E' la strada che ha sostituito il comando a due
+  // stati — *un'istruzione, non un valore*, quindi vive dove le istruzioni
+  // scadono da sole invece che sopra un grafico per sempre.
+  const last = card === 2
 
   return (
     <>
@@ -93,10 +98,22 @@ export function Guide({ categories, onDone }: Props) {
         <div class="guide__card">
           <p class="guide__step">{t('guide.step', { index: card + 1 })}</p>
 
-          {card === 0 ? <AmountArt /> : <SaveArt categories={categories} />}
+          {card === 0 ? (
+            <AmountArt />
+          ) : card === 1 ? (
+            <SaveArt categories={categories} />
+          ) : (
+            <ChartArt categories={categories} />
+          )}
 
-          <h2 class="guide__title">{t(card === 0 ? 'guide.amount.title' : 'guide.save.title')}</h2>
-          <p class="guide__text">{t(card === 0 ? 'guide.amount.text' : 'guide.save.text')}</p>
+          {/* Le chiavi si scrivono per intero: una costruita a pezzi spegne il
+              controllo B di `dead-surface.mjs` per tutto il progetto. */}
+          <h2 class="guide__title">
+            {t(card === 0 ? 'guide.amount.title' : card === 1 ? 'guide.save.title' : 'guide.chart.title')}
+          </h2>
+          <p class="guide__text">
+            {t(card === 0 ? 'guide.amount.text' : card === 1 ? 'guide.save.text' : 'guide.chart.text')}
+          </p>
 
           {/* Due bersagli, e sull'ultima scheda uno solo.
            *
@@ -119,7 +136,7 @@ export function Guide({ categories, onDone }: Props) {
               class="guide__next"
               onClick={() => {
                 if (last) onDone()
-                else setCard(1)
+                else setCard((n) => n + 1)
               }}
             >
               {t(last ? 'guide.start' : 'guide.next')}
@@ -326,6 +343,106 @@ function cellsOf(cents: number): readonly Cell[] {
  * che scrivono siano zero. Un'illustrazione che risponde a quel selettore
  * renderebbe piu' debole quel conteggio senza che si veda.
  */
+/**
+ * **Il grafico che si tocca**, ed e' la sola strada che insegna quel gesto.
+ *
+ * Il comando a due stati `Quote / Ordine` e' stato tolto: sullo schermo delle
+ * Statistiche non resta nessun controllo, si tocca la ciambella. Un gesto senza
+ * annuncio pero' e' un gesto che si scopre per caso — il grafico a torta era
+ * stato chiesto due volte prima che ne esistesse uno, cioe' una funzione che non
+ * si vede viene chiesta come se non ci fosse.
+ *
+ * A dirlo e' la guida e non una riga sotto il grafico, e la ragione e' la solita
+ * di questo progetto: **e' un'istruzione, non un valore**, quindi vive dove le
+ * istruzioni scadono da sole invece che sopra un grafico per sempre.
+ *
+ * ## Il finto usa la forma e i colori del vero
+ *
+ * Stessa regola applicata a `.mock__emoji`: *un ritratto che smette di
+ * somigliare al soggetto e' un difetto anche quando i suoi numeri tornano.* La
+ * ciambella qui non e' un disegno a parte — usa `PIE_BOX`, `PIE_RING`, `PIE_GAP`
+ * e la stessa costruzione a `stroke-dasharray` importate da `Stats.tsx`, e i
+ * colori sono quelli delle categorie vere. Le barre usano `.stat__bar`, la
+ * stessa classe delle righe.
+ *
+ * Se un giorno la ciambella cambiasse geometria, questa cambierebbe con lei
+ * invece di restare il ritratto di una schermata che non esiste piu'.
+ */
+function ChartArt({ categories }: { readonly categories: readonly Category[] }) {
+  // Quattro quote fisse: e' un'illustrazione, non una misura, e i numeri non
+  // devono somigliare a quelli di nessuno. Sommano a 1.
+  const quote = [0.4, 0.28, 0.19, 0.13]
+  const tinte = categories.slice(0, quote.length).map((c) => c.color)
+
+  const [barre, setBarre] = useState(false)
+  useEffect(() => {
+    if (reducedMotion()) return undefined
+    const timer = window.setInterval(() => setBarre((v) => !v), STEP_MS)
+    return () => clearInterval(timer)
+  }, [])
+
+  let cumulata = 0
+  const fette = quote.map((q, i) => {
+    const start = cumulata * PIE_C
+    cumulata += q
+    return {
+      key: i,
+      fill: tinte[i] ?? 'var(--brand)',
+      len: Math.max(0, q * PIE_C - PIE_GAP),
+      start: start + PIE_GAP / 2,
+    }
+  })
+
+  return (
+    // `aria-hidden` come le altre due illustrazioni: cambia da sola, e cio' che
+    // dice sta nel sottotitolo della scheda in parole.
+    <div class="demo demo--chart" aria-hidden="true">
+      {barre ? (
+        <ul class="mock__rows">
+          {quote.map((q, i) => (
+            <li class="mock__row" key={i}>
+              <span class="mock__track">
+                <span
+                  class="stat__bar"
+                  style={{ inlineSize: `${Math.round(q * 100)}%`, backgroundColor: tinte[i] ?? 'var(--brand)' }}
+                />
+              </span>
+              <span class="mock__amount">{money(Math.round(q * 12000))}</span>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <svg
+          class="mock__pie"
+          viewBox={`0 0 ${PIE_BOX} ${PIE_BOX}`}
+          width={PIE_BOX}
+          height={PIE_BOX}
+        >
+          <g transform={`rotate(-90 ${PIE_BOX / 2} ${PIE_BOX / 2})`}>
+            {fette.map((f) => (
+              <circle
+                key={f.key}
+                cx={PIE_BOX / 2}
+                cy={PIE_BOX / 2}
+                r={PIE_R}
+                fill="none"
+                stroke={f.fill}
+                stroke-width={PIE_RING}
+                stroke-dasharray={`${f.len} ${PIE_C - f.len}`}
+                stroke-dashoffset={-f.start}
+              />
+            ))}
+          </g>
+        </svg>
+      )}
+      {/* Il dito che tocca: e' l'unica cosa disegnata che non esiste nella
+          schermata vera, e ci deve essere — senza, l'illustrazione mostra due
+          figure che si alternano da sole invece di un gesto che le scambia. */}
+      <span class="mock__tap" data-on={barre ? undefined : ''} />
+    </div>
+  )
+}
+
 function SaveArt({ categories }: { readonly categories: readonly Category[] }) {
   return (
     <div class="demo demo--save" aria-hidden="true">

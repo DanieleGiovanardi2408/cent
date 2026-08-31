@@ -487,7 +487,7 @@ export const it = {
   //
   // Le stringhe inglesi sono l'originale (vedi en.ts): qui c'e' la traduzione.
   'guide.label': 'Come si usa Cent',
-  'guide.step': 'Passo {index} di 2',
+  'guide.step': 'Passo {index} di 3',
   'guide.skip': 'Salta',
   'guide.next': 'Avanti',
   'guide.start': 'Inizia',
@@ -498,6 +498,10 @@ export const it = {
   // "salva la spesa", non "salva la categoria": in Impostazioni le categorie si
   // salvano davvero, quindi la lettura sbagliata e' disponibile e va chiusa
   // nominando l'oggetto.
+  /* Vedi en.ts. */
+  'guide.chart.title': 'Tocca un grafico per vedere gli importi',
+  'guide.chart.text': 'Le quote a colpo d\u2019occhio, le cifre esatte al tocco. Tocca di nuovo per tornare.',
+
   'guide.save.title': 'Toccare una categoria salva la spesa',
   'guide.save.text':
     'È quella la conferma: non c’è un tasto Salva. Categoria sbagliata? Annulla, subito dopo.',
@@ -880,6 +884,17 @@ export const it = {
   'stats.outside.text':
     'Questo periodo è {range}, e nessuna delle tue spese ci cade dentro: le trovi tutte nello {history}. La prossima spesa che segni oggi compare qui.',
 
+  /* Vedi en.ts per l'argomento. La sezione resta in piedi e dice cosa manca,
+   * invece di sparire — che e' come si legge un'app rotta. */
+  /* Vedi en.ts per l'argomento delle quattro qui sotto. */
+  'stats.nav.prev': 'Periodo precedente',
+  'stats.nav.next': 'Periodo successivo',
+  'stats.chart.toRanking': 'Mostra gli importi esatti di {name}',
+  'stats.chart.toShares': 'Mostra le quote di {name}',
+
+  'stats.period.empty': 'In questo periodo non hai ancora segnato niente.',
+  'stats.period.previous': '{range} · {amount}',
+
   'stats.variable': 'Quotidiane',
 
   'stats.byCategory': 'Dove sono finiti',
@@ -907,8 +922,10 @@ export const it = {
   // quella che non deve cedere, e le due parole devono restare corte uguali:
   // `Classifica` e' larga il doppio di `Quote` e squilibrerebbe una scelta che
   // dev'essere simmetrica.
-  'stats.view.shares': 'Quote',
-  'stats.view.ranking': 'Ordine',
+  /* Qui c'erano `stats.view.shares` e `stats.view.ranking`, le due parole del
+   * comando a due stati. Il comando non c'e' piu': il gesto e' il tap sul
+   * grafico, e sullo schermo non resta nessun controllo che faccia la stessa
+   * cosa. A insegnarlo e' la guida. */
   'stats.byPeriod.weekly': 'Settimana per settimana',
   'stats.byPeriod.monthly': 'Mese per mese',
 

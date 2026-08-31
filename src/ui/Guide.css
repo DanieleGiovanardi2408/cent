@@ -460,3 +460,86 @@
     padding-inline: var(--sp-3);
   }
 }
+
+/* --- la terza scheda: il grafico che si tocca ----------------------------- */
+/*
+ * L'illustrazione alterna la ciambella e le barre, e sotto ci sta il dito.
+ * L'altezza e' **fissata**: le due figure hanno ingombri diversi, e senza un
+ * ingombro dichiarato la scheda salterebbe a ogni scambio — un salto di layout
+ * dentro l'unica schermata che sta insegnando qualcosa.
+ */
+.demo--chart {
+  position: relative;
+  display: grid;
+  place-items: center;
+  block-size: 132px;
+}
+
+.mock__pie {
+  display: block;
+}
+
+.mock__rows {
+  inline-size: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding-inline: var(--sp-3);
+}
+
+.mock__row {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+/* La traccia e la barra sono quelle vere: `.stat__bar` e' la stessa classe delle
+ * righe delle Statistiche, quindi raggio, bordo e altezza vengono da li'. */
+.mock__track {
+  position: relative;
+  flex: 1;
+  block-size: 14px;
+  border-radius: 2px;
+  background-color: var(--surface-sunken);
+  overflow: hidden;
+}
+
+.mock__rows .mock__amount {
+  flex: none;
+  min-inline-size: 4.5em;
+  text-align: end;
+  color: var(--text-muted);
+  font-size: var(--fs-100);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Il dito. E' un cerchio che pulsa dove il tap avviene, ed e' l'unica cosa
+ * disegnata qui che non esiste nella schermata vera: senza, l'illustrazione
+ * mostrerebbe due figure che si alternano da sole invece di un gesto che le
+ * scambia. */
+.mock__tap {
+  position: absolute;
+  inline-size: 30px;
+  block-size: 30px;
+  border-radius: var(--radius-full);
+  background-color: color-mix(in srgb, var(--text) 22%, transparent);
+  pointer-events: none;
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .mock__tap[data-on] {
+    animation: mock-tap var(--dur-3, 220ms) var(--ease-out) both;
+  }
+}
+
+@keyframes mock-tap {
+  from {
+    opacity: 0.9;
+    transform: scale(0.6);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.4);
+  }
+}

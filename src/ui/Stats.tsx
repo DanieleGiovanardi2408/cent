@@ -1,9 +1,11 @@
 import { Fragment } from 'preact'
 import { useMemo, useState } from 'preact/hooks'
 import type { Budget, BudgetPeriod, Category, Expense, RecurringRule } from '../core/types'
+import { isBefore } from '../core/date'
 import type { IsoDate } from '../core/date'
+import { periodRange } from '../core/budget'
 import { daysLabel, money, periodRangeLabel, t } from './i18n'
-import { statsView } from './stats-view'
+import { firstPeriodStart, shiftPeriod, statsView } from './stats-view'
 import type {
   Breakdown,
   BreakdownSection,
@@ -118,8 +120,10 @@ function sliceLabel(row: CategorySlice): string {
  */
 type Vista = 'quote' | 'ordine'
 
-/** Le due viste, nell'ordine in cui stanno nel controllo. */
-const VISTE: readonly Vista[] = ['quote', 'ordine']
+/* Qui c'era `VISTE`, l'elenco delle due nell'ordine in cui stavano nel comando.
+ * Il comando non c'e' piu' e l'elenco se n'e' andato con lui invece di restare
+ * come superficie che nessuno legge: le due viste adesso non hanno un ordine,
+ * hanno **un gesto che le scambia**. */
 
 /**
  * **Sotto quante voci la ciambella non si disegna.**
@@ -206,11 +210,11 @@ const PIE_MIN_SLICES = 3
  * posto. Non ci sono archi scritti a mano (`A`), nessun seno e nessun coseno, e
  * il taglio fra due fette esce **radiale** per costruzione.
  */
-const PIE_BOX = 120
-const PIE_RING = 20
-const PIE_GAP = 2
-const PIE_R = (PIE_BOX - PIE_RING) / 2
-const PIE_C = 2 * Math.PI * PIE_R
+export const PIE_BOX = 120
+export const PIE_RING = 20
+export const PIE_GAP = 2
+export const PIE_R = (PIE_BOX - PIE_RING) / 2
+export const PIE_C = 2 * Math.PI * PIE_R
 
 /**
  * Una fetta, gia' in unita' di tratteggio: **niente da decidere in JSX**.
@@ -567,9 +571,20 @@ function Row({
  */
 function Categories({
   breakdown,
+  period,
   range,
 }: {
   readonly breakdown: Breakdown
+  /**
+   * La forma del periodo, per **formattare il confine di quello precedente**
+   * nello stato vuoto della sezione. Non entra in nessun conto.
+   *
+   * Sta qui e non pre-formattato come `range` perche' l'intervallo da scrivere
+   * arriva dal modello (`previous.range`) e non e' noto al chiamante: e' lo
+   * stesso motivo per cui `Periods` riceve `period` e chiama `periodRangeLabel`
+   * per ogni riga invece di ricevere otto stringhe.
+   */
+  readonly period: BudgetPeriod
   /* `categories` stava qui, e serviva a **una cosa sola**: riordinare le fette
    * per `Category.order`. Quell'ordinamento non c'e' piu' (vedi il commento su
    * `quoteOf`), e il prop se n'e' andato con lui invece di restare come elenco
@@ -594,7 +609,7 @@ function Categories({
    */
   readonly range: string
 }) {
-  const { sections, split, asChart } = breakdown
+  const { sections, split, asChart, previous } = breakdown
 
   /**
    * **Quale domanda sta facendo ciascuna sezione**, e non e' persistito.
@@ -645,20 +660,25 @@ function Categories({
     setMosse((precedenti) => ({ ...precedenti, [kind]: true }))
   }
 
-  // **Nessuna sezione vuol dire che nel periodo non e' uscito niente**, e allora
-  // A non si disegna.
+  // **Nessuna sezione vuol dire che nel periodo non e' uscito niente — e A resta
+  // lo stesso in piedi, a dirlo.**
   //
-  // Questa riga e' stata `sections.length === 0 && showFixed` per un giorno, e la
-  // congiunzione copriva un vicolo cieco: con l'interruttore spento in una
-  // settimana di sole fisse le sezioni erano zero **per scelta di lettura**, e
-  // uscire qui avrebbe fatto sparire anche l'interruttore — l'utente chiuso fuori
-  // dai propri dati dentro l'unico ramo in cui il comando che li riaccende non si
-  // disegna.
+  // Qui c'era `if (sections.length === 0) return null`, e il 31 agosto — un
+  // lunedi' — ha prodotto il difetto peggiore della fase: le Statistiche si sono
+  // aperte **senza titolo, senza numero grande, senza ciambella e senza
+  // leggenda**. I dati c'erano tutti, era la settimana nuova a essere vuota, ma
+  // chi ha guardato ha creduto che l'app avesse dimenticato tutto.
   //
-  // Tolto il selettore, quel ramo **non e' piu' raggiungibile**: zero sezioni ha
-  // una causa sola, ed e' un fatto sui dati. La congiunzione se n'e' andata con la
-  // seconda causa invece di restare a difendersi da una possibilita' morta.
-  if (sections.length === 0) return null
+  // **Una sezione che sparisce si legge come un'app rotta; una sezione che dice
+  // di essere vuota si legge come un'app che funziona.** Da qui la regola in
+  // `CLAUDE.md`: un blocco della schermata non scompare perche' i suoi dati sono
+  // vuoti — tiene il titolo e la sua cornice e dice cosa manca. Scompare solo se
+  // la funzione a cui appartiene non esiste per questo utente, che e' un'assenza
+  // strutturale e non un vuoto temporaneo.
+  //
+  // Lo stato `outside` non copre questo caso e non deve: quello e' lo stato di
+  // **tutta la schermata** quando non c'e' niente da nessuna parte. Qui sotto c'e'
+  // ancora B, con dentro il totale che rassicura.
 
   // Il totale del periodo, che e' cio' che rendeva monco `DOVE SONO FINITI ·
   // 24–30 AGO`: finiti *quanto?* Viene dalla divisione quando c'e', perche' li'
@@ -724,6 +744,32 @@ function Categories({
       </h2>
       {totalCents === null ? null : <p class="stats__hero">{money(totalCents)}</p>}
 
+      {/* **Lo stato vuoto della sezione, non della schermata.**
+
+          Prende il posto del numero grande — che qui non esiste, perche'
+          `sectionsTotal` di zero sezioni e' `null` e non `0,00 €`. La differenza
+          non e' di stile: `0,00 €` sotto "Dove sono finiti" e' un'affermazione
+          sui soldi, e in una settimana appena cominciata sarebbe **vera e
+          inutile**, oltre che identica a quella di chi ha davvero speso zero
+          dopo aver speso.
+
+          L'uscita e' il periodo prima, quando ce n'e' uno con qualcosa dentro:
+          il suo confine e il suo totale, che e' il conto di **A** — fisse
+          comprese — e non quello di B. Vedi `BreakdownPrevious`. */}
+      {sections.length > 0 ? null : (
+        <div class="stats__empty">
+          <p class="stats__emptyText">{t('stats.period.empty')}</p>
+          {previous === null ? null : (
+            <p class="stats__emptyPrev">
+              {t('stats.period.previous', {
+                range: periodRangeLabel(period, previous.range),
+                amount: money(previous.totalCents),
+              })}
+            </p>
+          )}
+        </div>
+      )}
+
       {split === null ? null : <Split split={split} />}
 
       {/* **L'intestazione delle fisse si disegna anche quando la sezione non
@@ -749,7 +795,6 @@ function Categories({
           // E nessun comando: non ha righe da ripartire, quindi non c'e' nessuna
           // seconda domanda da fare a questa cifra.
           vista={null}
-          onVista={null}
         />
       ) : null}
 
@@ -844,7 +889,6 @@ function Categories({
               // qualcosa: un comando che dichiara un gesto che non esiste sarebbe
               // il difetto opposto a quello che il comando ripara.
               vista={quote === null ? null : vista}
-              onVista={quote === null ? null : (scelta) => commuta(part.kind, scelta)}
             />
             {vista === 'quote' && quote !== null ? (
               // La chiave porta la vista: commutando, Preact **rimonta** invece
@@ -853,6 +897,7 @@ function Categories({
               <Quote
                 key={`quote:${part.kind}`}
                 quote={quote}
+                nome={t(part.kind === 'fixed' ? 'stats.fixedInPeriod' : 'stats.variable')}
                 mossa={mosse[part.kind]}
                 onTap={() => commuta(part.kind, 'ordine')}
               />
@@ -864,13 +909,27 @@ function Categories({
                 // stesso gesto, verso opposto: e' la reversibilita' chiesta al
                 // comando, non una scorciatoia in piu'.
                 //
-                // Non e' un bersaglio dichiarato — non ha ruolo e non prende il
-                // fuoco — ed e' voluto: la strada annunciata, quella che si trova
-                // e che una tastiera percorre, e' il comando nell'intestazione.
-                // Questo e' il gesto che **il comando dichiara**, e un `<ul>` con
-                // dentro dei `<li>` non puo' essere un `<button>` senza smettere
-                // di essere HTML valido.
+                // **Adesso e' un bersaglio dichiarato**, e prima non lo era: la
+                // strada annunciata era il comando nell'intestazione, e il
+                // comando non c'e' piu'. Stesso trattamento della ciambella —
+                // `role` + `tabIndex` + tasti — e per la stessa ragione: un
+                // `<ul>` non puo' essere un `<button>` senza smettere di essere
+                // HTML valido.
                 data-vista={quote === null ? undefined : 'ordine'}
+                {...(quote === null
+                  ? {}
+                  : {
+                      role: 'button',
+                      tabIndex: 0,
+                      'aria-label': t('stats.chart.toShares', {
+                        name: t(part.kind === 'fixed' ? 'stats.fixedInPeriod' : 'stats.variable'),
+                      }),
+                      onKeyDown: (e: KeyboardEvent) => {
+                        if (e.key !== 'Enter' && e.key !== ' ') return
+                        e.preventDefault()
+                        commuta(part.kind, 'quote')
+                      },
+                    })}
                 data-mossa={quote !== null && mosse[part.kind] ? '' : undefined}
                 {...(quote === null ? {} : { onClick: () => commuta(part.kind, 'quote') })}
               >
@@ -1053,7 +1112,6 @@ function PartHead({
   amount,
   scale,
   vista,
-  onVista,
 }: {
   readonly kind: BreakdownSection['kind']
   /** Il totale della parte, o `null` quando lo porta gia' qualcos'altro. */
@@ -1095,7 +1153,6 @@ function PartHead({
    */
   readonly vista: Vista | null
   /** Cosa fare quando si sceglie una vista. `null` esattamente quando lo e' `vista`. */
-  readonly onVista: ((scelta: Vista) => void) | null
 }) {
   const fixed = kind === 'fixed'
   const nome = t(fixed ? 'stats.fixedInPeriod' : 'stats.variable')
@@ -1117,81 +1174,10 @@ function PartHead({
             In vista `quote` non c'e': non ci sono barre da calibrare. */}
         {scale === null ? null : <span class="stats__partScale">{scale}</span>}
       </h3>
-      {vista === null || onVista === null ? null : (
-        <ViewToggle nome={nome} vista={vista} onVista={onVista} />
-      )}
     </div>
   )
 }
 
-/**
- * **Il comando a due stati, e la sua ragione e' che il gesto da solo non basta.**
- *
- * > *"Un grafico che cambia solo se ti capita di toccarlo e' una funzione che
- * > nessuno trova."*
- *
- * E la prova non e' un'opinione: **il grafico a torta e' stato chiesto due volte
- * prima che ne esistesse uno**. Una funzione che si scopre per caso viene
- * richiesta come se non ci fosse, che e' il modo in cui una cosa costruita
- * diventa una cosa da costruire.
- *
- * Il tap sulla figura **resta** e fa la stessa identica cosa. Il comando non lo
- * sostituisce: **lo dichiara**. Chi lo vede una volta sa che il gesto esiste, e
- * da li' in poi usa quello che gli viene comodo.
- *
- * ## Due parole, non due icone
- *
- * *"Le icone sono la cosa che si vibe-codea per prima."* Una ciambella e un
- * istogramma disegnati a 16 px sono due macchie che chiedono di essere imparate;
- * due parole si leggono. E le parole nominano **la domanda**, non la forma:
- * `Quote` e' *"quanto pesa cosa"*, `Ordine` e' *"quanto e' grande cosa, in
- * ordine"*. Chi legge non deve sapere che forma avra' il disegno per scegliere.
- *
- * ## `aria-pressed` e non `role="radio"`
- *
- * Sono due bottoni a due stati, e uno dei due e' sempre premuto. Un gruppo di
- * radio sarebbe piu' preciso sulla semantica e porterebbe con se' l'obbligo di
- * gestire le frecce da tastiera per essere conforme: due bottoni con
- * `aria-pressed` si tabulano da soli e non hanno nessun comportamento da
- * scrivere. La precisione che si perde e' che l'esclusivita' fra i due si legge
- * dai due stati invece che dal ruolo del gruppo.
- *
- * Il gruppo prende il **nome della parte** e non una parola nuova: e' la stessa
- * scelta gia' fatta per l'etichetta di B (*"la stessa parola sopra gli stessi
- * soldi"*), ed evita una chiave di dizionario che direbbe una terza volta cio'
- * che l'intestazione accanto dice gia'.
- */
-function ViewToggle({
-  nome,
-  vista,
-  onVista,
-}: {
-  readonly nome: string
-  readonly vista: Vista
-  readonly onVista: (scelta: Vista) => void
-}) {
-  return (
-    <div class="stats__views" role="group" aria-label={nome}>
-      {VISTE.map((scelta) => (
-        <button
-          key={scelta}
-          type="button"
-          class="stats__view"
-          data-vista={scelta}
-          aria-pressed={vista === scelta}
-          // Premere quella gia' premuta non e' un errore e non fa niente di
-          // diverso: rimette lo stesso stato. Non si disabilita — un bersaglio
-          // che sparisce dalla sequenza di tabulazione quando e' attivo lascia
-          // il gruppo con un solo elemento raggiungibile, e chi arriva col
-          // tastierino non trova piu' il comando che sta usando.
-          onClick={() => onVista(scelta)}
-        >
-          {t(scelta === 'quote' ? 'stats.view.shares' : 'stats.view.ranking')}
-        </button>
-      ))}
-    </div>
-  )
-}
 
 /**
  * **La vista `quote`: la ciambella, il totale nel buco, la legenda sotto.**
@@ -1238,10 +1224,13 @@ function ViewToggle({
  */
 function Quote({
   quote,
+  nome,
   mossa,
   onTap,
 }: {
   readonly quote: Quote
+  /** Il nome della parte, per il nome accessibile del gesto. */
+  readonly nome: string
   /**
    * Se la commutazione e' gia' avvenuta almeno una volta in questa sessione
    * della schermata. Decide se il blocco entra in dissolvenza: al primo disegno
@@ -1251,7 +1240,32 @@ function Quote({
   readonly onTap: () => void
 }) {
   return (
-    <div class="stats__viz" data-mossa={mossa ? '' : undefined} onClick={onTap}>
+    // **La strada accessibile e' il gesto**, e prima era il comando.
+    //
+    // Togliendo il comando a due stati e' rimasto scoperto cio' che quello
+    // portava e la ciambella no: un bersaglio che si trova esplorando, che una
+    // tastiera raggiunge, e che dice cosa fa. Un `onClick` su un `div` muto e'
+    // un gesto che esiste solo per chi lo scopre col dito.
+    //
+    // `role="button"` e non un `<button>` vero: dentro c'e' la leggenda, che e'
+    // un `<ul>`, e un bottone puo' contenere solo contenuto di frase. La coppia
+    // `role` + `tabIndex` + tasti e' il modo con cui ARIA copre esattamente
+    // questo caso.
+    <div
+      class="stats__viz"
+      data-mossa={mossa ? '' : undefined}
+      role="button"
+      tabIndex={0}
+      aria-label={t('stats.chart.toRanking', { name: nome })}
+      onClick={onTap}
+      onKeyDown={(e: KeyboardEvent) => {
+        if (e.key !== 'Enter' && e.key !== ' ') return
+        // Lo spazio scorre la pagina: senza questo il grafico commuta **e** la
+        // schermata salta di uno schermo.
+        e.preventDefault()
+        onTap()
+      }}
+    >
       <div class="stats__donut">
         <Pie slices={quote.slices} />
         <p class="stats__donutTotal">{money(quote.totalCents)}</p>
@@ -1584,6 +1598,83 @@ function Periods({ trend, period }: { readonly trend: Trend; readonly period: Bu
   )
 }
 
+/**
+ * **Le frecce del periodo**, in cima e sopra ogni altra cosa.
+ *
+ * ## Perche' sta fuori dai rami della vista
+ *
+ * Si disegna **prima** di scegliere fra `blank`, `outside` e `ready`, e non
+ * dentro il ramo pieno. Una settimana intermedia senza spese e' uno stato
+ * legittimo da attraversare: se le frecce vivessero dentro il ramo con le
+ * righe, chi ci atterra resterebbe **chiuso li' dentro**, senza il controllo che
+ * lo riporta indietro. E' lo stesso argomento con cui l'interruttore delle fisse
+ * e' stato tolto — *un controllo che puo' cancellare se stesso non e' un
+ * controllo* — applicato a un controllo nuovo prima che il difetto esista.
+ *
+ * ## L'etichetta
+ *
+ * Sul periodo corrente dice **"Questa settimana"**, la stessa stringa che la
+ * Home mette sopra il numero grande (`period.weekly`): due schermate che parlano
+ * dello stesso periodo lo chiamano allo stesso modo.
+ *
+ * Altrove stampa `periodRangeLabel`, che e' **la stessa funzione con cui B
+ * scrive le sue righe**. Non un secondo formato per la stessa cosa: chi legge
+ * "24–30 ago" in cima deve ritrovare quella riga identica nel confronto sotto.
+ */
+function PeriodNav({
+  label,
+  corrente,
+  puoIndietro,
+  puoAvanti,
+  onIndietro,
+  onAvanti,
+}: {
+  readonly label: string
+  readonly corrente: boolean
+  readonly puoIndietro: boolean
+  readonly puoAvanti: boolean
+  readonly onIndietro: () => void
+  readonly onAvanti: () => void
+}) {
+  return (
+    <div class="pnav">
+      <button
+        type="button"
+        class="pnav__arrow"
+        disabled={!puoIndietro}
+        aria-label={t('stats.nav.prev')}
+        onClick={onIndietro}
+      >
+        {/* Il glifo e' disegnato, non una parola: e' l'unico posto della
+            schermata in cui un simbolo direzionale non ha bisogno di essere
+            letto, e il nome accessibile lo porta comunque. */}
+        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+          <path d="M15 5 8 12l7 7" />
+        </svg>
+      </button>
+      {/* `aria-live` **non** c'e', ed e' la decisione gia' presa sulla riga di
+          aiuto: cambiando periodo cambia tutta la schermata, e annunciare
+          l'etichetta metterebbe in coda un annuncio davanti al contenuto che
+          l'utente ha appena chiesto. Il nome accessibile delle frecce dice cosa
+          fanno; questo dice dove si e', e si legge esplorando. */}
+      <p class="pnav__label" data-corrente={corrente ? '' : undefined}>
+        {label}
+      </p>
+      <button
+        type="button"
+        class="pnav__arrow"
+        disabled={!puoAvanti}
+        aria-label={t('stats.nav.next')}
+        onClick={onAvanti}
+      >
+        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+          <path d="m9 5 7 7-7 7" />
+        </svg>
+      </button>
+    </div>
+  )
+}
+
 export function Stats({ phase, expenses, categories, rules, budgets, period, day }: Props) {
   const ready = phase === 'ready'
 
@@ -1601,10 +1692,39 @@ export function Stats({ phase, expenses, categories, rules, budgets, period, day
    * una migrazione di schema su dati veri per chi non lo spegne mai.
    */
 
+  /**
+   * **Quanti periodi indietro si sta guardando.** Effimero, come lo stato del
+   * grafico: uscendo dalle Statistiche il componente si smonta e si riparte
+   * dalla settimana corrente.
+   *
+   * Non e' una preferenza da ricordare. Uno stato che sopravvive va spiegato, e
+   * qui non c'e' niente da spiegare: chi riapre le Statistiche vuole sapere come
+   * sta andando adesso, e chi voleva il passato ci torna con una freccia.
+   */
+  const [indietro, setIndietro] = useState(0)
+
+  const anchor = useMemo(() => shiftPeriod(day, period, indietro), [day, period, indietro])
+
   const view = useMemo(
-    () => statsView({ expenses, categories, rules, budgets, period, day }),
-    [expenses, categories, rules, budgets, period, day],
+    () => statsView({ expenses, categories, rules, budgets, period, day, anchor }),
+    [expenses, categories, rules, budgets, period, day, anchor],
   )
+
+  /**
+   * **I due limiti, e vivono fuori dai rami della vista.**
+   *
+   * Avanti si spegne sul periodo corrente: una settimana che non e' ancora
+   * successa non ha uno stato vuoto, ha un non-senso.
+   *
+   * Indietro si spegne sul periodo della prima spesa: oltre ci sono settimane
+   * precedenti all'esistenza dei dati, e sono rumore. Il confronto e' fra
+   * **inizi di periodo** e non fra date, cosi' la settimana della prima spesa e'
+   * raggiungibile per intero e quella prima no.
+   */
+  const primoInizio = useMemo(() => firstPeriodStart(expenses, period), [expenses, period])
+  const inizioGuardato = periodRange(period, anchor).start
+  const puoIndietro = primoInizio !== null && isBefore(primoInizio, inizioGuardato)
+  const puoAvanti = indietro > 0
 
   // Il guscio si dipinge prima dei dati ("Ordine di pittura"): finche' non sono
   // arrivati non si mostra ne' il vuoto ne' il pieno, perche' dichiarare "niente
@@ -1615,6 +1735,28 @@ export function Stats({ phase, expenses, categories, rules, budgets, period, day
   // dentro `.app__main`, quindi occupa gia' tutto lo spazio disponibile in
   // entrambi gli stati e il contenuto arriva ancorato in alto. Niente si sposta.
   if (!ready) return <div class="stats" />
+
+  // Le frecce, disegnate una volta e valide per tutti i rami qui sotto.
+  const nav =
+    primoInizio === null ? null : (
+      <PeriodNav
+        label={
+          indietro === 0
+            ? // **Le chiavi si scrivono per intero**, e non `t(`period.${period}`)`:
+              // una chiave costruita a pezzi spegne il controllo B di
+              // `dead-surface.mjs`, che smette di poter dire se ogni chiave ha un
+              // lettore — e lo dichiara, "NON APPLICABILE". Una comodita' di due
+              // caratteri che disarma una guardia in CI.
+              t(period === 'weekly' ? 'period.weekly' : 'period.monthly')
+            : periodRangeLabel(period, periodRange(period, anchor))
+        }
+        corrente={indietro === 0}
+        puoIndietro={puoIndietro}
+        puoAvanti={puoAvanti}
+        onIndietro={() => setIndietro((n) => n + 1)}
+        onAvanti={() => setIndietro((n) => Math.max(0, n - 1))}
+      />
+    )
 
   if (view.kind === 'blank') {
     return (
@@ -1662,6 +1804,7 @@ export function Stats({ phase, expenses, categories, rules, budgets, period, day
   if (view.kind === 'outside') {
     return (
       <div class="stats">
+        {nav}
         <div class="blank">
           <p class="blank__title">{t('stats.outside.title')}</p>
           <p class="blank__text">
@@ -1677,6 +1820,7 @@ export function Stats({ phase, expenses, categories, rules, budgets, period, day
 
   return (
     <div class="stats">
+      {nav}
       {/* **Qui c'era la proiezione mensile delle fisse — `530,00 €/mese` — e non
           c'e' piu'.**
 
@@ -1709,6 +1853,7 @@ export function Stats({ phase, expenses, categories, rules, budgets, period, day
           `audit:source`, che e' esattamente la guardia scritta per questo. */}
       <Categories
         breakdown={view.byCategory}
+        period={view.period}
         range={periodRangeLabel(view.period, view.current.range)}
       />
       {/* **L'assenza di B si legge qui, e non dentro `Periods`.**

@@ -341,7 +341,7 @@ export const en: Record<keyof typeof it, string> = {
   // l'unico punto dell'app in cui l'italiano suonava meglio dell'inglese, cioe'
   // il segno che l'originale non era l'originale.
   'guide.label': 'How Cent works',
-  'guide.step': 'Step {index} of 2',
+  'guide.step': 'Step {index} of 3',
   'guide.skip': 'Skip',
   'guide.next': 'Next',
   'guide.start': 'Start',
@@ -352,6 +352,12 @@ export const en: Record<keyof typeof it, string> = {
   'guide.amount.text': 'For €23, type 2 3 0 0.',
   // "saves the expense", non "saves it": senza l'oggetto, "it" si legge come la
   // categoria — e in Settings le categorie si salvano per davvero.
+  /* La terza scheda: il gesto sul grafico. Il titolo dice **cosa si fa**, il
+   * testo **cosa si ottiene** — le due domande a cui il grafico risponde, non i
+   * nomi delle due forme. */
+  'guide.chart.title': 'Tap a chart to see the amounts',
+  'guide.chart.text': 'Shares at a glance, exact figures on tap. Tap again to go back.',
+
   'guide.save.title': 'Tapping a category saves the expense',
   'guide.save.text':
     'That’s the confirmation — no Save button. Wrong one? Undo, right after.',
@@ -510,6 +516,42 @@ export const en: Record<keyof typeof it, string> = {
   'stats.outside.text':
     'This period is {range}, and nothing you have logged falls inside it: it is all in {history}. The next expense you add today shows up here.',
 
+  /* --- **La sezione non sparisce perche' e' vuota** -------------------------
+   *
+   * Il 31 agosto, un lunedi', le Statistiche si sono aperte **senza la sezione
+   * A**: niente titolo, niente numero grande, niente ciambella. I dati c'erano
+   * tutti — era la settimana nuova a essere vuota — ma una sezione che sparisce
+   * si legge come un'app rotta, e chi guardava ha creduto di aver perso tutto.
+   *
+   * Queste due stringhe sono la sezione che **resta in piedi e dice cosa manca**.
+   * Non ripetono `stats.outside.*`: quello e' lo stato di **tutta la schermata**
+   * quando non c'e' niente da nessuna parte, e parla dello Storico perche' li'
+   * non c'e' nient'altro da offrire. Qui sotto c'e' ancora "Settimana per
+   * settimana", quindi l'uscita e' **il periodo prima**, che e' anche dove si
+   * arriva con la freccia. */
+  /* Le frecce del periodo. Nomi accessibili e non testo dipinto: il glifo lo
+   * porta un `svg`, e queste due stringhe sono cio' che sente chi non lo vede.
+   * Dicono **cosa fa il tap**, non dove si e' — dove si e' lo dice l'etichetta
+   * in mezzo, che si legge esplorando. */
+  'stats.nav.prev': 'Previous period',
+  'stats.nav.next': 'Next period',
+
+  /* **Il nome accessibile del gesto sul grafico**, e prima queste due frasi non
+   * servivano: la strada annunciata era il comando a due stati, che diceva da
+   * se' cosa faceva. Tolto quello, il gesto e' l'unica strada — e un gesto senza
+   * nome esiste solo per chi lo scopre col dito.
+   *
+   * Dicono **cosa succede toccando**, non come si chiama la forma. */
+  'stats.chart.toRanking': 'Show exact amounts for {name}',
+  'stats.chart.toShares': 'Show shares for {name}',
+
+  'stats.period.empty': 'Nothing logged in this period yet.',
+  /* Il periodo prima, con il suo totale. Due segnaposto e nessuna parola in
+   * mezzo che li spieghi: l'intervallo e' gia' un'etichetta che questa
+   * schermata stampa altrove, e il numero e' un importo. Aggiungere "invece"
+   * o "prima" direbbe una relazione che l'ordine gia' dice. */
+  'stats.period.previous': '{range} · {amount}',
+
   'stats.variable': 'Day to day',
 
   'stats.byCategory': 'What it went on',
@@ -529,30 +571,10 @@ export const en: Record<keyof typeof it, string> = {
   // Con un verbo ("bars are scaled to…") sarebbe una riga da leggere, e nessuno
   // legge una didascalia sotto un titolo.
   'stats.scale': 'Full bar = {amount}',
-  /* **Le due domande che una sezione di A sa fare**, e sono le due parole del
-   * comando che ci si commuta.
-   *
-   * ## Perche' due parole e non due icone
-   *
-   * *"Le icone sono la cosa che si vibe-codea per prima."* Una ciambella e un
-   * istogramma disegnati a 16 px sono due macchie che vanno imparate; due parole
-   * si leggono. E il comando deve **dichiarare** che il gesto esiste — il grafico
-   * a torta e' stato chiesto due volte prima che ne esistesse uno, cioe' una
-   * funzione che si scopre per caso viene chiesta come se non ci fosse.
-   *
-   * ## E nominano la domanda, non la forma
-   *
-   * Non `Donut` e `Bars`: quelle sono le forme, e chi legge dovrebbe gia' sapere
-   * a che domanda risponde ciascuna per scegliere. `Shares` e' *"quanto pesa
-   * cosa"*, `Ranking` e' *"quanto e' grande cosa, in ordine"*. Sono anche le due
-   * parole che tengono i due stati **paralleli**: un sostantivo ciascuno, stessa
-   * classe grammaticale, stesso peso — cosi' il comando si legge come una scelta
-   * e non come un titolo con accanto un'alternativa.
-   *
-   * Corte perche' vivono nella colonna che a 375 punti cede per prima: il nome
-   * di parte va a capo, il comando no. */
-  'stats.view.shares': 'Shares',
-  'stats.view.ranking': 'Ranking',
+  /* Qui c'erano `stats.view.shares` e `stats.view.ranking`, le due parole del
+   * comando a due stati. Il comando non c'e' piu': il gesto e' il tap sul
+   * grafico, e sullo schermo non resta nessun controllo che faccia la stessa
+   * cosa. A insegnarlo e' la guida. */
   'stats.byPeriod.weekly': 'Week by week',
   'stats.byPeriod.monthly': 'Month by month',
 

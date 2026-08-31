@@ -643,6 +643,10 @@ test('le otto categorie: etichetta AA, e i pixel confermano l\'aritmetica', asyn
   // usare `chiudiGuida`, e si rifa' cio' che quella garantisce: la sparizione
   // **e** la scrittura sul disco, perche' un `reload()` che precedesse la
   // scrittura rifarebbe comparire la guida a meta' scena.
+  // **Due tap, non uno**: da quando la guida ha tre schede, il bottone della
+  // seconda dice "Avanti" e non "Inizia". Si cammina fino all'ultima e si chiude
+  // di li', invece di dare per scontato quante schede ci siano.
+  await page.locator('.guide__next').tap()
   await page.locator('.guide__next').tap()
   await expect(page.locator('.guide')).toHaveCount(0)
   await expect
@@ -1009,8 +1013,10 @@ test('la barra divisa: i due segmenti si vedono, e la legenda porta i loro color
       leggi('.stats__donutTotal', 4.5),
       leggi('.legend__name', 4.5),
       leggi('.legend__value', 4.5),
-      leggi('.stats__view[aria-pressed="true"]', 4.5),
-      leggi('.stats__view[aria-pressed="false"]', 4.5),
+      // Qui c'erano le due parole del comando a due stati. Il comando non c'e'
+      // piu' — si tocca il grafico — e con lui se ne sono andate le uniche due
+      // stringhe della vista `quote` che vivevano su una superficie diversa da
+      // `--bg`. Cio' che resta di scritto e' misurato dalle tre righe qui sopra.
     ]
   })
   for (const t of testi) {
@@ -1028,7 +1034,7 @@ test('la barra divisa: i due segmenti si vedono, e la legenda porta i loro color
   //    farebbe chiunque voglia la classifica. Senza questa coda la didascalia
   //    resterebbe fuori da ogni misura di contrasto — che e' esattamente il buco
   //    che il punto 5 e' venuto a chiudere, riaperto da una vista nuova.
-  await page.locator('.stats__view[data-vista="ordine"]').first().tap()
+  await page.locator('.stats__viz').first().tap()
   const scala = await page.evaluate(() => {
     const el = document.querySelector('.stats__partScale')
     if (el === null) throw new Error('nessuna didascalia della scala nella vista a barre')
