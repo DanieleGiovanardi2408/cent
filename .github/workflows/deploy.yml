@@ -88,6 +88,22 @@ jobs:
       - name: Superfici che consumano la palette
         run: npm run audit:surfaces
 
+      # **Solo G1 ferma la pipeline, e lo script lo sa da solo.**
+      #
+      # G1 — una sola scala di spaziatura — ha un rimedio meccanico: il valore o
+      # sta sui gradini dichiarati, o e' un'altra grandezza e prende un token
+      # suo. E' cosi' che e' nato `--seam`, e bloccare non costa un giudizio a
+      # nessuno.
+      #
+      # G2 — la rampa tipografica — stampa e non fallisce: cio' che trova puo'
+      # essere un difetto **o** una grandezza diversa travestita da font-size
+      # (cinque delle nove trovate il 2 settembre dimensionavano una emoji dentro
+      # una pastiglia). Bloccare su un giudizio si aggira con `--no-verify` il
+      # terzo giorno, ed e' la calibrazione dell'hook pre-commit applicata di
+      # nuovo. Le sue righe si leggono nel log di questo passo.
+      - name: Le due scale — spaziatura e tipografia
+        run: npm run audit:scale
+
       - name: Test
         run: npm test
 

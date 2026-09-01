@@ -51,11 +51,27 @@ sono stati rivisti.
 
 ## In volo adesso
 
-<!-- JUDGMENT rivisto=2d9f75e -->
-> Rivisto a `2d9f75e`, 26 commit fa. **Da riguardare.**
+<!-- JUDGMENT rivisto=547fba4 -->
+> Rivisto a `547fba4`, cioe' all'albero da cui questa riscrittura e' stata
+> derivata. **Ri-derivato, non ritimbrato**: sotto c'e' cio' che e' cambiato.
 
-**Fase 6 sul ramo `fase-6-wip`, tredici commit sopra `origin/main`.** Il ramo e'
-spinto a ogni rientro.
+**Il lavoro della fase 6 e' su `main`, e `main` e' su Pages.** Ri-derivato il 2
+settembre guardando `git rev-parse HEAD origin/main` e l'ultimo deploy: le tre
+posizioni coincidono su `547fba4` — *"docs: i fatti dopo la linea del
+sostenibile"* — e il workflow `Deploy` e' `success` su quel commit. `fase-6-wip`
+esiste ancora come ramo (`1910c4e`) ma non e' piu' dove si lavora: il suo
+contenuto e' dentro `main`.
+
+**Questa riga diceva *"Fase 6 sul ramo `fase-6-wip`, tredici commit sopra
+`origin/main`"*, ed era la TERZA volta che invecchiava sullo stesso fatto.** Le
+prime due sono raccontate qui sotto. Tre volte sullo stesso fatto chiude la
+discussione: **la posizione di `main` e' derivabile e non deve stare scritta a
+mano.** Finche' non entra in `npm run state`, chi rilegge questa riga la rilegge
+guardando `git rev-parse origin/main` e `gh run list`, non ricordando — ed e'
+esattamente cosi' che e' stata riscritta adesso.
+
+**La chiusura della fase 6 sta sul ramo `fase-6-chiusura`**, spinto a ogni
+rientro; il piano che la segue sta in "I due binari", piu' sotto.
 
 **Rilettura del 30 agosto sera: questa riga era falsa in due punti.** Diceva
 *"cinque commit sopra"* (erano tredici) e *"cio' che sta su Pages e' ancora
@@ -319,6 +335,117 @@ mascherano la stessa uscita. E' la forma di DEBITO §6, trovata **dentro** la su
 riparazione. Sta scritta accanto al codice con la ragione: il giorno in cui una
 delle due maschere cade, B mostrerebbe un periodo in cui l'app non aveva dati.
 
+## I due binari
+
+**Il piano dopo la fase 6, e la regola fra i due binari e' una sola: niente del
+binario B prima che A sia chiuso.**
+
+Non e' una preferenza sull'ordine. **Ogni funzione aggiunta adesso viene disegnata
+sui dati e sulle abitudini di una persona sola** — un soggiorno ad Amsterdam, otto
+categorie scelte da lei, un affitto — e il primo utente vero la rimettera' in
+discussione. Il test degli amici non e' un traguardo: e' **l'ingresso** che dice
+quali funzioni di B servono e in che ordine. Costruire B prima vuol dire pagare
+due volte, e la seconda volta si paga disfacendo.
+
+### Binario A — arrivare a "finita e regalabile"
+
+**A1. Fase 6 — chiusura.** Le voci stanno in "Criterio di chiusura della fase 6",
+piu' sotto, e non si ricopiano qui: sarebbe una copia che parafrasa
+([DEBITO.md](DEBITO.md) §1).
+
+**A2. Fase 7 — il ritorno dei dati.** Import del backup di Cent, con
+`ImportPreview.exportedAt` e `RecurringRule.endDate` col suo campo di input.
+
+Il fatto che la ordina prima di A3, e non e' una preferenza: **oggi l'export e'
+l'unica copia e non esiste il modo di rimetterla dentro.** Un telefono perso e'
+tutto perso, e la promessa scritta in Impostazioni — *"i dati stanno solo su
+questo telefono"* — e' anche la ragione per cui non c'e' nessun'altra copia
+altrove. Dare l'app a degli amici prima che il ritorno esista significa dare a
+tre persone una scatola da cui i dati escono e non rientrano.
+
+E costruisce **l'anteprima, la conferma e l'idempotenza**, che servono a tutto il
+binario B: B4 non e' un parser, e' una riconciliazione, e la riconciliazione si
+mostra dentro quell'anteprima.
+
+**A3. Fase 8 — il test degli amici**, promosso da riga in coda alla fase 3 a
+**fase sua**.
+
+**La promozione e' il punto, non una formalita'.** E' rimasto un mese come quarta
+voce di un elenco di quattro, e una riga in coda a un elenco non ha mai un
+momento in cui e' il suo turno: c'e' sempre qualcosa sopra di lei che non e'
+finito. Era gia' scritto che *"si consuma una volta sola"*, ed e' vero — ed e'
+precisamente per questo che non puo' stare dove sta chi aspetta.
+
+Due o tre persone installano Cent su un telefono pulito e la usano **per una
+settimana**. Serve: README minimo, guida in inglese verificata, pavimento 375x667
+chiuso. **Output**: una lista di difetti trovati da qualcuno che non siamo noi —
+che e' l'unico strumento di questo progetto che nessuna misura sostituisce.
+
+### Binario B — crescere, in quest'ordine
+
+**B1. Il mese.** [DEBITO.md](DEBITO.md) §9: l'affitto e' mensile, il budget e'
+settimanale, e **nessuna schermata risponde a "come sta andando il mese"**. E' la
+prima perche' e' l'unica delle quattro che ripara un buco gia' misurato invece di
+aggiungere una strada nuova.
+
+**B2. La scorciatoia.** L'app accetta `?importo=…&categoria=…` e si apre con
+l'importo digitato e la categoria pronta; poi una Scorciatoia iOS sulla schermata
+Home, sul tasto Azione o nel Centro di Controllo. Sarebbe il principio guida n.1
+portato al suo limite: zero tap dentro l'app.
+
+> **PRIMA DI PROGETTARE — verifica da dieci minuti sul telefono.** Un URL nello
+> scope dell'app installata, aperto da una Scorciatoia: apre **l'app installata**
+> o **Safari**? Se apre Safari, l'utente atterra su un database vuoto — la PWA
+> installata e la scheda Safari sono due archivi separati, ed e' un fatto gia'
+> accertato di questo progetto (vedi "Storage di Safari e della PWA — SEPARATI")
+> — e la funzione e' morta.
+>
+> **Se cade, B2 esce dal piano e lo sappiamo subito**, invece di scoprirlo dopo
+> aver disegnato il parametro, il parsing e la schermata d'atterraggio. E' dieci
+> minuti contro giorni, ed e' esattamente il tipo di fatto che **solo il telefono
+> puo' dire**: qui non si deriva.
+
+**B3. Incolla e capisci.** Un bottone "Incolla" in `AddSheet` che estrae l'importo
+da un testo — l'SMS della banca, la riga di uno scontrino. Su iOS la lettura degli
+appunti **richiede un gesto dell'utente**, quindi e' un bottone e non una lettura
+automatica: non e' una scelta di prodotto, e' cio' che la piattaforma concede.
+
+**B4. Import dalla banca — e la funzione non e' il parser, e' la riconciliazione.**
+
+Il parser e' la parte facile e non e' il prodotto. Il prodotto e' questo: **la
+banca da' l'affitto, e l'app l'affitto se lo genera gia' da sola.** Importare
+agosto senza riconciliare produce 1.014 € di `Casa` invece di 507. Riconoscere che
+una riga della banca **e'** una spesa che l'app ha gia' creato, e proporre di
+unirle invece di sommarle, e' tutta la funzione — e si mostra **dentro l'anteprima
+di A2**, prima di scrivere.
+
+**E' import di un file scaricato dall'utente. NON e' un'API bancaria.** Quella
+richiede un server, un consenso da rinnovare ogni 90 giorni, e le transazioni che
+escono dal telefono: **l'opposto esatto di cio' che l'app promette all'utente in
+Impostazioni**. Se un giorno la si prende, non e' un dettaglio tecnico: e' una
+decisione di prodotto che cambia la promessa, e va scritta **in faccia
+all'utente**, non in una ADR che legge solo chi scrive il codice.
+
+### Fuori dal piano, con la condizione per rientrare
+
+Stanno scritte perche' **una cosa esclusa senza la sua ragione viene riproposta**,
+e la seconda volta senza nessuno che ricordi perche' era stata scartata.
+
+- **Widget** — **impossibile per una PWA.** WidgetKit e' nativo e passa dall'App
+  Store. **B2 ne copre gran parte del valore**: una Scorciatoia sulla schermata
+  Home e' un bersaglio a un tap, che e' quasi tutto quello che un widget di
+  inserimento darebbe.
+- **Notifiche** — **impossibile senza tradire la promessa.** Web Push su iOS
+  richiede un server, e una PWA non ha ne' Background Sync, ne' Periodic Sync, ne'
+  Background Fetch: **non esiste modo di programmare una notifica locale.** Non e'
+  una cosa che non abbiamo fatto: e' una cosa che la piattaforma non concede a
+  questa forma di app.
+- **App nativa** — sblocca widget **e** notifiche locali **senza server**: e'
+  l'unica strada che avrebbe entrambe senza rompere il vincolo "nessun backend".
+  **Condizione per riaprirla: se dopo A3 almeno tre persone dicono che la
+  userebbero tutti i giorni.** Prima di quel fatto e' un progetto grosso costruito
+  su un'ipotesi — e l'ipotesi e' precisamente quella che A3 esiste per verificare.
+
 ## Le sei misure del 30 agosto, prima di toccare una riga
 
 **Derivazione dichiarata**: l'export del 26 agosto come fixture a runtime, mai
@@ -440,8 +567,19 @@ differenza fra il modello mentale della richiesta e la configurazione dei dati.
 Sono ferme dal **24 agosto** e vanno fatte **in quest'ordine**, che non e' una
 preferenza: ogni passo distrugge la possibilita' di fare il precedente.
 
-<!-- JUDGMENT rivisto=2d9f75e -->
-> Rivisto a `58e0880`, 8 commit fa. **Da riguardare.**
+<!-- JUDGMENT rivisto=547fba4 -->
+> Rivisto a `547fba4`. **Riletto, non ri-derivato — e la differenza e' il
+> contenuto della voce**: i passi 3 e 4 succedono sul telefono, e da questa
+> macchina non si leggono. Il timbro certifica che questa prosa e' stata
+> riguardata, non che i due passi siano ancora aperti.
+
+**Cosa e' cambiato dal timbro precedente, ed e' una cosa sola**: il passo 4 —
+*"dare il telefono a una persona che non ha mai visto l'app"* — **non e' piu' una
+riga in coda a questa lista.** E' diventato **A3, una fase sua**, in "I due
+binari". La ragione e' che era qui da un mese senza muoversi, e una riga in coda
+a un elenco di quattro non ha mai un momento in cui e' il suo turno. La voce
+resta scritta qui perche' l'ordine fra i quattro passi non cambia — il 4 va
+ancora dopo il 3 — ma **chi cerca lo stato del test degli amici lo trova in A3**.
 
 ### Stato al 29 agosto: **i passi 1 e 2 sono FATTI**
 
@@ -545,8 +683,19 @@ macchina non puo' leggere.
 
 ## Il disco
 
-<!-- JUDGMENT rivisto=2d9f75e -->
-> Rivisto a `58e0880`, cioe' a questo commit.
+<!-- JUDGMENT rivisto=547fba4 -->
+> Rivisto a `547fba4`. **Ri-derivato**, non ritimbrato.
+
+**Ri-derivato il 2 settembre, e i numeri si sono mossi di nuovo — nell'altro
+verso**: `df` da' **16 GB liberi al 51%**, contro i 20 GB al 44% del 30 agosto e
+i 10 GB al 62% del 29. `~/.ollama` e' fermo a **12 KB**, identico da tre
+riletture; `node_modules` vale 160 MB e `test-results` 540 KB.
+
+**La conclusione non cambia e la soglia non si tocca**, ma il verso del movimento
+e' il fatto che vale: in tre riletture questa voce ha dato 10, poi 20, poi 16 GB.
+Non e' una tendenza, e' un'oscillazione — cioe' precisamente il tipo di misura
+che **non si puo' portare avanti con un timbro**. Ogni rilettura di questa voce
+rigira `df`, o il timbro mente.
 
 **Rivisto il 29 agosto, derivando: 10 GB liberi, 62% di capacita'.** Il taglio
 regge — `~/.ollama` e' fermo a 12 KB, solo le chiavi — e la regola sulla e2e non
@@ -785,8 +934,12 @@ giorno in cui serviva davvero.
 
 ## Decisioni prese e non ancora applicate
 
-<!-- JUDGMENT rivisto=2d9f75e -->
-> Rivisto a `b289fff`, 6 commit fa. **Da riguardare.**
+<!-- JUDGMENT rivisto=547fba4 -->
+> Rivisto a `547fba4`. **Ri-derivato**: `npm run state -- --check` da' ancora
+> **14/14 applicate**, cioe' nessuna decisione dichiarata qui e assente dal
+> codice. E' l'unico dei quattro giudizi la cui verita' e' interamente
+> controllabile a macchina — il che vuol dire che il timbro qui costa poco, e che
+> la meccanizzazione ha fatto il suo mestiere.
 
 **L'esistenza di una decisione e' un giudizio; la sua applicazione e' un fatto
 derivabile.** Erano due cose diverse nella stessa sezione, ed e' per questo che

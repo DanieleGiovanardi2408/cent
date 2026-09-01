@@ -258,7 +258,7 @@
   block-size: 1.625rem;
   border-radius: var(--radius-full);
   background-color: var(--cat);
-  font-size: 0.9375rem;
+  font-size: var(--fs-200);
   line-height: 1;
 }
 

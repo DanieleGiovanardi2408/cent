@@ -878,6 +878,103 @@ quindi nessuno rimisura leggendo: conteggi dei test, peso del bundle, scala dell
 migrazioni, eta' dei giudizi. **E' la differenza fra una guardia e un rumore**, ed
 e' la stessa scelta della calibrazione dell'hook.
 
+
+### E. Le due scale: spaziatura e tipografia — `scripts/scale.mjs` (`npm run audit:scale`)
+
+**G1 — una sola scala di spaziatura.** I gradini sono `--sp-1..7` (4, 8, 12, 16,
+24, 32, 48 px), tutti multipli di 4. Nessuna proprieta' di ritmo — `margin`,
+`padding`, `gap`, `inset`, `top/right/bottom/left` — porta un numero scritto a
+mano. **Ferma la CI**: il rimedio e' meccanico, perche' un valore che non sta
+sulla scala o e' un errore, o e' **un'altra grandezza** e allora prende un token
+suo.
+
+**G2 — una sola rampa tipografica, e l'invariante e' la CHIUSURA.** L'insieme
+dei token `--fs-*` e' la rampa, **qualunque sia il suo numero**, e niente vive
+fuori da li'. **Stampa e non ferma**: cio' che trova puo' essere un difetto o una
+grandezza diversa travestita da `font-size`.
+
+**G7 — niente gradienti, vetro, bagliori, ombre sfumate, emoji decorative,
+icone decorative.** Resta **regola scritta e non script**: e' una regola sul
+significato di una marca, non sulla sua sintassi, e uno script la prenderebbe
+solo per approssimazione — vietando anche i gradienti che portano un dato, come
+la guaina del segno del maturato o il tratteggio della linea del sostenibile.
+Un controllo che vieta la cosa giusta per la ragione sbagliata insegna ad
+aggirarlo.
+
+*(Le emoji delle categorie non ricadono in G7: li' l'emoji **e'** il dato — e'
+l'identita' della categoria scelta dall'utente, non un ornamento.)*
+
+#### Il tetto di cinque taglie e' stato proposto e RITIRATO
+
+La prima forma di G2 chiedeva *"al massimo cinque taglie"*. Quel cinque era
+**inventato**: nessuna misura lo produceva, la rampa vera ne ha otto, ed e' una
+progressione sensata. **Un controllo che dichiara violazione una scelta che
+nessuno ha argomentato contro insegna a non credergli** — e allora non lo si
+crede nemmeno il giorno in cui ha ragione.
+
+#### G3, G4, G5 e G6 sono state proposte e NON applicate
+
+Sono esistite in una conversazione e mai in un file. **Non si applicano, e questa
+riga esiste perche' fra due mesi nessuno le ricostruisca per completezza.**
+
+La ragione e' una sola e vale per tutte e quattro: **il problema che dovevano
+risolvere e' stato chiuso guardando**, e non si rimette mano a una schermata che
+funziona. Il 31 agosto uno sguardo umano sugli scatti ha prodotto dieci rilievi
+che cinque gate, cinquanta mutazioni e quattro controlli in CI non avevano visto;
+le riparazioni sono state fatte e la schermata e' stata riguardata. Un controllo
+che arriva **dopo** la riparazione non protegge il difetto che c'era: propone di
+rifare in modo diverso una cosa che gia' va, e il suo primo effetto sarebbe un
+diff su codice che nessuno ha motivo di toccare.
+
+**E il modo in cui G1–G7 sono nate e' esso stesso un rilievo.** Sono state
+inventate in chat e citate per giorni *"come se fossero un documento"*, fino a una
+sessione nuova che e' andata a cercarle nell'albero e non ha trovato niente. E'
+[DEBITO.md](docs/DEBITO.md) §1 nella sua forma piu' pura — **una lista che vive in
+una conversazione muore con lei** — ed e' la stessa forma di `888699a`, che
+dichiarava *"le altre dieci sono elencate come debito"* senza che l'elenco
+esistesse. La regola era gia' scritta: *"se una lista arriva in chat e non compare
+in un file, dirlo e' responsabilita' di chi la riceve tanto quanto di chi la
+manda"*. Ha funzionato: la sessione che le ha cercate l'ha detto. **La regola
+regge, e il costo di non applicarla e' misurato in giorni.**
+
+### Una scala esprime una grandezza sola, e le omonime prendono un token proprio
+
+`--seam: 2px` non e' un gradino della scala di spaziatura, ed e' fuori apposta.
+
+La scala `--sp-*` esprime il **ritmo** fra gli elementi. I 2 px della cucitura
+sono **la separazione fra due marche adiacenti** — della famiglia di un bordo,
+non di un margine. Aggiungerli come gradino autorizzerebbe chiunque a usarli come
+spaziatura, **che e' esattamente cio' che una scala esiste per impedire**: una
+scala che accoglie ogni numero che serve non risponde piu' alla domanda *"quanto
+spazio ci va qui?"*, e allora la domanda torna aperta ogni volta.
+
+**E il corollario, che e' la parte che si sbaglia: due numeri uguali non sono
+parenti.** I due `-2px` di `.stat__accrued` somigliavano alla cucitura e non lo
+erano: il margine e' **meta' della larghezza del segno** (4 px), e lo sporgere
+verticale e' una terza grandezza ancora. Scriverli come `calc(-1 * var(--seam))`
+avrebbe reso **esplicita una parentela che non esiste** — cioe' il contrario di
+cio' che si voleva — e il giorno in cui il segno diventasse largo 6 px il margine
+sarebbe rimasto sbagliato con una relazione scritta accanto a garantirlo.
+Si derivano dalla **propria** larghezza, dichiarata una volta.
+
+Regola: prima di far entrare un numero in una scala esistente, chiedersi **di
+quale grandezza e' una misura**. Se e' un'altra, prende un nome suo, e il nome
+deve dire cos'e'.
+
+### Un `font-size` non dimensiona sempre del testo
+
+Cinque delle nove taglie fuori rampa trovate il 2 settembre dimensionavano una
+**emoji dentro una pastiglia tonda**: `--fs-200` su tre pastiglie da 26 px, 14 px
+su quella da 24 px della guida, 22 px sulla cella da 44 px del selettore. Li'
+`font-size` non e' un gradino di una rampa di lettura: e' **un rapporto con un
+diametro**, e la domanda giusta e' *"quanto riempie la pastiglia"*, non *"quanto e'
+grande rispetto al corpo"*.
+
+E' la stessa forma di `--seam`: **una proprieta' CSS non dice quale grandezza sta
+misurando**, e due grandezze diverse che passano dallo stesso nome di proprieta'
+finiscono nella stessa scala per omonimia. E' anche il motivo per cui G2 **avvisa
+e non ferma**: quello che trova richiede di guardare cosa c'e' dentro l'elemento.
+
 ## Una derivazione vale dove ha guardato, e deve dire dove
 
 Derivare da un **corpus incompleto** sbaglia quanto dettare — **anzi peggio**,
@@ -1039,7 +1136,55 @@ Prima di condividere una griglia, chiedersi *quale* proprieta' si sta comprando:
 quasi sempre e' un bordo allineato, e un bordo non ha bisogno di una colonna
 condivisa.
 
-## Una mutazione che non compila non e' una mutazione
+## Le mutazioni finte: quattro forme, un solo difetto
+
+Far fallire apposta un controllo e' la prova che sorveglia qualcosa. **La prova
+vale solo se la mutazione e' arrivata fin dove il controllo guarda**, e ci sono
+ormai **quattro** modi documentati in cui non ci arriva. Stanno insieme perche'
+sono lo stesso difetto — *si legge un rosso, o un verde, che non significa cio'
+che sembra* — e perche' chi ne conosce una sola cade nelle altre tre.
+
+**Il conto che le tiene insieme: una mutazione che non poteva fallire e' peggio
+di un controllo assente. Un controllo assente non mente.**
+
+1. **Non compila.** Togliendo una condizione, la variabile che leggeva resta
+   inutilizzata e `TS6133` ferma la build prima della suite: il rosso e' del
+   compilatore, non del test. Si riscrive perche' **compili** —
+   `(condizione || true)` invece di cancellare.
+2. **Non si applica.** La mutazione tocca un file che l'artefatto misurato non
+   contiene: `vite preview` che serve un `dist/` vecchio, un `dist/` non
+   ricostruito, un ramo diverso. Il controllo misura un albero che non e' quello
+   che si e' mutato.
+3. **Non poteva fallire.** Il controllo e' verde anche senza la cosa che
+   sorveglia, perche' la sua premessa non e' costruita — il gate anti-CLS che si
+   dichiara soddisfatto quando non c'e' nessun guscio da confrontare.
+4. **Il controllo non guarda dove la mutazione e' stata messa.** Trovata il 2
+   settembre: `scripts/scale.mjs` leggeva le dichiarazioni CSS **solo a inizio
+   riga**, e `.x { padding-block: 7px }` — CSS perfettamente valido, tutto su una
+   riga — gli e' passata davanti. Lo scanner e' stato riscritto per leggere le
+   dichiarazioni ovunque stiano, e alla seconda prova la mutazione e' stata presa.
+
+**Cosa distingue la 4 dalla 3, ed e' la ragione per cui e' una forma nuova.** La
+3 e' un controllo la cui **premessa** non regge; la 4 e' un controllo la cui
+**copertura** ha un buco di cui nessuno sapeva. La 3 si trova rileggendo
+l'asserzione; la 4 **si trova solo mutando**, perche' dall'esterno il referto e'
+identico — un numero di violazioni che sembra completo. E' per questo che un
+controllo nuovo si muta **prima di crederci**, e non dopo la prima volta che
+sembra aver trovato qualcosa.
+
+**Come si esegue la prova, in tre righe.** Si muta; si guarda **quale** riga e'
+rossa (se nomina un file `.ts` e un codice `TS…`, e' la forma 1: si rifa'); si
+ripristina; **si riesegue il controllo sull'albero pulito** e si verifica che sia
+tornato al numero di prima. L'ultimo passo non e' formalita': e' cio' che
+distingue *"la mutazione e' stata presa"* da *"il controllo e' rotto in
+entrambe le direzioni"*.
+
+**E si muta anche in senso contrario, dove il controllo puo' avere falsi
+positivi**: gli stessi numeri messi **dentro un commento** devono restare
+invisibili. Un controllo che conta la propria documentazione produce un referto
+che nessuno legge due volte.
+
+### Una mutazione che non compila non e' una mutazione
 
 Far fallire apposta un test e' la prova che quel test sorveglia qualcosa. Ma la
 prova vale **solo se il test e' girato**: se la mutazione rompe `tsc`, la build si

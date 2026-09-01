@@ -980,7 +980,7 @@
 .stats__split {
   grid-column: 1 / -1;
   display: flex;
-  gap: 2px;
+  gap: var(--seam);
   /* Alta come le barre delle righe (`--bar-h`), e non di piu': e' lo stesso
    * inchiostro e due spessori diversi si leggerebbero come due tipi di grafico.
    * Sta subito sotto il numero grande, che e' cio' che la fa leggere per prima
@@ -1604,8 +1604,19 @@
  * staccare e' il **nucleo** (5,03:1 e 5,40:1 in chiaro, 7,68:1 e 7,30:1 in
  * scuro). Il minimo fra i sei numeri e' **5,03:1**, contro i 3:1 richiesti.
  *
- * La posizione non si sposta di un pixel: il nucleo resta 2 px e il
- * `margin-inline-start: -2px` lo rimette centrato sull'istante che rappresenta.
+ * La posizione non si sposta di un pixel: il nucleo resta 2 px e il margine
+ * negativo rimette il segno centrato sull'istante che rappresenta.
+ *
+ * ## I due numeri negativi sono scritti sulla larghezza del segno, non su `--seam`
+ *
+ * Valgono tutti e due -2 px e **somigliano alla cucitura da 2 px** della barra
+ * divisa. Non lo sono, ed e' la coincidenza che rende utile scriverlo: il
+ * margine e' **meta' della larghezza del segno** — 4 px larghi, spostati di 2 a
+ * sinistra e' cio' che lo centra — e lo sporgere verticale e' quanto il segno
+ * esce dalla traccia sopra e sotto. Se domani il segno diventasse largo 6 px, il
+ * margine dovrebbe diventare -3; la cucitura resterebbe 2. Sono due grandezze
+ * che oggi hanno lo stesso valore e nessuna parentela, quindi la larghezza si
+ * dichiara una volta e il margine si deriva da lei.
  *
  * Il guardiano e' `statistiche.spec.ts`, "il segno del maturato si stacca dal
  * riempimento su cui cade": campiona i pixel dipinti e cade sotto 3:1. La sonda
@@ -1627,10 +1638,16 @@
  * tornasse prima di `.stat__bar` in `Stats.tsx`, sotto il segno si
  * campionerebbe `--brand` puro, cioe' 1,00:1. */
 .stat__accrued {
+  /* Guaina + nucleo + guaina: 1 + 2 + 1. E' la larghezza da cui si deriva il
+   * centraggio qui sotto, e la sorgente del gradiente qui in fondo. */
+  --accrued-w: 4px;
+  /* Quanto il segno esce dalla traccia, sopra e sotto. Grandezza sua: non e' la
+   * meta' di niente e non e' la cucitura. */
+  --accrued-out: 2px;
   position: absolute;
-  inset-block: -2px;
-  inline-size: 4px;
-  margin-inline-start: -2px;
+  inset-block: calc(-1 * var(--accrued-out));
+  inline-size: var(--accrued-w);
+  margin-inline-start: calc(-1 * var(--accrued-w) / 2);
   /* Guaina, nucleo, guaina. `to right` e non un asse logico perche' la figura e'
    * simmetrica: in RTL disegna gli stessi quattro pixel, e il `margin` logico
    * qui sopra e' l'unica cosa che deve saperlo. */
@@ -1734,7 +1751,7 @@
 
 .stats__stackBar {
   display: flex;
-  gap: 2px;
+  gap: var(--seam);
   block-size: var(--bar-h);
   border-radius: 2px;
   overflow: hidden;

@@ -13,6 +13,7 @@
     "audit:source": "node scripts/dead-surface.mjs",
     "audit:palette": "node scripts/palette.mjs",
     "audit:surfaces": "node scripts/category-surfaces.mjs",
+    "audit:scale": "node scripts/scale.mjs",
     "state": "node scripts/state.mjs",
     "icons": "node scripts/generate-icons.mjs",
     "test:e2e": "npm run build && playwright test",

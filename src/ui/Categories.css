@@ -109,7 +109,7 @@
    * l'unica cosa che le distingue e' il colore — non c'e' nemmeno la posizione
    * in griglia ad aiutare, perche' e' un elenco che scorre. */
   background-color: var(--cat);
-  font-size: 0.9375rem;
+  font-size: var(--fs-200);
   line-height: 1;
 }
 

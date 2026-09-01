@@ -43,7 +43,7 @@
    * chiede all'utente di imparare due volte la stessa cosa. La coerenza
    * dell'oggetto, non la soglia. */
   background-color: var(--cat);
-  font-size: 0.9375rem;
+  font-size: var(--fs-200);
   line-height: 1;
 }
 
