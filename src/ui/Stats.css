@@ -618,7 +618,7 @@
  * 6,00:1 dall'accento in chiaro). Il secondo lo porta il contrasto di ciascun
  * segmento **col fondo**, che resta sopra 3:1 in tutti e quattro i casi:
  *
- *     tema      fisse (--line-strong)   quotidiane (--brand)
+ *     tema      fisse (--ink-fixed)     quotidiane (--brand)
  *     chiaro    3,19:1                  6,00:1
  *     scuro     3,28:1                  8,62:1
  *
@@ -631,9 +631,16 @@
  * Il segmento delle quotidiane era **nero pieno**: 16,5:1 sul fondo, cioe' la
  * cosa piu' scura della schermata addosso alla quantita' minoritaria. Il peso
  * visivo andava all'inverso della gerarchia che ADR 016 dichiara. */
+/* **`--ink-fixed` e non `--line-strong`, dal 2 settembre.** Stesso esadecimale,
+ * significato diverso: `--line-strong` e' *"un bordo che conta"* — che in questo
+ * file resta il contorno delle barre e la cornice della scheda — mentre questo
+ * e' l'inchiostro di **530,00 € su 954,00**, cioe' la meta' piu' grande dei
+ * soldi. Non e' un grigio di assenza, ed e' esattamente cosi' che veniva letto:
+ * lo stesso token, nella Home, dipinge una linea di riferimento col commento
+ * *"non e' un dato"* accanto. La ragione della divisione sta in `tokens.css`. */
 .stats__partHead[data-kind="fixed"],
 .stats__seg[data-kind="fixed"] {
-  --seg: var(--line-strong);
+  --seg: var(--ink-fixed);
 }
 
 .stats__partHead[data-kind="variable"],

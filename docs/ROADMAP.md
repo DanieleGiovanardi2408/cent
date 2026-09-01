@@ -25,15 +25,16 @@ sa gia', e per questo non puo' invecchiare. I giudizi — cosa e' in volo, cosa
 aspetta una persona — stanno sotto, scritti a mano e timbrati con lo SHA a cui
 sono stati rivisti.
 
-- **Ultimo commit**: `e89811d` — fix: la linea del sostenibile e' un riferimento, non un dato
-- **Data**: 31/08/2026 21:42
-- **Ramo**: `main`
-- **Pushato**: **no: 1 commit non pushati su `origin/main`**
-- **Albero di lavoro**: pulito
+- **Ultimo commit**: `b21d074` — feat: le due scale hanno un controllo, e la cucitura non e' un gradino
+- **Data**: 02/09/2026 00:46
+- **Ramo**: `fase-6-chiusura`
+- **Pushato**: si, `origin/fase-6-chiusura` e' allo stesso commit
+- **Rispetto a `origin/main`**: 1 commit avanti
+- **Albero di lavoro**: **non pulito**, ci sono modifiche non committate
 
 - **Test unitari**: 755 in 25 file, tutti verdi
-- **Test e2e dichiarati**: 422 in 14 file, su 4 progetti (iphone-se, iphone-14, landscape, dark)
-- **Test e2e eseguiti**: 404 passati, 18 saltati, in 2.8 minuti. I saltati sono condizionali (ADR 013): solo un'esecuzione li vede.
+- **Test e2e dichiarati**: 425 in 14 file, su 4 progetti (iphone-se, iphone-14, landscape, dark)
+- **Test e2e eseguiti**: 404 passati, 20 saltati, **1 falliti**, in 3.0 minuti. I saltati sono condizionali (ADR 013): solo un'esecuzione li vede.
 - **Bundle iniziale**: 59.3 KB gzip su 60.0 KB (0.7 KB di margine)
 
 - **Schema del database**: 5. La scala delle migrazioni:
@@ -52,7 +53,8 @@ sono stati rivisti.
 ## In volo adesso
 
 <!-- JUDGMENT rivisto=547fba4 -->
-> Rivisto a `547fba4`, cioe' all'albero da cui questa riscrittura e' stata
+> Rivisto a `547fba4`, un commit fa.
+
 > derivata. **Ri-derivato, non ritimbrato**: sotto c'e' cio' che e' cambiato.
 
 **Il lavoro della fase 6 e' su `main`, e `main` e' su Pages.** Ri-derivato il 2
@@ -334,6 +336,175 @@ togliendolo **94 test su 94 restano verdi** — la soglia e `comparableToBudget`
 mascherano la stessa uscita. E' la forma di DEBITO §6, trovata **dentro** la sua
 riparazione. Sta scritta accanto al codice con la ragione: il giorno in cui una
 delle due maschere cade, B mostrerebbe un periodo in cui l'app non aveva dati.
+
+## 2g — il controllo sulle clausole di rendering: il conto, prima di lanciarlo
+
+**Il restringimento e' deciso**: solo le condizioni che decidono se un blocco
+**compare a schermo**, fuori quelle che scelgono fra due forme dello stesso
+blocco. L'argomento e' che la famiglia di difetti da meccanizzare e' *"un blocco
+sparisce"* / *"uno stato vuoto non scatta"*, otto ricorrenze, tutte trovate per
+caso.
+
+### Il conto, derivato
+
+| insieme | quante |
+|---|---|
+| tutti i ternari con JSX in `src/ui/*.tsx` | ~66 |
+| **compare-o-no** (ramo negativo `null`/`undefined`) | **~26 condizioni, ~34 clausole** |
+| forma-vs-forma (due rami JSX) | 18 |
+
+Le clausole superano le condizioni perche' quattro ne portano due:
+`sheet?.kind === 'amount' && amountTarget !== null`,
+`chosen !== null && backTo === null`,
+`fixedSection === undefined && split !== null`, `!ready ? null : hasBudget`.
+
+**Tempo macchina**: la e2e completa costa **2,8 minuti**, quindi ~34 clausole
+valgono **circa 95 minuti** in serie, contro le **~4 ore** dell'insieme non
+ristretto. Il restringimento compra circa 3x.
+
+### E la verifica che era stata chiesta prima di escludere: **cade**
+
+Il motivo dell'esclusione era *"la scelta fra due forme e' gia' enumerata forma per
+forma da `statistiche.spec.ts`"*. Verificato contando dove stanno i 18:
+
+    Stats.tsx      1        RuleSheet.tsx  5        Home.tsx        3
+    Guide.tsx      3        CategorySheet  3        AddSheet/App/History  1 ciascuno
+
+**Uno su diciotto sta in `Stats.tsx`.** L'argomento e' vero per la scala 0/1/2/3+ —
+che e' l'unica cosa che `statistiche.spec.ts` enumera forma per forma — e **non
+dice niente sulle altre diciassette**, che vivono in cinque file diversi e la cui
+copertura non e' nota.
+
+E' *"una decisione vale dove vale il suo argomento"* presa nel verso opposto al
+solito: **un argomento applicato piu' largo di dove vale**, invece che piu'
+stretto. Il costo e' lo stesso — diciassette condizioni escluse da un controllo
+per una ragione che non le riguarda.
+
+**Quindi il restringimento resta, ma con la sua frontiera vera**: le 34 clausole
+del compare-o-no entrano; delle 18 forma-vs-forma esce **una** con l'argomento
+scritto, e le altre **17 restano da decidere** — o entrano, o si scrive il test
+che le enumera, o si scrive perche' non serve.
+
+**Niente e' stato lanciato**: il conto viene prima, come chiesto.
+
+## Le sei taglie fuori rampa — misurate, non ancora decise
+
+`npm run audit:scale` (G2) trova **sei** `font-size` scritti a mano che non
+corrispondono a nessun token. Sono qui perche' una lista che vive in una
+conversazione muore con lei, e questa aspetta una decisione.
+
+**Cinque delle nove trovate erano emoji, e tre sono gia' riparate.** Le tre
+`0.9375rem` di `.cat__emoji` e sorelle erano `--fs-200` riscritto a mano: scambio
+meccanico, zero effetto. Restano sei.
+
+| dove | taglia | cos'e' | dove si vede |
+|---|---|---|---|
+| `Categories.css:219` | 22 px | `.picker__key` — l'**emoji** nella cella da 44 px | editor categorie, selettore emoji/colori |
+| `Guide.css:340` | 14 px | `.mock__emoji` — l'**emoji** nella pastiglia da 24 px | guida al primo avvio, illustrazione della griglia |
+| `AddSheet.css:297` | 11 px | `.cat__name` sotto `@media (max-width: 359px)` | foglio Aggiungi, nome della categoria |
+| `Guide.css:453` | 11 px | `.mock__name`, stesso `@media` | guida, il **rispecchiamento** del precedente |
+| `RuleSheet.css:265` | 10 px | `.cat__tag` — l'etichetta maiuscola sotto il nome | foglio ricorrenze, chip della categoria |
+| `sheet.css:212` | 0,55em | `.amount__cell[data-kind]` — i **centesimi** dell'importo | ogni foglio con un importo |
+
+### Si dividono in tre famiglie, e solo una e' testo
+
+**1. Due emoji (22 e 14 px) — piu' le tre gia' scambiate: cinque casi.** Qui
+`font-size` **non dimensiona del testo**: dimensiona un glifo dentro un cerchio, e
+la domanda e' *"quanto riempie la pastiglia"*, non *"quanto e' grande rispetto al
+corpo"*. E' un **rapporto con un diametro**. Se un token loro esistesse
+(`--emoji-*`, derivato dalla pastiglia) i cinque casi uscirebbero da G2 insieme,
+ed e' la riparazione che li tratta come cio' che sono.
+
+**2. Uno proporzionale (0,55em).** I centesimi sono 0,55 volte gli euro, e gli
+euro sono `min(var(--fs-600), 10vw)`, cioe' fluidi. **Non e' una taglia: e' una
+relazione**, e scriverla come token la romperebbe. Esce da G2 solo dichiarandola.
+
+**3. Tre di testo vero: 11, 11, 10 px.** L'unica famiglia su cui la domanda *"e'
+qualcosa che e' stato stipato?"* si applica davvero.
+
+### La domanda sui 10 e 11 px, con il fatto che la cambia
+
+Testo sotto i 13 px — il gradino piu' basso della rampa — e' spesso il sintomo di
+qualcosa che e' stato stipato. **Per due dei tre il fatto e' che non si vedono a
+375 punti**: `AddSheet.css:297` e `Guide.css:453` vivono dentro
+`@media (max-width: 359px)`, e il pavimento dichiarato e' 375. Non scattano mai
+sul viewport minimo supportato.
+
+**Ma non sono codice morto**, e la ragione e' scritta accanto: *"320 punti non e'
+solo il vecchio SE, e' anche quello che si ottiene attivando lo Zoom schermo di
+iOS su un telefono normale"*. Quindi c'e' un utente vero a 320, con `Coffeeshop`
+che a 15 px verrebbe tagliato — e la scelta scritta e' *"il nome di una categoria
+non si abbrevia, si rimpicciolisce"*. La suite li esercita a 320x568 con
+`setViewportSize`, non come progetto.
+
+**Sono lo stesso caso in due posti**: la griglia vera e il suo ritratto nella
+guida. Se cambia uno deve cambiare l'altro, e oggi niente lo garantisce.
+
+`RuleSheet.css:265` e' il solo dei tre che si vede **sempre**, e ha gia' il suo
+argomento scritto: *"`--fs-100` e' gia' il gradino piu' basso e qui serve stare
+sotto al nome senza rubargli una riga"*. E' un'etichetta maiuscola di poche
+lettere, non prosa da leggere.
+
+**Nessuna delle sei e' stata toccata.** La decisione e' di prodotto, non
+meccanica, ed e' per questo che G2 stampa e non ferma.
+
+## ALTO aperto: a 375x667 lo stato vuoto della Home cade fuori dallo schermo
+
+**Trovato il 2 settembre scrivendo il test che mancava**, e la misura e' **peggiore**
+di quella che aveva prodotto la regola del pavimento il 30 agosto.
+
+Installazione pulita, nessun budget, nessuna spesa — cioe' **la prima schermata
+che vede un amico**, che e' il criterio di chiusura di A3:
+
+    piega (bordo alto del FAB)   595
+    finestra                     667
+    .blank__title  finisce a     601,31   →   6,31 px sotto la piega
+    .blank__text   finisce a     689,81   →  94,81 px sotto la piega,
+                                              e 22,81 px sotto il bordo dello schermo
+
+Il 30 agosto `.blank__text` finiva a **663,8**. Adesso finisce a **689,81**: il
+difetto non e' rimasto fermo, e' **cresciuto di 26 px** mentre la schermata veniva
+migliorata altrove. E' precisamente cio' che un invariante senza test fa —
+CLAUDE.md dichiarava *"un test fallisce se un elemento dello stato vuoto esce dalla
+piega a 375x667"*, e quel test non e' mai esistito.
+
+### Non e' troppo contenuto: e' riserva vuota
+
+Misurato blocco per blocco a 375x667, stato vuoto:
+
+    .app__bar     52          .rates       161,81 → 309,06   (147,25)
+    .hero      52 → 161,81    .slot__foot  309,06 → 389,31   ( 80,25)
+                              .week        390,31 → 568,06   (177,75)
+                              .blank       568,06 → 713,81   (145,75)
+
+`.week` occupa **177,75 px** per disegnare sette colonne tutte a zero con le
+etichette dei giorni; `.rates` ne occupa **147,25** per una frase sola
+(*"Con un budget questa riga diventa quanto puoi spendere oggi."*) piu' un vuoto.
+**Il deficit e' circa 119 px, e ce ne sono almeno il doppio di aria** fra i due
+blocchi. Lo si vede nello scatto: fra la frase del budget e *"Nessuna spesa in
+questo periodo, per ora."* c'e' un buco, e sotto `GIORNO PER GIORNO` c'e' una
+striscia alta e vuota.
+
+E' la stessa famiglia di [DEBITO.md](DEBITO.md) §7 — *"la riserva della Home
+avanza di 61,75 px nello stato piu' comune"* — misurata su un altro viewport e su
+un altro stato, dove pero' **non avanza: manca**.
+
+### Perche' non e' stato riparato in questo giro
+
+**E' una decisione di forma su una schermata che e' stata appena guardata e
+approvata.** Chi ha guardato, ha guardato a 390x844, dove tutto ci sta: il difetto
+vive solo sul pavimento, che e' **il telefono di nessuno di noi**. Ridisegnare la
+riserva senza che nessuno abbia guardato le alternative rifarebbe l'errore al
+contrario.
+
+Le varianti si preparano come **iniezione CSS sopra l'app costruita**
+(`page.addStyleTag`), non toccando i sorgenti: finche' non arriva la scelta,
+l'albero resta quello dell'ultimo commit. Vedi "Le varianti da guardare si
+iniettano, non si applicano".
+
+**Il test resta ROSSO fino ad allora, ed e' voluto**: e' un ALTO, e la regola di
+uscita della fase 6 dice che gli ALTO bloccano. Un test verde qui vorrebbe dire che
+il difetto e' stato accettato senza deciderlo.
 
 ## I due binari
 
@@ -799,9 +970,9 @@ Lo dice il blocco "Decisioni" qui sotto, che si rigenera.
 #### 2. `home.spec.ts:528` costruisce la propria premessa invece di sperarla
 
 <!-- USCITA
-     present: tests/e2e/home.spec.ts :: premessa costruita
+     present: tests/e2e/home.spec.ts :: dichiara di non sapere
 -->
-> **Non applicata**: manca `premessa costruita` in `tests/e2e/home.spec.ts`.
+> **Applicata**, verificato da: `dichiara di non sapere`.
 
 Sotto contesa il gate anti-CLS **non misura niente e si dichiara verde**: con i
 dati gia' arrivati al primo frame non c'e' nessun guscio da confrontare. Non e' un
@@ -809,11 +980,53 @@ test che passa, e' un test **non misurabile** che si dichiara soddisfatto — la
 confusione fra *non so* e *non c'e'*, sopravvissuta in un test invece che in un
 campo.
 
-Le due riparazioni ammesse, in ordine: **ritardare la sorgente dei dati** perche' il
-primo frame sia garantito senza dati (la premessa diventa costruita dal test e non
-dipende da quanti worker girano); oppure, se non praticabile, il test **si dichiara
-non misurabile** e lo dice, invece di passare. Renderlo permissivo no: accetterebbe
-la tautologia che quella riga esiste per impedire.
+Le due riparazioni ammesse erano: **ritardare la sorgente dei dati** perche' il
+primo frame sia garantito senza dati; oppure il test **si dichiara non misurabile**
+e lo dice, invece di passare. Renderlo permissivo no: accetterebbe la tautologia
+che quella riga esiste per impedire.
+
+### Chiusa il 2 settembre con la SECONDA, e la prima e' stata scartata con la sua ragione
+
+**Prima di ripararlo e' stata fatta la domanda che poteva cancellarlo**: che cosa
+misura questo test che la rete anti-CLS non misura gia'? Se la risposta fosse
+*"niente"*, non sarebbe un test da riparare ma da togliere — e varrebbe il
+precedente della fase 5, dove `expensesInRange` e `planBudgetChange` furono
+cancellate perche' vivevano solo dei test che le chiamavano.
+
+**La risposta e' tre cose**, e nessuna delle tre e' nella rete:
+
+1. il gate misura la **causa** — l'identita' delle posizioni fra guscio e dati,
+   confrontata **esatta** su quattro assi per ogni punto di riferimento — mentre
+   `cls === 0` misura l'**effetto** con dentro la soglia del browser. Lo
+   spostamento da 0,82 px che ha prodotto la tassonomia di CLAUDE.md **non produsse
+   nessuna voce `layout-shift`**: la rete non lo vide, il confronto esatto si';
+2. `fontAtFirstFrame` — che **nessun altro test di questo file asserisce**;
+3. `overflowX` e `homeOverflowX` — idem.
+
+**Quindi si ripara.** E delle due riparazioni si e' presa la seconda, perche' la
+prima e' un allestimento: ritardando la sorgente dei dati non si misura piu' il
+primo frame dell'app, si misura il primo frame di una scena costruita perche' la
+misura riesca. **Meglio dichiarare di non sapere che far passare truccando la
+scena** — che e' la stessa distinzione che il gate esiste per difendere, applicata
+a se stesso.
+
+*(Una precisazione sul divieto: una cucitura per i test qui starebbe in
+`src/app`, dove CLAUDE.md la dichiara **normale** — il divieto vale per
+`src/core`. L'argomento che la scarta non e' quello, e' l'onesta' della misura: sta
+in piedi da solo, e da solo basta.)*
+
+**La forma**: i sei gate passano da un helper `gate(m, perche)`. Le tre asserzioni
+che **non** dipendono dalla premessa stanno prima dello `skip`, cosi' un giro non
+misurabile perde solo il confronto fra guscio e dati e non le altre tre. Playwright
+ha i tre esiti che servono, e adesso li usa tutti e tre: *passa* = i blocchi non si
+sono mossi; *fallisce* = si sono mossi; **`skipped` con la ragione** = non c'era
+guscio da confrontare.
+
+**Provato mutando, e tutti e tre gli esiti sono stati visti**: premessa forzata a
+cadere -> `6 skipped`; `drift` truccato con una riga finta -> `6 failed`; albero
+pulito -> `6 passed`. Il terzo passo non e' formalita': senza, "la mutazione e'
+stata presa" e "il controllo e' rotto in entrambe le direzioni" hanno lo stesso
+aspetto.
 
 #### 3. Un gate con zero ALTO
 

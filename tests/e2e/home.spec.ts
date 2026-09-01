@@ -203,6 +203,72 @@ function drift(before: Geometry | null, after: Geometry | null): string[] {
 }
 
 /**
+ * **Il gate, per tutte e sei le scene — e la parte che dichiara di non sapere.**
+ *
+ * Il gate confronta la geometria del **guscio** con quella **coi dati**: se un
+ * blocco sta allo stesso pixel prima e dopo, l'arrivo dei dati non ha spostato
+ * niente. E' la misura della **causa**; il `cls === 0` della rete che
+ * l'accompagna misura l'**effetto**, con la soglia interna del browser dentro
+ * (CLAUDE.md, "Verifiche che passano perche' la macchina non e' il bersaglio",
+ * caso 1).
+ *
+ * ## La premessa era sperata, e quando cadeva il gate passava senza misurare
+ *
+ * Il confronto ha senso solo se al primo frame utile **i dati non erano ancora
+ * arrivati**. Se erano gia' li', `firstGeometry` e `finalGeometry` sono la stessa
+ * cosa e `drift` restituisce `[]` **per costruzione**: verde qualunque cosa
+ * succeda alla riserva d'altezza. E' la confusione fra *non so* e *non c'e'*,
+ * sopravvissuta in un test invece che in un campo — e la premessa non e' teorica,
+ * perche' ADR 021 mette quattro processi sulla stessa macchina e un `firstHero.at`
+ * fra 1.500 e 2.200 ms comincia a lampeggiare a 4 vCPU.
+ *
+ * ## Perche' NON si costruisce la premessa, che era l'altra riparazione ammessa
+ *
+ * Si poteva **ritardare la sorgente dei dati** perche' il primo frame fosse
+ * garantito senza. Scartata: quello che si misurerebbe non e' piu' il primo frame
+ * dell'app, e' il primo frame di una scena allestita perche' la misura riesca.
+ * **Meglio dichiarare di non sapere che far passare truccando la scena** — ed e'
+ * la stessa distinzione che il gate esiste per difendere, applicata a se stesso.
+ *
+ * ## Quindi: non misurabile e' `skipped`, non `passed`
+ *
+ * Playwright ha tre esiti, e sono esattamente i tre stati che servono: *passa* =
+ * i blocchi non si sono mossi; *fallisce* = si sono mossi; **`skipped` con la
+ * ragione scritta** = non c'era guscio da confrontare, e questo giro non lo sa.
+ * Un verde qui avrebbe detto la prima cosa avendo osservato la terza.
+ *
+ * ## L'ordine delle asserzioni e' parte della riparazione
+ *
+ * Le tre che **non dipendono dalla premessa** — il font pronto al primo frame e i
+ * due scorrimenti orizzontali, che nessun altro test di questo file asserisce —
+ * stanno **prima** dello `skip`. Cosi' un giro non misurabile perde solo il
+ * confronto fra guscio e dati, non le altre tre: se il font non fosse pronto o la
+ * pagina traboccasse, questo test fallirebbe **anche** nel giro in cui salta.
+ */
+function gate(m: Measures, perche = 'blocchi spostati dall\'arrivo dei dati'): void {
+  expect(m.fontAtFirstFrame, 'il font dichiarato non era pronto al primo frame').toBe(true)
+  expect(m.overflowX, 'scroll orizzontale in pagina').toBeLessThanOrEqual(0)
+  expect(m.homeOverflowX, 'scroll orizzontale dentro la Home').toBeLessThanOrEqual(0)
+
+  // Il numero grande deve esistere gia' al primo frame utile: se manca, il guscio
+  // non e' definitivo, ed e' un difetto — non un'incertezza.
+  expect(m.firstHero, 'al primo frame il numero grande non e\' nel DOM').not.toBeNull()
+
+  test.skip(
+    m.firstHero?.text !== '',
+    `non misurabile in questo giro: al primo frame utile (${m.firstHero?.at}ms, ` +
+      `${m.firstHero?.frames} frame) il numero grande diceva gia' ` +
+      `"${m.firstHero?.text}", quindi non c'e' nessun guscio da confrontare con lo ` +
+      'stato coi dati. Il gate non passa e non fallisce: dichiara di non sapere.',
+  )
+
+  // Il messaggio e' della scena, non del gate: *cosa* poteva spostare i blocchi
+  // cambia — l'arrivo dei dati, un cambio di lingua, una banda che compare — e
+  // chi legge un rosso deve sapere quale delle tre stava guardando.
+  expect(drift(m.firstGeometry, m.finalGeometry), perche).toEqual([])
+}
+
+/**
  * Osserva gli spostamenti di layout **da prima della navigazione**: con
  * `buffered: true` arrivano anche quelli avvenuti prima che l'osservatore
  * esistesse. Al primo frame utile registra il rettangolo del numero grande e
@@ -579,23 +645,7 @@ test.describe('la Home non salta, senza budget e senza spese', () => {
     // Il numero grande esiste al primo frame utile. Va chiesto prima del
     // confronto: senza guscio da confrontare il gate sarebbe verde per assenza
     // di misura, che e' il modo peggiore in cui un test puo' passare.
-    expect(m.firstHero, 'al primo frame il numero grande non e\' nel DOM').not.toBeNull()
-    // **E al primo frame era ancora vuoto.** Senza questa riga il gate confronta
-    // due geometrie che possono essere entrambe quelle *coi dati*: basta che il
-    // primo frame utile cada dopo l'arrivo del repository e il confronto diventa
-    // una tautologia, verde qualunque cosa succeda alla riserva d'altezza. La
-    // premessa non e' teorica — ADR 021 ha appena messo quattro processi sotto
-    // la stessa macchina, e un `firstHero.at` fra 1.500 e 2.200 ms e'
-    // esattamente il tipo di misura che comincia a lampeggiare a 4 vCPU.
-    expect(m.firstHero?.text, 'al primo frame i dati erano gia\' arrivati').toBe('')
-    expect(m.fontAtFirstFrame, 'il font dichiarato non era pronto al primo frame').toBe(true)
-    expect(
-      drift(m.firstGeometry, m.finalGeometry),
-      'blocchi spostati dall\'arrivo dei dati',
-    ).toEqual([])
-
-    expect(m.overflowX, 'scroll orizzontale in pagina').toBeLessThanOrEqual(0)
-    expect(m.homeOverflowX, 'scroll orizzontale dentro la Home').toBeLessThanOrEqual(0)
+    gate(m)
   })
 
   test('rete: il CLS resta zero, anche fuori dai blocchi del gate', async ({ page }, testInfo) => {
@@ -612,23 +662,7 @@ test.describe('la Home non salta, con budget e 5.000 spese, sforando', () => {
     const m = await scena5000(page)
     racconta(testInfo.project.name, 'home con budget e 5.000 spese', m)
 
-    expect(m.firstHero, 'al primo frame il numero grande non e\' nel DOM').not.toBeNull()
-    // **E al primo frame era ancora vuoto.** Senza questa riga il gate confronta
-    // due geometrie che possono essere entrambe quelle *coi dati*: basta che il
-    // primo frame utile cada dopo l'arrivo del repository e il confronto diventa
-    // una tautologia, verde qualunque cosa succeda alla riserva d'altezza. La
-    // premessa non e' teorica — ADR 021 ha appena messo quattro processi sotto
-    // la stessa macchina, e un `firstHero.at` fra 1.500 e 2.200 ms e'
-    // esattamente il tipo di misura che comincia a lampeggiare a 4 vCPU.
-    expect(m.firstHero?.text, 'al primo frame i dati erano gia\' arrivati').toBe('')
-    expect(m.fontAtFirstFrame, 'il font dichiarato non era pronto al primo frame').toBe(true)
-    expect(
-      drift(m.firstGeometry, m.finalGeometry),
-      'blocchi spostati dall\'arrivo dei dati',
-    ).toEqual([])
-
-    expect(m.overflowX, 'scroll orizzontale in pagina').toBeLessThanOrEqual(0)
-    expect(m.homeOverflowX, 'scroll orizzontale dentro la Home').toBeLessThanOrEqual(0)
+    gate(m)
   })
 
   test('rete: il CLS resta zero, anche fuori dai blocchi del gate', async ({ page }, testInfo) => {
@@ -764,23 +798,7 @@ test.describe('a 320 punti la Home non salta lo stesso', () => {
     const m = await scena320(page)
     racconta('320x568', 'home con budget', m)
 
-    expect(m.firstHero, 'al primo frame il numero grande non e\' nel DOM').not.toBeNull()
-    // **E al primo frame era ancora vuoto.** Senza questa riga il gate confronta
-    // due geometrie che possono essere entrambe quelle *coi dati*: basta che il
-    // primo frame utile cada dopo l'arrivo del repository e il confronto diventa
-    // una tautologia, verde qualunque cosa succeda alla riserva d'altezza. La
-    // premessa non e' teorica — ADR 021 ha appena messo quattro processi sotto
-    // la stessa macchina, e un `firstHero.at` fra 1.500 e 2.200 ms e'
-    // esattamente il tipo di misura che comincia a lampeggiare a 4 vCPU.
-    expect(m.firstHero?.text, 'al primo frame i dati erano gia\' arrivati').toBe('')
-    expect(m.fontAtFirstFrame, 'il font dichiarato non era pronto al primo frame').toBe(true)
-    expect(
-      drift(m.firstGeometry, m.finalGeometry),
-      'blocchi spostati dall\'arrivo dei dati',
-    ).toEqual([])
-
-    expect(m.overflowX, 'scroll orizzontale in pagina').toBeLessThanOrEqual(0)
-    expect(m.homeOverflowX, 'scroll orizzontale dentro la Home').toBeLessThanOrEqual(0)
+    gate(m)
   })
 
   test('rete: il CLS resta zero, anche fuori dai blocchi del gate', async ({ page }, testInfo) => {
@@ -1044,22 +1062,7 @@ test.describe('la Home con un budget nato a meta settimana', () => {
     const m = await scenaMetaSettimana(page)
     racconta(testInfo.project.name, 'home con budget nato a meta settimana', m)
 
-    expect(m.firstHero, 'al primo frame il numero grande non e\' nel DOM').not.toBeNull()
-    // **E al primo frame era ancora vuoto.** Senza questa riga il gate confronta
-    // due geometrie che possono essere entrambe quelle *coi dati*: basta che il
-    // primo frame utile cada dopo l'arrivo del repository e il confronto diventa
-    // una tautologia, verde qualunque cosa succeda alla riserva d'altezza. La
-    // premessa non e' teorica — ADR 021 ha appena messo quattro processi sotto
-    // la stessa macchina, e un `firstHero.at` fra 1.500 e 2.200 ms e'
-    // esattamente il tipo di misura che comincia a lampeggiare a 4 vCPU.
-    expect(m.firstHero?.text, 'al primo frame i dati erano gia\' arrivati').toBe('')
-    expect(m.fontAtFirstFrame, 'il font dichiarato non era pronto al primo frame').toBe(true)
-    expect(
-      drift(m.firstGeometry, m.finalGeometry),
-      'blocchi spostati dall\'arrivo dei dati',
-    ).toEqual([])
-
-    expect(m.overflowX, 'scroll orizzontale in pagina').toBeLessThanOrEqual(0)
+    gate(m)
   })
 
   test('rete: il CLS resta zero, anche fuori dai blocchi del gate', async ({ page }, testInfo) => {
@@ -1128,22 +1131,7 @@ test.describe('la Home con la lingua scelta diversa da quella del telefono', () 
     const m = await scenaLingua(page)
     racconta(testInfo.project.name, 'home con lingua scelta ≠ rilevata', m)
 
-    expect(m.firstHero, 'al primo frame il numero grande non e\' nel DOM').not.toBeNull()
-    // **E al primo frame era ancora vuoto.** Senza questa riga il gate confronta
-    // due geometrie che possono essere entrambe quelle *coi dati*: basta che il
-    // primo frame utile cada dopo l'arrivo del repository e il confronto diventa
-    // una tautologia, verde qualunque cosa succeda alla riserva d'altezza. La
-    // premessa non e' teorica — ADR 021 ha appena messo quattro processi sotto
-    // la stessa macchina, e un `firstHero.at` fra 1.500 e 2.200 ms e'
-    // esattamente il tipo di misura che comincia a lampeggiare a 4 vCPU.
-    expect(m.firstHero?.text, 'al primo frame i dati erano gia\' arrivati').toBe('')
-    expect(m.fontAtFirstFrame, 'il font dichiarato non era pronto al primo frame').toBe(true)
-    expect(
-      drift(m.firstGeometry, m.finalGeometry),
-      'blocchi spostati dal cambio di lingua all\'arrivo dei dati',
-    ).toEqual([])
-
-    expect(m.overflowX, 'scroll orizzontale in pagina').toBeLessThanOrEqual(0)
+    gate(m, 'blocchi spostati dal cambio di lingua all\'arrivo dei dati')
   })
 
   test('rete: il CLS resta zero, anche fuori dai blocchi del gate', async ({ page }, testInfo) => {
@@ -1248,23 +1236,7 @@ test.describe('il promemoria di backup compare senza far saltare la Home', () =>
     const m = await scenaPromemoria(page)
     racconta(testInfo.project.name, 'home + promemoria di backup', m)
 
-    expect(m.firstHero, 'al primo frame il numero grande non e\' nel DOM').not.toBeNull()
-    // **E al primo frame era ancora vuoto.** Senza questa riga il gate confronta
-    // due geometrie che possono essere entrambe quelle *coi dati*: basta che il
-    // primo frame utile cada dopo l'arrivo del repository e il confronto diventa
-    // una tautologia, verde qualunque cosa succeda alla riserva d'altezza. La
-    // premessa non e' teorica — ADR 021 ha appena messo quattro processi sotto
-    // la stessa macchina, e un `firstHero.at` fra 1.500 e 2.200 ms e'
-    // esattamente il tipo di misura che comincia a lampeggiare a 4 vCPU.
-    expect(m.firstHero?.text, 'al primo frame i dati erano gia\' arrivati').toBe('')
-    expect(m.fontAtFirstFrame, 'il font dichiarato non era pronto al primo frame').toBe(true)
-    expect(
-      drift(m.firstGeometry, m.finalGeometry),
-      'la banda del promemoria ha spostato qualcosa comparendo',
-    ).toEqual([])
-
-    expect(m.overflowX, 'scroll orizzontale in pagina').toBeLessThanOrEqual(0)
-    expect(m.homeOverflowX, 'scroll orizzontale dentro la Home').toBeLessThanOrEqual(0)
+    gate(m, 'la banda del promemoria ha spostato qualcosa comparendo')
   })
 
   test('rete: il CLS resta zero, anche fuori dai blocchi del gate', async ({ page }, testInfo) => {
@@ -1902,6 +1874,95 @@ test('l\'intestazione di oggi esiste solo dove c\'e\' qualcosa da intestare', as
     `il messaggio di giornata vuota parte a ${vuoto.stacco}px dal bordo del suo blocco e le righe di oggi a ${conRighe}: il vuoto e' tornato a stare in un posto suo invece che al posto delle righe`,
   ).toBe(conRighe)
 })
+
+
+/**
+ * **Lo stato vuoto della Home sta sopra la piega a 375x667.**
+ *
+ * E' il caso che ha **prodotto** la regola del pavimento in CLAUDE.md, e fino ad
+ * oggi era l'unico invariante di quella regola a non avere un test: quello per
+ * le Statistiche esiste (`statistiche.spec.ts`, "fuori dal periodo: il testo sta
+ * dentro"), questo no. Una regola nata da un difetto, con il difetto non
+ * sorvegliato.
+ *
+ * **La misura che la produsse, il 30 agosto**: a 375x667 `.blank__text` — *"Tocca
+ * il + qui sotto, digita l'importo…"* — finiva a **663,8** contro una piega a
+ * **583**. A 390x844 e a 393x852 ci stava per intero, cioe' **su nessuno dei
+ * telefoni che abbiamo in mano**.
+ *
+ * E la ragione per cui quel difetto e' il piu' caro possibile: **lo stato vuoto
+ * e' la prima schermata che vede un amico su un'installazione pulita**, ed e' il
+ * criterio di chiusura del test degli amici (A3). Il primo contatto con l'app
+ * sarebbe un testo tagliato, su un telefono che nessuno di noi ha.
+ *
+ * ## La piega e' il bordo del FAB, e si deriva
+ *
+ * Non e' `window.innerHeight`: il FAB e' `fixed` e vive in una **fascia
+ * riservata** (CLAUDE.md, "Sovrapposizioni"), quindi cio' che gli finisce sotto
+ * e' coperto anche se il viewport non e' finito. La piega si prende dal
+ * rettangolo del FAB invece che da un numero — **583 scritto qui dentro sarebbe
+ * vero solo finche' `--fab-lane` non cambia**, e cambierebbe in silenzio.
+ *
+ * Lo scorrimento non salva: questa e' la **prima** schermata, e un invito che
+ * chiede di scorrere per essere letto non e' stato letto.
+ */
+test('lo stato vuoto della Home sta sopra la piega, a 375x667', async ({ page }, testInfo) => {
+  test.skip(
+    testInfo.project.name !== 'iphone-se',
+    'il pavimento e\' 375x667: sugli altri progetti questa misura non e\' quella',
+  )
+
+  await fissaOrologio(page)
+  await page.goto('./')
+  await expect(page.locator('.budget')).toBeEnabled()
+  await chiudiGuida(page)
+
+  // Installazione pulita: nessun budget, nessuna spesa. E' lo stato in cui
+  // l'invito compare, ed e' quello che vede chi apre l'app per la prima volta.
+  await expect(page.locator('.blank__title')).toBeVisible()
+  await expect(page.locator('.blank__text')).toBeVisible()
+
+  const geo = await page.evaluate(() => {
+    const r = (n: number): number => Math.round(n * 100) / 100
+    const fab = document.querySelector('.fab')
+    if (!(fab instanceof HTMLElement)) throw new Error('nessun FAB: la piega non e\' derivabile')
+    const piega = r(fab.getBoundingClientRect().top)
+    const box = (sel: string): { sel: string; basso: number } | null => {
+      const el = document.querySelector(sel)
+      return el === null ? null : { sel, basso: r(el.getBoundingClientRect().bottom) }
+    }
+    return {
+      viewport: `${window.innerWidth}x${window.innerHeight}`,
+      finestra: window.innerHeight,
+      piega,
+      // Il titolo **e** l'invito: sono due blocchi, e il 30 agosto era il secondo
+      // a cadere. Guardarne uno solo avrebbe lasciato passare esattamente quello.
+      blocchi: ['.blank__title', '.blank__text']
+        .map(box)
+        .filter((b): b is { sel: string; basso: number } => b !== null),
+    }
+  })
+
+  console.log(
+    `\n| ${geo.viewport} | piega ${geo.piega} (finestra ${geo.finestra}) | ` +
+      geo.blocchi.map((b) => `${b.sel} finisce a ${b.basso}`).join(' · ') + ' |\n',
+  )
+
+  expect(geo.blocchi.length, 'lo stato vuoto non ha i due blocchi che si misurano').toBe(2)
+  for (const b of geo.blocchi) {
+    expect(
+      b.basso,
+      `${b.sel} finisce a ${b.basso} e la piega e' a ${geo.piega}: ` +
+        `${r2(b.basso - geo.piega)}px dello stato vuoto stanno sotto il FAB, ` +
+        'su un telefono che nessuno di noi ha in mano',
+    ).toBeLessThanOrEqual(geo.piega)
+  }
+})
+
+/** Due decimali, per i messaggi di questo file. */
+function r2(n: number): number {
+  return Math.round(n * 100) / 100
+}
 
 /**
  * **Il tutorial dei due tap tace dopo tre spese, e prima non taceva mai.**

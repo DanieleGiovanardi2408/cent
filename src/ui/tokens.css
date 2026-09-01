@@ -110,7 +110,45 @@
   --text: #12181f; /* 16.5:1 su --bg */
   --text-muted: #5c6670; /*  5.4:1 su --bg */
   --line: #e3e3de; /* divisori decorativi */
+  /* --- tre grigi che oggi valgono lo stesso, e non sono la stessa cosa ------
+   *
+   * `--line-strong` portava **tre significati** — trovati il 2 settembre
+   * leggendo i suoi sedici lettori — e un token con tre significati verra'
+   * cambiato per uno dei tre e ne rompera' due:
+   *
+   *  1. **`--line-strong`, "bordo che conta"**: quattordici lettori, tutti
+   *     contorni, tratteggi e fili che portano un fatto invece di decorare. E'
+   *     il significato dichiarato qui, ed e' quello che resta.
+   *  2. **`--reference`, "una linea di riferimento non e' un dato"**: la linea
+   *     del sostenibile nella striscia della Home. Deve stare **sotto le barre
+   *     nella gerarchia visiva** — era il tratto piu' pesante del grafico, e una
+   *     linea continua e spessa si legge come un bordo, cioe' come qualcosa che
+   *     taglia.
+   *  3. **`--ink-fixed`, "dominante per area, secondario per decisione"**: il
+   *     segmento delle Fisse nella barra divisa di Statistiche. **Non e' un
+   *     grigio di assenza**: sono 530,00 € su 954,00, la meta' piu' grande dei
+   *     soldi. E' desaturato perche' ADR 016 dice che *"il budget serve a
+   *     decidere se prendere quel caffe', e l'affitto non e' una decisione"*:
+   *     si accentua cio' su cui si decide, e le fisse restano dominanti **per
+   *     area**, che e' il fatto che la barra deve dire.
+   *
+   * **Oggi risolvono tutti e tre allo stesso esadecimale, ed e' voluto.** Cio'
+   * che si compra non e' un colore diverso: e' che domani possano divergere
+   * **senza che nessuno debba indovinare quale dei tre significati stava
+   * cambiando**. Sono scritti come letterali e non come `var(--line-strong)`
+   * proprio per questo: un alias non si puo' spostare da solo.
+   *
+   * ## E la lettura che ha prodotto la divisione
+   *
+   * Guardando lo schermo, il grigio delle Fisse e' stato letto come *"questo non
+   * e' un dato"*. **Quella lettura non era sbagliata: era la lettura che il token
+   * insegna due schermate prima**, dove lo stesso grigio significa esattamente
+   * quello sulla linea del sostenibile. Un token che insegna un significato in
+   * una schermata e ne porta un altro in quella dopo non produce un dubbio:
+   * produce una lettura sbagliata che si sente sicura. */
   --line-strong: #848c86; /*  3.2:1 su --bg — bordi che contano */
+  --reference: #848c86; /*  la linea di riferimento, non un dato */
+  --ink-fixed: #848c86; /*  le Fisse: dominanti per area, non azionabili */
   --brand: #0d6b4f; /*  6.0:1 su --bg */
   --brand-soft: #e3f0ea;
   --on-brand: #ffffff; /*  6.5:1 su --brand */
@@ -155,6 +193,8 @@
     --text-muted: #9aa5a0; /*  7.3:1 su --bg */
     --line: #262c2a;
     --line-strong: #606965; /*  3.3:1 su --bg */
+    --reference: #606965;
+    --ink-fixed: #606965;
     --brand: #35c795; /*  8.6:1 su --bg */
     --brand-soft: #12332a;
     --on-brand: #06221a; /*  7.8:1 su --brand */

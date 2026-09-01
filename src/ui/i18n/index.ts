@@ -88,6 +88,26 @@ interface Formats {
 
 function buildFormats(locale: string): Formats {
   return {
+    /* **`useGrouping` non e' passato, ed e' voluto.** Il default per
+     * `style: 'currency'` e' `'auto'`, e in italiano `'auto'` **non raggruppa a
+     * quattro cifre**: `1234,56 €`, non `1.234,56 €`. Dai cinque in poi
+     * raggruppa — `12.345,67 €` — e in inglese raggruppa gia' dai quattro,
+     * `€1,234.56`.
+     *
+     * **Non e' un difetto nostro: e' una regola CLDR**, la stessa che decide la
+     * posizione del simbolo e il separatore decimale. Passare `useGrouping:
+     * true` per "ripararlo" ci farebbe scrivere in italiano un numero che
+     * l'italiano non scrive, e con la nostra mano invece che con quella di
+     * `Intl` — cioe' presentazione cablata, che e' precisamente cio' che questo
+     * modulo esiste per non avere (vedi `money.ts`, "qui non si formatta piu'
+     * niente").
+     *
+     * Scritto qui perche' e' il tipo di cosa che qualcuno "ripara" fra sei mesi
+     * guardando `1234,56 €` a schermo e credendo a un punto mancante. Il
+     * guardiano e' **`i18n/index.test.ts`**, che asserisce `'1234,56 €'` in
+     * italiano e `'€1,234,567.89'` in inglese: le due convenzioni sono provate
+     * insieme, quindi chi passasse `useGrouping: true` romperebbe la prima e
+     * lascerebbe la seconda verde, che e' il modo in cui la differenza si vede. */
     money: new Intl.NumberFormat(locale, {
       style: 'currency',
       currency: 'EUR',

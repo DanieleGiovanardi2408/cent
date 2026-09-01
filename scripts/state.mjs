@@ -227,7 +227,7 @@ function unitFacts() {
  * sono **condizionali** (ADR 013): nessuna lettura statica puo' vederli, solo
  * un'esecuzione.
  */
-function e2eRunFacts() {
+function e2eRunFacts(dichiarati) {
   const REPORT = 'test-results/last.json'
   let raw
   try {
@@ -260,6 +260,30 @@ function e2eRunFacts() {
   }
   for (const suite of json.suites ?? []) walk(suite)
   const wall = json.stats?.duration ?? 0
+
+  // **Fresco non vuol dire intero.** Il controllo qui sopra guarda la *data* del
+  // report, non la sua *copertura*: un `npx playwright test -g "..."` e' piu'
+  // recente dei sorgenti e contiene sei test su quattrocento. E' successo il 2
+  // settembre — il blocco rigenerato ha scritto **"6 passati, 0 saltati, in 0.2
+  // minuti"** dopo una prova mirata, cioe' un fatto che non poteva invecchiare e
+  // che era falso appena nato.
+  //
+  // E' la stessa famiglia di *"l'output di una verifica si filtra quando lo si
+  // legge, mai quando lo si registra"*, applicata a un'esecuzione invece che a un
+  // log: il filtro era sul `-g`, e cio' che ha registrato non era una misura.
+  //
+  // Quindi si confronta con i test **dichiarati** da `--list`. Meno vuol dire
+  // parziale, e un fatto parziale si dichiara **non misurato** invece di essere
+  // scritto come se fosse il conto.
+  const visti = counts.expected + counts.skipped + counts.unexpected + counts.flaky
+  if (typeof dichiarati === 'number' && visti < dichiarati) {
+    return {
+      ok: false,
+      why: `l'ultima esecuzione e' **parziale** — ${visti} test su ${dichiarati} dichiarati, ` +
+        'probabilmente un `-g` o un `--project`: va rilanciata intera',
+    }
+  }
+
   return { ok: true, ...counts, wallMs: wall }
 }
 
@@ -677,11 +701,13 @@ const conteggioUscite = () => {
 const check = process.argv.includes('--check')
 const text = readFileSync(ROADMAP, 'utf8')
 
+const e2eDichiarati = e2eFacts()
+
 const facts = {
   commit: commitFacts(),
   unit: unitFacts(),
-  e2e: e2eFacts(),
-  e2eRun: e2eRunFacts(),
+  e2e: e2eDichiarati,
+  e2eRun: e2eRunFacts(e2eDichiarati === null ? undefined : e2eDichiarati.total),
   bundle: bundleFacts(),
   schema: schemaFacts(),
 }

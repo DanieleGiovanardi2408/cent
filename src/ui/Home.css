@@ -879,8 +879,16 @@
    * taglia; una tratteggiata si legge come un riferimento.
    *
    * Da 4 px di scatola (1 di fondo, 2 di tratto, 1 di fondo) a 1 px di tratto,
-   * e il colore scende da `--text-muted` a `--line-strong`, che e' il token dei
-   * bordi che contano — meno di un testo, piu' di un filo.
+   * e il colore scende da `--text-muted` a **`--reference`** — meno di un testo,
+   * piu' di un filo.
+   *
+   * **`--reference` e non `--line-strong`, dal 2 settembre.** I due valgono lo
+   * stesso esadecimale e non sono la stessa cosa: `--line-strong` e' *"un bordo
+   * che conta"* — quello che questa striscia usa venti righe piu' su, per il filo
+   * sotto i giorni vissuti — mentre questo tratteggio dice *"non sono un dato,
+   * sono il metro con cui li leggi"*. Erano lo stesso token, e in
+   * `Stats.css` ce n'era un **terzo** significato ancora: la ragione della
+   * divisione sta in `tokens.css`.
    *
    * Il tratteggio e' un `repeating-linear-gradient` e non un `border-top:
    * dashed`: il bordo tratteggiato del browser non dichiara il passo, e a
@@ -889,7 +897,7 @@
   block-size: 1px;
   background-image: repeating-linear-gradient(
     to right,
-    var(--line-strong) 0 3px,
+    var(--reference) 0 3px,
     transparent 3px 6px
   );
 }
