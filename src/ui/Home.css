@@ -165,7 +165,11 @@
         var(--rows-since) * var(--line-note) + 4 * var(--sp-1)
     ),
     calc(var(--rows-amount) * var(--line-amount) + 3 * var(--sp-1)),
-    calc(var(--rows-invite) * var(--line-pace) + var(--sp-2) + var(--rows-pace) * var(--line-pace))
+    /* Senza budget: il passo e l'invito. **L'ordine dei due si e' invertito** —
+     * prima l'invito e poi il passo, adesso il passo e poi l'invito, che cosi'
+     * tocca il bottone che spiega — ma la somma e' la stessa, e questo ramo
+     * continua a valere 75,5 px contro i 147,25 del primo. */
+    calc(var(--rows-pace) * var(--line-pace) + var(--sp-2) + var(--rows-invite) * var(--line-pace))
   );
 
   /* **Qui c'era `--slot-min`**, la riserva che teneva fermo il bottone del
@@ -372,6 +376,7 @@
   display: flex;
   flex-direction: column;
   gap: var(--sp-2);
+  justify-content: flex-end;
 }
 
 .slot__body {

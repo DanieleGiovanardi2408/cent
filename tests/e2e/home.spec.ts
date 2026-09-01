@@ -1747,6 +1747,25 @@ test('il pavimento della colonna: --strip-h regge il contratto del modello', asy
  * una domanda piu' severa — prima la striscia compariva dal nulla, adesso
  * cambia soltanto contenuto, quindi un pixel di spostamento e' un difetto e non
  * l'effetto di un blocco che nasce.
+ *
+ * ## La scena era sbagliata, e l'ha rivelato un'altra decisione
+ *
+ * Fino al 2 settembre questo test allestiva **un'installazione pulita** — zero
+ * spese, da nessuna parte — e la chiamava *"settimana vuota"*. Sono due cose
+ * diverse, e finche' nessuna decisione le distingueva la differenza non si
+ * vedeva. Poi ne e' arrivata una che le distingue: **su un'installazione pulita
+ * la striscia non si disegna**, perche' li' non c'e' una settimana vuota da
+ * mostrare — non c'e' nessuna settimana. Questo test e' andato rosso, e aveva
+ * ragione a dire che qualcosa era cambiato: aveva torto su **cosa** stesse
+ * provando.
+ *
+ * **Un lunedi' mattina vero ha le spese della settimana prima.** La scena adesso
+ * le semina, e la domanda torna quella dichiarata qui sopra: *"la settimana
+ * corrente e' vuota, la striscia c'e' lo stesso?"*. La decisione del lunedi' non
+ * e' stata toccata — e' stata **finalmente messa alla prova sulla sua scena**.
+ *
+ * L'altra meta' della regola — la striscia assente a installazione pulita — ha
+ * il suo test in "il pavimento a 375x667, nei tre stati della Home".
  */
 test('la striscia c\'e\' anche a settimana vuota, e i dati non spostano la coda', async ({
   page,
@@ -1766,9 +1785,23 @@ test('la striscia c\'e\' anche a settimana vuota, e i dati non spostano la coda'
       ) / 100
     })
 
+  // **La settimana prima ha delle spese, questa no**: e' il lunedi' mattina, non
+  // un'installazione pulita. Senza queste due righe la scena sarebbe "zero spese
+  // mai", dove la striscia non si disegna per una decisione diversa.
+  const settimanaPrima = addDays(giornoDichiarato(), -8)
+  await seedOn(page, [[settimanaPrima, 2500], [addDays(settimanaPrima, -1), 1800]])
+  await page.reload()
+  await expect(page.locator('.budget')).toBeEnabled()
+
   // A settimana vuota la striscia c'e', con sette colonne e nessuna dipinta.
   await expect(page.locator('.week')).toBeVisible()
   await expect(page.locator('.week__col')).toHaveCount(7)
+  const dipinteOra = await colonne(page)
+  expect(
+    dipinteOra.filter((h) => h > 0).length,
+    `questa settimana non e' vuota: ${JSON.stringify(dipinteOra)} — le spese seminate ` +
+      'sono cadute dentro il periodo corrente e la scena non e\' quella dichiarata',
+  ).toBe(0)
   const senza = await codaTop()
 
   await seedOn(page, [[todayIso(), 1250]])
@@ -1906,63 +1939,286 @@ test('l\'intestazione di oggi esiste solo dove c\'e\' qualcosa da intestare', as
  * Lo scorrimento non salva: questa e' la **prima** schermata, e un invito che
  * chiede di scorrere per essere letto non e' stato letto.
  */
-test('lo stato vuoto della Home sta sopra la piega, a 375x667', async ({ page }, testInfo) => {
-  test.skip(
-    testInfo.project.name !== 'iphone-se',
-    'il pavimento e\' 375x667: sugli altri progetti questa misura non e\' quella',
-  )
-
-  await fissaOrologio(page)
-  await page.goto('./')
-  await expect(page.locator('.budget')).toBeEnabled()
-  await chiudiGuida(page)
-
-  // Installazione pulita: nessun budget, nessuna spesa. E' lo stato in cui
-  // l'invito compare, ed e' quello che vede chi apre l'app per la prima volta.
-  await expect(page.locator('.blank__title')).toBeVisible()
-  await expect(page.locator('.blank__text')).toBeVisible()
-
-  const geo = await page.evaluate(() => {
-    const r = (n: number): number => Math.round(n * 100) / 100
-    const fab = document.querySelector('.fab')
-    if (!(fab instanceof HTMLElement)) throw new Error('nessun FAB: la piega non e\' derivabile')
-    const piega = r(fab.getBoundingClientRect().top)
-    const box = (sel: string): { sel: string; basso: number } | null => {
-      const el = document.querySelector(sel)
-      return el === null ? null : { sel, basso: r(el.getBoundingClientRect().bottom) }
-    }
-    return {
-      viewport: `${window.innerWidth}x${window.innerHeight}`,
-      finestra: window.innerHeight,
-      piega,
-      // Il titolo **e** l'invito: sono due blocchi, e il 30 agosto era il secondo
-      // a cadere. Guardarne uno solo avrebbe lasciato passare esattamente quello.
-      blocchi: ['.blank__title', '.blank__text']
-        .map(box)
-        .filter((b): b is { sel: string; basso: number } => b !== null),
-    }
+test.describe('il pavimento a 375x667, nei tre stati della Home', () => {
+  test.beforeEach(({}, testInfo) => {
+    test.skip(
+      testInfo.project.name !== 'iphone-se',
+      'il pavimento e\' 375x667: sugli altri progetti questa misura non e\' quella',
+    )
   })
 
-  console.log(
-    `\n| ${geo.viewport} | piega ${geo.piega} (finestra ${geo.finestra}) | ` +
-      geo.blocchi.map((b) => `${b.sel} finisce a ${b.basso}`).join(' · ') + ' |\n',
-  )
+  /**
+   * Gli elementi che devono stare sopra la piega, e **perche' proprio questi**.
+   *
+   * Non "tutto": la Home puo' avere una coda lunga, e chi ha ventitre' spese oggi
+   * scorre per vederle tutte senza che nessuno si sia perso niente. Questi due
+   * sono l'**invito**, cioe' l'unica cosa a schermo che dica come si usa l'app —
+   * e un invito che chiede di scorrere per essere letto non e' stato letto.
+   */
+  const SOPRA = ['.blank__title', '.blank__text'] as const
 
-  expect(geo.blocchi.length, 'lo stato vuoto non ha i due blocchi che si misurano').toBe(2)
-  for (const b of geo.blocchi) {
-    expect(
-      b.basso,
-      `${b.sel} finisce a ${b.basso} e la piega e' a ${geo.piega}: ` +
-        `${r2(b.basso - geo.piega)}px dello stato vuoto stanno sotto il FAB, ` +
-        'su un telefono che nessuno di noi ha in mano',
-    ).toBeLessThanOrEqual(geo.piega)
+  async function misura(page: Page): Promise<{
+    piega: number
+    finestra: number
+    blocchi: readonly { sel: string; basso: number }[]
+    tutti: string
+    corsa: number
+    rates: boolean
+    week: boolean
+    invito: boolean
+  }> {
+    return page.evaluate((sels: readonly string[]) => {
+      const r = (n: number): number => Math.round(n * 100) / 100
+      const fab = document.querySelector('.fab')
+      if (!(fab instanceof HTMLElement)) throw new Error('nessun FAB: la piega non e\' derivabile')
+      const box = (sel: string): { sel: string; basso: number } | null => {
+        const el = document.querySelector(sel)
+        return el === null ? null : { sel, basso: r(el.getBoundingClientRect().bottom) }
+      }
+      return {
+        piega: r(fab.getBoundingClientRect().top),
+        finestra: window.innerHeight,
+        blocchi: sels.map(box).filter((b): b is { sel: string; basso: number } => b !== null),
+        tutti: ['.hero', '.rates', '.slot__foot', '.budget', '.week', '.days', '.blank']
+          .map((sel) => {
+            const el = document.querySelector(sel)
+            const b = el === null ? null : el.getBoundingClientRect()
+            return b === null ? `${sel} —assente—` : `${sel} ${r(b.top)}→${r(b.bottom)}`
+          })
+          .join('  '),
+        corsa: ((): number => {
+          const home = document.querySelector('.home')
+          return home === null ? 0 : home.scrollHeight - home.clientHeight
+        })(),
+        rates: document.querySelector('.rates') !== null,
+        week: document.querySelector('.week') !== null,
+        // L'invito e' l'**ultima** riga di `.rates`, cioe' quella che tocca il
+        // piede: non basta che esista, deve stare li'. `lastElementChild`
+        // perche' rimetterlo in cima — dov'era — lo riporterebbe con un numero
+        // in mezzo fra la spiegazione e la cosa spiegata.
+        invito: document.querySelector('.rates')?.lastElementChild?.classList.contains('invite') === true,
+      }
+    }, sels(SOPRA))
   }
+
+  function sels(v: readonly string[]): readonly string[] {
+    return [...v]
+  }
+
+  /**
+   * **L'invariante non e' "sopra la piega": e' raggiungibile.**
+   *
+   * La prima forma di questo controllo chiedeva che i due blocchi finissero
+   * sopra il FAB in tutti e tre gli stati, e falliva su due su tre. Guardando i
+   * numeri invece della soglia, i due casi non erano lo stesso difetto:
+   *
+   * - nello stato **1** `.home` misura `531/531`, cioe' **non scorre**: cio' che
+   *   cade sotto la piega non e' scomodo, e' **irraggiungibile**. Era il difetto
+   *   vero, e nessuna misura lo diceva perche' si guardava la piega e non la
+   *   corsa;
+   * - negli stati **2** e **3** `.home` scorre di 196 e 236 px: sotto la piega
+   *   c'e' la **coda di una lista**, e scorrere per vedere il resto di una lista
+   *   e' cio' che si fa con le liste.
+   *
+   * Quindi si misura la **causa**: per ogni blocco, o finisce sopra la piega, o
+   * la corsa dello scorrevole basta a portarcelo. Un blocco irraggiungibile
+   * fallisce; un blocco che chiede uno scorrimento no.
+   *
+   * **E non e' la soglia allargata perche' due test erano rossi.** Allargarla
+   * sarebbe stato far tornare verde la misura spostando il difetto dove nessuno
+   * misura — la regola che V3 ha insegnato lo stesso giorno. Questa forma e'
+   * **piu' severa** dove conta: prende lo stato 1 anche il giorno in cui
+   * qualcuno gli desse `overflow-y: auto`, mentre la versione a piega sarebbe
+   * diventata verde. La prova e' nella mutazione, riportata nel commit.
+   */
+  function raggiungibile(
+    m: { piega: number; corsa: number; blocchi: readonly { sel: string; basso: number }[] },
+    stato: string,
+    scorrimento: 'ammesso' | 'no' = 'ammesso',
+  ): void {
+    expect(m.blocchi.length, `${stato}: i due blocchi dell'invito non sono a schermo`).toBe(
+      SOPRA.length,
+    )
+    // Quanto scorrimento si concede. Negli stati con delle spese, la corsa dello
+    // scorrevole: sotto la piega c'e' la coda di una lista, e scorrere una lista
+    // e' cio' che si fa con le liste. Nello stato vuoto, **zero**: li' l'invito
+    // e' l'unica cosa a schermo, e un invito che chiede di scorrere per essere
+    // letto non e' stato letto.
+    const concesso = scorrimento === 'ammesso' ? m.corsa : 0
+    for (const b of m.blocchi) {
+      const sotto = Math.round((b.basso - m.piega) * 100) / 100
+      expect(
+        Math.max(0, sotto),
+        `${stato}: ${b.sel} finisce a ${b.basso}, la piega e' a ${m.piega} — ${sotto}px sotto il ` +
+          `FAB` +
+          (scorrimento === 'ammesso'
+            ? `, e la corsa dello scorrevole (${m.corsa}px) non basta a portarcelo`
+            : `. Qui non si concede scorrimento: e' la prima schermata, e l'invito ` +
+              `e' l'unica cosa che ci sia sopra (la corsa vale ${m.corsa}px e non si usa)`),
+      ).toBeLessThanOrEqual(concesso)
+    }
+  }
+
+  /**
+   * **1. Zero spese, mai.** E' la prima schermata che vede un amico su
+   * un'installazione pulita, ed e' il caso che ha **prodotto** la regola del
+   * pavimento in CLAUDE.md.
+   *
+   * **La misura che la produsse, il 30 agosto**: a 375x667 `.blank__text` finiva
+   * a **663,8** contro una piega a **583**. Il 2 settembre, scrivendo questo
+   * test, finiva a **689,81**: l'invariante era dichiarato in CLAUDE.md e non in
+   * un test, e nei tre giorni in cui la schermata veniva migliorata altrove il
+   * difetto e' **cresciuto di 26 px** senza che niente lo dicesse.
+   *
+   * Le due asserzioni strutturali non sono un extra: sono la decisione V1
+   * — *"la mobilia non si disegna prima che esistano i dati"* — e senza di loro
+   * questo test resterebbe verde anche rimettendo 325 px di riserva vuota, a
+   * patto di rubarli da qualche altra parte.
+   */
+  test('1. zero spese mai: niente mobilia, e l\'invito sta sopra la piega', async ({ page }) => {
+    await fissaOrologio(page)
+    await page.goto('./')
+    await expect(page.locator('.budget')).toBeEnabled()
+    await chiudiGuida(page)
+    await expect(page.locator('.blank__title')).toBeVisible()
+
+    const m = await misura(page)
+    console.log(
+      `\n| 1. zero spese mai | piega ${m.piega}/${m.finestra} | ` +
+        m.blocchi.map((b) => `${b.sel} ${b.basso}`).join(' · ') +
+        ` | rates ${m.rates} week ${m.week} invito ${m.invito} | corsa ${m.corsa}px |\n  ${m.tutti}\n`,
+    )
+
+    // **La striscia non c'e'**: non e' vuota, non esiste ancora per questo utente.
+    expect(m.week, 'la striscia dei sette giorni si disegna senza nessuna spesa').toBe(false)
+
+    // **E il blocco dei numeri c'e', ed e' un'asserzione voluta, non un residuo.**
+    // Nasconderlo qui era la meta' scartata della riparazione: il guscio si
+    // dipinge prima che il database sia aperto, quindi in quell'istante
+    // `nessunDato` e' vero **per tutti**, e la mobilia comparirebbe all'arrivo
+    // dei dati spingendo in giu' il resto — dieci gate anti-CLS rossi, misurati.
+    // Questa riga sta qui perche' chi riprovera' a toglierlo trovi il perche'
+    // **nel test che glielo impedisce**, invece di scoprirlo dalla suite.
+    expect(
+      m.rates,
+      'il blocco dei numeri e\' sparito dal guscio: torna il salto all\'arrivo dei dati',
+    ).toBe(true)
+    // E l'invito al budget **non** e' sparito con lei: e' sceso accanto al bottone.
+    expect(m.invito, 'l\'invito al budget non e\' l\'ultima riga del blocco: non tocca piu\' il bottone').toBe(
+      true,
+    )
+    // **Qui non si concede scorrimento, ed e' la forma piu' severa delle tre.**
+    //
+    // La prima stesura asseriva `corsa === 0` come *premessa* — vera quando lo
+    // stato vuoto non scorreva affatto — e con la riparazione applicata la corsa
+    // vale 18 px, quindi quella riga sarebbe caduta senza che niente fosse
+    // peggiorato. Sostituirla con `raggiungibile` normale sarebbe stato allargare
+    // la soglia per far tornare verde una misura: la forma giusta e' **togliere
+    // lo scorrimento dalle cose concesse**, che e' piu' severo sia della premessa
+    // di prima (che parlava del contenitore invece che dell'invito) sia della
+    // versione con scorrimento.
+    raggiungibile(m, '1. zero spese mai', 'no')
+  })
+
+  /**
+   * **1b. Lo stesso stato, in inglese.** E' il caso vero, non un extra: **il
+   * default e' l'inglese** quando la lingua del telefono non e' italiana, e chi
+   * apre questa schermata su un'installazione pulita e' un amico in Erasmus.
+   *
+   * Il margine in italiano vale ~30 px, che e' poco: la stringa inglese e' piu'
+   * lunga di 4 caratteri (105 contro 101) e a 375 punti puo' guadagnare una riga.
+   * **Un margine che regge in una lingua sola non e' un margine**, ed e' lo
+   * stesso argomento con cui `--body-min` si misura alla larghezza piu' stretta
+   * invece che a quella comoda.
+   */
+  test('1b. zero spese mai, in inglese: l\'invito sta sopra la piega lo stesso', async ({
+    page,
+  }) => {
+    await fissaOrologio(page)
+    await page.goto('./')
+    await expect(page.locator('.budget')).toBeEnabled()
+    await chiudiGuida(page)
+    await inInglese(page)
+    await expect(page.locator('.blank__title')).toBeVisible()
+
+    const m = await misura(page)
+    console.log(
+      `\n| 1b. zero spese mai (en) | piega ${m.piega}/${m.finestra} | ` +
+        m.blocchi.map((b) => `${b.sel} ${b.basso}`).join(' · ') +
+        ` | rates ${m.rates} week ${m.week} invito ${m.invito} | corsa ${m.corsa}px |\n`,
+    )
+
+    expect(m.week, 'la striscia si disegna senza nessuna spesa, in inglese').toBe(false)
+    raggiungibile(m, '1b. zero spese mai (en)', 'no')
+  })
+
+  /**
+   * **2. Spese, nessun budget.** La mobilia torna — c'e' un dato da disegnare —
+   * e l'invito resta accanto al bottone, che e' l'unico stato in cui c'e'
+   * qualcosa da spiegare.
+   *
+   * Le spese sono datate **ieri**: cosi' "oggi" resta vuoto e i due blocchi
+   * dell'invito sono a schermo anche qui. Con spese di oggi il blocco non si
+   * disegnerebbe affatto e il test sarebbe verde per assenza.
+   */
+  test('2. spese senza budget: la mobilia torna, e l\'invito resta', async ({ page }) => {
+    await fissaOrologio(page)
+    await page.goto('./')
+    await expect(page.locator('.budget')).toBeEnabled()
+    await chiudiGuida(page)
+
+    const ieri = addDays(giornoDichiarato(), -1)
+    await seedOn(page, [[ieri, 1250], [ieri, 900]])
+    await page.reload()
+    await expect(page.locator('.blank__title')).toBeVisible()
+
+    const m = await misura(page)
+    console.log(
+      `\n| 2. spese senza budget | piega ${m.piega}/${m.finestra} | ` +
+        m.blocchi.map((b) => `${b.sel} ${b.basso}`).join(' · ') +
+        ` | rates ${m.rates} week ${m.week} invito ${m.invito} | corsa ${m.corsa}px |\n  ${m.tutti}\n`,
+    )
+
+    expect(m.week, 'la striscia non torna quando una spesa esiste').toBe(true)
+    expect(m.rates, 'il blocco dei numeri non torna quando una spesa esiste').toBe(true)
+    expect(m.invito, 'l\'invito al budget non c\'e\' dove non c\'e\' budget').toBe(true)
+    raggiungibile(m, '2. spese senza budget')
+  })
+
+  /**
+   * **3. Spese e budget.** Lo stato pieno: quattro righe di numeri, la striscia
+   * con la linea del sostenibile, e **niente invito** — il budget c'e' gia', e
+   * spiegare cosa sarebbe con un budget a chi ce l'ha e' rumore.
+   *
+   * E' lo stato piu' alto della Home, quindi e' quello in cui il pavimento e'
+   * piu' stretto: se regge qui, regge.
+   */
+  test('3. spese con budget: lo stato piu\' alto, e l\'invito tace', async ({ page }) => {
+    await fissaOrologio(page)
+    await page.goto('./')
+    await expect(page.locator('.budget')).toBeEnabled()
+    await chiudiGuida(page)
+
+    const ieri = addDays(giornoDichiarato(), -1)
+    await seedOn(page, [[ieri, 1250], [ieri, 900]])
+    await page.reload()
+    await setBudget(page, '20000', 'A settimana')
+    await expect(page.locator('.blank__title')).toBeVisible()
+
+    const m = await misura(page)
+    console.log(
+      `\n| 3. spese con budget | piega ${m.piega}/${m.finestra} | ` +
+        m.blocchi.map((b) => `${b.sel} ${b.basso}`).join(' · ') +
+        ` | rates ${m.rates} week ${m.week} invito ${m.invito} | corsa ${m.corsa}px |\n  ${m.tutti}\n`,
+    )
+
+    expect(m.week, 'la striscia manca nello stato pieno').toBe(true)
+    expect(m.rates, 'il blocco dei numeri manca con un budget').toBe(true)
+    expect(m.invito, 'l\'invito al budget si mostra a chi un budget ce l\'ha gia\'').toBe(false)
+    raggiungibile(m, '3. spese con budget')
+  })
 })
 
-/** Due decimali, per i messaggi di questo file. */
-function r2(n: number): number {
-  return Math.round(n * 100) / 100
-}
 
 /**
  * **Il tutorial dei due tap tace dopo tre spese, e prima non taceva mai.**

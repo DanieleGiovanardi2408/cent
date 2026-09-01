@@ -2,7 +2,7 @@ import { useMemo } from 'preact/hooks'
 import { computeBudgetMetrics } from '../core/budget'
 import type { BudgetMetrics } from '../core/budget'
 import type { IsoDate } from '../core/date'
-import { groupByDay } from '../core/stats'
+import { groupByDay, isLive } from '../core/stats'
 import type { Budget, Category, Expense } from '../core/types'
 import type { AppPhase } from '../app/boot'
 import { ArchiveError } from './Blank'
@@ -146,6 +146,29 @@ export function Home({
       // Una passata sola sulle 5.000 spese, dentro lo stesso memo delle altre
       // due: la striscia non aggiunge un ricalcolo, aggiunge un giro.
       week: weekStrip(metrics, expenses, day),
+      /* **Nessuna spesa viva, mai.** Non "nessuna oggi" e non "nessuna questa
+       * settimana": la seconda e' una decisione gia' presa e chiusa — il lunedi'
+       * la striscia **resta**, perche' una sezione non sparisce perche' i suoi
+       * dati sono vuoti.
+       *
+       * Questa e' l'altra meta' della stessa regola: una sezione sparisce se la
+       * funzione a cui appartiene **non esiste ancora per questo utente**. Su
+       * un'installazione pulita non c'e' una settimana vuota da mostrare: non
+       * c'e' nessuna settimana.
+       *
+       * `isLive` e non `length === 0`: una spesa fatta e disfatta e' comunque
+       * un'app gia' usata, ma il conteggio deve restare **uguale a quello che
+       * l'utente vede nello Storico** — e' lo stesso argomento con cui
+       * `savedByHand` esclude le lapidi, e la stessa ragione: e' li' che si
+       * formerebbe il dubbio.
+       *
+       * **E conta ogni sorgente, non solo `manual`.** `savedByHand` guarda le
+       * spese che l'utente ha toccato con le proprie mani, perche' la sua
+       * domanda e' *"ha gia' imparato?"*. Questa guarda se **c'e' un dato da
+       * disegnare**, e una ricorrenza materializzata e' un dato: la striscia ha
+       * qualcosa da dire anche se nessun chip e' stato toccato. Due domande
+       * diverse, due conteggi diversi, scritti vicini perche' si somigliano. */
+      nessunDato: !expenses.some(isLive),
       // Il periodo prima: serve al ritmo di riferimento del lunedi' e alla riga
       // che prende il posto del titolo orfano in coda. Una passata sola, dentro
       // lo stesso memo.
@@ -231,6 +254,39 @@ export function Home({
           Adesso ogni cifra della Home sta nella stessa griglia a due colonne, e
           i valori si incolonnano fra righe che prima appartenevano a blocchi
           diversi. La prosa resta dove c'e' uno **stato** e non una cifra. */}
+      {/* **Il blocco dei numeri resta anche su un'installazione pulita, e la
+          ragione e' l'ordine di pittura, non il contenuto.**
+
+          La prima stesura di questa riparazione lo nascondeva con
+          `nessunDato && !hasBudget`, ed era sbagliata **in modo misurabile**: la
+          suite e' passata da 0 a 28 rossi, dieci dei quali erano il gate
+          anti-CLS. Il guscio si dipinge **prima** che il database sia aperto,
+          quindi in quell'istante `expenses` e' vuoto e `nessunDato` e' vero per
+          tutti — anche per chi ha cinquemila spese. Il guscio disegnava il
+          layout senza mobilia, i dati arrivavano e la mobilia compariva
+          spingendo in giu' tutto il resto: **uno spostamento sulla schermata
+          piu' aperta dell'app, per ogni utente che ha dei dati.**
+
+          Non e' una condizione da correggere con `ready &&`: cosi' il salto si
+          sposterebbe sull'installazione pulita, cioe' proprio sul caso che
+          questa riparazione esiste per servire.
+
+          **La striscia invece si puo' togliere, e la differenza e' dove
+          abitano.** `.week` sta dentro `.days`, la coda — *"l'unico blocco della
+          Home senza altezza riservata"* — dove cio' che compare e sparisce non
+          ha niente sotto da spostare. `.rates` sta sopra il piede e sopra la
+          coda: togliendola si muove tutto quello che ha sotto.
+
+          E la striscia da sola bastava: valeva **177,75 px** contro i **94,81**
+          che mancavano. La meta' che non si puo' avere non serviva.
+
+          Cio' che resta qui su un'installazione pulita e' la riserva
+          `--body-min` col solo passo dentro. E' il prezzo dell'ordine di
+          pittura, ed e' scritto qui perche' il prossimo che lo guarda sappia che
+          e' stato **provato e misurato**, non trascurato. Toglierlo davvero
+          chiede una lettura **sincrona** che IndexedDB non puo' dare — cioe'
+          l'escalation gia' argomentata in `docs/ROADMAP.md`, che ha un suo test
+          e non si improvvisa qui. */}
       <div class="rates">
         {!ready ? null : hasBudget ? (
           <>
@@ -270,12 +326,33 @@ export function Home({
             {since === null ? null : <p class="since">{since}</p>}
           </>
         ) : (
+          /* **L'invito e' passato in fondo, ed e' finito accanto al bottone
+             senza uscire da qui.**
+
+             Diceva *cosa fa* il bottone — *"con un budget questa riga diventa
+             quanto puoi spendere oggi"* — e stava **sopra** il passo, cioe' con
+             un numero in mezzo fra la spiegazione e la cosa spiegata. Adesso e'
+             l'ultima riga di questo blocco, e `.slot__foot` comincia subito
+             sotto: la frase e il bottone si toccano.
+
+             **La prima stesura lo aveva spostato dentro `.slot__foot`**, ed era
+             una riparazione peggiore per una ragione che si e' vista solo
+             misurando: il piede non ha una riserva, quindi l'invito che
+             compariva all'arrivo dei dati lo faceva crescere di **12 px** —
+             tre gate anti-CLS rossi. Dargliene una costava **53 px di aria a
+             chi un budget ce l'ha**, cioe' al caso comune, per tenere fermo il
+             caso raro.
+
+             Qui invece la riserva c'e' gia': `--body-min` copre il piu' alto dei
+             due stati di questo blocco, e i 75,5 px di questo ramo ci stanno
+             dentro con margine. **Lo stesso risultato a costo zero, perche' il
+             posto giusto era a due elementi di distanza.** */
           <>
+            <Pace metrics={metrics} />
             <p class="invite">
               {t('home.invite.before')}
               <b>{t('home.invite.strong')}</b>
             </p>
-            <Pace metrics={metrics} />
           </>
         )}
       </div>
@@ -313,7 +390,14 @@ export function Home({
             vuote. Il modello lo decide (`weekStrip` -> `null`), e la ragione e'
             sua: il telaio di un grafico i cui dati sono tutti a zero occupa
             senza informare. */}
-        {!ready || view.week === null ? null : <WeekStrip week={view.week} day={day} />}
+        {/* **La striscia non c'e' su un'installazione pulita** (`nessunDato`), ed
+            e' una condizione diversa da quella accanto: `weekStrip` puo'
+            restituire `null` per ragioni sue, e questa dice *"non c'e' ancora
+            nessuna settimana da mostrare"*. Il lunedi' a settimana vuota la
+            striscia **resta**: quella e' una decisione presa, e non si riapre. */}
+        {!ready || view.nessunDato || view.week === null ? null : (
+          <WeekStrip week={view.week} day={day} />
+        )}
 
         {phase === 'failed' ? (
           <ArchiveError />

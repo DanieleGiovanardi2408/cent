@@ -25,17 +25,17 @@ sa gia', e per questo non puo' invecchiare. I giudizi — cosa e' in volo, cosa
 aspetta una persona — stanno sotto, scritti a mano e timbrati con lo SHA a cui
 sono stati rivisti.
 
-- **Ultimo commit**: `b21d074` — feat: le due scale hanno un controllo, e la cucitura non e' un gradino
-- **Data**: 02/09/2026 00:46
+- **Ultimo commit**: `7666ab8` — feat: il token si divide in tre, il gate dichiara di non sapere, e la piega ha il suo test
+- **Data**: 02/09/2026 01:05
 - **Ramo**: `fase-6-chiusura`
 - **Pushato**: si, `origin/fase-6-chiusura` e' allo stesso commit
-- **Rispetto a `origin/main`**: 1 commit avanti
+- **Rispetto a `origin/main`**: 2 commit avanti
 - **Albero di lavoro**: **non pulito**, ci sono modifiche non committate
 
 - **Test unitari**: 755 in 25 file, tutti verdi
-- **Test e2e dichiarati**: 425 in 14 file, su 4 progetti (iphone-se, iphone-14, landscape, dark)
-- **Test e2e eseguiti**: 404 passati, 20 saltati, **1 falliti**, in 3.0 minuti. I saltati sono condizionali (ADR 013): solo un'esecuzione li vede.
-- **Bundle iniziale**: 59.3 KB gzip su 60.0 KB (0.7 KB di margine)
+- **Test e2e dichiarati**: 434 in 14 file, su 4 progetti (iphone-se, iphone-14, landscape, dark)
+- **Test e2e eseguiti**: 408 passati, 26 saltati, in 2.9 minuti. I saltati sono condizionali (ADR 013): solo un'esecuzione li vede.
+- **Bundle iniziale**: 59.4 KB gzip su 60.0 KB (0.6 KB di margine)
 
 - **Schema del database**: 5. La scala delle migrazioni:
   - **1** — Schema iniziale: expenses, categories, recurringRules, budgets, settings
@@ -53,7 +53,7 @@ sono stati rivisti.
 ## In volo adesso
 
 <!-- JUDGMENT rivisto=547fba4 -->
-> Rivisto a `547fba4`, un commit fa.
+> Rivisto a `547fba4`, 2 commit fa.
 
 > derivata. **Ri-derivato, non ritimbrato**: sotto c'e' cio' che e' cambiato.
 
@@ -448,63 +448,134 @@ lettere, non prosa da leggere.
 **Nessuna delle sei e' stata toccata.** La decisione e' di prodotto, non
 meccanica, ed e' per questo che G2 stampa e non ferma.
 
-## ALTO aperto: a 375x667 lo stato vuoto della Home cade fuori dallo schermo
+## CHIUSO: il pavimento a 375x667, e la Home ha tre stati
 
-**Trovato il 2 settembre scrivendo il test che mancava**, e la misura e' **peggiore**
-di quella che aveva prodotto la regola del pavimento il 30 agosto.
+**Aperto e chiuso il 2 settembre.** Il difetto e' stato trovato scrivendo il test
+che CLAUDE.md dichiarava e che non esisteva.
 
-Installazione pulita, nessun budget, nessuna spesa — cioe' **la prima schermata
-che vede un amico**, che e' il criterio di chiusura di A3:
+### Cosa c'era, e il numero che dice quanto e' costato non misurarlo
 
-    piega (bordo alto del FAB)   595
-    finestra                     667
-    .blank__title  finisce a     601,31   →   6,31 px sotto la piega
-    .blank__text   finisce a     689,81   →  94,81 px sotto la piega,
-                                              e 22,81 px sotto il bordo dello schermo
+    piega (bordo alto del FAB)   595        finestra   667
+    .blank__title  finisce a     601,31
+    .blank__text   finisce a     689,81   →  22,81 px sotto il bordo dello schermo
 
-Il 30 agosto `.blank__text` finiva a **663,8**. Adesso finisce a **689,81**: il
-difetto non e' rimasto fermo, e' **cresciuto di 26 px** mentre la schermata veniva
-migliorata altrove. E' precisamente cio' che un invariante senza test fa —
-CLAUDE.md dichiarava *"un test fallisce se un elemento dello stato vuoto esce dalla
-piega a 375x667"*, e quel test non e' mai esistito.
+E — **il fatto che conta piu' della piega** — in quello stato `.home` misurava
+`531/531`, cioe' **non scorreva**: quel testo non era scomodo, era
+**irraggiungibile**. Nessuna misura lo diceva perche' si guardava la piega e non
+la corsa dello scorrevole.
 
-### Non e' troppo contenuto: e' riserva vuota
+Il 30 agosto `.blank__text` finiva a **663,8**. Tre giorni dopo a **689,81**:
+l'invariante era scritto in CLAUDE.md e non in un test, e il difetto e'
+**cresciuto di 26 px** mentre la schermata veniva migliorata altrove. La regola
+che ne esce sta in CLAUDE.md, *"un invariante scritto e non misurato peggiora da
+solo"*.
 
-Misurato blocco per blocco a 375x667, stato vuoto:
+### La scelta: V1, guardata prima di essere applicata
 
-    .app__bar     52          .rates       161,81 → 309,06   (147,25)
-    .hero      52 → 161,81    .slot__foot  309,06 → 389,31   ( 80,25)
-                              .week        390,31 → 568,06   (177,75)
-                              .blank       568,06 → 713,81   (145,75)
+Tre varianti costruite come **iniezione CSS** sopra l'app costruita, sedici scatti
+(tre varianti piu' lo stato di partenza, due viewport, due temi), scelta a occhio.
 
-`.week` occupa **177,75 px** per disegnare sette colonne tutte a zero con le
-etichette dei giorni; `.rates` ne occupa **147,25** per una frase sola
-(*"Con un budget questa riga diventa quanto puoi spendere oggi."*) piu' un vuoto.
-**Il deficit e' circa 119 px, e ce ne sono almeno il doppio di aria** fra i due
-blocchi. Lo si vede nello scatto: fra la frase del budget e *"Nessuna spesa in
-questo periodo, per ora."* c'e' un buco, e sotto `GIORNO PER GIORNO` c'e' una
-striscia alta e vuota.
+| | 375x667, piega 595 | margine |
+|---|---|---|
+| com'era | testo a 689,81 | **fuori di 94,81** |
+| **V1** — la mobilia non si disegna | testo a 364,81 | dentro, 230 px |
+| V2 — riserve ridotte | testo a 561,81 | dentro, **33 px** |
+| V3 — lo stato vuoto sale | testo a 512,06 | dentro, 83 px |
 
-E' la stessa famiglia di [DEBITO.md](DEBITO.md) §7 — *"la riserva della Home
-avanza di 61,75 px nello stato piu' comune"* — misurata su un altro viewport e su
-un altro stato, dove pero' **non avanza: manca**.
+**E il numero di V1 applicata non e' quello dell'iniezione**: l'iniezione toglieva
+tutte e due i blocchi, l'albero ne toglie uno solo (sopra). A schermo il testo
+finisce a **512,06** contro una piega a 595 — dentro, con **83 px** di margine, e
+con `corsa` a **0**, cioe' senza chiedere nemmeno un pixel di scorrimento.
+Verificato **anche in inglese**, dove la stringa e' piu' lunga di quattro
+caratteri e cade alle stesse tre righe: stessi numeri.
 
-### Perche' non e' stato riparato in questo giro
+Per confronto, V2 stava dentro per 33 px **pagando `--body-min`**, cioe' la
+riserva che tiene ferma la coda. Qui il margine e' due volte e mezzo il suo e la
+riserva non e' stata toccata.
 
-**E' una decisione di forma su una schermata che e' stata appena guardata e
-approvata.** Chi ha guardato, ha guardato a 390x844, dove tutto ci sta: il difetto
-vive solo sul pavimento, che e' **il telefono di nessuno di noi**. Ridisegnare la
-riserva senza che nessuno abbia guardato le alternative rifarebbe l'errore al
-contrario.
+**V2 scartata**: 33 px di margine sono la distanza da cui il difetto torna in
+inglese o con un nome piu' lungo, e toglie `--body-min`, cioe' la riserva che
+tiene ferma la coda (DEBITO §7, M7).
 
-Le varianti si preparano come **iniezione CSS sopra l'app costruita**
-(`page.addStyleTag`), non toccando i sorgenti: finche' non arriva la scelta,
-l'albero resta quello dell'ultimo commit. Vedi "Le varianti da guardare si
-iniettano, non si applicano".
+**V3 scartata, e ha prodotto una regola**: portava lo stato vuoto sopra il FAB e
+ci spingeva sotto la striscia, lasciando a schermo `GIORNO PER GIORNO` con le
+colonne fuori. La misura tornava verde e il difetto si era solo spostato dove
+nessuno misurava. Vedi CLAUDE.md, *"una misura che torna verde spostando il
+difetto consuma l'allarme"*.
 
-**Il test resta ROSSO fino ad allora, ed e' voluto**: e' un ALTO, e la regola di
-uscita della fase 6 dice che gli ALTO bloccano. Un test verde qui vorrebbe dire che
-il difetto e' stato accettato senza deciderlo.
+### Cosa e' stato applicato — **meta' di V1, e la meta' che manca e' misurata**
+
+**La striscia dei sette giorni non si disegna prima che esistano i dati.** Con
+`nessunDato` — nessuna spesa **viva**, di **qualunque** sorgente; non "nessuna
+oggi", non "nessuna questa settimana" — la striscia non c'e'.
+
+**Il blocco dei numeri invece resta, e non e' una dimenticanza: e' stato provato
+e ha rotto la suite.** Nascondendolo con `nessunDato && !hasBudget` i test sono
+passati da 0 a **28 rossi**, dieci dei quali erano il gate anti-CLS. La ragione e'
+l'**ordine di pittura**: il guscio si dipinge prima che il database sia aperto,
+quindi in quell'istante `expenses` e' vuoto e `nessunDato` e' vero **per tutti**,
+anche per chi ha cinquemila spese. Il guscio disegnava senza mobilia, i dati la
+facevano comparire, e tutto quello che aveva sotto scendeva: **un salto sulla
+schermata piu' aperta dell'app, per ogni utente che ha dei dati.**
+
+Aggiungere `ready &&` non ripara: sposta il salto sull'installazione pulita, cioe'
+esattamente sul caso che questa riparazione serve.
+
+**La differenza fra i due blocchi e' dove abitano.** `.week` sta dentro `.days`,
+la coda — *"l'unico blocco della Home senza altezza riservata"* — dove cio' che
+compare e sparisce non ha niente sotto da spostare. `.rates` sta sopra il piede e
+sopra la coda.
+
+**E la striscia da sola bastava**: valeva **177,75 px** contro i **94,81** che
+mancavano. La meta' che non si puo' avere non serviva.
+
+Cio' che resta su un'installazione pulita e' la riserva `--body-min` (147,25 px)
+col solo passo dentro. Toglierla davvero chiede una lettura **sincrona** che
+IndexedDB non puo' dare: e' l'escalation gia' argomentata in "Il lampo di lingua
+all'avvio", che ha un suo test e non si improvvisa dentro una riparazione di
+layout. **Rinviata con la sua condizione**, non trascurata.
+
+E' la regola gia' scritta — *una sezione non sparisce perche' i suoi dati sono
+vuoti; sparisce se la funzione a cui appartiene non esiste ancora per questo
+utente* — applicata al caso che l'ha ispirata. **Il lunedi' a settimana vuota la
+striscia resta: quella decisione non si riapre.**
+
+**L'invito al budget e' finito accanto al bottone**, ed e' l'ultima riga di
+`.rates` invece della prima: `.slot__foot` comincia subito sotto, quindi la frase
+e il bottone si toccano. Prima stava **sopra** il passo, cioe' con un numero in
+mezzo fra la spiegazione e la cosa spiegata.
+
+**La prima stesura lo aveva spostato dentro `.slot__foot`, e la misura l'ha
+scartata.** Il piede non ha una riserva: l'invito che compariva all'arrivo dei
+dati lo faceva crescere di **12 px**, e il gate lo ha preso. Dargli una riserva
+costava **53 px di aria a chi il budget ce l'ha** — cioe' al caso comune, per
+tenere fermo il caso raro. In fondo a `.rates` la riserva c'e' gia' (`--body-min`
+copre il piu' alto dei due stati, e questo ramo vale 75,5 px contro 147,25):
+**stesso risultato a costo zero, perche' il posto giusto era a due elementi di
+distanza.**
+
+### L'invariante non e' la piega: e' la raggiungibilita'
+
+Il test copre **tre stati** a 375x667 — zero spese mai, spese senza budget, spese
+con budget, piu' lo stato vuoto **in inglese** — e per ognuno chiede che i due
+blocchi dell'invito o stiano sopra la piega, o siano portati sopra dalla corsa
+dello scorrevole.
+
+**Nello stato vuoto lo scorrimento non si concede affatto**, ed e' la forma piu'
+severa delle quattro: li' l'invito e' l'unica cosa a schermo, e un invito che
+chiede di scorrere per essere letto non e' stato letto. La prima stesura asseriva
+`corsa === 0` come premessa; con la riparazione applicata la corsa vale 18 px e
+quella riga sarebbe caduta **senza che niente fosse peggiorato**. Sostituirla con
+la forma permissiva sarebbe stato allargare una soglia per far tornare verde una
+misura: la forma giusta e' stata **togliere lo scorrimento dalle cose concesse**,
+che e' piu' severo sia della premessa di prima — che parlava del contenitore
+invece che dell'invito — sia della versione con scorrimento.
+
+**Provato mutando, tre volte**: V1 disfatta -> cade lo stato 1; l'invito tolto dal
+piede -> cade lo stato 1; `.home` resa scorrevole a parita' di posizioni -> cade
+la premessa, **dove la forma a piega sarebbe rimasta verde**. La prima stesura
+della terza mutazione era inerte (`min-block-size` su un figlio `flex: 1`) ed e'
+stata rifatta: e' la forma 2 delle mutazioni finte.
 
 ## I due binari
 

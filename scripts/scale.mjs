@@ -183,7 +183,11 @@ for (const f of files) {
 // --------------------------------------------------- G2 · una sola rampa
 
 const fsScale = []
-for (const m of tokens.matchAll(/--fs-([a-z0-9]+)\s*:\s*([^;]+);/g)) {
+// `[a-z0-9-]` e non `[a-z0-9]`: la prima forma non prendeva `--fs-cat-narrow`,
+// che quindi veniva **accettato come lettore** (il controllo guarda il prefisso
+// `var(--fs-`) e **non elencato nella rampa**. Un referto che accetta cio' che
+// non dichiara e' incoerente in un verso solo — quello permissivo.
+for (const m of tokens.matchAll(/--fs-([a-z0-9-]+)\s*:\s*([^;]+);/g)) {
   fsScale.push({ name: `--fs-${m[1]}`, raw: m[2].trim(), px: toPx(m[2]) })
 }
 if (fsScale.length === 0) throw new Error(`nessun --fs-* in ${TOKENS}`)

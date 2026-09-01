@@ -42,6 +42,36 @@
   --tracking-tight: -0.022em;
   --tracking-wide: 0.06em;
 
+  /* **Il nome di una categoria a schermo stretto, e vive in due posti.**
+   *
+   * Sotto i 360 punti — che non e' solo il vecchio SE, e' anche lo **Zoom
+   * schermo di iOS su un telefono normale** — il chip scende sotto i 70 px e
+   * "Coffeeshop" verrebbe tagliato. La scelta e' *"il nome di una categoria non
+   * si abbrevia, si rimpicciolisce"*, e regge.
+   *
+   * Il numero e' scritto qui e non due volte perche' i due posti sono **la
+   * griglia vera** (`AddSheet.css`, `.cat__name`) e **il suo ritratto nella
+   * guida** (`Guide.css`, `.mock__name`), e vale la regola gia' applicata a
+   * `.mock__emoji`: **il finto deve somigliare al vero**. Un ritratto che smette
+   * di somigliare al soggetto e' un difetto anche quando i suoi numeri tornano.
+   *
+   * ## Un token e non un test, e la ragione e' il verso dell'errore
+   *
+   * L'altra strada era un test che asserisse che le due misure coincidono. Un
+   * test **accorge** di una divergenza; un token la rende **impossibile**. E il
+   * test avrebbe una condizione in piu' da azzeccare — deve girare sotto i 360
+   * punti, che non e' nessuno dei quattro progetti — quindi la divergenza
+   * passerebbe finche' qualcuno non ricorda di misurare li'. E' la stessa mossa
+   * che ricorre in questo progetto: **rendere esatta la cosa, invece di
+   * tollerare l'approssimazione e sorvegliarla.**
+   *
+   * Non e' un gradino della rampa e non si usa altrove: e' **una taglia sola,
+   * condivisa da due elementi che devono essere lo stesso elemento**. Porta il
+   * prefisso `--fs-` perche' e' una taglia dichiarata, e la rampa e' chiusa —
+   * l'invariante e' che niente viva fuori dai token, non quanti siano. */
+  --fs-cat-narrow: 0.6875rem; /* 11px — solo sotto i 360 punti */
+  --tracking-cat-narrow: -0.02em;
+
   /* --- spaziature (scala 4px) ------------------------------------------ */
   --sp-1: 0.25rem;
   --sp-2: 0.5rem;

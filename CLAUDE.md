@@ -856,6 +856,81 @@ stantio.** I giudizi — cosa e' in volo, cosa aspetta una persona — non si de
 e restano scritti a mano, ma portano un **timbro**: lo SHA a cui sono stati rivisti
 e quanti commit fa. Oltre cinque commit, `npm run state -- --check` avvisa in CI.
 
+### Un fatto rigenerato da un'esecuzione parziale non e' un fatto
+
+**Tutta la disciplina di `docs/ROADMAP.md` poggia su una frase: *"i fatti si
+rigenerano, quindi non possono invecchiare"*.** Il 2 settembre quella frase ha
+avuto una crepa, e non era un difetto di uno script: era nella fondazione.
+
+`scripts/state.mjs` legge il report di Playwright e ne controlla la **data**
+contro `src/` e `tests/`. Dopo un `npx playwright test -g "..."` il report era
+piu' recente dei sorgenti e conteneva **sei test su quattrocentoventicinque**: il
+blocco rigenerato ha scritto *"6 passati, 0 saltati, in 0.2 minuti"*. Un numero
+**derivato**, quindi creduto senza rileggerlo — e falso appena nato.
+
+**La regola**: un fatto derivato da un'esecuzione parziale si dichiara **non
+misurato**, non si scrive come se fosse il conto. Un controllo di freschezza non
+e' un controllo di copertura, e sono due domande diverse: *"e' di adesso?"* e
+*"e' tutto?"*.
+
+E' la terza faccia di *"l'output di una verifica si filtra quando lo si legge,
+mai quando lo si registra"*, applicata a un'**esecuzione** invece che a un log:
+il filtro era il `-g`, e cio' che ha registrato non era una misura. La differenza
+che la rende piu' pericolosa delle altre due: **si travestiva da fatto
+rigenerato**, cioe' dalla meta' del documento che esiste apposta per non dover
+essere controllata.
+
+`state.mjs` adesso confronta i test visti con quelli dichiarati da `--list`.
+
+### Un invariante scritto e non misurato peggiora da solo
+
+Il pavimento 375x667 dichiarava, in questo file: *"un test fallisce se un
+elemento dello stato vuoto esce dalla piega"*. **Quel test non e' mai esistito**,
+e nei tre giorni successivi il difetto non e' rimasto fermo: `.blank__text` e'
+passato da **663,8** (30 agosto) a **689,81** (2 settembre). **E' cresciuto di
+26 px mentre la schermata veniva migliorata altrove.**
+
+Non e' un difetto trascurato: e' un difetto **che nessuno stava guardando mentre
+lavorava esattamente li'**. Una regola scritta non frena la deriva — non
+partecipa. Chi tocca quella schermata legge il diff, non il documento.
+
+E' il caso di scuola di *"le regole non bastano scritte"*, con un numero: **il
+costo di un invariante non meccanizzato non e' che il difetto resta, e' che
+cresce.** Va accanto a quella riga ogni volta che si scrive un invariante e si
+rimanda il suo test.
+
+### Una misura che torna verde spostando il difetto consuma l'allarme
+
+Delle tre varianti costruite per la piega, **V3 faceva passare la misura senza
+riparare niente**: portava lo stato vuoto sopra il FAB e ci spingeva sotto la
+striscia dei sette giorni, lasciando a schermo l'intestazione `GIORNO PER GIORNO`
+con le sue colonne fuori. Il numero sorvegliato tornava dentro; il difetto si era
+solo spostato **dove nessuna misura guardava**.
+
+E' peggio di non riparare, per due ragioni:
+
+1. **il difetto nuovo e' meno visibile del vecchio** — un titolo orfano si nota
+   meno di un paragrafo tagliato, e non ha un test;
+2. **l'allarme e' stato consumato.** Il verde su quella misura significava
+   *"questa schermata sta dentro"*, e da quel momento significa *"questa misura
+   sta dentro"*. Nessuno lo sa, e la prossima persona si fidera' del verde.
+
+**La domanda da farsi davanti a una riparazione che fa tornare verde una
+misura**: cio' che era fuori adesso e' **dentro**, o e' **altrove**? Se e'
+altrove, la riparazione va scartata anche quando il numero e' bello.
+
+**E il rovescio, che e' successo lo stesso giorno.** Il test dei tre stati della
+Home falliva su due stati su tre, e la tentazione era allargare la soglia. La
+riparazione giusta e' stata **cambiare cio' che si misura**: non *"sta sopra la
+piega"* ma *"e' raggiungibile"* — perche' guardando i numeri i due casi erano
+difetti diversi (nello stato vuoto `.home` **non scorre**, quindi cio' che sta
+sotto e' irraggiungibile; con delle spese scorre di 196 px, e scorrere una lista
+e' cio' che si fa con le liste). La differenza fra allargare e riformulare si
+controlla in un modo solo: **la forma nuova dev'essere piu' severa da qualche
+parte**, e lo si prova mutando. Qui la prova e' che la forma nuova cade su una
+`.home` resa scorrevole a parita' di posizioni — dove quella a piega restava
+verde.
+
 ### Un controllo fallisce quando la riparazione e' meccanica, avvisa quando richiede un giudizio
 
 E' la riga che decide i due esiti di `state --check`, e vale per il prossimo
@@ -1152,9 +1227,13 @@ di un controllo assente. Un controllo assente non mente.**
    compilatore, non del test. Si riscrive perche' **compili** —
    `(condizione || true)` invece di cancellare.
 2. **Non si applica.** La mutazione tocca un file che l'artefatto misurato non
-   contiene: `vite preview` che serve un `dist/` vecchio, un `dist/` non
-   ricostruito, un ramo diverso. Il controllo misura un albero che non e' quello
-   che si e' mutato.
+   contiene — `vite preview` che serve un `dist/` vecchio, un `dist/` non
+   ricostruito, un ramo diverso — **oppure e' inerte**: il 2 settembre
+   `min-block-size: 200px` su `.home` non ha fatto scorrere niente, perche'
+   `.home` e' `flex: 1` in una colonna flex e la sua altezza la decide il padre.
+   La build era fresca, il CSS c'era, e il test e' rimasto verde **per la ragione
+   giusta**: non era successo niente. Una mutazione va scelta anche per la sua
+   **efficacia**, non solo per la sua sintassi.
 3. **Non poteva fallire.** Il controllo e' verde anche senza la cosa che
    sorveglia, perche' la sua premessa non e' costruita — il gate anti-CLS che si
    dichiara soddisfatto quando non c'e' nessun guscio da confrontare.
@@ -1229,6 +1308,17 @@ iniezione ordinaria. La stessa cucitura nello **strato di dominio** (`src/core`)
 e' la cosa che qualcuno usera' per sbaglio.
 
 **Non e' il test a essere sbagliato: e' il piano su cui lo apri.**
+
+**E il perimetro va tenuto stretto, perche' e' gia' stato citato piu' largo di
+com'e'.** Questa regola parla di `src/core`. Una cucitura in `src/app` **non e'
+vietata**: comporre e' il mestiere di quello strato, e una dipendenza passata come
+argomento e' iniezione ordinaria — lo dice il paragrafo qui sopra. Citarla come
+un divieto generale sposta una decisione giusta in una stanza dove non vale, che
+e' il difetto che questo documento insegue da giorni. Se un argomento contro una
+cucitura in `src/app` serve, va **derivato li'** — per esempio *"ritardare la
+sorgente dei dati misurerebbe una scena allestita perche' la misura riesca"*, che
+e' un argomento sull'onesta' della misura e sta in piedi da solo, senza
+appoggiarsi a questo divieto.
 
 Il precedente in questo repo e' stato applicato due volte, e non ha eccezioni:
 `expensesInRange` e `planBudgetChange` sono state cancellate perche' erano API

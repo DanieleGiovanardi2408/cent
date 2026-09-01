@@ -294,8 +294,10 @@
  * nome di una categoria non si abbrevia, si rimpicciolisce. */
 @media (max-width: 359px) {
   .cat__name {
-    font-size: 0.6875rem; /* 11px */
-    letter-spacing: -0.02em;
+    /* La stessa taglia della griglia vera / del suo ritratto: un token solo,
+     * dichiarato in `tokens.css` con la ragione. */
+    font-size: var(--fs-cat-narrow);
+    letter-spacing: var(--tracking-cat-narrow);
   }
 
   /* Quattro pixel per fianco in meno su tre chip: dodici punti di larghezza
