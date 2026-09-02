@@ -613,9 +613,36 @@ degli amici lo fa emergere** — cioe' se qualcuno che non ha scritto l'app chie
 impedisce di leggere quel numero come mensile, ed e' quindi parte di questa voce e
 non una rifinitura del copy.
 
-## 10. Le otto tinte nuove non hanno un nome parlato, e la ottava non ce l'ha per costruzione
+## 10. Le otto tinte nuove non hanno un nome parlato, e la ottava non ce l'ha per costruzione — **CHIUSA**
 
-**Stato: aperto.** Nato il 30 agosto, insieme alla palette che passa i quattro
+**Stato: CHIUSA il 2 settembre 2026**, dentro il gate di chiusura della fase 6 —
+che era **la condizione scritta in questa voce**: *"al primo giro in cui
+`CategorySheet.tsx` e i dizionari sono liberi. Non oltre la chiusura della fase
+6."* I dizionari sono stati toccati in quella sessione, `CategorySheet.tsx` era
+libero, e il gate ha trovato la voce ancora aperta oltre la propria scadenza.
+
+**Cosa e' stato fatto.** `COLOR_NAMES` riscritta sugli esadecimali V2 — le otto
+voci erano quelle V1 e **l'intersezione fra i due insiemi era vuota**, quindi
+tutte e otto le pastiglie cadevano sul ripiego e chi esplora con la voce sentiva
+otto volte *"Colore"*. L'ottava, `#2a6198`, ha smesso di chiamarsi *"Grigio"*:
+non e' grigio, e' un blu spento, ma `color.blue` e' gia' di `#3157fa`, e due
+tinte che si annunciano *"Blu"* sarebbero lo stesso difetto con un passo in meno.
+Si chiama **Ardesia** / *Slate*.
+
+**E ha un guardiano**, che prima non c'era: `colori.spec.ts`, *"ogni tinta della
+tavolozza ha un nome, e i nomi sono tutti diversi"*. Non asserisce **quali** nomi
+— quelli sono una scelta — ma che nessuna pastiglia cada sul ripiego e che i nomi
+siano tutti distinti. Provato mutando nei due versi: la mappa rimessa sui V1 ->
+cade; due tinte con lo stesso nome -> cade.
+
+**La lezione che resta.** `audit:source` era verde per tutto il tempo, perche' le
+otto chiavi avevano un lettore: **la mappa stessa**. Il controllo B era tenuto in
+vita da otto voci morte — cioe' la stessa forma di *"una catena di sole copie gira
+a vuoto"*, applicata a una mappa invece che a un campo.
+
+<details><summary>La voce originale, per intero</summary>
+
+**Stato: era aperto.** Nato il 30 agosto, insieme alla palette che passa i quattro
 pavimenti di `scripts/palette.mjs`.
 
 **Cosa.** `COLOR_NAMES`, in `src/ui/CategorySheet.tsx`, associa un nome parlato a
@@ -653,6 +680,8 @@ tocca. Fino ad allora vale la nota gia' scritta accanto a `COLOR_NAMES`: *"una
 tinta che non fosse in tavolozza resta senza nome proprio e si annuncia come
 'Colore': una bugia sarebbe peggio"*. Qui il ripiego e' quello, ed e' onesto —
 solo, non e' piu' il caso raro per cui era stato scritto.
+
+</details>
 
 ## 3. Rischi noti gia' scritti altrove
 

@@ -76,15 +76,47 @@ const PALETTE: readonly string[] = DEFAULT_CATEGORY_SEEDS.map((seed) => seed.col
  * arrivato da un import — resta senza nome proprio e si annuncia come "Colore":
  * una bugia sarebbe peggio.
  */
+/**
+ * **La mappa e' indicizzata sull'esadecimale, quindi vive o muore con la
+ * palette.**
+ *
+ * Le otto voci erano quelle della palette **V1** mentre `PALETTE` si deriva dai
+ * semi V2 (migrazione 5): **l'intersezione fra i due insiemi era vuota**, quindi
+ * `COLOR_NAMES[one]` valeva `undefined` per tutte e otto le pastiglie e
+ * l'`aria-label` cadeva sul ripiego `t('cat.color')`. Chi esplora la tavolozza
+ * con la voce sentiva **otto volte "Colore"**, in una schermata dove il colore
+ * e' l'unica cosa che si sceglie e le pastiglie non hanno nessun'altra etichetta.
+ *
+ * `audit:source` restava verde perche' `color.grey` aveva ancora un lettore —
+ * **questa mappa**: il controllo B era tenuto in vita da otto voci morte.
+ *
+ * ## L'ottava ha un nome suo, e non e' piu' "Grigio"
+ *
+ * `#2a6198` non e' grigio: e' un blu spento. Ma `color.blue` e' gia' di
+ * `#3157fa`, che e' un blu acceso, e due tinte che si annunciano tutte e due
+ * *"Blu"* sono lo stesso difetto di prima con un passo in meno. **Ardesia** le
+ * distingue dicendo la cosa vera — piu' scuro, piu' spento — invece di numerarle.
+ *
+ * ## Il legame che manca, e resta dichiarato
+ *
+ * Niente garantisce che questa mappa segua la prossima palette: e' un secondo
+ * elenco di esadecimali accanto a `DEFAULT_CATEGORY_SEEDS`. La forma che
+ * reggerebbe e' indicizzare sulla **chiave del seme** (`groceries`, `eatingOut`,
+ * …) invece che sulla tinta — ma i colori si possono anche **modificare**, e
+ * allora la chiave del seme non dice piu' che colore sia. Finche' quella
+ * domanda non ha una risposta, il legame lo tiene `colori.spec.ts`, che
+ * asserisce che ogni pastiglia della tavolozza si annuncia con un nome e non col
+ * ripiego.
+ */
 const COLOR_NAMES: Readonly<Record<string, Key>> = {
-  '#81a369': 'color.green',
-  '#f26b00': 'color.orange',
-  '#06b0a0': 'color.teal',
-  '#845e23': 'color.brown',
-  '#3f5db6': 'color.blue',
-  '#b90e5c': 'color.magenta',
-  '#bc85ec': 'color.lilac',
-  '#676c75': 'color.grey',
+  '#709951': 'color.green',
+  '#fc5401': 'color.orange',
+  '#00a6c6': 'color.teal',
+  '#895c02': 'color.brown',
+  '#3157fa': 'color.blue',
+  '#b90f60': 'color.magenta',
+  '#9861c7': 'color.lilac',
+  '#2a6198': 'color.slate',
 }
 
 /**

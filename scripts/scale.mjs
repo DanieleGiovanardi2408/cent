@@ -101,6 +101,75 @@ function stripComments(text) {
 
 for (const f of files) f.code = stripComments(f.text)
 
+// ------------------------------------------- G0 · nessun token fantasma
+//
+// **Un `var(--x)` che non trova `--x` da nessuna parte non e' un token: e' uno
+// zero silenzioso.** Una `var()` irrisolta rende la dichiarazione invalida al
+// momento del calcolo, e la proprieta' torna al suo valore iniziale — per `gap`,
+// `normal`, cioe' zero. Niente errore, niente console, niente test rosso: solo
+// due marche che si toccano.
+//
+// **Questo controllo esiste perche' e' successo, e l'ha causato G1.** Il 2
+// settembre tre `gap: 2px` sono diventati `gap: var(--seam)` per soddisfare G1, e
+// la definizione di `--seam` e' stata cancellata nello stesso giro da un
+// `git checkout` di pulizia, quando non era ancora committata. G1 stampava
+// `✓ passa` — perche' guardava i **letterali**, e un letterale non c'era piu' —
+// mentre a schermo la cucitura valeva zero.
+//
+// E' la lezione della calibrazione, rovesciata: **un controllo bloccante la cui
+// riparazione e' "meccanica" puo' produrre un difetto proprio perche' la
+// riparazione e' meccanica.** Chi sostituisce un numero con un nome deve provare
+// che il nome esiste, e provarlo non e' compito di chi ricorda: e' di tre righe
+// di script.
+
+const definiti = new Set()
+for (const f of files) {
+  for (const m of f.code.matchAll(/(--[a-zA-Z][\w-]*)\s*:/g)) definiti.add(m[1])
+}
+// **E le variabili che arrivano da JavaScript**, scritte nello `style` di un
+// elemento: `--cat` con la tinta della categoria, `--h` con l'altezza di una
+// colonna, `--at` con l'ora del giorno. Sono definizioni a tutti gli effetti —
+// solo che il posto in cui si scrivono e' un `.tsx`, non un `.css`. Senza questa
+// meta' il controllo griderebbe al lupo su dodici token vivissimi, e un controllo
+// che grida al lupo viene spento: la calibrazione dell'hook pre-commit, applicata
+// ancora una volta.
+for (const f of readdirSync(UI).filter((n) => n.endsWith('.tsx'))) {
+  const text = readFileSync(join(UI, f), 'utf8')
+  // Si scrivono come **stringhe di stile**, `style={`--cat:${colore}`}`, non come
+  // chiavi di un oggetto: si cerca la forma `--x:` ovunque compaia nel file.
+  for (const m of text.matchAll(/(--[a-zA-Z][\w-]*)\s*:/g)) definiti.add(m[1])
+}
+// Restano i **fantasmi**: i nomi che nessuno scrive mai, da nessuna parte.
+//
+// E il rovescio: i token **dichiarati e mai letti**, che sono i "campi senza
+// produttore" applicati al CSS — la classe che `dead-surface.mjs` copre per i
+// tipi e non per le custom property. Si **stampano e non fanno fallire**: un
+// gradino di una scala che oggi nessuno usa non e' un difetto, mentre un
+// `--rows-real` che dichiara di essere sorvegliato da un test e non lo e' lo era.
+// La differenza richiede di guardare cosa il token e', quindi e' un giudizio, e
+// un giudizio avvisa.
+const fantasmi = []
+const letti = new Set()
+for (const f of files) {
+  f.code.split('\n').forEach((line, i) => {
+    for (const m of line.matchAll(/var\(\s*(--[a-zA-Z][\w-]*)\s*[,)]/g)) {
+      letti.add(m[1])
+      if (!definiti.has(m[1])) fantasmi.push({ file: f.name, line: i + 1, nome: m[1] })
+    }
+  })
+}
+for (const f of readdirSync(UI).filter((n) => n.endsWith('.tsx'))) {
+  const text = readFileSync(join(UI, f), 'utf8')
+  for (const m of text.matchAll(/var\(\s*(--[a-zA-Z][\w-]*)\s*[,)]/g)) letti.add(m[1])
+}
+// I token del tema si ridichiarano nel blocco scuro: la seconda dichiarazione non
+// e' una lettura, ma nemmeno un token morto. Si guarda solo `tokens.css`, dove
+// vive la scala, e si escludono quelli che il documento dichiara due volte.
+const soloDefiniti = [...definiti]
+  .filter((n) => !letti.has(n))
+  .filter((n) => tokens.includes(`${n}:`))
+  .sort()
+
 // ------------------------------------------------- G1 · una sola spaziatura
 
 /**
@@ -223,6 +292,7 @@ for (const f of files) {
 // ------------------------------------------------------------- il referto
 
 const referto = {
+  g0: { definiti: [...definiti].sort(), fantasmi, soloDefiniti },
   g1: {
     scala: spScale.map((t) => ({ ...t })),
     fuoriMultiplo: spOffScale.map((t) => t.name),
@@ -242,6 +312,19 @@ if (json) {
 }
 
 const pad = (s, n) => String(s).padEnd(n)
+console.log('')
+console.log('  G0. Nessun token fantasma — ogni `var(--x)` trova la sua definizione')
+if (fantasmi.length === 0) {
+  console.log(`     ${definiti.size} custom property dichiarate, nessun lettore orfano.`)
+} else {
+  console.log(`     ${fantasmi.length} lettori senza definizione — valgono ZERO a schermo:`)
+  for (const g of fantasmi) console.log(`       ${pad(`${g.file}:${g.line}`, 30)} ${g.nome}`)
+}
+if (soloDefiniti.length > 0) {
+  console.log(
+    `     (${soloDefiniti.length} dichiarati in tokens.css e mai letti: ${soloDefiniti.join(', ')})`,
+  )
+}
 console.log('')
 console.log('  G1. Una sola scala di spaziatura — multipli di 4 da un insieme dichiarato')
 console.log(
@@ -300,10 +383,15 @@ if (derivati.length > 0) {
   console.log('      )')
 }
 console.log('')
+if (fantasmi.length > 0) {
+  console.log(`  ✗ G0: ${fantasmi.length} token fantasma. Valgono zero a schermo, in silenzio.`)
+  console.log('')
+  process.exit(1)
+}
 if (fuori.length > 0 || spOffScale.length > 0) {
   console.log(`  ✗ G1: ${fuori.length + spOffScale.length} violazioni. La scala di spaziatura non e' una sola.`)
   console.log('')
   process.exit(1)
 }
-console.log('  ✓ G1 passa. G2 e\' una misura e non fa fallire niente: le sue righe si leggono.')
+console.log('  ✓ G0 e G1 passano. G2 e\' una misura e non fa fallire niente: le sue righe si leggono.')
 console.log('')

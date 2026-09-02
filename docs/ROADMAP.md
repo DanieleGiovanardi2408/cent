@@ -25,15 +25,15 @@ sa gia', e per questo non puo' invecchiare. I giudizi — cosa e' in volo, cosa
 aspetta una persona — stanno sotto, scritti a mano e timbrati con lo SHA a cui
 sono stati rivisti.
 
-- **Ultimo commit**: `d91965f` — fix: non tutti i rossi di tsc sono lo stesso rosso
-- **Data**: 02/09/2026 02:55
+- **Ultimo commit**: `c4d1ef7` — fix: la didascalia della guida deriva dalle schede, e non puo' piu' scadere
+- **Data**: 02/09/2026 19:01
 - **Ramo**: `main`
 - **Pushato**: si, `origin/main` e' allo stesso commit
 - **Albero di lavoro**: **non pulito**, ci sono modifiche non committate
 
 - **Test unitari**: 755 in 25 file, tutti verdi
-- **Test e2e dichiarati**: 434 in 14 file, su 4 progetti (iphone-se, iphone-14, landscape, dark)
-- **Test e2e eseguiti**: 408 passati, 26 saltati, in 3.2 minuti. I saltati sono condizionali (ADR 013): solo un'esecuzione li vede.
+- **Test e2e dichiarati**: 436 in 14 file, su 4 progetti (iphone-se, iphone-14, landscape, dark)
+- **Test e2e eseguiti**: 410 passati, 26 saltati, in 2.9 minuti. I saltati sono condizionali (ADR 013): solo un'esecuzione li vede.
 - **Bundle iniziale**: 59.6 KB gzip su 60.0 KB (0.4 KB di margine)
 
 - **Schema del database**: 5. La scala delle migrazioni:
@@ -51,10 +51,13 @@ sono stati rivisti.
 
 ## In volo adesso
 
-<!-- JUDGMENT rivisto=547fba4 -->
-> Rivisto a `547fba4`, 5 commit fa.
+<!-- JUDGMENT rivisto=c4d1ef7 -->
+> Rivisto a `c4d1ef7`, cioe' a questo commit.
 
-> derivata. **Ri-derivato, non ritimbrato**: sotto c'e' cio' che e' cambiato.
+**Ri-derivato**: `git rev-parse HEAD origin/main` da' lo stesso commit e l'ultimo
+workflow `Deploy` su `main` e' `success`, quindi le tre posizioni — albero,
+remoto, Pages — coincidono ancora. La chiusura della fase 6 e' passata dal ramo
+`fase-6-chiusura`, gia' fuso.
 
 **Il lavoro della fase 6 e' su `main`, e `main` e' su Pages.** Ri-derivato il 2
 settembre guardando `git rev-parse HEAD origin/main` e l'ultimo deploy: le tre
@@ -296,12 +299,17 @@ mai misurarla.
 
 ### Aperto adesso — due voci, e nessuna delle due e' un difetto del prodotto
 
-1. **`home.spec.ts:528` si dichiara verde senza misurare.** L'unico criterio di
-   uscita verificabile ancora aperto. Con i dati gia' arrivati al primo frame non
-   c'e' nessun guscio da confrontare, quindi il gate anti-CLS non cade: **non
-   trova**. E' la confusione fra *non so* e *non c'e'*, sopravvissuta in un test.
-   Nessun utente ne vede niente.
-   *Derivato da:* `npm run state`, `> Non applicata: manca "premessa costruita"`.
+1. ~~**`home.spec.ts:528` si dichiara verde senza misurare.**~~ **CHIUSA il 2
+   settembre**, con la voce 2 del criterio di chiusura: il gate dichiara
+   `skipped` con la ragione quando non c'e' guscio da confrontare.
+
+   **La riga e' rimasta qui dichiarata aperta**, in una sezione che porta scritto
+   *"derivato dall'albero, riga per riga"*, mentre `npm run state -- --check`
+   rispondeva gia' `4/4 verificabili soddisfatti`. L'ha trovata il gate di
+   chiusura. E' il guasto che questa meta' del documento **dichiara di avere per
+   costruzione** — *dichiarare aperto cio' che e' chiuso, e si rifa' lavoro che
+   esiste* — con l'aggravante che la voce citava la propria derivazione: chi la
+   leggeva aveva **due** ragioni di crederle.
 
 2. **Il prezzo della scala unica e' misurato e non e' stato deciso a occhio.** Nello
    stato di default sei righe cadono fra 4 e 19 px, e **Svago (26,00 €) e Coffeeshop
@@ -576,6 +584,97 @@ la premessa, **dove la forma a piega sarebbe rimasta verde**. La prima stesura
 della terza mutazione era inerte (`min-block-size` su un figlio `flex: 1`) ed e'
 stata rifatta: e' la forma 2 delle mutazioni finte.
 
+## Fase 6 — CHIUSA il 2 settembre 2026
+
+**Gate a zero ALTO**, su `c4d1ef7` piu' le riparazioni che il gate stesso ha
+prodotto. Il rapporto ha trovato **tre ALTO**, tutti chiusi, e ognuno con il suo
+guardiano — perche' un difetto riparato senza guardiano e' un difetto che torna.
+
+### I tre ALTO, e cosa insegnano
+
+**1. `--seam` non era definito da nessuna parte.** Tre `gap: var(--seam)` senza la
+loro dichiarazione: una `var()` irrisolta rende la regola invalida al calcolo, e
+`gap` torna a `normal`, cioe' **zero**. I segmenti della barra divisa e quelli
+della barra impilata delle Fisse si sono toccati a filo **per otto commit**.
+
+La definizione era stata scritta e cancellata **nello stesso giro**: la prova di
+fallimento di G1 mutava `--sp-3` in `tokens.css` e ripuliva con
+`git checkout -- src/ui/tokens.css`, quando `--seam` era scritto e non ancora
+committato.
+
+**E' G1 che l'ha prodotto.** Un controllo bloccante la cui riparazione e'
+"meccanica" puo' produrre un difetto **proprio perche' la riparazione e'
+meccanica**: sostituire un numero con un nome e' meccanico, provare che il nome
+esiste no. Guardiano: **G0** in `scale.mjs` — un `var(--x)` senza definizione fa
+fallire. Provato con la cancellazione e con un refuso.
+
+**2. Il test del pavimento concedeva lo scorrimento su un argomento falso.**
+Diceva *"sotto la piega c'e' la coda di una lista"*, e nelle sue scene la lista
+non c'era: le spese sono datate a ieri apposta, quindi `todayRows.length === 0`.
+Sotto la piega c'era l'istruzione dei due tap.
+
+L'argomento vero e' un altro: **il pavimento protegge la schermata in cui
+l'invito e' l'unico canale**, la prima. Chi ha gia' salvato ha gia' toccato un
+chip, e per lui quella riga e' un promemoria. Adesso la concessione **si merita**:
+vale solo dove delle spese esistono davvero, dichiarate dalla scena.
+
+E la misura era sbagliata: `scrollHeight - clientHeight` e' l'**eccedenza del
+contenuto**, non la scorrevolezza — con `overflow-y: hidden` resta 143 mentre il
+contenuto diventa irraggiungibile. Adesso si **prova a scorrere** e si controlla
+che sia il dito a poterlo fare. Due mutazioni per arrivarci: la prima forma
+passava con `hidden`, la seconda anche, perche' `scrollTop` si muove lo stesso.
+
+**3. Gli otto colori si annunciavano tutti "Colore".** `COLOR_NAMES` era
+indicizzata sugli esadecimali **V1** mentre la tavolozza offre i **V2**:
+intersezione vuota, ripiego per tutte e otto, in una schermata dove il colore e'
+l'unica cosa che si sceglie. `audit:source` restava verde perche' le otto chiavi
+avevano un lettore — **la mappa stessa**: il controllo B tenuto in vita da otto
+voci morte. E' DEBITO §10, la cui condizione nominava **questo gate**. Guardiano:
+`colori.spec.ts`, *"ogni tinta ha un nome, e i nomi sono tutti diversi"*.
+
+### I MEDIO e i BASSO
+
+- **La sentinella del vuoto confrontava un valore con se stesso.** `vuoto` e
+  `dietro` erano la stessa espressione sullo stesso nodo: `x === x`. Il commento
+  accanto prometteva *"il giorno in cui qualcuno dipingesse il gap cadrebbe qui"*.
+  La prova che non poteva fallire e' l'ALTO 1: gap a zero per otto commit, test
+  verde a ogni giro. Adesso misura la **geometria** — un colore non puo' dire se
+  una distanza esiste.
+- **`Home.css`**: una regola morta (`.slot__body`), un `.slot__foot` duplicato,
+  due token senza lettori (`--rows-fixed`, `--rows-real`) e tre commenti che
+  l'albero smentiva, fra cui uno che dichiarava `--body-min` uscita mentre e'
+  viva e regge tre argomenti. G0 adesso **riporta** anche i token dichiarati e
+  mai letti: `--ease-in-out`, `--fs-display`, `--sp-7`. Stampa e non ferma — un
+  gradino di scala inutilizzato non e' un difetto, un token che dichiara di
+  essere sorvegliato e non lo e' si'.
+- **"Aperto adesso"** dichiarava aperto un criterio chiuso, in una sezione
+  intitolata *"derivato dall'albero"* e citando la propria derivazione: chi
+  leggeva aveva **due** ragioni di crederle.
+
+### Cosa e' RINVIATO, e con quale condizione
+
+- **2g, il controllo sulle clausole di rendering.** `scripts/clausole.mjs` esiste
+  ed e' provato in sola lettura (41 condizioni, 48 clausole). Il giro completo non
+  e' stato eseguito: due tentativi, il primo fermato a 23/48 e il secondo a 14/48
+  perche' il suo `vite preview` contendeva la porta 4173 con le verifiche della
+  fase. **Condizione**: riparte su un albero fermo, con una porta sua. Cio' che
+  trova e' una lista sua, non un ritardo della fase.
+- **La lettura sincrona per il blocco dei numeri.** `.rates` resta a schermo su
+  un'installazione pulita con 147,25 px di riserva e il solo passo dentro,
+  perche' il guscio si dipinge prima che il database sia aperto. **Condizione**:
+  l'escalation gia' argomentata in "Il lampo di lingua all'avvio" — una cache
+  sincrona e' legittima se compra una lettura che IndexedDB non puo' dare e se,
+  quando e' stantia, degrada al comportamento di oggi.
+- **Tutto il binario B** — il mese, la scorciatoia, incolla-e-capisci, l'import
+  dalla banca. **Condizione: A3, il test degli amici.** Ogni funzione aggiunta
+  adesso viene disegnata sui dati di una persona sola.
+- **Le sei taglie fuori rampa** e i tre token mai letti: riportati, non decisi.
+
+### Cosa NON apre questa chiusura
+
+**Il link agli amici resta chiuso.** E' A3, che adesso e' una fase sua. La fase 6
+chiude una schermata, non il progetto.
+
 ## I due binari
 
 **Il piano dopo la fase 6, e la regola fra i due binari e' una sola: niente del
@@ -808,11 +907,13 @@ differenza fra il modello mentale della richiesta e la configurazione dei dati.
 Sono ferme dal **24 agosto** e vanno fatte **in quest'ordine**, che non e' una
 preferenza: ogni passo distrugge la possibilita' di fare il precedente.
 
-<!-- JUDGMENT rivisto=547fba4 -->
-> Rivisto a `547fba4`. **Riletto, non ri-derivato — e la differenza e' il
-> contenuto della voce**: i passi 3 e 4 succedono sul telefono, e da questa
-> macchina non si leggono. Il timbro certifica che questa prosa e' stata
-> riguardata, non che i due passi siano ancora aperti.
+<!-- JUDGMENT rivisto=c4d1ef7 -->
+> Rivisto a `547fba4`, 6 commit fa. **Da riguardare.**
+
+**Riletto, non ri-derivato, e la differenza e' il contenuto della voce**: i passi
+3 e 4 succedono sul telefono, e da questa macchina non si leggono. Il timbro
+certifica che questa prosa e' stata riguardata, non che i due passi siano ancora
+aperti.
 
 **Cosa e' cambiato dal timbro precedente, ed e' una cosa sola**: il passo 4 —
 *"dare il telefono a una persona che non ha mai visto l'app"* — **non e' piu' una
@@ -924,7 +1025,7 @@ macchina non puo' leggere.
 
 ## Il disco
 
-<!-- JUDGMENT rivisto=547fba4 -->
+<!-- JUDGMENT rivisto=c4d1ef7 -->
 > Rivisto a `547fba4`. **Ri-derivato**, non ritimbrato.
 
 **Ri-derivato il 2 settembre, e i numeri si sono mossi di nuovo — nell'altro
@@ -1217,7 +1318,7 @@ giorno in cui serviva davvero.
 
 ## Decisioni prese e non ancora applicate
 
-<!-- JUDGMENT rivisto=547fba4 -->
+<!-- JUDGMENT rivisto=c4d1ef7 -->
 > Rivisto a `547fba4`. **Ri-derivato**: `npm run state -- --check` da' ancora
 > **14/14 applicate**, cioe' nessuna decisione dichiarata qui e assente dal
 > codice. E' l'unico dei quattro giudizi la cui verita' e' interamente

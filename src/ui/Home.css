@@ -112,18 +112,12 @@
    * che li reggeva gia'. */
   --rows-allowance: 2;
   --rows-since: 2;
-  --rows-fixed: 1;
   --rows-pace: 1;
   /* **Le righe etichetta+valore del blocco dei numeri**, dal 31 agosto: Budget,
    * Speso, il ritmo consentito, il ritmo vero. Erano due frasi di due taglie
    * diverse; adesso sono quattro righe della stessa griglia, e la riserva le
    * conta come quattro. */
   --rows-amount: 4;
-  /* Il ritmo vero, la riga nuova sotto la disponibilita'. Una riga: porta un
-   * importo e una finestra, e a 320 punti in inglese sta ancora su una — se un
-   * giorno non ci stesse, questo numero e' il posto dove dirlo, e il test della
-   * riserva cade prima che lo scopra un utente. */
-  --rows-real: 1;
   --rows-invite: 2;
 
   /* **Il corpo del blocco del budget**: la parte che cambia contenuto fra i due
@@ -313,8 +307,10 @@
  * la dichiarazione di cosa quel numero misura. Niente `--over` e niente
  * grassetto: chi ha l'affitto in mezzo al mese non ha fatto niente di strano.
  *
- * L'altezza e' riservata **sempre**, anche quando la riga e' vuota — dentro
- * `--slot-min`, adesso, invece che qui. Non e' lo spazio buttato che sembra:
+ * L'altezza e' riservata **sempre**, anche quando la riga e' vuota, e la riserva
+ * sta **qui sotto** (`min-block-size`). Questa riga diceva *"dentro `--slot-min`,
+ * adesso, invece che qui"*, ed era falsa due volte: `--slot-min` non esiste piu'
+ * e la riserva non si e' mai spostata. Non e' lo spazio buttato che sembra:
  * questa riga compare e sparisce con il periodo (la settimana in cui scatta il
  * canone si', la successiva no), quindi senza riserva sarebbe un salto
  * **ricorrente**, non uno all'apertura.
@@ -366,22 +362,19 @@
  * proteggere.
  *
  * `--slot-min` e' uscita con lei invece di restare come variabile che nessuno
- * legge. Restano `--body-min` e le sue compagne? No: erano gli addendi di quel
- * calcolo, e sono uscite insieme. */
+ * legge. **`--body-min` no**: e' viva, e la legge `.rates` — e' la riserva su cui
+ * poggiano tre argomenti di `Home.tsx` e la voce 7 di `docs/DEBITO.md`. Qui
+ * c'era scritto che era uscita anche lei, ed era falso.
+ *
+ * **E qui c'erano due blocchi `.slot__foot` di fila**, residuo di modifica, piu'
+ * una regola `.slot__body` che nessun elemento porta piu' da quando `.rates` ha
+ * preso il suo posto. Fusi e cancellata. */
 .slot__foot {
   padding-block-start: var(--sp-3);
-}
-
-.slot__foot {
   display: flex;
   flex-direction: column;
   gap: var(--sp-2);
   justify-content: flex-end;
-}
-
-.slot__body {
-  justify-content: flex-end;
-  min-block-size: var(--body-min);
 }
 
 /* --- la riga piu' utile: quanto al giorno -------------------------------- */

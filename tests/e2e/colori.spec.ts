@@ -907,10 +907,31 @@ test('la barra divisa: i due segmenti si vedono, e la legenda porta i loro color
       fisse: getComputedStyle(seg('fixed')).backgroundColor,
       quotidiane: getComputedStyle(seg('variable')).backgroundColor,
       // Il vuoto fra i due segmenti **non e' dipinto**: e' il `gap`, quindi cio'
-      // che si vede li' e' il fondo del contenitore. Si legge di li', non da un
-      // token, perche' il fatto e' *"in mezzo si vede la superficie"*.
+      // che si vede li' e' il fondo del contenitore.
+      //
+      // **Qui c'erano due chiavi con la stessa espressione sullo stesso nodo**, e
+      // l'asserzione che le confrontava era `x === x`: non poteva fallire. Il
+      // commento accanto prometteva *"il giorno in cui qualcuno dipingesse il gap
+      // cadrebbe qui"*, e il docblock del test elencava il vuoto fra le tre cose
+      // misurate — *"la riga che lo dice a macchina invece che in un commento"*.
+      // Nessuna riga lo diceva. E' la forma 3 delle mutazioni finte, su un
+      // controllo citato come esempio del contrario.
+      //
+      // **La prova che non poteva fallire e' un fatto, non un'ipotesi**: fra il 2
+      // e il 3 settembre `--seam` e' rimasto indefinito, il `gap` e' valso **zero**
+      // per otto commit, e questo test e' rimasto verde a ogni giro.
+      //
+      // Adesso si misura la **geometria**: quanto spazio c'e' davvero fra il
+      // bordo destro del primo segmento e il sinistro del secondo. Un colore non
+      // puo' dire se una distanza esiste.
       vuoto: fondo(split),
       dietro: fondo(split),
+      varco: ((): number => {
+        const a = seg('fixed').getBoundingClientRect()
+        const b = seg('variable').getBoundingClientRect()
+        return Math.round((b.left - a.right) * 100) / 100
+      })(),
+      seam: getComputedStyle(document.documentElement).getPropertyValue('--seam').trim(),
       legendaFisse: pastiglia('fixed'),
       legendaQuotidiane: pastiglia('variable'),
     }
@@ -954,6 +975,23 @@ test('la barra divisa: i due segmenti si vedono, e la legenda porta i loro color
     'il vuoto fra i due segmenti non e\' la superficie: il confine sarebbe un bordo, ' +
       'cioe\' una terza tinta proprio dove serve leggere dove finisce l\'uno',
   ).toEqual(dietro)
+
+  // 2b. **E il vuoto esiste**, largo quanto `--seam` dichiara. Il colore da solo
+  //     non lo dice: un `gap` a zero e' anche lui "del colore del fondo", perche'
+  //     non c'e'. E' successo — `--seam` indefinito, `gap` tornato a `normal`,
+  //     cioe' 0 — e la e2e lo stampava a ogni giro senza che nessuna asserzione
+  //     lo guardasse: `95.1% = 326.22px` (341,0 su 343) diventato
+  //     `95.7% = 328.11px` (342,99 su 343).
+  const atteso = Number.parseFloat(misura.seam)
+  expect(
+    misura.seam,
+    'il documento non dichiara --seam: i tre `gap: var(--seam)` valgono zero',
+  ).not.toBe('')
+  expect(
+    misura.varco,
+    `fra i due segmenti ci sono ${misura.varco}px e --seam dichiara ${misura.seam}: ` +
+      'il confine e\' scomparso, e due marche che si toccano a filo si leggono come una',
+  ).toBeCloseTo(atteso, 1)
 
   // 3. La distanza percettiva. Non e' il contrasto — sotto 3 per costruzione,
   //    vedi il commento in testa — e' la domanda "si distinguono?", con la
@@ -1057,4 +1095,62 @@ test('la barra divisa: i due segmenti si vedono, e la legenda porta i loro color
   expect(rapportoScala, `${scala.label} sotto la soglia AA della sua taglia`).toBeGreaterThanOrEqual(
     4.5,
   )
+})
+
+/**
+ * **Ogni pastiglia della tavolozza si annuncia col proprio nome, non col ripiego.**
+ *
+ * `COLOR_NAMES` in `CategorySheet.tsx` e' indicizzata sull'**esadecimale**, e per
+ * otto commit ha contenuto gli esadecimali della palette **V1** mentre la
+ * tavolozza offriva i **V2**: intersezione vuota, quindi tutte e otto le
+ * pastiglie cadevano sul ripiego e chi esplora con la voce sentiva **otto volte
+ * "Colore"** — in una schermata dove il colore e' l'unica cosa che si sceglie e
+ * le pastiglie non hanno nessun'altra etichetta.
+ *
+ * **Nessuna misura poteva accorgersene**, e `audit:source` restava verde perche'
+ * le otto chiavi avevano un lettore: la mappa stessa. Il controllo B era tenuto
+ * in vita da otto voci morte.
+ *
+ * Questo test e' il legame che la mappa non ha per costruzione. Non asserisce
+ * **quali** nomi — quelli sono una scelta, e cambiarli non e' un difetto — ma che
+ * **nessuna** pastiglia cada sul ripiego, e che i nomi siano **tutti diversi**:
+ * due tinte che si annunciano uguali sono lo stesso difetto con un passo in meno.
+ */
+test('ogni tinta della tavolozza ha un nome, e i nomi sono tutti diversi', async ({ page }) => {
+  await page.goto('./')
+  await chiudiGuida(page)
+  await page.locator('.app__action').tap()
+  await expect(page.locator('.prefs')).toBeVisible()
+  // Si passa dal foglio "nuova categoria", che e' il percorso gia' provato in
+  // `overlays.spec.ts`: la tavolozza e' la stessa, e questo evita di dipendere
+  // dal nome di una categoria esistente.
+  await page.locator('.cats__add').tap()
+  await expect(page.locator('.sheet--cat')).toBeVisible()
+  await expect(page.locator('.picker--color')).toBeVisible()
+
+  const ripiego = (await page.locator('.picker--color').getAttribute('aria-label')) ?? ''
+  const pastiglie = page.locator('.picker__key--color')
+  const quante = await pastiglie.count()
+  expect(quante, 'la tavolozza non ha otto tinte').toBe(8)
+
+  const nomi: string[] = []
+  for (let i = 0; i < quante; i += 1) {
+    const label = (await pastiglie.nth(i).getAttribute('aria-label')) ?? ''
+    // L'etichetta puo' portare " · attuale" in coda: il nome e' la prima parte.
+    nomi.push((label.split('\u00b7')[0] ?? '').trim())
+  }
+  console.log(`\n  [tavolozza] ${nomi.join(' · ')}  (ripiego: "${ripiego}")\n`)
+
+  for (const [i, nome] of nomi.entries()) {
+    expect(
+      nome,
+      `la pastiglia ${i + 1} si annuncia "${nome}", cioe' col ripiego: ` +
+        'COLOR_NAMES non copre la tavolozza che la schermata offre',
+    ).not.toBe(ripiego)
+    expect(nome, `la pastiglia ${i + 1} non ha nessuna etichetta`).not.toBe('')
+  }
+  expect(
+    new Set(nomi).size,
+    `due tinte si annunciano allo stesso modo: ${nomi.join(' · ')}`,
+  ).toBe(quante)
 })

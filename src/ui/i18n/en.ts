@@ -364,7 +364,7 @@ export const en: Record<keyof typeof it, string> = {
   'color.blue': 'Blue',
   'color.magenta': 'Magenta',
   'color.lilac': 'Lilac',
-  'color.grey': 'Grey',
+  'color.slate': 'Slate',
 
   /* --- la guida al primo avvio --------------------------------------------- */
   // **Queste stringhe sono l'originale**, non una traduzione: la guida e' stata

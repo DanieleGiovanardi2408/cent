@@ -505,7 +505,7 @@ export const it = {
   'color.blue': 'Blu',
   'color.magenta': 'Magenta',
   'color.lilac': 'Lilla',
-  'color.grey': 'Grigio',
+  'color.slate': 'Ardesia',
 
   /* --- la guida al primo avvio --------------------------------------------- */
   // Due schede, non tre: la terza — "i dati restano su questo telefono" —

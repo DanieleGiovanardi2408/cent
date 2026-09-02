@@ -81,6 +81,46 @@
   --sp-6: 2rem;
   --sp-7: 3rem;
 
+  /* --- la cucitura ------------------------------------------------------ */
+  /* **Non e' un passo del ritmo: e' la separazione fra due marche adiacenti.**
+   *
+   * La scala `--sp-*` esprime il **ritmo** fra gli elementi, e ogni suo gradino
+   * e' un multiplo di 4. Questi 2 px sono un'altra grandezza — lo spessore di
+   * una giuntura, della stessa famiglia di un bordo — e stanno fuori dalla scala
+   * apposta: aggiungerli come gradino autorizzerebbe chiunque a usarli come
+   * spaziatura, che e' esattamente cio' che una scala esiste per impedire.
+   *
+   * Dove vive: fra i due segmenti della barra divisa di Statistiche, fra quelli
+   * della barra impilata, e fra i tasti del periodo nel foglio del budget. In
+   * tutti e tre e' **assenza di marca** — dipinta nel colore della superficie,
+   * non in un colore suo — perche' un contorno fra due marche che si toccano
+   * aggiunge una terza tinta proprio sul confine, cioe' dove serve leggere dove
+   * finisce l'una (l'argomento per esteso e' in `Stats.css`, `.stats__split`).
+   *
+   * **Cosa NON e':** i due `-2px` di `.stat__accrued` somigliano a questo numero
+   * e non lo sono. Li' il segno e' largo 4 px e il margine negativo vale **meta'
+   * della sua larghezza**, per centrarlo sull'istante che rappresenta: e' una
+   * relazione con se' stesso, non con una cucitura.
+   *
+   * ## Questa riga e' gia' stata cancellata una volta, ed e' andata a schermo
+   *
+   * Scritta il 2 settembre insieme ai tre `var(--seam)` che la leggono, e persa
+   * **nello stesso giro**: la prova di fallimento di G1 mutava `--sp-3` in questo
+   * file e ripuliva con `git checkout -- src/ui/tokens.css`, quando `--seam` era
+   * scritto e **non ancora committato**. Il checkout ha riportato il file a HEAD
+   * portandosi via la definizione, e i tre lettori sono partiti soli.
+   *
+   * Una `var()` irrisolta rende la dichiarazione invalida al momento del calcolo:
+   * `gap` non e' ereditata, quindi e' tornata a `normal`, cioe' **0**. I due
+   * segmenti della barra divisa e quelli della barra impilata delle Fisse si sono
+   * toccati a filo per otto commit, e la e2e lo stampava a ogni giro senza che
+   * nessuno lo leggesse: `95.1% = 326.22px · 4.3% = 14.78px` (341,0 su 343) e'
+   * diventato `95.7% = 328.11px · 4.3% = 14.88px` (342,99 su 343).
+   *
+   * Il guardiano adesso e' `scripts/scale.mjs`, che fa fallire G1 se un
+   * `var(--x)` non trova la sua definizione. */
+  --seam: 2px;
+
   /* --- raggi ------------------------------------------------------------ */
   --radius-1: 0.5rem;
   --radius-2: 0.75rem;

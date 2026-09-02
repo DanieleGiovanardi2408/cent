@@ -1986,9 +1986,33 @@ test.describe('il pavimento a 375x667, nei tre stati della Home', () => {
             return b === null ? `${sel} —assente—` : `${sel} ${r(b.top)}→${r(b.bottom)}`
           })
           .join('  '),
+        // **Quanto lo scorrevole si lascia scorrere davvero**, non quanto
+        // contenuto avanza.
+        //
+        // Prima era `scrollHeight - clientHeight`, che e' l'**eccedenza del
+        // contenuto** e non la scorrevolezza: con `overflow-y: hidden` quel numero
+        // resta 143 mentre il contenuto diventa irraggiungibile. La mutazione l'ha
+        // provato — messo `hidden`, il test restava verde su una Home in cui
+        // l'istruzione non si poteva piu' raggiungere in nessun modo.
+        //
+        // Adesso si **prova a scorrere** e si guarda dove si arriva, poi si torna
+        // indietro. E' la differenza fra misurare la causa e misurare qualcosa che
+        // di solito le somiglia.
         corsa: ((): number => {
           const home = document.querySelector('.home')
-          return home === null ? 0 : home.scrollHeight - home.clientHeight
+          if (home === null) return 0
+          // **E che sia il dito a poterlo scorrere, non solo `scrollTop`.**
+          // `element.scrollTop = 1e6` si muove anche su `overflow-y: hidden`: li'
+          // il contenuto e' raggiungibile da JavaScript e non da una persona. La
+          // mutazione l'ha provato due volte — la prima forma di questa misura
+          // restava verde con `hidden`, cioe' su una Home in cui l'istruzione non
+          // si poteva piu' raggiungere in nessun modo.
+          if (!['auto', 'scroll', 'overlay'].includes(getComputedStyle(home).overflowY)) return 0
+          const prima = home.scrollTop
+          home.scrollTop = 1e6
+          const arrivo = home.scrollTop
+          home.scrollTop = prima
+          return Math.round(arrivo * 100) / 100
         })(),
         rates: document.querySelector('.rates') !== null,
         week: document.querySelector('.week') !== null,
@@ -2016,9 +2040,41 @@ test.describe('il pavimento a 375x667, nei tre stati della Home', () => {
    *   cade sotto la piega non e' scomodo, e' **irraggiungibile**. Era il difetto
    *   vero, e nessuna misura lo diceva perche' si guardava la piega e non la
    *   corsa;
-   * - negli stati **2** e **3** `.home` scorre di 196 e 236 px: sotto la piega
-   *   c'e' la **coda di una lista**, e scorrere per vedere il resto di una lista
-   *   e' cio' che si fa con le liste.
+   * - negli stati **2** e **3** `.home` scorre di 143 e 195 px, e l'invito finisce
+   *   94,81 px sotto la piega: **e' sotto la piega ma raggiungibile.**
+   *
+   * ## L'argomento della concessione e' stato riscritto, perche' il primo era falso
+   *
+   * Diceva *"sotto la piega c'e' la coda di una lista, e scorrere una lista e'
+   * cio' che si fa con le liste"*. **Nelle scene che questo test costruisce non
+   * c'e' nessuna lista**: le spese sono datate a ieri apposta perche' "oggi"
+   * resti vuoto, quindi `todayRows.length === 0` e il `<ul>` non esiste. Sotto la
+   * piega c'e' `.blank__text`, non delle righe. L'argomento era vero di
+   * un'altra scena.
+   *
+   * **Quello vero e' un altro, e cambia dove vale la regola del pavimento.** Il
+   * pavimento protegge la schermata in cui l'invito e' **l'unico canale** che
+   * spiega la convenzione dell'app: la **prima**, dove non c'e' nient'altro. Chi
+   * si trova negli stati 2 e 3 ha gia' salvato delle spese — ha gia' toccato un
+   * chip, ha gia' visto l'importo riempirsi da destra — e quella riga per lui
+   * non e' l'unico canale: e' un promemoria. Un promemoria sotto la piega e'
+   * accettabile; un'istruzione irraggiungibile no.
+   *
+   * E' la stessa asimmetria di costo con cui `COACH_UNTIL` vale tre e non uno:
+   * mostrarla due volte di troppo costa zero, mostrarla troppo poco costa un
+   * utente **senza piu' nessun canale**. Qui il canale c'e', ed e' la sua stessa
+   * storia.
+   *
+   * ## Quindi la concessione si merita, e la premessa si asserisce
+   *
+   * `scorrimento: 'ammesso'` non e' piu' una dichiarazione del test: vale solo
+   * dove **esistono davvero delle spese salvate**. Uno stato senza nessuna spesa
+   * non ha diritto a nessuno scorrimento, per quanto lo si dichiari — cosi' la
+   * maglia non si puo' allargare scrivendo una parola.
+   *
+   * **E la corsa deve bastare**: 94,81 px sotto la piega contro 143 di corsa. Se
+   * un giorno non bastasse, l'invito tornerebbe irraggiungibile e questo test
+   * cadrebbe, che e' esattamente cio' che deve fare.
    *
    * Quindi si misura la **causa**: per ogni blocco, o finisce sopra la piega, o
    * la corsa dello scorrevole basta a portarcelo. Un blocco irraggiungibile
@@ -2032,29 +2088,39 @@ test.describe('il pavimento a 375x667, nei tre stati della Home', () => {
    * diventata verde. La prova e' nella mutazione, riportata nel commit.
    */
   function raggiungibile(
-    m: { piega: number; corsa: number; blocchi: readonly { sel: string; basso: number }[] },
+    m: {
+      piega: number
+      corsa: number
+      blocchi: readonly { sel: string; basso: number }[]
+    },
     stato: string,
-    scorrimento: 'ammesso' | 'no' = 'ammesso',
+    // **Quante spese l'utente ha gia' salvato in questa scena.** Non si legge dal
+    // DOM: leggerla vorrebbe dire aggiungere un attributo alla pagina solo per
+    // questo test, cioe' una cucitura in produzione. La scena lo sa perche' e'
+    // lei che le ha seminate, e passarlo la costringe a **dichiarare** la propria
+    // premessa invece di sperarla.
+    speseSalvate = 0,
   ): void {
     expect(m.blocchi.length, `${stato}: i due blocchi dell'invito non sono a schermo`).toBe(
       SOPRA.length,
     )
-    // Quanto scorrimento si concede. Negli stati con delle spese, la corsa dello
-    // scorrevole: sotto la piega c'e' la coda di una lista, e scorrere una lista
-    // e' cio' che si fa con le liste. Nello stato vuoto, **zero**: li' l'invito
-    // e' l'unica cosa a schermo, e un invito che chiede di scorrere per essere
-    // letto non e' stato letto.
-    const concesso = scorrimento === 'ammesso' ? m.corsa : 0
+    // La concessione **non e' una scelta del test**: e' un fatto della scena. Vale
+    // dove l'utente ha gia' salvato qualcosa, cioe' dove l'invito e' un
+    // promemoria e non l'unico canale. Se le spese non ci sono, non si concede
+    // niente per quanto lo si dichiari.
+    const concesso = speseSalvate > 0 ? m.corsa : 0
     for (const b of m.blocchi) {
       const sotto = Math.round((b.basso - m.piega) * 100) / 100
       expect(
         Math.max(0, sotto),
         `${stato}: ${b.sel} finisce a ${b.basso}, la piega e' a ${m.piega} — ${sotto}px sotto il ` +
           `FAB` +
-          (scorrimento === 'ammesso'
-            ? `, e la corsa dello scorrevole (${m.corsa}px) non basta a portarcelo`
-            : `. Qui non si concede scorrimento: e' la prima schermata, e l'invito ` +
-              `e' l'unica cosa che ci sia sopra (la corsa vale ${m.corsa}px e non si usa)`),
+          (speseSalvate > 0
+            ? `, e la corsa dello scorrevole (${m.corsa}px) non basta a portarcelo: ` +
+              `e' un promemoria diventato irraggiungibile`
+            : `. Qui non si concede scorrimento: nessuna spesa e' stata salvata, ` +
+              `quindi l'invito e' l'unico canale che spieghi l'app — e la corsa ` +
+              `(${m.corsa}px) non si usa`),
       ).toBeLessThanOrEqual(concesso)
     }
   }
@@ -2117,7 +2183,7 @@ test.describe('il pavimento a 375x667, nei tre stati della Home', () => {
     // lo scorrimento dalle cose concesse**, che e' piu' severo sia della premessa
     // di prima (che parlava del contenitore invece che dell'invito) sia della
     // versione con scorrimento.
-    raggiungibile(m, '1. zero spese mai', 'no')
+    raggiungibile(m, '1. zero spese mai')
   })
 
   /**
@@ -2149,7 +2215,7 @@ test.describe('il pavimento a 375x667, nei tre stati della Home', () => {
     )
 
     expect(m.week, 'la striscia si disegna senza nessuna spesa, in inglese').toBe(false)
-    raggiungibile(m, '1b. zero spese mai (en)', 'no')
+    raggiungibile(m, '1b. zero spese mai (en)')
   })
 
   /**
@@ -2182,7 +2248,7 @@ test.describe('il pavimento a 375x667, nei tre stati della Home', () => {
     expect(m.week, 'la striscia non torna quando una spesa esiste').toBe(true)
     expect(m.rates, 'il blocco dei numeri non torna quando una spesa esiste').toBe(true)
     expect(m.invito, 'l\'invito al budget non c\'e\' dove non c\'e\' budget').toBe(true)
-    raggiungibile(m, '2. spese senza budget')
+    raggiungibile(m, '2. spese senza budget', 2)
   })
 
   /**
@@ -2215,7 +2281,7 @@ test.describe('il pavimento a 375x667, nei tre stati della Home', () => {
     expect(m.week, 'la striscia manca nello stato pieno').toBe(true)
     expect(m.rates, 'il blocco dei numeri manca con un budget').toBe(true)
     expect(m.invito, 'l\'invito al budget si mostra a chi un budget ce l\'ha gia\'').toBe(false)
-    raggiungibile(m, '3. spese con budget')
+    raggiungibile(m, '3. spese con budget', 2)
   })
 })
 
