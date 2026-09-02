@@ -4,7 +4,8 @@ import { amountCells, money, t } from './i18n'
 import { reducedMotion } from './motion'
 import './sheet.css'
 import './Guide.css'
-import { STEPS, STEP_MS } from './guide-steps'
+import { CARDS, STEPS, STEP_MS } from './guide-steps'
+import type { Card } from './guide-steps'
 import { PIE_BOX, PIE_C, PIE_GAP, PIE_R, PIE_RING } from './Stats'
 
 /**
@@ -71,7 +72,12 @@ export function Guide({ categories, onDone }: Props) {
   // Statistiche si toccano. E' la strada che ha sostituito il comando a due
   // stati — *un'istruzione, non un valore*, quindi vive dove le istruzioni
   // scadono da sole invece che sopra un grafico per sempre.
-  const last = card === 2
+  // **L'ordine e il numero delle schede vengono da `CARDS`**, non da un `2`
+  // scritto qui: il denominatore del contatore e l'elenco della didascalia in
+  // Impostazioni leggono la stessa lista, quindi una quarta scheda li aggiorna
+  // tutti e tre da sola.
+  const kind = CARDS[card] ?? CARDS[0]
+  const last = card === CARDS.length - 1
 
   return (
     <>
@@ -96,24 +102,14 @@ export function Guide({ categories, onDone }: Props) {
         }}
       >
         <div class="guide__card">
-          <p class="guide__step">{t('guide.step', { index: card + 1 })}</p>
-
-          {card === 0 ? (
-            <AmountArt />
-          ) : card === 1 ? (
-            <SaveArt categories={categories} />
-          ) : (
-            <ChartArt categories={categories} />
-          )}
-
-          {/* Le chiavi si scrivono per intero: una costruita a pezzi spegne il
-              controllo B di `dead-surface.mjs` per tutto il progetto. */}
-          <h2 class="guide__title">
-            {t(card === 0 ? 'guide.amount.title' : card === 1 ? 'guide.save.title' : 'guide.chart.title')}
-          </h2>
-          <p class="guide__text">
-            {t(card === 0 ? 'guide.amount.text' : card === 1 ? 'guide.save.text' : 'guide.chart.text')}
+          <p class="guide__step">
+            {t('guide.step', { index: card + 1, total: CARDS.length })}
           </p>
+
+          {art(kind, categories)}
+
+          <h2 class="guide__title">{titolo(kind)}</h2>
+          <p class="guide__text">{testo(kind)}</p>
 
           {/* Due bersagli, e sull'ultima scheda uno solo.
            *
@@ -480,4 +476,65 @@ function SaveArt({ categories }: { readonly categories: readonly Category[] }) {
       </span>
     </div>
   )
+}
+
+/**
+ * **Le tre cose che una scheda porta — illustrazione, titolo, testo — scelte con
+ * uno `switch` esaustivo invece che con una catena di ternari.**
+ *
+ * Una catena finisce con un `else`: una quarta scheda ci cadrebbe dentro e
+ * prenderebbe **l'illustrazione e i testi della terza**, in silenzio. Col ramo
+ * `never` non compila finche' non ha i suoi.
+ *
+ * E' la stessa forma di `soggetto()` in `Settings.tsx`, e insieme chiudono il
+ * cerchio: da `CARDS` derivano l'ordine di disegno, il denominatore del
+ * contatore e l'elenco della didascalia, e **niente di una scheda puo' restare
+ * indietro** — perche' non si puo' aggiungerne una a meta'.
+ *
+ * Le chiavi si scrivono per intero: una costruita a pezzi spegne il controllo B
+ * di `dead-surface.mjs` per tutto il progetto.
+ */
+function art(kind: Card, categories: readonly Category[]) {
+  switch (kind) {
+    case 'amount':
+      return <AmountArt />
+    case 'save':
+      return <SaveArt categories={categories} />
+    case 'chart':
+      return <ChartArt categories={categories} />
+    default: {
+      const mai: never = kind
+      return mai
+    }
+  }
+}
+
+function titolo(kind: Card): string {
+  switch (kind) {
+    case 'amount':
+      return t('guide.amount.title')
+    case 'save':
+      return t('guide.save.title')
+    case 'chart':
+      return t('guide.chart.title')
+    default: {
+      const mai: never = kind
+      return mai
+    }
+  }
+}
+
+function testo(kind: Card): string {
+  switch (kind) {
+    case 'amount':
+      return t('guide.amount.text')
+    case 'save':
+      return t('guide.save.text')
+    case 'chart':
+      return t('guide.chart.text')
+    default: {
+      const mai: never = kind
+      return mai
+    }
+  }
 }

@@ -1,8 +1,10 @@
 import type { IsoDate } from '../core/date'
 import type { BudgetPeriod, Category, Language, RecurringRule } from '../core/types'
+import { CARDS } from './guide-steps'
+import type { Card } from './guide-steps'
 import { Categories } from './Categories'
 import { FixedCosts } from './FixedCosts'
-import { LANGUAGE_NAMES, cadenceLabel, daysLabel, money, t } from './i18n'
+import { LANGUAGE_NAMES, cadenceLabel, daysLabel, list, money, t } from './i18n'
 import './Settings.css'
 
 /**
@@ -235,7 +237,29 @@ export function Settings({
         <h2 class="prefs__title" id="prefs-guide">
           {t('settings.guide.title')}
         </h2>
-        <p class="prefs__text">{t('settings.guide.text')}</p>
+        {/* **La didascalia deriva dalle schede.**
+         *
+         * Diceva *"le due cose che in Cent non si indovinano"* quando le schede
+         * erano **tre**, e nessuna misura poteva accorgersene: era prosa che
+         * descriveva una funzione senza essere legata alla funzione. L'ha trovata
+         * una persona guardando lo schermo.
+         *
+         * Adesso l'elenco lo costruisce `CARDS`, e la congiunzione la fa `Intl`
+         * secondo la lingua attiva. **Una quarta scheda si nomina da sola**, e
+         * chi la aggiunge senza scriverne il soggetto non compila.
+         *
+         * **E il numero e' uscito dalla frase.** Diceva *"le due cose"*, e un
+         * numerale in lettere avrebbe chiesto una tabella di numeri per lingua —
+         * macchinario per tenere in sincrono una cosa che l'elenco **dice gia'**.
+         * La forma piu' forte di derivazione e' quella in cui non resta niente
+         * da sincronizzare.
+         *
+         * Le chiavi si scrivono per intero, come nella guida: una costruita a
+         * pezzi spegne il controllo B di `dead-surface.mjs` per tutto il
+         * progetto. */}
+        <p class="prefs__text">
+          {t('settings.guide.text', { list: list(CARDS.map(soggetto)) })}
+        </p>
         <button type="button" class="prefs__action" disabled={!ready} onClick={onReplayGuide}>
           {t('settings.guide.again')}
         </button>
@@ -304,4 +328,33 @@ function Pick({
       </svg>
     </button>
   )
+}
+
+/**
+ * Il soggetto di una scheda della guida: la cosa che quella scheda insegna,
+ * detta in una riga, per l'elenco della didascalia.
+ *
+ * **E' uno `switch` esaustivo e non una catena di ternari**, e la differenza e'
+ * tutta la garanzia. Una catena finisce con un `else`, quindi una quarta scheda
+ * ci cadrebbe dentro e prenderebbe il soggetto della terza: la didascalia
+ * nominerebbe tre cose per quattro schede, cioe' **esattamente il difetto da cui
+ * si e' partiti**, ricostruito dentro la sua riparazione. Con il ramo `never`
+ * una scheda nuova senza il suo soggetto **non compila**.
+ *
+ * Le chiavi si scrivono per intero: una costruita a pezzi spegne il controllo B
+ * di `dead-surface.mjs` per tutto il progetto.
+ */
+function soggetto(kind: Card): string {
+  switch (kind) {
+    case 'amount':
+      return t('guide.amount.subject')
+    case 'save':
+      return t('guide.save.subject')
+    case 'chart':
+      return t('guide.chart.subject')
+    default: {
+      const mai: never = kind
+      return mai
+    }
+  }
 }

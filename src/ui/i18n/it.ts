@@ -375,7 +375,7 @@ export const it = {
   // quello stato**, non riaprire un foglio.
   'settings.guide.title': 'Guida',
   'settings.guide.text':
-    'Le due cose che in Cent non si indovinano: come si digita l’importo e cosa salva la spesa.',
+    'Le cose che in Cent non si indovinano: {list}.',
   'settings.guide.again': 'Rivedi la guida',
 
   /* --- Impostazioni: categorie -------------------------------------------- */
@@ -514,21 +514,24 @@ export const it = {
   //
   // Le stringhe inglesi sono l'originale (vedi en.ts): qui c'e' la traduzione.
   'guide.label': 'Come si usa Cent',
-  'guide.step': 'Passo {index} di 3',
+  'guide.step': 'Passo {index} di {total}',
   'guide.skip': 'Salta',
   'guide.next': 'Avanti',
   'guide.start': 'Inizia',
   // Titolo: il fatto. Sottotitolo: la **regola operativa**, che e' la cosa che
   // serve davvero al primo importo tondo — due zeri, o si segna un centesimo.
+  'guide.amount.subject': 'come si digita l’importo',
   'guide.amount.title': 'L’importo si riempie da destra',
   'guide.amount.text': 'Per 23 € digita 2 3 0 0.',
   // "salva la spesa", non "salva la categoria": in Impostazioni le categorie si
   // salvano davvero, quindi la lettura sbagliata e' disponibile e va chiusa
   // nominando l'oggetto.
   /* Vedi en.ts. */
+  'guide.chart.subject': 'come si aprono gli importi da un grafico',
   'guide.chart.title': 'Tocca un grafico per vedere gli importi',
   'guide.chart.text': 'Le quote a colpo d\u2019occhio, le cifre esatte al tocco. Tocca di nuovo per tornare.',
 
+  'guide.save.subject': 'cosa salva la spesa',
   'guide.save.title': 'Toccare una categoria salva la spesa',
   'guide.save.text':
     'È quella la conferma: non c’è un tasto Salva. Categoria sbagliata? Annulla, subito dopo.',

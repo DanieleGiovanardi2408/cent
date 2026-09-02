@@ -25,17 +25,16 @@ sa gia', e per questo non puo' invecchiare. I giudizi — cosa e' in volo, cosa
 aspetta una persona — stanno sotto, scritti a mano e timbrati con lo SHA a cui
 sono stati rivisti.
 
-- **Ultimo commit**: `7666ab8` — feat: il token si divide in tre, il gate dichiara di non sapere, e la piega ha il suo test
-- **Data**: 02/09/2026 01:05
-- **Ramo**: `fase-6-chiusura`
-- **Pushato**: si, `origin/fase-6-chiusura` e' allo stesso commit
-- **Rispetto a `origin/main`**: 2 commit avanti
+- **Ultimo commit**: `d91965f` — fix: non tutti i rossi di tsc sono lo stesso rosso
+- **Data**: 02/09/2026 02:55
+- **Ramo**: `main`
+- **Pushato**: si, `origin/main` e' allo stesso commit
 - **Albero di lavoro**: **non pulito**, ci sono modifiche non committate
 
 - **Test unitari**: 755 in 25 file, tutti verdi
 - **Test e2e dichiarati**: 434 in 14 file, su 4 progetti (iphone-se, iphone-14, landscape, dark)
-- **Test e2e eseguiti**: 408 passati, 26 saltati, in 2.9 minuti. I saltati sono condizionali (ADR 013): solo un'esecuzione li vede.
-- **Bundle iniziale**: 59.4 KB gzip su 60.0 KB (0.6 KB di margine)
+- **Test e2e eseguiti**: 408 passati, 26 saltati, in 3.2 minuti. I saltati sono condizionali (ADR 013): solo un'esecuzione li vede.
+- **Bundle iniziale**: 59.6 KB gzip su 60.0 KB (0.4 KB di margine)
 
 - **Schema del database**: 5. La scala delle migrazioni:
   - **1** — Schema iniziale: expenses, categories, recurringRules, budgets, settings
@@ -53,7 +52,7 @@ sono stati rivisti.
 ## In volo adesso
 
 <!-- JUDGMENT rivisto=547fba4 -->
-> Rivisto a `547fba4`, 2 commit fa.
+> Rivisto a `547fba4`, 5 commit fa.
 
 > derivata. **Ri-derivato, non ritimbrato**: sotto c'e' cio' che e' cambiato.
 

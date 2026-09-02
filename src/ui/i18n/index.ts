@@ -81,6 +81,8 @@ interface Formats {
   readonly dayWithYear: Intl.DateTimeFormat
   readonly dayShort: Intl.DateTimeFormat
   readonly monthLong: Intl.DateTimeFormat
+  /** Congiunzione di un elenco: `a, b e c` in italiano, `a, b, and c` in inglese. */
+  readonly list: Intl.ListFormat
   readonly weekdayLong: Intl.DateTimeFormat
   readonly weekdayShort: Intl.DateTimeFormat
   readonly dayAndMonth: Intl.DateTimeFormat
@@ -124,6 +126,13 @@ function buildFormats(locale: string): Formats {
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
     }),
+    /* **La congiunzione la fa `Intl`, non noi.** L'unico posto che ne ha bisogno
+     * e' la didascalia della guida in Impostazioni, che elenca i soggetti delle
+     * sue schede. Scriverla a mano vorrebbe dire decidere in questo file che
+     * l'italiano usa " e " e l'inglese ", and " — cioe' cablare due convenzioni
+     * di lingua dentro il codice, che e' la cosa da cui `money.ts` e' uscito.
+     * `Intl.ListFormat` e' nativo e non pesa un byte sul bundle. */
+    list: new Intl.ListFormat(locale, { style: 'long', type: 'conjunction' }),
     dayLong: new Intl.DateTimeFormat(locale, {
       weekday: 'long',
       day: 'numeric',
@@ -368,6 +377,16 @@ export function variants(key: Key): readonly string[] {
 export function rate(cents: Cents): string {
   assertCents(cents)
   return formats.rate.format(Math.round(cents / 100))
+}
+
+/**
+ * Un elenco, congiunto secondo la lingua attiva.
+ *
+ * Serve alla didascalia della guida, che **deriva** cio' che nomina dalle schede
+ * invece di ricordarselo: vedi `CARDS` in `guide-steps.ts`.
+ */
+export function list(parti: readonly string[]): string {
+  return formats.list.format(parti)
 }
 
 export function money(cents: Cents): string {

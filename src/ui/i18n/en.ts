@@ -291,7 +291,7 @@ export const en: Record<keyof typeof it, string> = {
   'settings.data.never': 'You have not exported anything yet.',
   'settings.guide.title': 'Guide',
   'settings.guide.text':
-    'The two things about Cent nobody guesses: how you type an amount, and what saves an expense.',
+    'The things about Cent nobody guesses: {list}.',
   'settings.guide.again': 'Show the guide again',
 
   /* --- Impostazioni: categorie -------------------------------------------- */
@@ -373,13 +373,14 @@ export const en: Record<keyof typeof it, string> = {
   // l'unico punto dell'app in cui l'italiano suonava meglio dell'inglese, cioe'
   // il segno che l'originale non era l'originale.
   'guide.label': 'How Cent works',
-  'guide.step': 'Step {index} of 3',
+  'guide.step': 'Step {index} of {total}',
   'guide.skip': 'Skip',
   'guide.next': 'Next',
   'guide.start': 'Start',
   // Il titolo dice il fatto, il sottotitolo dice **cosa fare**: due zeri per un
   // importo tondo. Prima dicevano lo stesso fatto due volte, ed entrambi
   // descrittivi — cioe' la regola non era in nessuno dei due.
+  'guide.amount.subject': 'how you type an amount',
   'guide.amount.title': 'Amounts fill in from the right',
   'guide.amount.text': 'For €23, type 2 3 0 0.',
   // "saves the expense", non "saves it": senza l'oggetto, "it" si legge come la
@@ -387,9 +388,11 @@ export const en: Record<keyof typeof it, string> = {
   /* La terza scheda: il gesto sul grafico. Il titolo dice **cosa si fa**, il
    * testo **cosa si ottiene** — le due domande a cui il grafico risponde, non i
    * nomi delle due forme. */
+  'guide.chart.subject': 'how you open the amounts from a chart',
   'guide.chart.title': 'Tap a chart to see the amounts',
   'guide.chart.text': 'Shares at a glance, exact figures on tap. Tap again to go back.',
 
+  'guide.save.subject': 'what saves an expense',
   'guide.save.title': 'Tapping a category saves the expense',
   'guide.save.text':
     'That’s the confirmation — no Save button. Wrong one? Undo, right after.',

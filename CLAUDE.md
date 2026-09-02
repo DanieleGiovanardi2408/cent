@@ -760,6 +760,68 @@ cose, l'invariante da sorvegliare non e' *"l'ordine e' quello giusto"* ma
 **l'identita' fra le viste** — che resta vera anche il giorno in cui si cambia
 idea sull'ordine, e cade solo sul difetto vero.
 
+## La prosa che descrive una funzione e' parte della funzione
+
+**Terza volta che "una decisione vale dove vale il suo argomento" esce su un
+testo invece che su del codice, e le prime due erano gia' scritte qui**: una
+copia che parafrasa e perde una condizione ([DEBITO.md](docs/DEBITO.md) §1), e un
+messaggio che afferma un fatto che l'utente non puo' verificare. La terza:
+
+> La didascalia della guida in Impostazioni diceva *"le due cose che in Cent non
+> si indovinano"* mentre le schede erano **tre**. L'ha trovata una persona
+> guardando lo schermo — nessuna misura poteva accorgersene, perche' era prosa
+> che descriveva una funzione **senza essere legata alla funzione**.
+
+Quindi la regola si dice esplicitamente, perche' finora era formulata parlando di
+argomenti e condizioni e nessuno l'ha letta come se parlasse di didascalie:
+
+> **Una frase che descrive una funzione e' parte di quella funzione, e come il
+> resto della funzione si deriva, non si ricorda.** Se dice *quante* cose fa,
+> *quali* cose fa, o *dove* stanno, quel numero e quell'elenco vengono dal codice
+> che le fa.
+
+**Il costo di sbagliarla e' peggiore che nel codice**, ed e' la ragione per cui
+merita una riga sua: una funzione rotta la trova un test, una didascalia falsa la
+trova **solo qualcuno che legge lo schermo** — cioe', in un'app che sta per
+andare in mano a degli amici, l'utente.
+
+### Derivare batte un test, e l'argomento e' sempre lo stesso
+
+La seconda scelta sarebbe un test che asserisce che il numero di cose nominate e'
+uguale al numero di passi. **Un test si accorge di una divergenza; una
+derivazione la rende impossibile** — lo stesso argomento con cui `--fs-cat-narrow`
+e' un token e non un test, e vale qui identico.
+
+Come e' stata derivata questa: le schede sono un dato (`CARDS` in
+`guide-steps.ts`), e da li' vengono **l'ordine di disegno, il denominatore del
+contatore** (*"Passo 1 di 3"* era un `3` scritto a mano in due dizionari) **e
+l'elenco dentro la didascalia**, congiunto da `Intl.ListFormat` secondo la lingua.
+
+### E il numero e' uscito dalla frase: la derivazione piu' forte non lascia niente da sincronizzare
+
+*"Le due cose"* e' diventato *"Le cose"*. Tenere il numerale in lettere avrebbe
+chiesto una tabella di numeri per lingua — macchinario, per tenere in sincrono
+una cosa che **l'elenco dice gia'**. Quando si puo' scegliere, si toglie il
+secondo posto in cui il fatto e' scritto invece di costruire il ponte fra i due.
+
+### Una catena di ternari ha un `else`, e l'`else` e' dove il difetto si ricostruisce
+
+La prima stesura sceglieva il soggetto con `kind === 'amount' ? … : kind ===
+'save' ? … : …`. Con una quarta scheda, quella cadeva nell'`else` e prendeva il
+soggetto della terza: **la didascalia avrebbe nominato tre cose per quattro
+schede**, cioe' esattamente il difetto di partenza, ricostruito dentro la propria
+riparazione.
+
+La forma che regge e' uno **`switch` esaustivo con un ramo `never`**: una scheda
+nuova senza il suo soggetto **non compila**. Vale per tutto cio' che una scheda
+porta — illustrazione, titolo, testo, soggetto — perche' altrimenti se ne puo'
+aggiungere **mezza**.
+
+**Provato mutando**, e nei due versi: una quarta scheda senza soggetto ->
+`TS2322: Type '"quarta"' is not assignable to type 'never'`; con il soggetto ->
+il contatore dice **"Passo 1 di 4"** e la didascalia ne nomina quattro, **senza
+che nessuna delle due sia stata toccata**.
+
 ## Un campo e' prodotto quando un valore entra da fuori
 La prima formulazione era *"un campo si spedisce insieme al suo produttore, o non
 si spedisce"*. Dice la cosa giusta a un umano e **non si puo' controllare a
