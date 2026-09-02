@@ -25,16 +25,17 @@ sa gia', e per questo non puo' invecchiare. I giudizi — cosa e' in volo, cosa
 aspetta una persona — stanno sotto, scritti a mano e timbrati con lo SHA a cui
 sono stati rivisti.
 
-- **Ultimo commit**: `c4d1ef7` — fix: la didascalia della guida deriva dalle schede, e non puo' piu' scadere
-- **Data**: 02/09/2026 19:01
+- **Ultimo commit**: `ce5ac64` — fix: i tre ALTO del gate, e la fase 6 chiude
+- **Data**: 02/09/2026 19:33
 - **Ramo**: `main`
 - **Pushato**: si, `origin/main` e' allo stesso commit
 - **Albero di lavoro**: **non pulito**, ci sono modifiche non committate
 
 - **Test unitari**: 755 in 25 file, tutti verdi
 - **Test e2e dichiarati**: 436 in 14 file, su 4 progetti (iphone-se, iphone-14, landscape, dark)
-- **Test e2e eseguiti**: 410 passati, 26 saltati, in 2.9 minuti. I saltati sono condizionali (ADR 013): solo un'esecuzione li vede.
+- **Test e2e eseguiti**: non misurato — l'ultima esecuzione e' **parziale** — 4 test su 436 dichiarati, probabilmente un `-g` o un `--project`: va rilanciata intera
 - **Bundle iniziale**: 59.6 KB gzip su 60.0 KB (0.4 KB di margine)
+- **Disco**: 10.1 GB liberi, 62% pieno. Non e' un giudizio e non porta un timbro: cambia da solo, quindi si rigenera.
 
 - **Schema del database**: 5. La scala delle migrazioni:
   - **1** — Schema iniziale: expenses, categories, recurringRules, budgets, settings
@@ -52,7 +53,7 @@ sono stati rivisti.
 ## In volo adesso
 
 <!-- JUDGMENT rivisto=c4d1ef7 -->
-> Rivisto a `c4d1ef7`, cioe' a questo commit.
+> Rivisto a `c4d1ef7`, un commit fa.
 
 **Ri-derivato**: `git rev-parse HEAD origin/main` da' lo stesso commit e l'ultimo
 workflow `Deploy` su `main` e' `success`, quindi le tre posizioni — albero,
@@ -728,6 +729,52 @@ settimanale, e **nessuna schermata risponde a "come sta andando il mese"**. E' l
 prima perche' e' l'unica delle quattro che ripara un buco gia' misurato invece di
 aggiungere una strada nuova.
 
+### B1b. Il colore del numero grande — dal verde al rosso, in funzione di quanto resta
+
+**Condizione: dopo A3**, come tutto il binario B.
+
+**Cosa.** L'eroe *"Restano"* prende un colore che va da **verde a rosso** in
+funzione di `restano / budget`: pieno verde, vicino a zero rosso, molte sfumature
+in mezzo. **Nessun termine di tempo** — se la settimana finisce senza aver
+esaurito il budget, il colore e' restato verde. **Sotto zero resta rosso.** Senza
+budget impostato, **nessun colore**.
+
+**Perche' e' dentro B1 e non altrove.** B1 e' *il mese*: entrambe rispondono alla
+domanda *"come sta andando"* prima che l'utente legga una cifra. Il colore e'
+l'unica delle due che risponde **senza leggere**, ed e' per questo che sta accanto.
+
+### Come si costruisce, e dov'e' il problema vero
+
+**Interpolazione in OKLCH, non in sRGB**, con la curva di luminosita' controllata
+a mano.
+
+**Gli estremi sono la parte facile. Il problema e' il giallo a meta' scala**:
+interpolato ingenuamente diventa fluo, e rende **fangosi i passaggi intorno** —
+cioe' proprio la zona in cui il colore dovrebbe dire qualcosa, perche' e' li' che
+si decide se prendere quel caffe'. Un verde e un rosso li azzecca chiunque; la
+scala si giudica in mezzo.
+
+**Nessun vincolo di daltonismo — decisione di Daniele, e il costo e' basso perche'
+qui il colore e' atmosfera e il numero porta l'informazione.** Va scritto cosi',
+per esteso: la palette delle categorie ha quattro pavimenti misurati
+(`scripts/palette.mjs`) **perche' li' il colore e' il dato** — due fette che non
+si distinguono sono una fetta piu' grande. Qui no: chi non distingue il verde dal
+rosso legge *"Restano 12,40 €"* e sa esattamente quello che sanno gli altri. **La
+differenza non e' l'indulgenza, e' il ruolo del colore**, ed e' la stessa
+distinzione con cui `audit:surfaces` chiede la tinta piena solo dove le pastiglie
+sono compresenti.
+
+**Resta il controllo di contrasto, in chiaro e in scuro, e per un motivo pratico e
+non normativo**: un rosso troppo scuro su fondo nero rende illeggibile **il numero
+stesso** — cioe' fa sparire l'informazione che il colore doveva soltanto
+accompagnare. E' un vincolo sulla leggibilita' del testo, non sulla distinguibilita'
+delle tinte, e va misurato su **tutta la scala**, non sui due estremi: il punto
+peggiore di una rampa non sta mai dove lo si guarda.
+
+**Dove vive il colore — tutto il numero, oppure il `€` piu' una sottolineatura —
+si sceglie guardando due iniezioni**, come le tre varianti della piega. Non si
+applica niente prima della scelta.
+
 **B2. La scorciatoia.** L'app accetta `?importo=…&categoria=…` e si apre con
 l'importo digitato e la categoria pronta; poi una Scorciatoia iOS sulla schermata
 Home, sul tasto Azione o nel Centro di Controllo. Sarebbe il principio guida n.1
@@ -1023,10 +1070,39 @@ macchina non puo' leggere.
   24 GB liberi. Vedi il giudizio qui sotto, che dice anche **da dove venivano** i
   gigabyte spariti — non era una perdita.
 
-## Il disco
+## Il disco — **non e' piu' un giudizio: e' un fatto rigenerato**
 
-<!-- JUDGMENT rivisto=c4d1ef7 -->
-> Rivisto a `547fba4`. **Ri-derivato**, non ritimbrato.
+Lo spazio libero sta nel blocco in cima, insieme agli altri fatti, e si rigenera
+con `npm run state`. Qui non c'e' piu' un timbro perche' **non c'era niente da
+timbrare**.
+
+**Quattro riletture, quattro numeri: 10, 20, 16, 12 GB.** Non e' una tendenza, e'
+una quantita' che **cambia da sola** — e un timbro dice *"qualcuno ha
+guardato"*, non *"questo numero e' ancora quello"*. Timbrarne una che si muove
+non certifica niente: la prossima persona legge un numero vecchio con una firma
+fresca sopra, che e' **peggio** di un numero vecchio e basta.
+
+E' il rovescio della classe D (*"fatti derivabili scritti a mano"*) nella forma
+che nessuno cerca: non un fatto **stantio**, ma un fatto **vestito da giudizio**.
+Il criterio per distinguerli c'era gia' ed e' bastato applicarlo: **un giudizio e'
+cio' che nessuna macchina puo' dire.** `df` lo dice.
+
+**Cio' che resta scritto qui e' l'unica parte che e' davvero un giudizio**, cioe'
+la regola e la sua ragione:
+
+- **La soglia non si toglie.** Il calo che l'ha prodotta veniva dal provisioning
+  di una VM, che ricapita a ogni sessione nuova: e' un ciclo, non un evento
+  chiuso.
+- **Come si ripara, se torna a mordere.** Il 26 agosto: da 2,1 GB liberi a 24,
+  cancellando i 22 GB di modelli in `~/.ollama` (sei modelli locali) **dopo aver
+  fermato `ollama serve`** — senza fermarlo, `rm` non libera niente. Le chiavi
+  restano: 12 KB, e sono l'identita' di questa macchina. Per riaverli:
+  `brew services start ollama`, poi `ollama pull`.
+- **E la regola sulla e2e**: se la suite locale supera i cinque minuti si divide.
+  Oggi non morde — si misura a ogni giro.
+
+<details><summary>La caccia alla perdita, e cosa insegnava</summary>
+
 
 **Ri-derivato il 2 settembre, e i numeri si sono mossi di nuovo — nell'altro
 verso**: `df` da' **16 GB liberi al 51%**, contro i 20 GB al 44% del 30 agosto e
@@ -1073,7 +1149,7 @@ Sotto, la misura che l'ha prodotta.
 niente. Le chiavi in `~/.ollama` sono rimaste: 8 KB, e sono l'identita' di questa
 macchina. Per riaverli: `brew services start ollama`, poi `ollama pull`.
 
-### La caccia alla perdita: non c'e' una perdita, c'e' un provisioning
+#### La caccia alla perdita: non c'e' una perdita, c'e' un provisioning
 
 Due misure sugli stessi percorsi a 6,5 minuti di distanza. **Niente e' cresciuto**
 tranne `~/Library/Logs`, +1 MB, che eravamo noi.
@@ -1107,6 +1183,8 @@ verde che non riguarda piu' questo codice.
 Se il libero scende sotto il gigabyte questa sessione si e' gia' bloccata una volta
 al punto di non poter eseguire nemmeno `df`: se ricapita, la prima mossa e' liberare
 spazio da un Terminale vero, non da qui.
+
+</details>
 
 ## Criterio di chiusura della fase 6
 

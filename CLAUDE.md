@@ -1344,6 +1344,101 @@ Corollario operativo: dopo una mutazione, si guarda **quale** riga e' rossa. Se
 il messaggio nomina un file `.ts` e un codice `TS…`, la mutazione va rifatta. Se
 nomina il test e la sua asserzione, allora e' una prova.
 
+## Un numero che la suite stampa o e' asserito, o si smette di stamparlo
+
+**Non esiste una terza via, e la terza via si chiama "lo guardiamo".**
+
+Il caso: `colori.spec.ts` stampava a ogni giro `| barra 343px | 95.1% = 326.22px ·
+4.3% = 14.78px |` — 341,0 su 343, cioe' i 2 px del vuoto fra i due segmenti. Da un
+certo commit in poi ha stampato `95.7% = 328.11px · 4.3% = 14.88px`, cioe' 342,99
+su 343: **il vuoto era sparito**. Per otto commit, a ogni esecuzione, sotto gli
+occhi di chiunque leggesse il log.
+
+**Non e' un test che non poteva fallire**: e' un numero che non era un test. Non
+avendo nessuna asserzione sopra, non poteva fallire per costruzione — e in cambio
+si e' guadagnato la fiducia **solo comparendo**, perche' un numero preciso in un
+log verde sembra una misura.
+
+La riga di diario di questo progetto e' una buona idea e resta: serve a dire
+**cosa e' stato misurato anche quando passa**. Ma un numero che nessuna
+asserzione tocca e' un ornamento, e va o legato o tolto.
+
+> **Regola**: prima di stampare una quantita' in un test, si scrive
+> l'asserzione che la sorveglia. Se non si sa cosa asserire su quel numero, non
+> si sa perche' lo si sta stampando.
+
+## Quando un controllo prescrive una riparazione, il guardiano va nello stesso commit
+
+**Una riparazione meccanica puo' produrre un difetto proprio perche' e'
+meccanica.**
+
+G1 e' bloccante con l'argomento *"la riparazione e' meccanica, quindi bloccare non
+costa un giudizio a nessuno"*. La riparazione era: sostituire `2px` con
+`var(--seam)`. **Sostituire un numero con un nome e' meccanico; provare che il
+nome esiste non lo e'** — e la definizione di `--seam` e' stata scritta e persa
+nello stesso giro, senza che niente lo dicesse. Una `var()` irrisolta non e' un
+errore: e' uno zero silenzioso.
+
+Il difetto non e' arrivato **nonostante** il controllo: e' arrivato **attraverso**
+di lui. Un controllo bloccante e' un'istruzione a cambiare il codice in un modo
+preciso, e ogni modo preciso di cambiare il codice ha i suoi modi di rompersi.
+
+> **Regola**: quando si rende bloccante un controllo che prescrive una forma di
+> riparazione, ci si chiede **cosa quella riparazione puo' rompere**, e il
+> guardiano di quel guasto entra **nello stesso commit**. Non nel prossimo giro:
+> il difetto arriva col primo uso.
+
+Qui il guardiano e' **G0** — ogni `var(--x)` trova la sua definizione — ed e' tre
+righe. Le tre righe non c'erano perche' nessuno si era fatto la domanda.
+
+## La prova di fallimento si fa su un albero committato
+
+Far fallire apposta un controllo vuol dire **mutare e poi ripulire**, e la
+pulizia piu' naturale e' `git checkout -- <file>`. Quel comando non conosce la
+differenza fra la mutazione e il lavoro vero: riporta il file a **HEAD**, e tutto
+cio' che era scritto e non ancora committato se ne va con lei.
+
+E' successo **due volte nella stessa giornata**, e la prima non e' stata vista per
+otto commit:
+
+- `--seam`, scritta insieme ai suoi tre lettori e cancellata dalla pulizia della
+  mutazione di G1. Nessun controllo la guardava, quindi il difetto e' andato a
+  schermo;
+- la derivazione della didascalia della guida, cancellata dalla pulizia della
+  mutazione della quarta scheda. Questa e' stata vista subito — ma solo perche'
+  la verifica successiva **misurava proprio quella riga**.
+
+> **Regola**: o si committa prima di mutare, o si muta in un worktree. Non si
+> muta un albero che contiene lavoro non salvato.
+
+E il corollario che vale quando si sbaglia lo stesso: **una pulizia si verifica
+come una riparazione**. Dopo un `git checkout` di pulizia si guarda `git diff` o
+si rilancia la verifica che si stava costruendo — non si presume che abbia tolto
+solo cio' che si era messo.
+
+## Un fatto vestito da giudizio
+
+La divisione fra **fatti rigenerati** e **giudizi timbrati** ha un terzo caso che
+il documento non nominava: una quantita' che **cambia da sola**, scritta fra i
+giudizi.
+
+Lo spazio libero sul disco stava li', con uno SHA accanto. Quattro riletture,
+quattro numeri — 10, 20, 16, 12 GB. **Un timbro dice "qualcuno ha guardato", non
+"questo numero e' ancora quello"**: su una quantita' che si muove non certifica
+niente, e produce la cosa peggiore delle due — un numero vecchio con una firma
+fresca sopra.
+
+Non e' un fatto **stantio** (quelli si vedono, e `state --check` li prende): e' un
+fatto **vestito da giudizio**, e nessun controllo lo cerca perche' sta nella meta'
+del documento che per definizione non si controlla.
+
+> **Il criterio per smascherarlo c'era gia': un giudizio e' cio' che nessuna
+> macchina puo' dire.** Se una macchina lo puo' dire, e' un fatto, e va rigenerato
+> — qualunque cosa suggerisca il posto in cui e' scritto.
+
+Il disco e' passato in `scripts/state.mjs`. Cio' che resta nella prosa e' l'unica
+parte che era davvero un giudizio: la soglia, e come si ripara.
+
 ## Dopo una correzione, la verifica si riesegue — non si deduce
 Il posto piu' probabile in cui trovare il prossimo difetto e' **dentro la
 correzione appena fatta**. Una correzione tocca il codice in un punto delicato

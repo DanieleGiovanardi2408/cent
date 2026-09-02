@@ -334,6 +334,33 @@ function newestMtime(dir) {
  * chiudere — con l'aggravante di essere invisibile, perche' un numero vecchio
  * ha esattamente l'aspetto di uno fresco.
  */
+/**
+ * **Lo spazio libero sul disco, derivato invece che timbrato.**
+ *
+ * Era un *giudizio* in `docs/ROADMAP.md`, con uno SHA accanto. Quattro riletture
+ * hanno dato quattro numeri — 10, 20, 16, 12 GB — e non e' una tendenza: e' una
+ * quantita' che **cambia da sola**, mentre un timbro dice *"qualcuno ha
+ * guardato"*. Timbrare una cosa che si muove non certifica niente: la prossima
+ * persona legge un numero vecchio con una firma fresca sopra.
+ *
+ * E' il rovescio della classe D — *"fatti derivabili scritti a mano"* — nella
+ * forma che nessuno cerca: non un fatto **stantio**, ma un fatto **vestito da
+ * giudizio**. Il criterio per distinguerli e' quello che c'era gia': un giudizio
+ * e' cio' che nessuna macchina puo' dire. `df` lo dice.
+ */
+function discoFacts() {
+  try {
+    const out = execFileSync('df', ['-k', '/'], { encoding: 'utf8' }).trim().split('\n').pop() ?? ''
+    const campi = out.split(/\s+/)
+    const liberiKb = Number(campi[3])
+    const uso = campi[4] ?? ''
+    if (!Number.isFinite(liberiKb)) return { ok: false, why: '`df` non ha risposto come atteso' }
+    return { ok: true, gb: Math.round((liberiKb / 1024 / 1024) * 10) / 10, uso }
+  } catch {
+    return { ok: false, why: '`df` non ha risposto' }
+  }
+}
+
 function bundleFacts() {
   let distFiles
   try {
@@ -674,6 +701,12 @@ function renderBlock(f) {
           `(${kb(f.bundle.budget - f.bundle.total)} di margine)`
       : `- **Bundle iniziale**: non misurato — ${f.bundle.why}`,
   )
+  L.push(
+    f.disco.ok
+      ? `- **Disco**: ${f.disco.gb} GB liberi, ${f.disco.uso} pieno. Non e' un giudizio ` +
+          'e non porta un timbro: cambia da solo, quindi si rigenera.'
+      : `- **Disco**: non misurato — ${f.disco.why}`,
+  )
   L.push('')
   L.push(`- **Schema del database**: ${f.schema.version}. La scala delle migrazioni:`)
   for (const s of f.schema.steps) L.push(`  - **${s.to}** — ${s.summary}`)
@@ -709,6 +742,7 @@ const facts = {
   e2e: e2eDichiarati,
   e2eRun: e2eRunFacts(e2eDichiarati === null ? undefined : e2eDichiarati.total),
   bundle: bundleFacts(),
+  disco: discoFacts(),
   schema: schemaFacts(),
 }
 
