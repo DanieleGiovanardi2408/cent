@@ -55,7 +55,19 @@ function condizioni(text, file) {
     // il `) :` iniziale invece di scartare la riga: quella condizione decide
     // eccome cosa si disegna, e scartarla sarebbe un buco nell'inventario —
     // esattamente il difetto che questo controllo cerca, dentro il controllo.
-    const cond = (m[2] ?? m[5] ?? '').trim().replace(/^\)\s*:\s*/, '')
+    let cond = (m[2] ?? m[5] ?? '').trim().replace(/^\)\s*:\s*/, '')
+    // **Una condizione che e' essa stessa un ternario si spezza.**
+    // `!ready ? null : hasBudget` non e' una clausola: e' una guardia sul guscio
+    // **piu'** la condizione vera. Sostituire tutto produce
+    // `(!ready ? null : hasBudget || true)`, che compila, gira, e non e' la
+    // mutazione che si credeva di aver fatto — la forma 4, dentro lo strumento
+    // che cerca la forma 4. Si tiene il ramo dopo l'ultimo `:`, che e' quello che
+    // decide quando i dati ci sono.
+    if (/\s\?\s/.test(cond)) {
+      const ultimo = cond.lastIndexOf(':')
+      if (ultimo === -1) return
+      cond = cond.slice(ultimo + 1).trim()
+    }
     if (cond === '' || cond.length > 200) return
     // Il ramo negativo, cercato entro venti righe.
     const blob = lines.slice(i, i + 20).join('\n')
@@ -147,10 +159,19 @@ for (const r of inventario) {
     esiti.push({ ...r, esito: 'NON APPLICATA', nota: 'la clausola non si ritrova sulla sua riga' })
     continue
   }
+  // Se il testo della clausola compare **due volte** sulla riga, `replace`
+  // colpisce la prima — che puo' non essere quella. Una mutazione applicata al
+  // posto sbagliato e' peggio di una non applicata: gira, e il suo esito parla
+  // di un'altra cosa. Si dichiara invece di tirare a indovinare.
+  if (riga.split(r.clausola).length > 2) {
+    esiti.push({ ...r, esito: 'AMBIGUA', nota: 'la clausola compare piu\' volte sulla riga' })
+    continue
+  }
   righe[r.line - 1] = riga.replace(r.clausola, neutro)
   writeFileSync(join(r.file === '' ? UI : UI, r.file), righe.join('\n'))
 
   let esito
+  let nota
   try {
     execSync('npx tsc --noEmit', { stdio: 'pipe' })
     try {
@@ -159,21 +180,46 @@ for (const r of inventario) {
     } catch {
       esito = 'presa'
     }
-  } catch {
-    esito = 'NON COMPILA'
+  } catch (e) {
+    // **Non tutti i rossi di `tsc` sono lo stesso rosso**, e la differenza decide
+    // se la clausola e' verificata o se la mutazione e' da rifare.
+    //
+    // - **Un errore di narrowing** (`TS18047` e parenti) dice che quella clausola
+    //   e' un **type guard**: il ramo che disegna legge un valore che esiste solo
+    //   perche' lei l'ha ristretto. Neutralizzarla e' impossibile per
+    //   costruzione, e **il compilatore e' il test**: la clausola e' verificata,
+    //   piu' severamente di quanto potrebbe fare una suite.
+    // - **`TS6133`** (variabile inutilizzata) dice invece che la mutazione ha
+    //   reso irraggiungibile un ramo: e' la **forma 1** delle mutazioni finte, e
+    //   va rifatta — quel che si legge e' il compilatore, non un test.
+    const out = `${e.stdout ?? ''}${e.stderr ?? ''}`
+    const codici = [...new Set([...out.matchAll(/error (TS\d+)/g)].map((x) => x[1]))]
+    nota = codici.join(' ')
+    esito = codici.some((c) => ['TS6133', 'TS6196', 'TS6192'].includes(c))
+      ? 'MUTAZIONE DA RIFARE'
+      : 'verificata da tsc'
   }
   ripristina()
-  esiti.push({ ...r, esito, mutazione: neutro })
+  esiti.push({ ...r, esito, nota, mutazione: neutro })
   console.log(
-    `[${String(n).padStart(3)}/${inventario.length}] ${esito.padEnd(13)} ${r.file}:${r.line}  ${r.clausola.slice(0, 60)}`,
+    `[${String(n).padStart(3)}/${inventario.length}] ${esito.padEnd(19)} ${r.file}:${r.line}  ${r.clausola.slice(0, 55)}${nota === undefined ? '' : '  (' + nota + ')'}`,
   )
   writeFileSync('clausole-esiti.json', JSON.stringify(esiti, null, 2))
 }
 
 ripristina()
-const vive = esiti.filter((e) => e.esito === 'SOPRAVVIVE')
+const conta = esiti.reduce((a, e) => ({ ...a, [e.esito]: (a[e.esito] ?? 0) + 1 }), {})
 console.log('')
-console.log(`  ${vive.length} clausole su ${inventario.length} sopravvivono a essere neutralizzate.`)
+for (const [k, v] of Object.entries(conta)) console.log(`  ${String(v).padStart(3)}  ${k}`)
+console.log('')
+const vive = esiti.filter((e) => e.esito === 'SOPRAVVIVE')
+console.log(`  ${vive.length} clausole su ${inventario.length} sopravvivono a essere neutralizzate:`)
 for (const v of vive) console.log(`    ${v.file}:${v.line}  ${v.clausola}`)
+const rifare = esiti.filter((e) => e.esito === 'MUTAZIONE DA RIFARE')
+if (rifare.length > 0) {
+  console.log('')
+  console.log(`  ${rifare.length} mutazioni da rifare (forma 1: si legge il compilatore, non un test):`)
+  for (const v of rifare) console.log(`    ${v.file}:${v.line}  ${v.clausola}  (${v.nota})`)
+}
 console.log('')
 console.log('  Referto completo in clausole-esiti.json')
