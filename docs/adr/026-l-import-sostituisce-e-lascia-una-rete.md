@@ -268,6 +268,85 @@ emendata, ed e' un fatto che l'utente puo' verificare nello Storico. La regola
 sui messaggi vale qui nel suo rovescio — **un fatto vero che nessun messaggio
 dice**.
 
+## 6b. Il selettore di file su iOS, e i tre stati che e' facile confondere in uno
+
+**E' la trappola vera di questo commit.** Un `<input type="file">` in una PWA apre
+il foglio File, e il file puo' stare **su iCloud Drive**: arriva lento, o non
+arriva.
+
+### Tre stati, non uno
+
+> **sto leggendo il file** · **il file non si e' potuto leggere** · **il file si e'
+> letto e non e' un backup valido**
+
+Il secondo e il terzo hanno **cause e rimedi opposti**, e collassarli in un
+"file non valido" manda la persona a cercare un altro file quando il problema era
+la rete, o a riprovare all'infinito quando il problema era il file.
+
+- **Sto leggendo**: puo' durare secondi su iCloud. Serve dirlo, o il tocco sembra
+  non aver fatto niente e si tocca di nuovo.
+- **Non si e' potuto leggere**: il rimedio e' *riprovare*, o scaricare il file
+  sul telefono. Non e' un difetto del backup.
+- **Letto ma non e' un backup**: il rimedio e' *scegliere un altro file*.
+  Riprovare con lo stesso non serve a niente.
+
+### `accept` — e questo lo dice solo il telefono
+
+Su iOS `accept` si risolve in UTI, e **filtrare male significa che i file JSON
+appaiono grigi e non selezionabili**: la funzione non parte proprio, e il difetto
+si presenta come *"il mio backup non c'e'"*. E' il caso peggiore, perche' e'
+indistinguibile da un bug del salvataggio.
+
+La forma che si spedisce dichiara **tutte e due** le strade — il tipo MIME e
+l'estensione — perche' e' quella che degrada meglio se una delle due non e'
+riconosciuta. **Ma qual e' quella giusta e' un fatto del dispositivo**: da questa
+macchina non si deriva, e sta in "Verificabili solo sul dispositivo". Va provato
+con un file su iCloud Drive **e** uno locale, prima che il link vada a qualcuno.
+
+## 6c. L'anteprima e' un prima/dopo, non un elenco
+
+Il fatto da capire in un colpo d'occhio e' **cosa cambia**, e con la sostituzione
+quel fatto ha **due meta'**:
+
+    adesso    47 spese, 8 categorie
+    dopo      18 spese, 8 categorie
+
+piu' la data del file **dentro** la frase.
+
+**Un conteggio solo dice cosa entra e tace su cosa esce**, che e' la meta' che fa
+male. Il prima/dopo rende visibile la distruzione **senza drammatizzarla**: sono
+due numeri accostati, non un avvertimento.
+
+E i conteggi sono quelli che l'utente **vedra'**, non i record del file: sul primo
+backup reale sarebbero 6 spese contro le 3 che lo Storico mostra, perche' tre sono
+lapidi. Un numero che mente per eccesso in una schermata che chiede una conferma
+distruttiva.
+
+## 6d. La rete cambia il tono della conferma
+
+**Con lo scatto pre-import il tocco sbagliato e' recuperabile**, quindi la
+conferma non deve spaventare: niente "scrivi CANCELLA per confermare", niente
+rosso, niente punti esclamativi. **Una frase chiara, e un Annulla visibile dopo.**
+
+> Una conferma drammatica su un'operazione **reversibile** insegna a temere la
+> cosa sbagliata — e poi la stessa persona tocchera' con leggerezza qualcosa che
+> reversibile non e'.
+
+E' la stessa economia dell'attenzione con cui questo progetto rifiuta i dialoghi
+"Sei sicuro?" e sceglie soft delete piu' toast: **il peso di un avviso e' un
+bilancio, non una scelta locale.**
+
+## 6e. Dove si atterra dopo: sulla Home
+
+L'import parte da **Impostazioni** e finisce sulla **Home**.
+
+Il senso di ripristinare e' **vedere che i dati ci sono**. Restare in Impostazioni
+lascia la persona a fissare un elenco di voci mentre si chiede se ha funzionato —
+e la risposta a quella domanda non e' in quella schermata.
+
+E' anche cio' che rende l'Annulla trovabile nel momento giusto: sulla Home, dove
+si vede lo stato ripristinato, "torna a com'era" ha un referente a schermo.
+
 ## 7. Cosa NON e' cambiato, e vale la pena scriverlo
 
 **Le migrazioni sono gia' una fonte sola.** `MigrationStep.transform` e' una
