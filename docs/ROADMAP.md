@@ -25,8 +25,8 @@ sa gia', e per questo non puo' invecchiare. I giudizi — cosa e' in volo, cosa
 aspetta una persona — stanno sotto, scritti a mano e timbrati con lo SHA a cui
 sono stati rivisti.
 
-- **Ultimo commit**: `ce5ac64` — fix: i tre ALTO del gate, e la fase 6 chiude
-- **Data**: 02/09/2026 19:33
+- **Ultimo commit**: `bd87864` — docs: quattro regole dalla sessione, e il disco smette di essere un giudizio
+- **Data**: 02/09/2026 21:08
 - **Ramo**: `main`
 - **Pushato**: si, `origin/main` e' allo stesso commit
 - **Albero di lavoro**: **non pulito**, ci sono modifiche non committate
@@ -35,7 +35,7 @@ sono stati rivisti.
 - **Test e2e dichiarati**: 436 in 14 file, su 4 progetti (iphone-se, iphone-14, landscape, dark)
 - **Test e2e eseguiti**: non misurato — l'ultima esecuzione e' **parziale** — 4 test su 436 dichiarati, probabilmente un `-g` o un `--project`: va rilanciata intera
 - **Bundle iniziale**: 59.6 KB gzip su 60.0 KB (0.4 KB di margine)
-- **Disco**: 10.1 GB liberi, 62% pieno. Non e' un giudizio e non porta un timbro: cambia da solo, quindi si rigenera.
+- **Disco**: 7.9 GB liberi, 67% pieno. Non e' un giudizio e non porta un timbro: cambia da solo, quindi si rigenera.
 
 - **Schema del database**: 5. La scala delle migrazioni:
   - **1** — Schema iniziale: expenses, categories, recurringRules, budgets, settings
@@ -53,7 +53,7 @@ sono stati rivisti.
 ## In volo adesso
 
 <!-- JUDGMENT rivisto=c4d1ef7 -->
-> Rivisto a `c4d1ef7`, un commit fa.
+> Rivisto a `c4d1ef7`, 2 commit fa.
 
 **Ri-derivato**: `git rev-parse HEAD origin/main` da' lo stesso commit e l'ultimo
 workflow `Deploy` su `main` e' `success`, quindi le tre posizioni — albero,
@@ -585,7 +585,14 @@ la premessa, **dove la forma a piega sarebbe rimasta verde**. La prima stesura
 della terza mutazione era inerte (`min-block-size` su un figlio `flex: 1`) ed e'
 stata rifatta: e' la forma 2 delle mutazioni finte.
 
-## Fase 6 — CHIUSA il 2 settembre 2026
+## Fase 6 — CHIUSA il 3 settembre 2026
+
+**Chiusa quando la voce 5 e' stata soddisfatta, non quando il gate e' passato**, e
+l'ordine e' l'argomento: il gate ha girato il 2 settembre su `c4d1ef7`, le sue
+riparazioni sono entrate in `ce5ac64`, e **solo allora** i 36 scatti sono stati
+rifatti e guardati. Fra il gate e lo sguardo la schermata era cambiata in due
+punti — la cucitura da 2 px e la didascalia della guida — quindi gli scatti di
+prima erano di una schermata che non esisteva piu'.
 
 **Gate a zero ALTO**, su `c4d1ef7` piu' le riparazioni che il gate stesso ha
 prodotto. Il rapporto ha trovato **tre ALTO**, tutti chiusi, e ognuno con il suo
@@ -1277,10 +1284,16 @@ pulito -> `6 passed`. Il terzo passo non e' formalita': senza, "la mutazione e'
 stata presa" e "il controllo e' rotto in entrambe le direzioni" hanno lo stesso
 aspetto.
 
-#### 3. Un gate con zero ALTO
+#### 3. Un gate con zero ALTO — **SODDISFATTA il 2 settembre**
 
 <!-- USCITA -->
 > **Giudizio**, senza controllo per costruzione: nessuna macchina puo' dirlo.
+
+**Esito, con lo SHA su cui e' stato fatto.** Gate su `c4d1ef7`: **tre ALTO**, tutti
+chiusi, ognuno con il suo guardiano — `--seam` indefinito (G0), il pavimento che
+concedeva scorrimento su un argomento falso (la misura riscritta sullo scorrimento
+vero), gli otto colori che si annunciavano tutti "Colore" (`colori.spec.ts`).
+Riparazioni in `ce5ac64`.
 
 **Giudizio.** Nessun controllo puo' dirlo: e' il gate stesso a produrlo. Va scritto
 qui l'esito con lo SHA su cui e' stato fatto, altrimenti "il critico e' passato"
@@ -1297,10 +1310,25 @@ Il controllo verifica che la **forma** esista, non che l'elenco sia completo:
 quella parte resta a chi legge il gate. E' il limite dichiarato di questo ago,
 come per la regola in CLAUDE.md.
 
-#### 5. Gli screenshot guardati da un essere umano — **e viene PRIMA del gate**
+#### 5. Gli screenshot guardati da un essere umano — **SODDISFATTA il 3 settembre**
 
 <!-- USCITA -->
 > **Giudizio**, senza controllo per costruzione: nessuna macchina puo' dirlo.
+
+**Esito.** **36 scatti su `ce5ac64`**, guardati e approvati: la guida (tutte e tre
+le schede), la Home nei tre stati, la didascalia nuova in Impostazioni, e
+Statistiche in tutte e due le forme — ciambella e barre — a 375x667 e 390x844,
+chiaro e scuro.
+
+**E i primi due giri sono stati buttati, il che dice a cosa serve questa voce.**
+Il primo lotto era su `d12a05d`, poi la cucitura da 2 px e' **tornata** e la
+didascalia della guida e' cambiata: erano scatti di una schermata che non esisteva
+piu', **proprio sui due punti riparati**. Rifatti su `ce5ac64`, il primo tentativo
+aveva le spese fisse datate **fuori dal periodo corrente**, e Statistiche non
+mostrava ne' la barra divisa ne' meta' delle Quotidiane — cioe' esattamente le
+cose da guardare. Una scena sbagliata produce uno scatto che passa per una
+schermata: **si guarda anche che la scena sia quella**, non solo che la schermata
+sia giusta.
 
 **Giudizio, e la sola voce che non puo' diventare altro.** 390 chiaro, 390 scuro,
 320, stato vuoto, stato senza budget.
