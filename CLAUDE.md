@@ -1416,6 +1416,41 @@ come una riparazione**. Dopo un `git checkout` di pulizia si guarda `git diff` o
 si rilancia la verifica che si stava costruendo — non si presume che abbia tolto
 solo cio' che si era messo.
 
+## Una misura presa su un artefatto stantio non e' una misura
+
+**Tre volte in una sessione**, e la terza ha quasi fatto passare un budget
+sforato: `npm run size` ha riportato *"59,8 KB, rispettato"* leggendo un `dist/`
+piu' vecchio dei sorgenti. Il numero era **giusto per l'albero di mezz'ora
+prima** e falso per quello in mano. Le altre due: una prova sulla didascalia
+della guida che leggeva l'albero di un altro worktree — la porta 4173 tenuta da
+un `vite preview` altrui — e un `npm run size` su un `dist/` non ricostruito
+dopo una modifica al CSS.
+
+E' la stessa famiglia del **fatto rigenerato da un'esecuzione parziale**, e la
+proprieta' che le accomuna e' quella che le rende pericolose:
+
+> **Un numero che viene da uno script si guadagna la fiducia solo comparendo.**
+> Un numero scritto a mano lo si rilegge con sospetto; uno stampato da un
+> comando no — e' proprio per non doverlo rileggere che si e' scritto il comando.
+
+**Il rimedio e' quello di sempre in questo progetto: rendere esatta la cosa
+misurata invece di ricordarsi di rimisurarla.** Uno strumento di misura o
+**verifica la freschezza di cio' che legge, o ricostruisce da se'**. Non esiste
+una terza via, e la terza via si chiama *"ricordati di ricostruire"*.
+
+`scripts/size.mjs` confronta la data di `dist/` con quella del sorgente piu'
+recente e **si rifiuta di riportare** — non riporta un numero con un asterisco,
+perche' un asterisco su un numero verde non lo legge nessuno. Non ricostruisce da
+se': `vite build` costa qualche secondo, e chi lancia `size` in un ciclo lo
+pagherebbe a ogni giro. Il messaggio dice il comando, che e' uno solo.
+
+**E la forma piu' insidiosa e' quella con due processi**: due suite sulla stessa
+porta, dove `reuseExistingServer` fa misurare l'albero di qualcun altro. Li' non
+c'e' nessuna data da confrontare — l'artefatto e' fresco, e' solo di un altro
+albero. L'unica difesa che ha funzionato e' stata **guardare quale processo tiene
+la porta** quando un numero non torna, invece di rileggere il codice che lo
+produce.
+
 ## Un fatto vestito da giudizio
 
 La divisione fra **fatti rigenerati** e **giudizi timbrati** ha un terzo caso che

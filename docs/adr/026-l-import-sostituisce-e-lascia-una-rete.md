@@ -63,6 +63,79 @@ l'unica rete e' un Annulla che vive in memoria e muore con la chiusura dell'app.
 
 **Il peso non e' il problema.** Uno scatto solo, mai una serie.
 
+### La migrazione 5 -> 6, verificata su una copia del backup reale
+
+**3 settembre 2026.** CLAUDE.md lo chiede prima di una migrazione che tocchi
+record esistenti, e questa ne tocca **uno**: il singleton delle impostazioni,
+campo `schemaVersion`. Provata sulla catena intera **4 -> 6**, perche' e' quella
+che girera' davvero sul telefono:
+
+    ok=true, da schema 4 -> 6      issues=[]      scartati=0
+    spese      18 -> 18            categorie   8 -> 8
+    regole      2 -> 2             budget      1 -> 1
+    somma centesimi   88.493 -> 88.493
+    lapidi                 6 -> 6
+    settings.schemaVersion 4 -> 6      <- l'unico record cambiato
+    ancore mensili         [25, 25]    (derivate dal passo 3->4, intatte)
+
+**Niente perso, niente riscritto tranne il campo che doveva cambiare.** Le sei
+lapidi sopravvivono, che e' il caso su cui una migrazione sbaglia piu' spesso —
+un filtro distratto le tratta come record invalidi.
+
+**Sulla forma della prova**: il file vero non e' stato committato, e il suo
+percorso non e' finito dentro nessun test — e' arrivato da una variabile
+d'ambiente, e senza quella il test non gira. E' gia' successo in fase 3, e quei
+test furono cancellati per questo.
+
+**E l'ADR aveva torto su un dettaglio.** Diceva *"uno step con `createStores` e
+senza `transform`: nessun record viene toccato"*. Misurato: senza `transform`, un
+database che arriva dalla v1 finisce a schema 6 con `Settings.schemaVersion`
+**uguale a 5**, mentre un'installazione nuova nasce con 6. Serve il `transform`
+minimo, sul solo singleton. **L'argomento resta intero** — parlava di non
+riscrivere l'archivio, che e' cio' che costa — e l'archivio esce per riferimento
+identico.
+
+### Il lato lettura, differito
+
+`snapshotTakenAt`, `restoreSnapshot` e `snapshotPayload` **non sono state
+spedite** con lo scatto. Lo scatto si prende; niente lo legge e niente lo
+ripristina, perche' non esiste ancora una schermata che lo chieda.
+
+**La ragione e' la regola, non il tetto**: *una funzione si spedisce insieme al
+suo chiamante, o non si spedisce* — la stessa con cui `expensesInRange` e
+`planBudgetChange` sono state cancellate, e con cui `note` ed `endDate` sono
+uscite dai tipi. Il tetto del bundle ha fatto da **rivelatore**: 61.554 byte
+contro 61.440 con le due dentro, 61.215 senza. Se fosse stato piu' alto la regola
+sarebbe valsa lo stesso, e sta scritto perche' fra sei mesi la tentazione sara'
+rimetterle "tanto adesso c'e' spazio".
+
+**Condizione**: arrivano nel commit del dialogo di ripristino. **Se quel dialogo
+non arriva in fase 7, non arrivano nemmeno loro** — e lo scatto resta una rete
+che nessuno puo' tirare, che e' un difetto suo e va guardato allora.
+
+Gli argomenti che vivevano su quelle funzioni stanno qui, perche' sono decisioni
+e una decisione non vive nel commento di una funzione che non esiste:
+
+**Il ripristino consuma lo scatto**, per tre ragioni in ordine di forza:
+
+1. **tenerlo direbbe una cosa falsa.** La voce dichiara la data dello stato a cui
+   riporta, e dopo il ripristino quello stato e' quello in cui si e' gia': un
+   gesto che non fa niente, con accanto un fatto che lo schermo non conferma.
+2. **scambiarlo** — mettere al suo posto i dati importati, per disfare il
+   disfacimento — sarebbe un redo che nessuno ha chiesto, e in uno slot solo: la
+   rete diventerebbe un interruttore fra due stati, cioe' un'altra funzione.
+3. **cio' che si perde ha gia' un'altra copia.** Il file importato l'ha scelto
+   l'utente e sta ancora dove stava; **lo stato pre-import non esisteva da
+   nessun'altra parte**, ed e' l'unica cosa che questa rete e' nata per tenere.
+
+**Il carico va migrato al ripristino, non all'upgrade.** Fra l'import e il
+ripristino ci sta un aggiornamento della PWA, e **le migrazioni non toccano gli
+store di sistema**: uno scatto preso a schema 6 e ripristinato sotto lo schema 7
+dev'essere portato avanti al momento in cui rientra. Per questo
+`PreImportSnapshot.schemaVersion` **resta scritto** anche senza un lettore: e'
+l'unico istante in cui quel numero si puo' sapere, e ricostruirlo dopo sarebbe
+indovinarlo.
+
 ### Il costo vero e' nei tipi, e va pagato comunque
 
 `MigrationStep` ha gia' `createStores`, e uno step con `createStores` e **senza

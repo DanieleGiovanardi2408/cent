@@ -25,26 +25,28 @@ sa gia', e per questo non puo' invecchiare. I giudizi — cosa e' in volo, cosa
 aspetta una persona — stanno sotto, scritti a mano e timbrati con lo SHA a cui
 sono stati rivisti.
 
-- **Ultimo commit**: `7e63c39` — docs: la fase 6 chiude — la voce 5 e' soddisfatta
-- **Data**: 03/09/2026 11:22
-- **Ramo**: `main`
-- **Pushato**: si, `origin/main` e' allo stesso commit
+- **Ultimo commit**: `c5b032a` — refactor: il lato lettura dello scatto si spedisce col suo chiamante
+- **Data**: 03/09/2026 12:03
+- **Ramo**: `fase7/scatto-pre-import`
+- **Pushato**: si, `origin/fase7/scatto-pre-import` e' allo stesso commit
+- **Rispetto a `origin/main`**: 3 commit avanti
 - **Albero di lavoro**: **non pulito**, ci sono modifiche non committate
 
-- **Test unitari**: 755 in 25 file, tutti verdi
+- **Test unitari**: 771 in 26 file, tutti verdi
 - **Test e2e dichiarati**: 436 in 14 file, su 4 progetti (iphone-se, iphone-14, landscape, dark)
-- **Test e2e eseguiti**: non misurato — l'ultima esecuzione e' **parziale** — 4 test su 436 dichiarati, probabilmente un `-g` o un `--project`: va rilanciata intera
-- **Bundle iniziale**: 59.6 KB gzip su 60.0 KB (0.4 KB di margine)
-- **Disco**: 7.9 GB liberi, 67% pieno. Non e' un giudizio e non porta un timbro: cambia da solo, quindi si rigenera.
+- **Test e2e eseguiti**: non misurato — l'ultima esecuzione e' piu' vecchia dei sorgenti — va rilanciata
+- **Bundle iniziale**: 59.8 KB gzip su 60.0 KB (0.2 KB di margine)
+- **Disco**: 7.8 GB liberi, 68% pieno. Non e' un giudizio e non porta un timbro: cambia da solo, quindi si rigenera.
 
-- **Schema del database**: 5. La scala delle migrazioni:
+- **Schema del database**: 6. La scala delle migrazioni:
   - **1** — Schema iniziale: expenses, categories, recurringRules, budgets, settings
   - **2** — Expense.timeMinutes (opzionale); le impostazioni dichiarano la versione 2
   - **3** — Settings.language e Settings.onboardingCompletedAt (opzionali, default assente)
   - **4** — RecurringRule.anchorDay esplicito e obbligatorio sulle regole mensili
   - **5** — Le otto tinte delle categorie passano alla palette che regge i pavimenti
+  - **6** — Lo store di sistema che tiene lo scatto pre-import
 
-  Un dispositivo fermo a una versione precedente le esegue **tutte in fila fino alla 5**
+  Un dispositivo fermo a una versione precedente le esegue **tutte in fila fino alla 6**
   alla prima apertura dopo l’aggiornamento. Da quale parta e' un fatto del telefono, non del
   repository, e per questo non e' scritto qui.
 
@@ -53,7 +55,7 @@ sono stati rivisti.
 ## In volo adesso
 
 <!-- JUDGMENT rivisto=c4d1ef7 -->
-> Rivisto a `c4d1ef7`, 3 commit fa.
+> Rivisto a `c4d1ef7`, 7 commit fa. **Da riguardare.**
 
 **Ri-derivato**: `git rev-parse HEAD origin/main` da' lo stesso commit e l'ultimo
 workflow `Deploy` su `main` e' `success`, quindi le tre posizioni — albero,

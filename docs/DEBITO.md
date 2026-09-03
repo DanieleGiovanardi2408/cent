@@ -683,6 +683,39 @@ solo, non e' piu' il caso raro per cui era stato scritto.
 
 </details>
 
+## 11. `dead-surface.mjs` e' cieco sui campi dal nome comune
+
+**Stato: aperto.** Nato il 3 settembre 2026, trovato per caso costruendo lo
+scatto pre-import.
+
+**Cosa.** Il controllo A cerca, per ogni campo dei tipi in `src/core/types.ts`,
+una scrittura che non sia `parseBackup`, una migrazione o un test. Ma **cerca il
+nome, non il tipo**: se lo stesso nome esiste altrove con dei produttori, il
+campo nuovo risulta vivo anche quando non lo e'.
+
+**Il caso concreto, misurato.** Un campo `reason` aggiunto a `PreImportSnapshot`
+e mai scritto da nessuno **non viene segnalato**: `reason` esiste altrove nel
+progetto con produttori veri. Lo stesso campo chiamato `deviceLabel` viene preso
+subito.
+
+**Era gia' dichiarato** — il limite 9 nella testata dello script lo dice — e
+**questa voce non lo scopre: lo pesa**. La differenza e' il punto: *"cerca il
+nome, non il tipo"* letto in una testata sembra una precisazione; *"un campo
+chiamato `reason` puo' essere morto e l'audit dice che e' vivo"* e' un buco con
+una forma. Finche' non morde, nessuno sa quanto e' grande.
+
+**Perche' non e' stato riparato adesso.** Riparare vuol dire risolvere il tipo
+del campo, non il suo nome — cioe' passare da una ricerca testuale a
+un'analisi che sappia a quale dichiarazione appartiene una scrittura. E' un
+altro strumento, non una toppa a questo, e non e' il lavoro della fase 7.
+
+**La condizione che la chiude**: il giorno in cui un campo morto passa l'audit
+**in produzione** — non in una prova — oppure il giorno in cui si tocca
+`dead-surface.mjs` per un'altra ragione e la riscrittura costa meno del rischio
+di lasciarla. Fino ad allora vale la contromisura a occhio: **un nome comune per
+un campo nuovo e' una scelta contro di noi**, e conviene sceglierne uno che nel
+progetto non esista gia'.
+
 ## 3. Rischi noti gia' scritti altrove
 
 Non si duplicano qui, per non creare la diciannovesima copia che parafrasa:
