@@ -13,19 +13,19 @@
  * solo la **classificazione**, cioe' l'unica parte che si puo' provare senza un
  * browser.
  *
- * ## La sorgente del testo e' un parametro, e in questo giro non ce n'e' una
+ * ## La sorgente del testo e' un parametro, e adesso ce n'e' una
  *
- * `BackupReader` e' la firma che il selettore di file dovra' avere. Non e'
- * un'astrazione preventiva: e' il confine fra il pezzo che dipende dal
- * dispositivo — `<input type="file">`, `accept`, gli UTI di iOS, un file su
- * iCloud Drive che arriva lento o non arriva — e il pezzo che non ci dipende,
- * che e' tutto il resto. Il primo si verifica solo su un telefono; il secondo
- * si verifica adesso.
+ * `BackupReader` e' la firma del selettore di file, ed e' il confine fra il
+ * pezzo che dipende dal dispositivo — `<input type="file">`, `accept`, gli UTI
+ * di iOS, un file su iCloud Drive che arriva lento o non arriva — e il pezzo che
+ * non ci dipende, che e' tutto il resto. Il primo si verifica solo su un
+ * telefono; il secondo si verifica qui.
  *
- * **Oggi nessuno la implementa**, quindi la voce "Ripristina da un backup" non
- * compare in Impostazioni: e' assenza strutturale, non uno stato vuoto — la
- * stessa distinzione della striscia dei sette giorni sulla Home. La condizione
- * che la fa comparire e' una sola: il commit del selettore di file.
+ * L'implementazione e' `pickBackup` in `src/app/backup-read.ts`, e `main.tsx`
+ * la passa ad `App`: da qui la voce "Ripristina da un backup" compare in
+ * Impostazioni. Il parametro resta un parametro perche' e' cio' che tiene fuori
+ * il DOM da questo modulo — e perche' `App` senza sorgente e' esattamente lo
+ * stato che la pagina d'installazione avrebbe (ADR 011).
  *
  * ## I quattro stati, e perche' non sono tre
  *
@@ -66,11 +66,31 @@ export type BackupRead =
   | { readonly kind: 'text'; readonly text: string }
   /** L'utente ha chiuso il selettore: non e' successo niente. */
   | { readonly kind: 'cancelled' }
-  /** Il file non si e' potuto leggere: iCloud, permessi, un file sparito. */
-  | { readonly kind: 'unreadable' }
+  /**
+   * Il file non si e' potuto leggere: iCloud, permessi, un file sparito.
+   *
+   * **`again` non e' un extra: e' cio' che rende questo esito diverso dagli
+   * altri.** E' l'unico stato in cui riprovare ha senso — il file va bene, e' la
+   * lettura che e' fallita — e portarsi dietro il modo di rifarla rende il
+   * "Riprova" della schermata **vero per costruzione**: non si puo' costruire
+   * questo esito senza dire come si ritenta, e non si puo' ritentare qualcosa
+   * che non sia lo stesso file.
+   *
+   * Il giro A aveva un'azione sola con due etichette — il bottone diceva
+   * *"Riprova"* e faceva *"Scegli un altro file"* — e l'esito prevedibile era:
+   * l'utente ripesca lo stesso file, ottiene lo stesso errore, e conclude che
+   * l'app e' rotta (ADR 026 §6f).
+   */
+  | { readonly kind: 'unreadable'; readonly again: BackupReader }
 
 /**
- * Da dove arriva il testo del backup. La implementera' il selettore di file.
+ * Da dove arriva il testo del backup.
+ *
+ * **Due implementazioni, e la stessa firma**: `pickBackup`, che apre il
+ * selettore del sistema, e la chiusura `again` di un esito `unreadable`, che
+ * rilegge lo stesso `File` **senza** riaprire niente. Che siano la stessa firma
+ * e' cio' che permette ad `App` di avere **una sola sequenza** con due ingressi,
+ * invece di due sequenze che divergeranno.
  *
  * **Non rifiuta**: un rifiuto sarebbe un quarto esito senza nome, e il chiamante
  * dovrebbe indovinare se e' un annullamento o un guasto. `App` tratta comunque
@@ -126,7 +146,8 @@ export interface ImportCounts {
  */
 export type ImportStep =
   | { readonly kind: 'reading' }
-  | { readonly kind: 'unreadable' }
+  /** Porta con se' il modo di rileggere **lo stesso file**: vedi `BackupRead`. */
+  | { readonly kind: 'unreadable'; readonly again: BackupReader }
   | { readonly kind: 'refused'; readonly refusal: ImportRefusal }
   | {
       readonly kind: 'ready'

@@ -1,6 +1,12 @@
 import type { IsoDate } from '../core/date'
 import { countRows, exportedDay } from './import-view'
-import type { CountKind, ImportCounts, ImportRefusal, ImportStep } from './import-view'
+import type {
+  BackupReader,
+  CountKind,
+  ImportCounts,
+  ImportRefusal,
+  ImportStep,
+} from './import-view'
 import { fullDayLabel, t } from './i18n'
 import './ImportSheet.css'
 
@@ -45,12 +51,13 @@ interface Props {
   /** Il giorno civile corrente: decide se la data del file porta l'anno. */
   readonly day: IsoDate
   /**
-   * Legge di nuovo dalla stessa sorgente. E' un'azione sola con **due
-   * etichette**, e la differenza e' tutto il punto: dopo un errore di lettura si
-   * chiama "Riprova" (lo stesso file, di nuovo), dopo un rifiuto "Scegli un
-   * altro file" (con lo stesso non cambia niente).
+   * Rilegge **lo stesso file**. Prende `again` in argomento invece di andarselo
+   * a cercare: cosi' il bottone "Riprova" esiste solo dove `again` esiste, e
+   * nessuno dei due lati ha un ramo *"e se non ci fosse"* da scrivere.
    */
-  readonly onRead: () => void
+  readonly onRetry: (again: BackupReader) => void
+  /** Riapre il selettore del sistema: un altro file, non lo stesso. */
+  readonly onPick: () => void
   /**
    * Scrive. Non porta niente con se': cio' che si scrive e' `step.data`, e
    * `App` sta guardando **lo stesso oggetto** che questa schermata sta
@@ -62,7 +69,7 @@ interface Props {
   readonly onClose: () => void
 }
 
-export function ImportSheet({ step, now, day, onRead, onConfirm, onClose }: Props) {
+export function ImportSheet({ step, now, day, onRetry, onPick, onConfirm, onClose }: Props) {
   return (
     <div class="restore" role="dialog" aria-modal="true" aria-labelledby="restore-title">
       <div class="restore__head">
@@ -93,23 +100,65 @@ export function ImportSheet({ step, now, day, onRead, onConfirm, onClose }: Prop
       {/* Sempre presente, anche vuoto: e' la fascia che tiene ferma la
           geometria fra uno stato e l'altro. */}
       <div class="restore__foot">
-        {step.kind === 'reading' ? null : (
-          <button
-            type="button"
-            class="restore__action"
-            onClick={step.kind === 'ready' ? onConfirm : onRead}
-          >
-            {t(
-              step.kind === 'ready'
-                ? 'import.confirm'
-                : step.kind === 'unreadable'
-                  ? 'import.retry'
-                  : 'import.another',
-            )}
-          </button>
-        )}
+        <Action step={step} onRetry={onRetry} onPick={onPick} onConfirm={onConfirm} />
       </div>
     </div>
+  )
+}
+
+/**
+ * Il bottone del piede: **l'etichetta e la cosa che fa, scelte insieme**.
+ *
+ * Un `switch` solo, e in ogni ramo la parola sta accanto alla funzione che
+ * partira'. E' la forma, non la disciplina, a impedire il difetto del giro A —
+ * un'azione sola sotto due etichette, dove il bottone diceva *"Riprova"* e
+ * faceva *"Scegli un altro file"*.
+ *
+ * > Un'etichetta e' una promessa sull'azione. Se l'azione e' la stessa per due
+ * > etichette diverse, una delle due sta mentendo.
+ *
+ * E il rovescio, che e' la semplificazione da non fare: unificare le due
+ * etichette in *"Scegli un altro file"* toglierebbe la bugia **e anche il
+ * rimedio giusto** — chi non e' riuscito a leggere un file da iCloud non ha
+ * bisogno di un altro file, ha bisogno di quello, un momento dopo (ADR 026 §6f).
+ *
+ * `reading` non ha bottone e non e' una svista: non c'e' niente da ritentare
+ * finche' la lettura e' in corso, e un bottone li' sarebbe un secondo tocco che
+ * ricomincia da capo cio' che stava per arrivare. La fascia resta alta lo stesso
+ * (vedi il CSS), quindi l'arrivo dell'esito non sposta niente.
+ */
+function Action({
+  step,
+  onRetry,
+  onPick,
+  onConfirm,
+}: {
+  readonly step: ImportStep
+  readonly onRetry: (again: BackupReader) => void
+  readonly onPick: () => void
+  readonly onConfirm: () => void
+}) {
+  switch (step.kind) {
+    case 'reading':
+      return null
+    case 'unreadable':
+      return <Does label={t('import.retry')} run={() => onRetry(step.again)} />
+    case 'refused':
+      return <Does label={t('import.another')} run={onPick} />
+    case 'ready':
+      return <Does label={t('import.confirm')} run={onConfirm} />
+    default: {
+      const mai: never = step
+      return mai
+    }
+  }
+}
+
+function Does({ label, run }: { readonly label: string; readonly run: () => void }) {
+  return (
+    <button type="button" class="restore__action" onClick={run}>
+      {label}
+    </button>
   )
 }
 

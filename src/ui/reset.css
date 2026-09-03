@@ -134,3 +134,25 @@ a {
     scroll-behavior: auto !important;
   }
 }
+
+/* L'input del selettore di backup (`src/app/backup-read.ts`).
+ *
+ * Sta **dentro** il documento e non staccato: su WebKit un input staccato e' la
+ * cosa che smette di aprire il selettore per prima, e quando smette non lancia
+ * niente — il tap non fa nulla, in silenzio. Non `display: none` per la stessa
+ * ragione: e' l'altra forma di nascondere che storicamente porta con se' lo
+ * stesso guasto muto.
+ *
+ * `pointer-events: none` non e' cosmesi: e' cio' che lo tiene fuori da
+ * `elementFromPoint`, cioe' dalla regola delle sovrapposizioni. Un rettangolo
+ * invisibile nell'angolo che intercettasse un tap sarebbe esattamente il difetto
+ * che quella regola sorveglia. */
+.filepick {
+  position: fixed;
+  inset-block-start: 0;
+  inset-inline-start: 0;
+  inline-size: 1px;
+  block-size: 1px;
+  opacity: 0;
+  pointer-events: none;
+}

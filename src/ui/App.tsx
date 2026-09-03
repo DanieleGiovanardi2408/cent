@@ -126,20 +126,19 @@ export function savedByHand(expenses: readonly Expense[], stopAt: number): numbe
 }
 
 /**
- * **La sorgente del testo di un backup e' un parametro di `App`, e oggi nessuno
- * la passa.**
+ * **La sorgente del testo di un backup e' un parametro di `App`.**
  *
  * E' il confine fra il pezzo che dipende dal dispositivo — un
  * `<input type="file">`, il suo `accept` che su iOS si risolve in UTI, un file
  * su iCloud Drive che arriva lento o non arriva — e tutto il resto del
  * ripristino, che non ci dipende: anteprima, rifiuti, conferma. Il primo si
- * verifica solo su un telefono vero; il secondo si e' verificato senza.
+ * verifica solo su un telefono vero; il secondo si verifica in suite.
  *
- * Finche' il parametro non arriva, **la voce "Ripristina da un backup" non
- * compare in Impostazioni**: e' assenza strutturale, non un bottone che non fa
- * niente. La condizione che la fa comparire e' scritta e ha un commit suo — il
- * selettore di file — e finche' non arriva questa schermata non e'
- * raggiungibile da nessun percorso dell'app.
+ * La passa `main.tsx` (`pickBackup`, in `src/app/backup-read.ts`), e da li'
+ * **la voce "Ripristina da un backup" compare in Impostazioni**. Resta
+ * facoltativa perche' l'assenza e' uno stato vero e non un ripiego: senza
+ * sorgente la voce non compare affatto — assenza strutturale, non un bottone
+ * spento che direbbe *"qui c'e' qualcosa che a te non e' concesso"*.
  */
 interface AppProps {
   readonly readBackup?: BackupReader
@@ -921,10 +920,20 @@ export function App({ readBackup }: AppProps) {
    * `import-view.ts`; qui c'e' solo la sequenza.
    */
 
-  function beginImport(): void {
-    const read = readBackup
-    // Non e' difensivo: senza sorgente la voce non esiste in Impostazioni, e
-    // questa funzione non ha nessun chiamante. Vedi `AppProps`.
+  /**
+   * **Una sequenza sola, due ingressi.**
+   *
+   * `read` e' o il selettore di file (`pickBackup`, da `main.tsx`) o la chiusura
+   * `again` di una lettura fallita, che rilegge lo stesso `File` senza riaprire
+   * niente. Hanno la stessa firma proprio perche' qui non ci sia un secondo
+   * percorso: annullamento, esito, riconciliazione e stato in ritardo sono
+   * scritti una volta e valgono per tutti e due.
+   *
+   * `undefined` non e' difensivo: e' lo stato in cui `App` non ha nessuna
+   * sorgente, e li' la voce non esiste in Impostazioni e questa funzione non ha
+   * chiamanti. Vedi `AppProps`.
+   */
+  function beginImport(read: BackupReader | undefined): void {
     if (read === undefined) return
     // Come per ogni foglio: un "Annulla" appeso a una spesa che non si sta piu'
     // guardando non deve sopravvivere dietro a una schermata piena.
@@ -938,16 +947,23 @@ export function App({ readBackup }: AppProps) {
       (result) => {
         if (importSeq.current !== mine) return
         if (result.kind === 'cancelled') setImporting(null)
-        else if (result.kind === 'unreadable') setImporting({ kind: 'unreadable' })
+        // `result.again` e non `read`: rilegge **quel** file, non riapre il
+        // selettore. E' l'unico stato in cui riprovare ha senso (ADR 026 §6f).
+        else if (result.kind === 'unreadable')
+          setImporting({ kind: 'unreadable', again: result.again })
         else setImporting(stepFromText(result.text))
       },
       // Una promessa rifiutata non e' nel contratto di `BackupReader` (ha
       // `unreadable` per quello), ma un errore che nessuno ha previsto non puo'
       // finire in un `catch` vuoto: lascerebbe la schermata su "sto leggendo"
       // per sempre, che e' il modo peggiore di fallire fra quelli disponibili.
+      // `again: read`: cio' che e' fallito e' **questa** chiamata, quindi
+      // ritentare vuol dire rifare esattamente lei. Se era il selettore, lo
+      // riapre; se era una rilettura, rilegge — in tutti e due i casi il bottone
+      // fa quello che dice.
       () => {
         if (importSeq.current !== mine) return
-        setImporting({ kind: 'unreadable' })
+        setImporting({ kind: 'unreadable', again: read })
       },
     )
   }
@@ -1599,7 +1615,7 @@ export function App({ readBackup }: AppProps) {
                  voce non compare invece di comparire spenta. Una voce spenta
                  dice "qui c'e' qualcosa che a te non e' concesso"; questa
                  funzione non esiste ancora per nessuno. */
-              onImport={readBackup === undefined ? undefined : beginImport}
+              onImport={readBackup === undefined ? undefined : () => beginImport(readBackup)}
               onReplayGuide={replayGuide}
             />
           )}
@@ -1746,7 +1762,11 @@ export function App({ readBackup }: AppProps) {
             app.data?.recurringRules ?? [],
           )}
           day={app.day}
-          onRead={beginImport}
+          /* Due azioni, non una con due etichette: `onRetry` rilegge lo stesso
+             file, `onPick` riapre il selettore. La schermata sceglie quale delle
+             due mostrare in base allo stato — e' la riparazione di ADR 026 §6f. */
+          onRetry={beginImport}
+          onPick={() => beginImport(readBackup)}
           onConfirm={applyImport}
           onClose={closeImport}
         />

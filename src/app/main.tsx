@@ -1,5 +1,6 @@
 import { render } from 'preact'
 import { App } from '../ui/App'
+import { pickBackup } from './backup-read'
 import { Install } from '../ui/Install'
 import { boot } from './boot'
 import { readDisplayContext, writesAreBlocked } from './install-gate'
@@ -71,8 +72,14 @@ const blocked = writesAreBlocked(display)
 // dimensioni: barra, lista vuota, FAB. Nessuna misura cambiera' quando i dati
 // arriveranno (CLS 0). La pagina di installazione e' gia' definitiva al primo
 // frame: non aspetta niente, perche' non legge niente.
+//
+// `pickBackup` entra da qui e non da dentro `App`: e' il pezzo che tocca il DOM
+// del sistema — `<input type="file">`, `accept`, gli UTI di iOS — e comporre e'
+// il mestiere di questo strato. Dentro `App` sarebbe una dipendenza dal
+// dispositivo in mezzo alla UI, e la stessa cucitura che i test usano per
+// inscenare un file smetterebbe di esistere.
 const root = document.getElementById('app')
-if (root) render(blocked ? <Install /> : <App />, root)
+if (root) render(blocked ? <Install /> : <App readBackup={pickBackup} />, root)
 
 // Poi il database. `boot()` ritorna subito: la prima cosa che fa e' una lettura
 // asincrona, quindi questo task finisce e il browser dipinge. Aspettare qui
