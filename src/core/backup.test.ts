@@ -52,6 +52,21 @@ function roundTrip(data: DataSet): ReturnType<typeof parseBackup> {
   return parseBackup(JSON.parse(JSON.stringify(file)))
 }
 
+/**
+ * L'archivio: le quattro liste, senza le impostazioni.
+ *
+ * E' cio' che un round-trip deve restituire **identico**. Il record
+ * `settings` no, e non e' un dettaglio che si mette da parte per comodita': e'
+ * ADR 026 §4 — meta' di quel record descrive il **telefono**, non i dati, e
+ * viaggiare dentro il file e' esattamente cio' che non deve fare. Cosa ne
+ * esce, campo per campo, sta nei due test qui sotto e in
+ * `repository.test.ts > lo stato del dispositivo non entra dal file`.
+ */
+function archivio(data: DataSet): Omit<DataSet, 'settings'> {
+  const { settings: _settings, ...rest } = data
+  return rest
+}
+
 describe('round-trip export -> import', () => {
   it('i dati escono e rientrano identici', () => {
     const originale = dataset()
@@ -59,7 +74,38 @@ describe('round-trip export -> import', () => {
     expect(preview.ok).toBe(true)
     expect(preview.issues).toEqual([])
     expect(preview.discarded).toBe(0)
-    expect(preview.data).toEqual(originale)
+    expect(preview.data).not.toBeNull()
+    expect(archivio(preview.data as DataSet)).toEqual(archivio(originale))
+  })
+
+  it('le impostazioni sono l unico record che non fa il giro intero', () => {
+    const originale: DataSet = {
+      ...dataset(),
+      settings: makeSettings({
+        theme: 'dark',
+        language: 'it',
+        onboardingCompletedAt: '2026-08-23T10:00:00.000Z',
+        lastBackupAt: '2026-08-01T09:00:00.000Z',
+      }),
+    }
+    const file = buildBackup(originale, tickingClock())
+    const preview = parseBackup(JSON.parse(JSON.stringify(file)))
+    const settings = preview.data?.settings
+
+    // Il file **contiene** i tre campi del dispositivo: e' l'export completo di
+    // un altro telefono, e buttarli via in scrittura vorrebbe dire mutilare un
+    // backup. E' in lettura che non entrano.
+    expect(file.data.settings.language).toBe('it')
+    expect(settings && 'language' in settings).toBe(false)
+    expect(settings && 'onboardingCompletedAt' in settings).toBe(false)
+    // Il tema che esce da qui e' un segnaposto: `settingsAfterImport` lo
+    // sostituisce con quello di questo telefono, e nessuno lo legge prima.
+    expect(settings?.theme).toBe('auto')
+    // E l'unico derivato: non quello del file, l'istante dell'export.
+    expect(settings?.lastBackupAt).toBe(file.exportedAt)
+    // Cio' che descrive i dati, invece, viaggia.
+    expect(settings?.weekStartsOn).toBe(1)
+    expect(settings?.schemaVersion).toBe(SCHEMA_VERSION)
   })
 
   it('sopravvivono i campi opzionali: nota, ricorrenza, cancellazione, fine budget', () => {
@@ -72,7 +118,6 @@ describe('round-trip export -> import', () => {
     expect(data?.recurringRules[0]?.anchorDay).toBe(31)
     expect(data?.recurringRules[0]?.lastMaterializedDate).toBe('2026-08-02')
     expect(data?.budgets[0]?.effectiveTo).toBe('2026-07-31')
-    expect(data?.settings.lastBackupAt).toBe('2026-08-01T09:00:00.000Z')
   })
 
   it('i campi assenti restano assenti, non diventano undefined espliciti', () => {
@@ -98,19 +143,25 @@ describe('round-trip export -> import', () => {
       recurringRules: [senzaSegnaposto as (typeof base.recurringRules)[number]],
     }
     const preview = roundTrip(data)
-    expect(preview.data).toEqual(data)
+    expect(archivio(preview.data as DataSet)).toEqual(archivio(data))
     expect('lastMaterializedDate' in (preview.data?.recurringRules[0] ?? {})).toBe(false)
   })
 
-  it('un archivio vuoto e un round-trip valido', () => {
-    const vuoto: DataSet = {
+  it('un archivio senza spese e un round-trip valido: e l export di chi ha appena installato', () => {
+    // **Zero spese e' uno stato che l'app produce**, quindi entra. Zero
+    // categorie no, e il confine sta un test piu' sotto: e' la meta' del
+    // criterio "l'import accetta solo stati che l'app tiene" che dice **si'**.
+    const appenaInstallata: DataSet = {
       expenses: [],
-      categories: [],
+      categories: [makeCategory({ id: 'cat-1', name: 'Spesa' })],
       recurringRules: [],
       budgets: [],
       settings: makeSettings(),
     }
-    expect(roundTrip(vuoto).data).toEqual(vuoto)
+    const preview = roundTrip(appenaInstallata)
+    expect(preview.ok).toBe(true)
+    expect(archivio(preview.data as DataSet)).toEqual(archivio(appenaInstallata))
+    expect(preview.counts.expenses).toBe(0)
   })
 
   it('l importo resta un intero, non passa mai da un float', () => {
@@ -131,16 +182,54 @@ describe('round-trip export -> import', () => {
 })
 
 describe('anteprima e conteggi', () => {
-  it('conta i record per sezione', () => {
+  it('conta cio che l utente vedra, non i record del file', () => {
+    // Tre spese nel file, una delle quali e' una lapide: lo Storico ne mostra
+    // **due**. Sul primo backup reale la differenza era 6 contro 3, cioe' il
+    // doppio, davanti a una conferma che sostituisce l'archivio.
     const preview = roundTrip(dataset())
+    expect(preview.data?.expenses).toHaveLength(3)
     expect(preview.counts).toEqual({
-      expenses: 3,
+      expenses: 2,
       categories: 1,
       recurringRules: 1,
       budgets: 2,
       settings: 1,
     })
     expect(preview.fromSchemaVersion).toBe(SCHEMA_VERSION)
+  })
+
+  it('le categorie archiviate si contano: sono in archivio, non cancellate', () => {
+    // Il confine non e' "attiva" ma "si vede da qualche parte". Un'archiviata
+    // resta su ogni spesa che l'ha usata, quindi Storico e Statistiche
+    // continuano a mostrarla: contarla e' dire il vero. Una lapide, no.
+    const data: DataSet = {
+      ...dataset(),
+      categories: [
+        makeCategory({ id: 'cat-1', name: 'Spesa' }),
+        makeCategory({ id: 'cat-2', name: 'Vecchia', archived: true }),
+      ],
+    }
+    expect(roundTrip(data).counts.categories).toBe(2)
+  })
+
+  it('l istante dell export arriva all anteprima invece di essere buttato via', () => {
+    // E' il fatto su cui si decide se ripristinare, e finiva nel file senza che
+    // nessuno lo rileggesse.
+    const file = buildBackup(dataset(), tickingClock())
+    const preview = parseBackup(JSON.parse(JSON.stringify(file)))
+    expect(preview.exportedAt).toBe(file.exportedAt)
+  })
+
+  it('senza istante nel file la data e null, non una inventata', () => {
+    const file = JSON.parse(JSON.stringify(buildBackup(dataset(), tickingClock())))
+    delete file.exportedAt
+    const preview = parseBackup(file)
+    expect(preview.ok).toBe(true)
+    expect(preview.exportedAt).toBeNull()
+    // E allora nemmeno `lastBackupAt` si inventa: senza data il banner del
+    // backup insiste, che e' il verso in cui un indicatore di sicurezza deve
+    // sbagliare.
+    expect(preview.data && 'lastBackupAt' in preview.data.settings).toBe(false)
   })
 })
 
@@ -161,13 +250,38 @@ describe('file rotti: si racconta il problema, non si esplode', () => {
     expect(preview.issues[0]?.severity).toBe('error')
   })
 
-  it('rifiuta un file scritto da una versione futura', () => {
+  it('rifiuta un file scritto da una versione futura, e ne dichiara la versione', () => {
     const preview = parseBackup({ ...valido(), schemaVersion: SCHEMA_VERSION + 5 })
     expect(preview.ok).toBe(false)
     expect(preview.issues[0]?.message).toContain('Aggiorna')
+    // **Il campo dice il numero che il file dichiarava.** Prima ogni rifiuto
+    // lo azzerava, e "aggiorna l'app" e "questo non e' un backup" — due
+    // messaggi opposti — avevano lo stesso `null`. Adesso la distinzione si
+    // deriva senza nessun campo nuovo: `> SCHEMA_VERSION` su un rifiuto vuol
+    // dire "viene da un'app piu' nuova".
+    expect(preview.fromSchemaVersion).toBe(SCHEMA_VERSION + 5)
+    expect(preview.fromSchemaVersion as number).toBeGreaterThan(SCHEMA_VERSION)
   })
 
-  it('scarta la singola spesa malformata e tiene le altre', () => {
+  it('null resta il valore di chi non dichiara niente, cioe di cio che non e un backup', () => {
+    for (const nonBackup of [null, 42, 'ciao', {}, { app: 'cent' }, { app: 'cent', data: {} }]) {
+      const preview = parseBackup(nonBackup)
+      expect(preview.ok).toBe(false)
+      expect(preview.fromSchemaVersion).toBeNull()
+    }
+  })
+
+  it('una spesa illeggibile non si scarta in silenzio: il file non si importa, e si dice dove', () => {
+    // **Questo test diceva il contrario**, e diceva `ok: true` con due issue
+    // `error` accanto. Il cambio non e' una preferenza: l'import **sostituisce
+    // tutto**, quindi un "va bene" su un file monco scambia un archivio intero
+    // con una copia mutilata, e i record che mancano non li rivede piu'
+    // nessuno. `ok` significa "nessuna issue di severita' error", altrimenti
+    // la severita' non decide niente.
+    //
+    // Il costo e' dichiarato: **una spesa rotta su cento ferma tutto il file**.
+    // Il rimedio ce l'ha in mano chi importa, ed e' il motivo per cui la issue
+    // nomina il punto esatto invece di dire "file non valido".
     const file = valido()
     const data = file['data'] as Record<string, unknown[]>
     data['expenses'] = [
@@ -176,21 +290,55 @@ describe('file rotti: si racconta il problema, non si esplode', () => {
       { id: 'rotta2', date: '2026-08-01', amountCents: 12.5, categoryId: 'cat-1' },
     ]
     const preview = parseBackup(file)
-    expect(preview.ok).toBe(true)
-    expect(preview.counts.expenses).toBe(3)
+    expect(preview.ok).toBe(false)
+    expect(preview.data).toBeNull()
+    // Niente prima/dopo per un import che non avverra'.
+    expect(preview.counts.expenses).toBe(0)
+    // Quanto e' grave: due record, non "questo non e' un backup".
     expect(preview.discarded).toBe(2)
     expect(preview.issues.filter((i) => i.severity === 'error')).toHaveLength(2)
     expect(preview.issues[0]?.path).toBe('expenses[3].date')
   })
 
   it('segnala le spese orfane di categoria ma le importa lo stesso', () => {
+    // La categoria che manca e' **un'altra**, non tutte: un file senza
+    // nessuna categoria e' un caso diverso, e ha il suo test.
     const file = valido()
-    const data = file['data'] as Record<string, unknown>
-    data['categories'] = []
+    const data = file['data'] as Record<string, unknown[]>
+    data['expenses'] = [
+      ...(data['expenses'] as unknown[]),
+      { id: 'orfana', date: '2026-08-04', amountCents: 300, categoryId: 'sparita' },
+    ]
     const preview = parseBackup(file)
     expect(preview.ok).toBe(true)
     expect(preview.counts.expenses).toBe(3)
     expect(preview.issues.some((i) => i.severity === 'warning' && i.path === 'expenses')).toBe(true)
+  })
+
+  it('un file senza nessuna categoria non si importa: e uno stato che l app non tiene', () => {
+    // 54 byte che svuotavano l'archivio. La regola non e' "rifiuta i backup
+    // vuoti": zero spese entra (l'export di chi ha appena installato), zero
+    // categorie no — `openRepository` risemina la griglia ogni volta che la
+    // trova vuota, quindi importare questo file scriverebbe uno stato che
+    // l'app disfa da sola alla riapertura, lasciando nel frattempo una
+    // schermata da cui non si puo' inserire niente.
+    const file = valido()
+    ;(file['data'] as Record<string, unknown>)['categories'] = []
+    const preview = parseBackup(file)
+    expect(preview.ok).toBe(false)
+    expect(preview.data).toBeNull()
+    expect(preview.issues.some((i) => i.severity === 'error' && i.path === 'categories')).toBe(true)
+  })
+
+  it('il minimo indispensabile non passa piu: senza app non e un backup di Cent', () => {
+    // Prima `{ schemaVersion, data: {} }` dava `ok: true`. Rompe la
+    // retrocompatibilita' con **zero file reali**: ogni file uscito da
+    // `buildBackup` porta `app: 'cent'`.
+    const preview = parseBackup({ schemaVersion: SCHEMA_VERSION, data: {} })
+    expect(preview.ok).toBe(false)
+    expect(preview.issues[0]?.path).toBe('file.app')
+    // E un backup vero, che quel campo ce l'ha, continua a passare.
+    expect(parseBackup(valido()).ok).toBe(true)
   })
 
   it('senza impostazioni usa quelle di default e lo dice', () => {
@@ -218,7 +366,7 @@ describe('file rotti: si racconta il problema, non si esplode', () => {
     const first = data['expenses']![0] as Record<string, unknown>
     data['expenses'] = [...(data['expenses'] as unknown[]), { ...first, amountCents: 999 }]
     const preview = parseBackup(file)
-    expect(preview.counts.expenses).toBe(3)
+    expect(preview.counts.expenses).toBe(2)
     expect(preview.data?.expenses.find((e) => e.id === 'e1')?.amountCents).toBe(999)
     expect(preview.issues.some((i) => i.message.includes('id duplicato'))).toBe(true)
   })
@@ -230,7 +378,7 @@ describe('file rotti: si racconta il problema, non si esplode', () => {
     const preview = parseBackup(file)
     expect(preview.ok).toBe(true)
     expect(preview.counts.budgets).toBe(0)
-    expect(preview.counts.expenses).toBe(3)
+    expect(preview.counts.expenses).toBe(2)
   })
 })
 
@@ -258,8 +406,9 @@ describe('orario: opzionale, validato, e se e sbagliato si butta', () => {
     for (const brutto of [1_440, -1, 12.5, NaN, '1240', true, {}]) {
       const preview = conOrario(brutto)
       expect(preview.ok).toBe(true)
-      // La spesa c'e' tutta: importo, data, categoria, nota.
-      expect(preview.counts.expenses).toBe(3)
+      // La spesa c'e' tutta: importo, data, categoria, nota. Due e il conto
+      // delle vive, la terza del fixture e' una lapide.
+      expect(preview.counts.expenses).toBe(2)
       expect(preview.discarded).toBe(0)
       expect(preview.data?.expenses[0]?.amountCents).toBe(1_250)
       expect(preview.data?.expenses[0]?.note).toBe('Caffe e brioche')
@@ -326,8 +475,21 @@ describe('un backup della versione 1 entra nella versione corrente', () => {
   })
 })
 
-describe('lingua e guida: due campi opzionali, e l assenza e un dato', () => {
-  it('una lingua scelta fa il giro e torna identica', () => {
+/**
+ * **Questo blocco diceva il contrario.** Si chiamava *"lingua e guida: due
+ * campi opzionali, e l'assenza e' un dato"* e il suo primo test si chiamava
+ * *"una lingua scelta fa il giro e torna identica"*: sorvegliava che la lingua
+ * di **un altro telefono** entrasse da un file. E' il difetto che ADR 026 §4
+ * chiude, e il test che lo difendeva e' l'artefatto che domani ne
+ * giustificherebbe il ritorno.
+ *
+ * L'assenza resta un dato — quella parte era giusta, ed e' il motivo per cui
+ * questi campi non vengono mai riempiti con un valore di ripiego. Ma la
+ * decisione su quale valore vale la prende `settingsAfterImport` guardando
+ * **questo** dispositivo, non il file.
+ */
+describe('lingua e guida non entrano dal file: sono di questo telefono', () => {
+  it('un file che le porta non le fa entrare nell anteprima', () => {
     const data: DataSet = {
       ...dataset(),
       settings: makeSettings({
@@ -336,30 +498,24 @@ describe('lingua e guida: due campi opzionali, e l assenza e un dato', () => {
       }),
     }
     const preview = parseBackup(JSON.parse(JSON.stringify(buildBackup(data, tickingClock()))))
-
-    expect(preview.ok).toBe(true)
-    expect(preview.data?.settings.language).toBe('en')
-    expect(preview.data?.settings.onboardingCompletedAt).toBe('2026-08-23T10:00:00.000Z')
-  })
-
-  it('un file senza i due campi li lascia assenti, non li inventa', () => {
-    const preview = parseBackup(
-      JSON.parse(JSON.stringify(buildBackup(dataset(), tickingClock()))),
-    )
     const settings = preview.data?.settings
 
+    expect(preview.ok).toBe(true)
     expect(settings && 'language' in settings).toBe(false)
     expect(settings && 'onboardingCompletedAt' in settings).toBe(false)
   })
 
-  it('una lingua sconosciuta non viene sostituita da una a caso: torna assente', () => {
+  it('nemmeno una lingua sconosciuta: non c e piu nessuna porta da sorvegliare', () => {
+    // Prima qui c'era un avviso su `settings.language`, e con lui il guardiano
+    // `isLanguage`. Tolta la porta, il guardiano e' uscito con lei: una
+    // funzione si spedisce insieme al suo chiamante.
     const file = JSON.parse(JSON.stringify(buildBackup(dataset(), tickingClock())))
     file.data.settings.language = 'de'
     const preview = parseBackup(file)
-    const settings = preview.data?.settings
 
-    expect(settings && 'language' in settings).toBe(false)
-    expect(preview.issues.some((i) => i.path === 'settings.language')).toBe(true)
+    expect(preview.ok).toBe(true)
+    expect(preview.data && 'language' in preview.data.settings).toBe(false)
+    expect(preview.issues.some((i) => i.path === 'settings.language')).toBe(false)
   })
 })
 

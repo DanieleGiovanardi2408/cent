@@ -21,6 +21,7 @@ import type { IsoDate } from './date'
 import { buildDefaultSettings } from './defaults'
 import { SCHEMA_VERSION, SchemaTooNewError, emptyRawDataSet, migrateRawData } from './schema'
 import type { RawDataSet, RawRecord } from './schema'
+import { isLive } from './stats'
 import type {
   Budget,
   Category,
@@ -31,7 +32,7 @@ import type {
   StoreName,
   Timestamp,
 } from './types'
-import { SETTINGS_ID, isLanguage, nowTimestamp } from './types'
+import { SETTINGS_ID, nowTimestamp } from './types'
 
 export interface BackupFile {
   readonly app: 'cent'
@@ -71,16 +72,79 @@ export interface ImportIssue {
 }
 
 export interface ImportPreview {
-  /** `false` = il file non e' utilizzabile, `data` e' `null`. */
+  /**
+   * **Nessuna issue di severita' `error`**, e nient'altro. Non e' un giudizio
+   * separato dalle issue: e' la loro lettura, ed e' l'unica che le rende
+   * vincolanti. Un `ok: true` accanto a un `error` significherebbe che la
+   * severita' non decide niente.
+   *
+   * `false` = il file non si importa: `data` e' `null` e `counts` e' a zero.
+   */
   readonly ok: boolean
   readonly data: DataSet | null
-  /** Record validi per store, da mostrare nell'anteprima. */
+  /**
+   * **Cio' che l'utente vedra' dopo l'import**, non i record del file.
+   *
+   * Non e' un dettaglio di presentazione: e' il numero di un prima/dopo davanti
+   * a una conferma distruttiva, e ADR 026 §6c lo mette li'. Le due liste
+   * divergono su una cosa sola, e vale la pena averla scritta:
+   *
+   * - **le spese** si contano **vive** (`isLive`): una lapide non si vede in
+   *   nessuna schermata. Sul primo backup reale questo campo diceva **6 dove
+   *   lo Storico ne mostra 3**. Le lapidi restano dentro `data` — devono
+   *   sopravvivere al round-trip, altrimenti un import le resusciterebbe — e
+   *   quindi `counts.expenses` e' minore di `data.expenses.length` **di
+   *   proposito**;
+   * - **le categorie** si contano **tutte, archiviate comprese**, ed e' lo
+   *   stesso criterio, non un'eccezione: una categoria archiviata sparisce
+   *   dalla griglia ma resta su ogni spesa che l'ha usata, quindi Storico e
+   *   Statistiche continuano a mostrarla. Il confine non e' "attiva" — che e'
+   *   una proprieta' della griglia — ma "si vede da qualche parte". La lapide
+   *   sta da zero parti; l'archiviata da due. Contare solo le attive
+   *   mentirebbe **per difetto** proprio nel caso in cui il file ne porta piu'
+   *   di otto, cioe' quando `capActiveCategories` ne archivia il surplus e
+   *   l'utente le ritroverebbe tutte in Impostazioni.
+   *
+   * Regole e budget non hanno ne' lapidi ne' archivio: si contano tutti.
+   */
   readonly counts: Readonly<Record<StoreName, number>>
-  /** Record scartati perche' irrecuperabili. */
+  /**
+   * Record scartati perche' irrecuperabili. Con `ok: true` e' sempre `0` — uno
+   * scarto e' una issue `error` — quindi qui vive per dire **quanto** e' grave
+   * un rifiuto: 2 record illeggibili non e' "questo non e' un backup".
+   */
   readonly discarded: number
   readonly issues: readonly ImportIssue[]
-  /** Versione dichiarata dal file, prima delle migrazioni. */
+  /**
+   * Versione dichiarata dal file, prima delle migrazioni. `null` quando il file
+   * non ne dichiara una leggibile — cioe' quando **non e' un backup**.
+   *
+   * Vale anche sui rifiuti, ed e' cambiato apposta: prima ogni rifiuto la
+   * azzerava, **compreso quello di un file scritto da una versione futura**,
+   * dove il numero era noto e non c'era niente da nascondere. Quel `null` e'
+   * il campo che ADR 026 §5 chiama "non e' un ramo": *"aggiorna l'app"* e
+   * *"questo non e' un backup"* sono messaggi opposti e avevano lo stesso
+   * valore qui.
+   *
+   * Adesso la distinzione **si deriva** senza nessun campo nuovo:
+   * `fromSchemaVersion > SCHEMA_VERSION` su un `ok: false` significa "il file
+   * viene da un'app piu' nuova di questa", e `null` significa "non c'era niente
+   * da leggere". Resta vero che **la UI non ramifica sul solo `null`**: il
+   * messaggio da mostrare sta nell'issue.
+   */
   readonly fromSchemaVersion: number | null
+  /**
+   * L'istante in cui il file e' stato esportato, come lo dichiara il file.
+   *
+   * **E' il fatto su cui si decide se ripristinare** — la data entra dentro la
+   * frase di conferma (ADR 026 §6) — ed era l'unico che `buildBackup` scriveva
+   * e l'anteprima buttava via.
+   *
+   * `null` quando il file non ne porta uno leggibile, e allora la frase si
+   * scrive **senza data**: una data inventata qui sarebbe l'unico numero della
+   * schermata che nessuno puo' verificare.
+   */
+  readonly exportedAt: Timestamp | null
 }
 
 class Collector {
@@ -308,40 +372,101 @@ function parseBudget(raw: RawRecord, path: string, c: Collector): Budget | null 
   }
 }
 
-function parseSettings(raw: RawRecord | undefined, c: Collector): Settings {
+/**
+ * Le impostazioni **che entrano dal file**, che sono meno di quelle che il file
+ * contiene.
+ *
+ * CLAUDE.md divide `Settings` in due da giorni: `language`, `theme`,
+ * `onboardingCompletedAt` (e `createdAt`, che dice quando l'app e' stata
+ * installata **qui**) descrivono il dispositivo; `weekStartsOn` e
+ * `schemaVersion` descrivono i dati. Qui si smette di leggere la prima meta'.
+ *
+ * **Non si legge invece di leggere-e-ignorare** perche' `data` di
+ * `ImportPreview` e' esattamente cio' che viene passato a
+ * `Repository.importBackup`: un `theme: 'dark'` letto dal file e mai applicato
+ * sarebbe un valore che dice cosa succedera' e si sbaglia, e il primo che lo
+ * mostrasse nell'anteprima mostrerebbe una cosa falsa.
+ *
+ * Il `theme` che esce da qui e' quindi un **segnaposto**: sta nell'oggetto
+ * perche' `Settings.theme` e' obbligatorio, non perche' qualcuno lo legga —
+ * `settingsAfterImport` lo sostituisce con quello di questo telefono. Nessun
+ * altro chiamante esiste: `parseBackup` non applica niente.
+ *
+ * `lastBackupAt` non si legge dal file per un'altra ragione ancora: non e'
+ * conservato **ne'** importato, e' **derivato** dall'`exportedAt` del file.
+ * Vedi `settingsAfterImport`.
+ */
+function parseSettings(raw: RawRecord | undefined, exportedAt: Timestamp | null, c: Collector): Settings {
   const fallback = buildDefaultSettings()
+  const derived = exportedAt === null ? {} : { lastBackupAt: exportedAt }
   if (raw === undefined) {
     c.warn('settings', 'impostazioni assenti nel file: si usano quelle di default')
-    return fallback
+    return { ...fallback, ...derived }
   }
-  const theme = raw['theme']
-  const lastBackupAt = optionalStr(raw['lastBackupAt'])
   if (raw['weekStartsOn'] !== undefined && raw['weekStartsOn'] !== 1) {
     c.warn('settings.weekStartsOn', 'la settimana in questa app inizia sempre di lunedi')
   }
-  // Una lingua sconosciuta non entra e non viene sostituita da una a caso: il
-  // campo torna assente, che e' il modo che il modello ha per dire "nessuno
-  // l'ha scelta", e la UI la ridecide dall'ambiente.
-  const rawLanguage = raw['language']
-  const language = isLanguage(rawLanguage) ? rawLanguage : undefined
-  if (rawLanguage !== undefined && rawLanguage !== null && language === undefined) {
-    c.warn('settings.language', `lingua sconosciuta (${String(rawLanguage)}): la sceglie l app`)
-  }
-  const onboardingCompletedAt = optionalStr(raw['onboardingCompletedAt'])
   return {
     id: SETTINGS_ID,
     createdAt: typeof raw['createdAt'] === 'string' ? raw['createdAt'] : fallback.createdAt,
     updatedAt: typeof raw['updatedAt'] === 'string' ? raw['updatedAt'] : fallback.updatedAt,
     weekStartsOn: 1,
-    theme: theme === 'light' || theme === 'dark' ? theme : 'auto',
+    theme: fallback.theme,
     // La versione la decide questa app, non il file: i dati sono appena passati
     // dalle migrazioni e sono nella forma corrente qualunque cosa dica il file.
     schemaVersion: SCHEMA_VERSION,
-    ...(lastBackupAt !== undefined && lastBackupAt !== false ? { lastBackupAt } : {}),
-    ...(language !== undefined ? { language } : {}),
-    ...(onboardingCompletedAt !== undefined && onboardingCompletedAt !== false
-      ? { onboardingCompletedAt }
+    ...derived,
+  }
+}
+
+/**
+ * Le impostazioni da scrivere quando un import viene **applicato**: il
+ * dispositivo da una parte, i dati dall'altra.
+ *
+ * Sta qui e non dentro `Repository.importBackup` perche' e' la seconda meta'
+ * di `parseSettings` — una legge il file sapendo cosa non prendere, l'altra
+ * scrive sapendo cosa conservare — e leggerle a due file di distanza vorrebbe
+ * dire tenere la divisione a mente. Ma **si applica solo qui**, dove il
+ * dispositivo esiste: `parseBackup` e' pura e non sa niente di questo telefono.
+ *
+ * - `theme`, `language`, `onboardingCompletedAt`, `createdAt`: di `device`.
+ *   Chi ha appena scelto un file da ripristinare ha dimostrato di non essere
+ *   alle prime armi, e rimettergli la guida davanti ai dati appena importati
+ *   sarebbe il modo peggiore di accoglierlo.
+ * - `weekStartsOn` e `schemaVersion`: di `imported`. Il primo perche'
+ *   cambiarlo **reinterpreta ogni confine di periodo dello storico**, quindi
+ *   descrive i dati (oggi vale 1 per tipo: la riga conta il giorno in cui quel
+ *   vincolo cadesse); il secondo perche' `parseSettings` l'ha gia' portato
+ *   alla versione corrente.
+ * - `lastBackupAt`: **derivato**. Dopo un ripristino l'ultimo backup e' proprio
+ *   il file appena importato, e quello e' il suo `exportedAt`. Se il file non
+ *   ne dichiarava uno, il campo esce **assente** invece di conservare quello
+ *   del dispositivo: quella data parlava di un archivio che non c'e' piu', e un
+ *   indicatore di sicurezza che puo' sbagliare deve sbagliare **verso
+ *   l'allarme**.
+ * - `updatedAt`: `writtenAt`. Questo record non viene ne' dal file ne' dal
+ *   disco — e' il loro innesto — e l'unico istante vero e' quello in cui viene
+ *   scritto. Arriva da fuori gia' generato, come ogni altro timestamp che
+ *   attraversa il confine della persistenza, cosi' un ritentativo riscrive lo
+ *   stesso record invece di spostarne la data.
+ */
+export function settingsAfterImport(
+  device: Settings,
+  imported: Settings,
+  writtenAt: Timestamp,
+): Settings {
+  return {
+    id: SETTINGS_ID,
+    createdAt: device.createdAt,
+    updatedAt: writtenAt,
+    theme: device.theme,
+    ...(device.language !== undefined ? { language: device.language } : {}),
+    ...(device.onboardingCompletedAt !== undefined
+      ? { onboardingCompletedAt: device.onboardingCompletedAt }
       : {}),
+    weekStartsOn: imported.weekStartsOn,
+    schemaVersion: imported.schemaVersion,
+    ...(imported.lastBackupAt !== undefined ? { lastBackupAt: imported.lastBackupAt } : {}),
   }
 }
 
@@ -431,26 +556,49 @@ const EMPTY_COUNTS: Readonly<Record<StoreName, number>> = {
  */
 export function parseBackup(input: unknown): ImportPreview {
   const c = new Collector()
+  /** Quello che si e' riusciti a leggere dell'intestazione, rifiuto compreso. */
+  let declared: number | null = null
+  let exportedAt: Timestamp | null = null
+  const refused = (discarded: number): ImportPreview => ({
+    ok: false,
+    data: null,
+    // A zero, e non i record letti: `counts` dice **cosa ci sara' dopo**, e
+    // dopo un rifiuto non c'e' nessun dopo. Lasciarli veri inviterebbe a
+    // disegnare il prima/dopo di un import che non avverra'.
+    counts: EMPTY_COUNTS,
+    discarded,
+    issues: c.issues,
+    fromSchemaVersion: declared,
+    exportedAt,
+  })
   const reject = (path: string, message: string): ImportPreview => {
     c.error(path, message)
-    return {
-      ok: false,
-      data: null,
-      counts: EMPTY_COUNTS,
-      discarded: 0,
-      issues: c.issues,
-      fromSchemaVersion: null,
-    }
+    return refused(0)
   }
 
   if (!isRecord(input)) return reject('file', 'il contenuto non e un oggetto JSON')
-  if (input['app'] !== undefined && input['app'] !== 'cent') {
+  exportedAt = str(input['exportedAt'])
+  // **`app` assente non passa piu'.** Prima passava, e un `{schemaVersion, data}`
+  // di 54 byte bastava a svuotare l'archivio. Rompe la retrocompatibilita' con
+  // **zero file reali**: ogni file uscito da `buildBackup` ha `app: 'cent'`
+  // dalla prima riga di questa funzione, quindi non esiste un backup di
+  // quest'app che questa riga rifiuti. Rifiuta i JSON di qualcun altro, che e'
+  // cio' che deve fare.
+  //
+  // I due messaggi sono separati perche' sono due situazioni diverse per chi
+  // legge: un file di un'altra app dice il nome di quell'app, un file che non
+  // dice niente non e' un backup.
+  if (input['app'] === undefined) {
+    return reject('file.app', 'questo file non dice di essere un backup di Cent')
+  }
+  if (input['app'] !== 'cent') {
     return reject('file.app', `questo file dice di appartenere a "${String(input['app'])}"`)
   }
-  const declared = input['schemaVersion']
-  if (typeof declared !== 'number' || !Number.isInteger(declared) || declared < 1) {
+  const rawVersion = input['schemaVersion']
+  if (typeof rawVersion !== 'number' || !Number.isInteger(rawVersion) || rawVersion < 1) {
     return reject('file.schemaVersion', 'versione dello schema assente o non valida')
   }
+  declared = rawVersion
   const body = input['data']
   if (!isRecord(body)) return reject('file.data', 'sezione dati assente')
 
@@ -474,9 +622,36 @@ export function parseBackup(input: unknown): ImportPreview {
   const categories = parseList(migrated.categories, 'categories', parseCategory, c)
   const recurringRules = parseList(migrated.recurringRules, 'recurringRules', parseRule, c)
   const budgets = parseList(migrated.budgets, 'budgets', parseBudget, c)
-  const settings = parseSettings(migrated.settings[0], c)
+  const settings = parseSettings(migrated.settings[0], exportedAt, c)
 
   const cappedCategories = capActiveCategories(categories.records, c)
+
+  // **Zero categorie non e' uno stato in cui quest'app puo' vivere**, e la
+  // regola non e' "rifiuta i backup vuoti" — quella sarebbe una preferenza. Si
+  // deriva: l'import accetta solo stati che l'app **tiene**. Zero spese lo e'
+  // (l'export di un'installazione appena aperta); zero categorie no, perche'
+  // `openRepository` semina la griglia ogni volta che la trova vuota, quindi
+  // importare questo file scriverebbe uno stato che l'app disfa da sola alla
+  // riapertura successiva — e nel frattempo lascerebbe una griglia da cui non
+  // si puo' inserire nessuna spesa.
+  //
+  // **Il criterio cade sulle categorie, e non l'ha scelto nessuno.**
+  //
+  // Nota sulla derivazione, perche' ADR 026 la fa piu' corta di com'e': lo
+  // dice "non producibile, il tetto di otto attive non permette di
+  // archiviarle tutte". Archiviarle tutte davvero non si puo' — ma
+  // `planCategoryDeletion` non ha nessun pavimento, e su un'installazione
+  // nuova (nessuna spesa, nessuna regola) le otto si **cancellano** una per
+  // una. Lo stato e' quindi producibile *dentro una sessione*; quello che non
+  // e' producibile e' **sopravviverci a una riapertura**. La riga sotto e la
+  // semina di `openRepository` dicono la stessa cosa da due porte.
+  if (cappedCategories.length === 0) {
+    c.error(
+      'categories',
+      'il file non contiene nessuna categoria: senza griglia non si puo inserire nessuna spesa',
+    )
+  }
+
   const knownCategories = new Set(cappedCategories.map((cat) => cat.id))
   const orphans = expenses.records.filter((e) => !knownCategories.has(e.categoryId)).length
   if (orphans > 0) {
@@ -485,6 +660,26 @@ export function parseBackup(input: unknown): ImportPreview {
       `${orphans} spese fanno riferimento a una categoria che non e nel file: vengono importate lo stesso`,
     )
   }
+
+  const discarded =
+    expenses.discarded + categories.discarded + recurringRules.discarded + budgets.discarded
+
+  // ## L'unica riga che decide `ok`
+  //
+  // Prima `ok` era `true` per costruzione appena il file aveva una forma: un
+  // backup in cui **tutte** le spese erano illeggibili tornava
+  // `ok: true, counts.expenses: 0, discarded: 2` con due issue `error`
+  // accanto. La severita' esisteva e non decideva niente.
+  //
+  // Il costo di questa riga e' dichiarato: **una sola spesa illeggibile su
+  // cento rende il file non importabile**, e non e' un effetto collaterale.
+  // L'import sostituisce tutto, quindi accettare un file monco vuol dire
+  // scambiare un archivio intero con una copia mutilata, dopo un "va bene".
+  // Il rimedio esiste ed e' nelle mani di chi importa: la issue nomina il
+  // punto esatto (`expenses[12].amountCents`) dentro un file di testo che ha
+  // gia' in mano — e' l'unica forma di rifiuto che l'utente puo' verificare.
+  const fatal = c.issues.some((issue) => issue.severity === 'error')
+  if (fatal) return refused(discarded)
 
   return {
     ok: true,
@@ -496,15 +691,18 @@ export function parseBackup(input: unknown): ImportPreview {
       settings,
     },
     counts: {
-      expenses: expenses.records.length,
+      // Vive, non tutte: vedi `ImportPreview.counts`. Le lapidi restano dentro
+      // `data` — un import che le perdesse resusciterebbe cio' che l'utente ha
+      // cancellato — e non entrano in nessun numero a schermo.
+      expenses: expenses.records.filter(isLive).length,
       categories: cappedCategories.length,
       recurringRules: recurringRules.records.length,
       budgets: budgets.records.length,
       settings: 1,
     },
-    discarded:
-      expenses.discarded + categories.discarded + recurringRules.discarded + budgets.discarded,
+    discarded,
     issues: c.issues,
     fromSchemaVersion: declared,
+    exportedAt,
   }
 }

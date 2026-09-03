@@ -215,9 +215,19 @@ export type ThemePreference = 'light' | 'dark' | 'auto'
 /** Le due lingue dell'app. Non e' una stringa qualsiasi: e' un insieme chiuso. */
 export type Language = 'it' | 'en'
 
-export function isLanguage(value: unknown): value is Language {
-  return value === 'it' || value === 'en'
-}
+/*
+ * Nota su una funzione che non c'e' piu': `isLanguage`.
+ *
+ * Aveva un chiamante solo, `parseSettings`, e serviva a non far entrare dal
+ * file una lingua sconosciuta. Da ADR 026 §4 **la lingua dal file non entra
+ * affatto** — e' stato del dispositivo — quindi il guardiano e' rimasto senza
+ * porta da sorvegliare: una funzione si spedisce insieme al suo chiamante, o
+ * non si spedisce. Stessa dottrina di `expensesInRange` e `planBudgetChange`.
+ *
+ * Non serve altrove: `Language` e' un'unione chiusa di due letterali e ogni
+ * altro punto che la scrive — `SettingsPatch.language` in Impostazioni — la
+ * passa gia' tipata. L'unico ingresso non tipato era il file.
+ */
 
 /** Record singolo: esiste una sola riga, con questo id. */
 export const SETTINGS_ID = 'settings'

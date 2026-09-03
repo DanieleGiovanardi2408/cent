@@ -94,7 +94,7 @@ import { materializeRecurring } from './recurrence'
 import type { MaterializeResult } from './recurrence'
 import { planResolvedBudgetChange } from './budget'
 import type { BudgetChange, BudgetChangeRequest } from './budget'
-import { buildBackup } from './backup'
+import { buildBackup, settingsAfterImport } from './backup'
 import type { BackupFile } from './backup'
 import { createObservable } from './store'
 import type {
@@ -706,6 +706,13 @@ export interface Repository {
    * e' lo stato letto dal disco, non dal mirror. Chi disegna il ripristino usa
    * quella; questa resta perche' un Annulla che costa zero letture, nell'istante
    * in cui il toast e' ancora a schermo, e' un'altra cosa.
+   *
+   * ## "Tutto" e' l'archivio, non il telefono
+   *
+   * `data.settings` non viene scritto com'e': tema, lingua, guida gia' vista e
+   * data di installazione restano quelli di **questo** dispositivo, e
+   * `lastBackupAt` diventa l'`exportedAt` del file. Vedi `settingsAfterImport`
+   * per la divisione e per il motivo di ciascuno dei quattro.
    */
   importBackup(data: DataSet): Promise<BackupFile>
 
@@ -825,17 +832,43 @@ export async function openRepository(
   let settings = loaded.settings
   let categories = loaded.categories
 
+  // Primo avvio: le impostazioni e le categorie di default nascono qui, in una
+  // sola transazione, cosi' un'app che muore subito dopo riparte gia' pronta.
+  //
+  // I nomi arrivano da fuori gia' risolti (`options.defaultCategoryNames`).
+  // Qui dentro non si sceglie nessuna lingua: chi apre ha gia' scelto, ed e'
+  // il solo modo perche' "le categorie si creano dopo che la lingua e'
+  // risolta" non dipenda da chi si ricorda di farlo.
+  //
+  // ## Le due condizioni sono separate, e prima erano una sola
+  //
+  // Era `if (settings === null) { semina tutto }`: **con le impostazioni gia'
+  // scritte e zero categorie, la griglia non veniva piu' seminata mai**, e
+  // l'app restava in uno stato da cui non si puo' inserire nessuna spesa —
+  // nessuna schermata sa uscirne, perche' l'editor delle categorie e' in
+  // Impostazioni ma il principio guida n.1 e' in Home.
+  //
+  // Non e' uno stato che serve un import per raggiungere, ed e' per questo che
+  // la riparazione sta qui e non all'ingresso dell'import:
+  // `planCategoryDeletion` non ha nessun pavimento — permette di cancellare
+  // una categoria che nessuna spesa viva e nessuna regola nomina — quindi su
+  // un'installazione nuova le otto si cancellano una per una senza barare.
+  // L'import lo ha solo reso **facile**: 54 byte.
+  //
+  // La griglia si riempie con le stesse otto di sempre, non con le ultime
+  // cancellate: ricostruirle vorrebbe dire tenere una lapide per categoria, e
+  // qui l'unica cosa da garantire e' che l'app sia usabile.
+  const seed: { settings?: Settings; categories?: readonly Category[] } = {}
   if (settings === null) {
-    // Primo avvio: le impostazioni e le categorie di default nascono qui, in una
-    // sola transazione, cosi' un'app che muore subito dopo riparte gia' pronta.
-    //
-    // I nomi arrivano da fuori gia' risolti (`options.defaultCategoryNames`).
-    // Qui dentro non si sceglie nessuna lingua: chi apre ha gia' scelto, ed e'
-    // il solo modo perche' "le categorie si creano dopo che la lingua e'
-    // risolta" non dipenda da chi si ricorda di farlo.
     settings = buildDefaultSettings(clock)
+    seed.settings = settings
+  }
+  if (categories.length === 0) {
     categories = buildDefaultCategories(options.defaultCategoryNames, clock, makeId)
-    await persistence.write({ settings, categories })
+    seed.categories = categories
+  }
+  if (seed.settings !== undefined || seed.categories !== undefined) {
+    await persistence.write(seed)
   }
 
   const observable = createObservable<RepositoryState>({
@@ -1532,7 +1565,21 @@ export async function openRepository(
         // stesso istante anche se la scrittura viene ritentata, e nessuno
         // dentro `src/core` guarda l'orologio di sistema di nascosto.
         const takenAt = clock()
-        const run = queue.then(() => persistence.replaceAll(data, takenAt))
+        // **Il record `settings` non si sostituisce intero.** Meta' di lui
+        // descrive questo telefono — tema, lingua, guida gia' vista, e la data
+        // di installazione da cui il banner del backup conta i giorni — e
+        // quella meta' non e' dentro il file di nessun altro. La divisione, e
+        // il perche' `lastBackupAt` sia derivato invece che importato, stanno
+        // in `settingsAfterImport`.
+        //
+        // Vale anche per l'Annulla, che passa di qui con il backup di prima:
+        // i campi del dispositivo non sono mai cambiati, quindi conservarli e'
+        // ripristinarli.
+        const applied: DataSet = {
+          ...data,
+          settings: settingsAfterImport(observable.get().settings, data.settings, takenAt),
+        }
+        const run = queue.then(() => persistence.replaceAll(applied, takenAt))
         queue = run.then(
           () => undefined,
           () => undefined,
@@ -1543,7 +1590,7 @@ export async function openRepository(
         // costruzione, e quindi l'unico in cui si puo' onestamente dire che la
         // divergenza non c'e' piu'.
         pendingError = null
-        observable.set({ ...data, writeFailures: NO_WRITE_FAILURES })
+        observable.set({ ...applied, writeFailures: NO_WRITE_FAILURES })
         return previous
       } finally {
         importing = false

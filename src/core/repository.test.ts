@@ -63,6 +63,46 @@ describe('primo avvio', () => {
     expect(repo.getState().categories.map((c) => c.id)).toEqual(idsPrima)
   })
 
+  it('con le impostazioni gia scritte e la griglia vuota, risemina la griglia', async () => {
+    // **Prima non seminava mai**: la condizione era una sola,
+    // `if (settings === null)`, e con le impostazioni gia' sul disco l'app
+    // restava senza categorie per sempre — cioe' in uno stato da cui non si
+    // puo' inserire nessuna spesa, e da cui nessuna schermata sa uscire.
+    //
+    // Non serve un import per arrivarci: `planCategoryDeletion` non ha nessun
+    // pavimento, quindi su un'installazione nuova le otto si cancellano una
+    // per una. L'import lo aveva solo reso raggiungibile con 54 byte, ed e'
+    // per questo che la riparazione sta qui e non alla porta dell'import.
+    const { disk } = await open()
+    disk.categories = []
+    const impostazioniPrima = { ...disk.settings }
+
+    const { repo } = await open(disk, 'risemina')
+
+    expect(disk.categories).toHaveLength(DEFAULT_CATEGORY_SEEDS.length)
+    expect(repo.getState().categories).toHaveLength(DEFAULT_CATEGORY_SEEDS.length)
+    expect(repo.getState().categories[0]?.name).toBe(TEST_CATEGORY_NAMES.groceries)
+    // Le impostazioni non si toccano: la griglia mancava, non loro.
+    expect(disk.settings).toEqual(impostazioniPrima)
+  })
+
+  it('la risemina non tocca niente altro: le spese restano dove sono', async () => {
+    // Il caso in cui la riparazione potrebbe fare danno: un archivio con delle
+    // spese e nessuna categoria. Le spese restano — sono dell'utente — e
+    // mostrano "Categoria rimossa", che e' il ripiego che tutti e quattro i
+    // lettori hanno gia'.
+    const { repo: primo, disk } = await open()
+    const cat = primo.getState().categories[0]?.id ?? 'cat-1'
+    primo.addExpense({ amountCents: 700, categoryId: cat, date: '2026-08-20' })
+    await primo.flush()
+    disk.categories = []
+
+    const { repo } = await open(disk, 'risemina2')
+    expect(repo.getState().expenses).toHaveLength(1)
+    expect(repo.getState().expenses[0]?.categoryId).toBe(cat)
+    expect(repo.getState().categories.map((c) => c.id)).not.toContain(cat)
+  })
+
   it('semina i nomi che riceve, non nomi suoi', async () => {
     // La prova che nel core non e' rimasta nessuna parola: con un altro
     // dizionario esce un'altra griglia, e nient'altro cambia.
@@ -1286,7 +1326,13 @@ describe('export e import dal repository', () => {
     return fixture
   }
 
-  it('esporta, reimporta in un archivio vuoto e i dati sono identici', async () => {
+  it('esporta e reimporta: l archivio esce e rientra identico', async () => {
+    // Qui c'era `expect(destinazione.repo.getState()).toEqual(sorgente...)`, e
+    // quel `toEqual` **codificava il difetto**: diceva che dopo un import il
+    // telefono di arrivo e' indistinguibile da quello di partenza, cioe' che
+    // tema, lingua e guida viaggiano dentro il file. Non devono (ADR 026 §4),
+    // e la prova che non lo fanno e' il test qui sotto. Questo confronta cio'
+    // che il round-trip deve davvero garantire: **l'archivio**.
     const sorgente = await popolato()
     const file = JSON.parse(JSON.stringify(sorgente.repo.exportBackup())) as unknown
 
@@ -1297,11 +1343,60 @@ describe('export e import dal repository', () => {
     const destinazione = await open(emptyDisk(), 'dest')
     await destinazione.repo.importBackup(preview.data as DataSet)
 
-    expect(destinazione.repo.getState()).toEqual(sorgente.repo.getState())
+    const arrivo = destinazione.repo.getState()
+    const partenza = sorgente.repo.getState()
+    expect(arrivo.expenses).toEqual(partenza.expenses)
+    expect(arrivo.categories).toEqual(partenza.categories)
+    expect(arrivo.recurringRules).toEqual(partenza.recurringRules)
+    expect(arrivo.budgets).toEqual(partenza.budgets)
     expect(destinazione.disk.expenses).toEqual(sorgente.disk.expenses)
     expect(destinazione.disk.budgets).toEqual(sorgente.disk.budgets)
     expect(destinazione.disk.recurringRules).toEqual(sorgente.disk.recurringRules)
-    expect(destinazione.disk.settings).toEqual(sorgente.disk.settings)
+    expect(destinazione.disk.categories).toEqual(sorgente.disk.categories)
+  })
+
+  it('lo stato del dispositivo non entra dal file: tema, lingua e guida restano di qui', async () => {
+    const sorgente = await popolato()
+    // Il telefono che ha scritto il file: scuro, italiano, guida vista a luglio.
+    sorgente.repo.updateSettings({
+      theme: 'dark',
+      language: 'it',
+      onboardingCompletedAt: '2026-07-01T08:00:00.000Z',
+    })
+    await sorgente.repo.flush()
+    const file = JSON.parse(JSON.stringify(sorgente.repo.exportBackup())) as {
+      readonly exportedAt: string
+    }
+    const preview = parseBackup(file)
+    expect(preview.ok).toBe(true)
+
+    // Il telefono che importa: chiaro, inglese, guida vista qui. Chi importa ha
+    // appena dimostrato di non essere alle prime armi: rimettergli la guida
+    // davanti ai dati appena ripristinati e' il difetto che ADR 026 §4 chiude.
+    const destinazione = await open(emptyDisk(), 'dest')
+    destinazione.repo.updateSettings({
+      theme: 'light',
+      language: 'en',
+      onboardingCompletedAt: '2026-08-30T20:00:00.000Z',
+    })
+    await destinazione.repo.flush()
+    const dispositivo = destinazione.repo.getState().settings
+
+    await destinazione.repo.importBackup(preview.data as DataSet)
+
+    const dopo = destinazione.repo.getState().settings
+    expect(dopo.theme).toBe('light')
+    expect(dopo.language).toBe('en')
+    expect(dopo.onboardingCompletedAt).toBe('2026-08-30T20:00:00.000Z')
+    // Anche `createdAt`: e' quando l'app e' stata installata **qui**, ed e' il
+    // ripiego del banner del backup per chi non ne ha mai fatto uno.
+    expect(dopo.createdAt).toBe(dispositivo.createdAt)
+    // L'unico dei quattro che non e' ne' importato ne' conservato: **derivato**.
+    // Dopo un ripristino l'ultimo backup e' proprio il file appena importato.
+    expect(dopo.lastBackupAt).toBe(file.exportedAt)
+    // E il disco dice la stessa cosa del mirror: la divisione non vive solo in
+    // memoria.
+    expect(destinazione.disk.settings).toEqual(dopo)
   })
 
   it('l import sostituisce, non fonde: le categorie di default spariscono', async () => {
@@ -1323,13 +1418,17 @@ describe('export e import dal repository', () => {
     const destinazione = await open(emptyDisk(), 'dest')
     await destinazione.repo.importBackup(preview.data as DataSet)
 
+    const dopoImport = destinazione.repo.getState().settings
     const riaperto = await open(destinazione.disk, 'riletto')
     const atteso = sorgente.repo.getState()
     const letto = riaperto.repo.getState()
     expect([...letto.expenses].sort((a, b) => a.id.localeCompare(b.id))).toEqual(
       [...atteso.expenses].sort((a, b) => a.id.localeCompare(b.id)),
     )
-    expect(letto.settings).toEqual(atteso.settings)
+    // Le impostazioni si confrontano con quelle **di questo dispositivo dopo
+    // l'import**, non con quelle di chi ha scritto il file: e' il mirror contro
+    // il disco, che e' la cosa che questo test sorveglia.
+    expect(letto.settings).toEqual(dopoImport)
   })
 
   it('l import restituisce il backup di quello che c era: l Annulla e una riga', async () => {
@@ -1352,6 +1451,48 @@ describe('export e import dal repository', () => {
     expect(destinazione.repo.getState().categories).toEqual(prima.categories)
     expect(destinazione.repo.getState().budgets).toEqual(prima.budgets)
     expect(destinazione.disk.expenses.some((e) => e.amountCents === 999)).toBe(true)
+  })
+
+  it('l Annulla riporta indietro anche la data dell ultimo backup', async () => {
+    // `lastBackupAt` e' l'unico campo del record `settings` che l'import
+    // cambia, quindi e' l'unico che l'Annulla deve rimettere a posto. Passa
+    // dalla stessa porta di tutto il resto: il `BackupFile` di prima.
+    const sorgente = await popolato()
+    const file = JSON.parse(JSON.stringify(sorgente.repo.exportBackup())) as {
+      readonly exportedAt: string
+    }
+    const preview = parseBackup(file)
+
+    const destinazione = await open(emptyDisk(), 'dest')
+    destinazione.repo.updateSettings({ lastBackupAt: '2026-08-10T07:00:00.000Z' })
+    await destinazione.repo.flush()
+
+    const annulla = await destinazione.repo.importBackup(preview.data as DataSet)
+    expect(destinazione.repo.getState().settings.lastBackupAt).toBe(file.exportedAt)
+
+    await destinazione.repo.importBackup(annulla.data)
+    expect(destinazione.repo.getState().settings.lastBackupAt).toBe('2026-08-10T07:00:00.000Z')
+    expect(destinazione.disk.settings?.lastBackupAt).toBe('2026-08-10T07:00:00.000Z')
+  })
+
+  it('un file senza istante di export lascia la data assente invece di tenere la vecchia', async () => {
+    // La vecchia parlava di un archivio che non c'e' piu'. Un indicatore di
+    // sicurezza che puo' sbagliare deve sbagliare **verso l'allarme**: il
+    // banner insiste, e chi ha appena importato esporta di nuovo.
+    const sorgente = await popolato()
+    const file = JSON.parse(JSON.stringify(sorgente.repo.exportBackup())) as Record<string, unknown>
+    delete file['exportedAt']
+    const preview = parseBackup(file)
+    expect(preview.ok).toBe(true)
+
+    const destinazione = await open(emptyDisk(), 'dest')
+    destinazione.repo.updateSettings({ lastBackupAt: '2026-08-10T07:00:00.000Z' })
+    await destinazione.repo.flush()
+    await destinazione.repo.importBackup(preview.data as DataSet)
+
+    const settings = destinazione.repo.getState().settings
+    expect('lastBackupAt' in settings).toBe(false)
+    expect(destinazione.disk.settings && 'lastBackupAt' in destinazione.disk.settings).toBe(false)
   })
 
   it('il backup restituito e la fotografia di prima, non di dopo', async () => {
