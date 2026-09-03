@@ -38,7 +38,17 @@ import type {
   WriteBatch,
   WriteResult,
 } from './persistence'
-import type { Budget, Category, DataSet, Expense, RecurringRule, Settings } from './types'
+import { buildPreImportSnapshot, snapshotPayload } from './snapshot'
+import type {
+  Budget,
+  Category,
+  DataSet,
+  Expense,
+  PreImportSnapshot,
+  RecurringRule,
+  Settings,
+  Timestamp,
+} from './types'
 
 export interface MemoryDisk {
   expenses: Expense[]
@@ -46,6 +56,12 @@ export interface MemoryDisk {
   recurringRules: RecurringRule[]
   budgets: Budget[]
   settings: Settings | null
+  /**
+   * Lo store di **sistema**. Sta qui accanto agli altri e non dentro di loro
+   * per la stessa ragione per cui nel database e' un'altra famiglia: nessuna
+   * delle operazioni che svuotano l'archivio lo nomina.
+   */
+  snapshot: PreImportSnapshot | null
 }
 
 export interface MemoryPersistence extends Persistence {
@@ -68,7 +84,14 @@ export class SimulatedCrashError extends Error {
 }
 
 export function emptyDisk(): MemoryDisk {
-  return { expenses: [], categories: [], recurringRules: [], budgets: [], settings: null }
+  return {
+    expenses: [],
+    categories: [],
+    recurringRules: [],
+    budgets: [],
+    settings: null,
+    snapshot: null,
+  }
 }
 
 function upsert<T extends { readonly id: string }>(target: T[], incoming: readonly T[]): void {
@@ -130,8 +153,23 @@ function advanceMarkers(
   }
 }
 
-/** @param disk lo stato iniziale; passare quello di un'istanza morta la "riapre". */
-export function createMemoryPersistence(disk: MemoryDisk = emptyDisk()): MemoryPersistence {
+/**
+ * Lo stato con cui si apre un disco finto.
+ *
+ * `snapshot` e' **opzionale qui e obbligatorio in `MemoryDisk`**, e la
+ * differenza e' voluta: lo stato del disco ha sempre uno slot per lo scatto
+ * (vuoto o pieno), mentre chi apre un disco per provare le ricorrenze non ha
+ * niente da dire sullo scatto e non deve scriverlo per far compilare il file.
+ */
+export type MemoryDiskSeed = Omit<MemoryDisk, 'snapshot'> & {
+  snapshot?: PreImportSnapshot | null
+}
+
+/** @param seed lo stato iniziale; passare quello di un'istanza morta la "riapre". */
+export function createMemoryPersistence(seed: MemoryDiskSeed = emptyDisk()): MemoryPersistence {
+  // `Object.assign` invece di uno spread: l'oggetto passato resta **lo stesso**,
+  // ed e' cio' su cui i test che simulano un crash tengono un riferimento.
+  const disk: MemoryDisk = Object.assign(seed, { snapshot: seed.snapshot ?? null })
   let writes = 0
   let remainingBeforeCrash = Number.POSITIVE_INFINITY
   let dead = false
@@ -271,15 +309,65 @@ export function createMemoryPersistence(disk: MemoryDisk = emptyDisk()): MemoryP
         ...(ruleRewind !== undefined ? { recurringRuleRewind: ruleRewind } : {}),
       }
     },
-    async replaceAll(data: DataSet): Promise<void> {
+    async replaceAll(data: DataSet, takenAt: Timestamp): Promise<Timestamp | null> {
       guard()
+      // Lo scatto si prende **da qui**, cioe' dal "disco", e non da cio' che ha
+      // in mano il chiamante: e' la stessa scelta di `idb.ts`, e il doppio deve
+      // sbagliare e indovinare le stesse cose, altrimenti i test provano una
+      // cosa e la produzione ne fa un'altra.
+      const previous = disk.settings
+      const snapshot =
+        previous === null
+          ? null
+          : buildPreImportSnapshot(
+              structuredClone({
+                expenses: disk.expenses,
+                categories: disk.categories,
+                recurringRules: disk.recurringRules,
+                budgets: disk.budgets,
+                settings: previous,
+              }),
+              takenAt,
+            )
       const clone = structuredClone(data) as DataSet
       disk.expenses = [...clone.expenses]
       disk.categories = [...clone.categories]
       disk.recurringRules = [...clone.recurringRules]
       disk.budgets = [...clone.budgets]
       disk.settings = clone.settings
+      // Uno solo, l'ultimo: quello di ieri se ne va in tutti e due i rami.
+      // Il ramo `null` non e' raggiungibile oggi (nessuno cancella `settings`:
+      // vedi l'enumerazione degli scrittori in `idb.ts`), e sta qui perche' i
+      // due lati devono restare osservabilmente identici anche nei rami che
+      // nessuno percorre — il giorno in cui uno diventa raggiungibile, lo
+      // diventa per tutti e due.
+      disk.snapshot = snapshot
       writes += 1
+      return snapshot === null ? null : snapshot.takenAt
+    },
+
+    async snapshotTakenAt(): Promise<Timestamp | null> {
+      if (dead) throw new SimulatedCrashError()
+      return disk.snapshot?.takenAt ?? null
+    },
+
+    async restoreSnapshot(): Promise<DataSet | null> {
+      guard()
+      const snapshot = disk.snapshot
+      // Nessuno scatto, nessuna scrittura: l'archivio non si svuota per un
+      // ripristino che non ha materiale. Come in `idb.ts`, dove il ramo e' un
+      // `rollback` prima di qualunque `put`.
+      if (snapshot === null) return null
+      const restored = structuredClone(snapshotPayload(snapshot))
+      disk.expenses = [...restored.expenses]
+      disk.categories = [...restored.categories]
+      disk.recurringRules = [...restored.recurringRules]
+      disk.budgets = [...restored.budgets]
+      disk.settings = restored.settings
+      // Consumato. La ragione per esteso sta su `Persistence.restoreSnapshot`.
+      disk.snapshot = null
+      writes += 1
+      return restored
     },
     close(): void {
       dead = true

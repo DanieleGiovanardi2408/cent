@@ -29,7 +29,15 @@
 
 import { openDB } from 'idb'
 import type { DBSchema, IDBPDatabase, IDBPTransaction, StoreNames } from 'idb'
-import { DB_NAME, MIGRATIONS, SCHEMA_VERSION, STORE_NAMES, emptyRawDataSet, pendingMigrations } from './schema'
+import {
+  DB_NAME,
+  MIGRATIONS,
+  MIGRATED_STORES,
+  REPLACED_STORES,
+  SCHEMA_VERSION,
+  emptyRawDataSet,
+  pendingMigrations,
+} from './schema'
 import type { MigrationStep, RawDataSet, RawRecord } from './schema'
 import { planResolvedBudgetChange } from './budget'
 import { planCategoryDeletion, planCategoryPlacement } from './categories'
@@ -39,8 +47,20 @@ import type { CategoryDeletion, CategoryPlacement } from './categories'
 import { isAfter } from './date'
 import { NOTHING_SKIPPED } from './persistence'
 import type { LoadedData, Persistence, WriteBatch, WriteResult } from './persistence'
-import type { Budget, Category, DataSet, Expense, RecurringRule, Settings, StoreName } from './types'
-import { SETTINGS_ID } from './types'
+import { buildPreImportSnapshot, snapshotPayload } from './snapshot'
+import type {
+  AnyStoreName,
+  Budget,
+  Category,
+  DataSet,
+  Expense,
+  PreImportSnapshot,
+  RecurringRule,
+  Settings,
+  StoreName,
+  Timestamp,
+} from './types'
+import { ALL_STORES, PRE_IMPORT_SNAPSHOT_ID, SETTINGS_ID } from './types'
 
 export interface CentDB extends DBSchema {
   expenses: { key: string; value: Expense; indexes: { 'by-date': string } }
@@ -48,6 +68,15 @@ export interface CentDB extends DBSchema {
   recurringRules: { key: string; value: RecurringRule }
   budgets: { key: string; value: Budget }
   settings: { key: string; value: Settings }
+  /**
+   * Store di **sistema**: non si migra con l'archivio, non esce nel backup, e
+   * `replaceAll` non lo cancella. Vedi le due famiglie in `types.ts`.
+   */
+  preImportSnapshot: {
+    key: string
+    value: PreImportSnapshot
+    indexes: { 'by-takenAt': string }
+  }
 }
 
 type UpgradeTx = IDBPTransaction<CentDB, StoreNames<CentDB>[], 'versionchange'>
@@ -107,7 +136,7 @@ async function applyTransforms(
   const withTransform = pendingMigrations(oldVersion, newVersion, steps).filter((s) => s.transform)
   if (withTransform.length === 0) return
 
-  const existing = STORE_NAMES.filter((name) => tx.objectStoreNames.contains(name))
+  const existing = MIGRATED_STORES.filter((name) => tx.objectStoreNames.contains(name))
   const before: RawDataSet = emptyRawDataSet()
   for (const name of existing) {
     before[name] = (await tx.objectStore(name).getAll()) as unknown as RawRecord[]
@@ -240,7 +269,13 @@ export interface IdbPersistence extends Persistence {
   readonly reopenCount: number
 }
 
-type WriteTx = IDBPTransaction<CentDB, StoreName[], 'readwrite'>
+/**
+ * Una transazione di scrittura. E' aperta su `AnyStoreName` — cioe' su tutte e
+ * due le famiglie — perche' import e ripristino toccano anche lo store di
+ * sistema; `storesOf` continua a restituire la lista **piu' stretta possibile**,
+ * e questa e' la sua controparte piu' larga possibile a livello di tipo.
+ */
+type WriteTx = IDBPTransaction<CentDB, AnyStoreName[], 'readwrite'>
 
 /** Il corpo di una scrittura, dentro una transazione gia' aperta. */
 async function runBatch(tx: WriteTx, batch: WriteBatch): Promise<WriteResult> {
@@ -422,6 +457,28 @@ async function runBatch(tx: WriteTx, batch: WriteBatch): Promise<WriteResult> {
 }
 
 /**
+ * Lo scatto da scrivere, letto dall'archivio **dentro la transazione**.
+ *
+ * `null` quando non c'e' nessun record `settings`: un database mai
+ * inizializzato non ha nessuno stato a cui tornare, e uno scatto di niente
+ * sarebbe una voce in Impostazioni che promette un ripristino vuoto.
+ */
+async function readArchive(tx: WriteTx, takenAt: Timestamp): Promise<PreImportSnapshot | null> {
+  const settings = await tx.objectStore('settings').get(SETTINGS_ID)
+  if (settings === undefined) return null
+  return buildPreImportSnapshot(
+    {
+      expenses: await tx.objectStore('expenses').getAll(),
+      categories: await tx.objectStore('categories').getAll(),
+      recurringRules: await tx.objectStore('recurringRules').getAll(),
+      budgets: await tx.objectStore('budgets').getAll(),
+      settings,
+    },
+    takenAt,
+  )
+}
+
+/**
  * Abortisce una transazione andata storta e ne assorbe l'esito.
  *
  * Un errore **sincrono** (un record che non passa lo structured clone, uno
@@ -541,11 +598,35 @@ export function createIdbPersistence(options: OpenOptions = {}): IdbPersistence 
       })
     },
 
-    async replaceAll(data: DataSet): Promise<void> {
-      await withDb(async (connection) => {
-        const tx = connection.transaction([...STORE_NAMES], 'readwrite')
+    async replaceAll(data: DataSet, takenAt: Timestamp): Promise<Timestamp | null> {
+      return withDb(async (connection) => {
+        // La transazione si apre su **tutte e due** le famiglie: lo scatto e la
+        // sostituzione sono la stessa operazione, e se fossero due transazioni
+        // esisterebbe l'istante "import senza scatto" (ADR 008).
+        const tx = connection.transaction([...ALL_STORES], 'readwrite') as WriteTx
         try {
-          await Promise.all(STORE_NAMES.map((name) => tx.objectStore(name).clear()))
+          // Lo stato precedente si legge **qui dentro, dal disco**, e non lo
+          // porta il chiamante: e' il caso "il valore da scrivere dipende da
+          // cosa c'e' gia' li'". Un mirror ha in piu' cio' che la coda non ha
+          // ancora scritto e in meno cio' che ha scritto un altro contesto.
+          const snapshot = await readArchive(tx, takenAt)
+          const store = tx.objectStore('preImportSnapshot')
+          // In tutti e due i rami lo store resta con **esattamente uno**
+          // scatto o con nessuno: l'id e' una costante, quindi il `put`
+          // sostituisce quello di ieri invece di affiancarglisi.
+          //
+          // Il `delete` e' l'invariante scritta invece che argomentata, e vale
+          // la pena dire quanto: oggi non e' raggiungibile, perche' per
+          // arrivarci servirebbe un archivio **senza** `settings` che ha
+          // pero' gia' uno scatto — e gli scrittori del record `settings` sono
+          // tre, `WriteBatch.settings`, `replaceAll` e `restoreSnapshot`, che
+          // lo mettono e non lo tolgono mai. Nessuno lo cancella. Resta perche'
+          // costa una riga e rende l'invariante vera per costruzione invece che
+          // per una catena di tre argomenti che il prossimo lettore dovrebbe
+          // rifare.
+          if (snapshot === null) await store.delete(PRE_IMPORT_SNAPSHOT_ID)
+          else await store.put(snapshot)
+          await Promise.all(REPLACED_STORES.map((name) => tx.objectStore(name).clear()))
           await runBatch(tx, {
             expenses: data.expenses,
             categories: data.categories,
@@ -553,6 +634,57 @@ export function createIdbPersistence(options: OpenOptions = {}): IdbPersistence 
             budgets: data.budgets,
             settings: data.settings,
           })
+          return snapshot === null ? null : snapshot.takenAt
+        } catch (error) {
+          await rollback(tx)
+          throw error
+        }
+      })
+    },
+
+    async snapshotTakenAt(): Promise<Timestamp | null> {
+      return withDb(async (connection) => {
+        // Cursore di **sole chiavi** sull'indice: la chiave dell'indice e'
+        // `takenAt`, quindi la data arriva senza che il carico venga letto. E'
+        // l'unica ragione per cui l'indice esiste, ed e' la stessa forma di
+        // `by-date` — un indice si aggiunge quando c'e' una lettura vera che
+        // senza costerebbe troppo, non per simmetria.
+        const cursor = await connection
+          .transaction('preImportSnapshot')
+          .store.index('by-takenAt')
+          .openKeyCursor()
+        return cursor === null ? null : cursor.key
+      })
+    },
+
+    async restoreSnapshot(): Promise<DataSet | null> {
+      return withDb(async (connection) => {
+        const tx = connection.transaction([...ALL_STORES], 'readwrite') as WriteTx
+        try {
+          const store = tx.objectStore('preImportSnapshot')
+          const snapshot = await store.get(PRE_IMPORT_SNAPSHOT_ID)
+          // Nessuno scatto: non si scrive niente. Svuotare l'archivio per un
+          // ripristino che non ha materiale sarebbe il danno che l'operazione
+          // esiste per evitare.
+          if (snapshot === undefined) {
+            await rollback(tx)
+            return null
+          }
+          // Il carico puo' essere stato scritto da una versione precedente
+          // dell'app: le migrazioni non toccano gli store di sistema.
+          const restored = snapshotPayload(snapshot)
+          // Consumato: dopo il ripristino la rete non c'e' piu', e la voce
+          // sparisce. La ragione per esteso sta su `Persistence.restoreSnapshot`.
+          await store.delete(PRE_IMPORT_SNAPSHOT_ID)
+          await Promise.all(REPLACED_STORES.map((name) => tx.objectStore(name).clear()))
+          await runBatch(tx, {
+            expenses: restored.expenses,
+            categories: restored.categories,
+            recurringRules: restored.recurringRules,
+            budgets: restored.budgets,
+            settings: restored.settings,
+          })
+          return restored
         } catch (error) {
           await rollback(tx)
           throw error

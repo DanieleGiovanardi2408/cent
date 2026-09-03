@@ -697,6 +697,15 @@ export interface Repository {
    *
    * E' anche l'unico punto in cui `writeFailures` torna a zero: dopo un
    * `replaceAll` riuscito mirror e disco sono uguali per costruzione.
+   *
+   * ## Due reti, e non sono la stessa
+   *
+   * Il `BackupFile` che torna e' la rete **in memoria**: serve all'Annulla
+   * subito dopo, e muore con l'app. Sotto, `replaceAll` ne lascia una **sul
+   * disco** — lo scatto pre-import di ADR 026 — che sopravvive alla chiusura ed
+   * e' lo stato letto dal disco, non dal mirror. Chi disegna il ripristino usa
+   * quella; questa resta perche' un Annulla che costa zero letture, nell'istante
+   * in cui il toast e' ancora a schermo, e' un'altra cosa.
    */
   importBackup(data: DataSet): Promise<BackupFile>
 
@@ -1519,7 +1528,11 @@ export async function openRepository(
         // venti spese della regola precedente sopravvivessero **insieme** ai
         // dati importati: non una sovrascrittura, una fusione silenziosa fra due
         // dataset.
-        const run = queue.then(() => persistence.replaceAll(data))
+        // `takenAt` si pregenera qui e viaggia dentro l'operazione: e' lo
+        // stesso istante anche se la scrittura viene ritentata, e nessuno
+        // dentro `src/core` guarda l'orologio di sistema di nascosto.
+        const takenAt = clock()
+        const run = queue.then(() => persistence.replaceAll(data, takenAt))
         queue = run.then(
           () => undefined,
           () => undefined,

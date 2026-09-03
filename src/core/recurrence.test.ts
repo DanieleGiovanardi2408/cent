@@ -210,6 +210,7 @@ function harness(rules: readonly RecurringRule[], expenses: readonly Expense[] =
     recurringRules: [...rules],
     budgets: [],
     settings: null,
+    snapshot: null,
   }
   const persistence = createMemoryPersistence(disk)
   return {
@@ -258,6 +259,7 @@ describe('identita deterministica (ADR 006)', () => {
       recurringRules: [rule],
       budgets: [],
       settings: null,
+      snapshot: null,
     }
     const persistence = createMemoryPersistence(disk)
     const call = (): Promise<{ created: readonly Expense[] }> =>
@@ -286,6 +288,7 @@ describe('identita deterministica (ADR 006)', () => {
       recurringRules: [rule],
       budgets: [],
       settings: null,
+      snapshot: null,
     }
     const persistence = createMemoryPersistence(disk)
     await Promise.all(
@@ -323,6 +326,7 @@ describe('identita deterministica (ADR 006)', () => {
       recurringRules: [rule],
       budgets: [],
       settings: null,
+      snapshot: null,
     }
     const persistence = createMemoryPersistence(disk)
     const result = await materializeRecurring({
@@ -355,6 +359,7 @@ describe('identita deterministica (ADR 006)', () => {
       recurringRules: [rule],
       budgets: [],
       settings: null,
+      snapshot: null,
     }
     const persistence = createMemoryPersistence(disk)
     await materializeRecurring({
@@ -491,6 +496,7 @@ describe('materializzazione: la regola cambia durante il catch-up', () => {
       recurringRules: [rule],
       budgets: [],
       settings: null,
+      snapshot: null,
     }
     const persistence = createMemoryPersistence(disk)
     let writes = 0
@@ -558,6 +564,7 @@ describe('materializzazione: la regola cambia durante il catch-up', () => {
       recurringRules: [rule],
       budgets: [],
       settings: null,
+      snapshot: null,
     }
     const persistence = createMemoryPersistence(disk)
     let writes = 0
@@ -596,6 +603,7 @@ describe('materializzazione: la regola cambia durante il catch-up', () => {
       recurringRules: [rule],
       budgets: [],
       settings: null,
+      snapshot: null,
     }
     const persistence = createMemoryPersistence(disk)
     let writes = 0
@@ -763,6 +771,7 @@ describe('materializzazione: interrompibile', () => {
       recurringRules: [rule],
       budgets: [],
       settings: null,
+      snapshot: null,
     }
 
     // Prima vita dell app: muore durante la terza transazione.
@@ -817,6 +826,7 @@ describe('materializzazione: interrompibile', () => {
       recurringRules: [rule],
       budgets: [],
       settings: null,
+      snapshot: null,
     }
 
     let lives = 0
@@ -872,6 +882,7 @@ describe('materializzazione: regole ignorate', () => {
       recurringRules: [broken, good],
       budgets: [],
       settings: null,
+      snapshot: null,
     }
     const persistence = createMemoryPersistence(disk)
     const result = await materializeRecurring({

@@ -14,20 +14,53 @@
  * ed e' anche l'unico modo per testarle in node.
  */
 
-import type { StoreName } from './types'
+import { ARCHIVE_STORES } from './types'
+import type { AnyStoreName, StoreName } from './types'
 
 export const DB_NAME = 'cent'
 
 /** Versione corrente. Si incrementa aggiungendo un passo a `MIGRATIONS`. */
-export const SCHEMA_VERSION = 5
+export const SCHEMA_VERSION = 6
 
-export const STORE_NAMES: readonly StoreName[] = [
-  'expenses',
-  'categories',
-  'recurringRules',
-  'budgets',
-  'settings',
-]
+/*
+ * ## Le tre liste, che avevano un nome solo
+ *
+ * `STORE_NAMES` rispondeva a tre domande diverse — cosa si migra, cosa esce nel
+ * backup, cosa `replaceAll` cancella — e le tre risposte coincidevano. Erano
+ * cinque store e nient'altro: la coincidenza era vera, non era un fatto.
+ *
+ * Adesso ognuna ha il suo nome e la sua ragione. Due di queste puntano ancora
+ * all'archivio intero, e va bene cosi': il giorno in cui una divergera' — uno
+ * store d'archivio che non deve uscire nel backup, per dire — a cambiare sara'
+ * **quella** costante, e non ci sara' nessuna terza da ricordarsi.
+ *
+ * La terza lista non e' una lista, ed e' la ragione per cui non compare qui:
+ * **cosa esce nel backup e' un tipo**, `BackupFile.data` piu' i `counts`
+ * dell'anteprima, tutti e due indicizzati su `StoreName`. Uno store di sistema
+ * li' dentro non compila, che e' meglio di non essere elencato.
+ */
+
+/**
+ * Cosa una **migrazione** trasforma: l'archivio, e solo l'archivio.
+ *
+ * Gli store di sistema restano fuori perche' il loro contenuto non e' un dato
+ * dell'utente e non ha la stessa vita: lo scatto pre-import porta scritta
+ * dentro di se' la versione con cui e' stato preso, e si migra al **ripristino**
+ * (vedi `PreImportSnapshot.schemaVersion`), non qui. Migrarlo qui vorrebbe dire
+ * riscrivere fino a 1,3 MB dentro la transazione di upgrade, cioe' davanti al
+ * primo frame dopo un aggiornamento, per un carico che potrebbe non essere
+ * ripristinato mai.
+ */
+export const MIGRATED_STORES: readonly StoreName[] = ARCHIVE_STORES
+
+/**
+ * Cosa `replaceAll` **cancella**: l'archivio, e solo l'archivio.
+ *
+ * E' la lista che l'ha fatta nascere. Con una sola lista per tre mestieri, lo
+ * scatto pre-import sarebbe stato distrutto dalla stessa transazione che deve
+ * proteggerlo — terzo dei tre danni elencati in ADR 026 §2, e l'unico fatale.
+ */
+export const REPLACED_STORES: readonly StoreName[] = ARCHIVE_STORES
 
 /** Un record letto dal database o da un file, prima di essere validato. */
 export type RawRecord = Record<string, unknown>
@@ -42,7 +75,12 @@ export interface IndexSpec {
 }
 
 export interface StoreSpec {
-  readonly name: StoreName
+  /**
+   * `AnyStoreName`, non `StoreName`: uno store si **crea** in tutte e due le
+   * famiglie. E' l'unico posto in cui le due si nominano insieme, e non e' un
+   * allentamento — nessun'altra firma di questo file la accetta.
+   */
+  readonly name: AnyStoreName
   readonly indexes: readonly IndexSpec[]
 }
 
@@ -80,6 +118,20 @@ export interface MigrationStep {
  * Non c'e' un indice su `recurringId`: la deduplica delle ricorrenze lavora sul
  * mirror, non sul database (vedi `recurrence.ts`).
  */
+/**
+ * Lo store di sistema dello scatto pre-import (schema 6).
+ *
+ * L'indice `by-takenAt` e' il secondo di tutto il database, e ha la stessa
+ * giustificazione del primo: **una lettura vera che senza costerebbe troppo**.
+ * Sapere se lo scatto c'e' e di che giorno e' — l'unica cosa che serve per
+ * dipingere la voce in Impostazioni — passa da un cursore di sole chiavi e non
+ * legge il carico, che a 5.000 spese vale 1,3 MB.
+ */
+const SNAPSHOT_STORE: StoreSpec = {
+  name: 'preImportSnapshot',
+  indexes: [{ name: 'by-takenAt', keyPath: 'takenAt' }],
+}
+
 const INITIAL_STORES: readonly StoreSpec[] = [
   { name: 'expenses', indexes: [{ name: 'by-date', keyPath: 'date' }] },
   { name: 'categories', indexes: [] },
@@ -285,6 +337,37 @@ export const MIGRATIONS: readonly MigrationStep[] = [
       ...data,
       categories: withPaletteV2(data.categories),
       settings: data.settings.map((raw) => ({ ...raw, schemaVersion: 5 })),
+    }),
+  },
+  {
+    to: 6,
+    summary: 'Lo store di sistema che tiene lo scatto pre-import',
+    createStores: [SNAPSHOT_STORE],
+    /**
+     * **Il passo piu' economico possibile, meno un record.**
+     *
+     * ADR 026 lo descrive come *"uno step con `createStores` e senza
+     * `transform`: nessun record viene toccato"*. Scritto cosi' non regge, e il
+     * numero e' questo: senza `transform`, un database che arriva dalla versione
+     * 1 finisce a schema 6 con `Settings.schemaVersion` **uguale a 5**, mentre
+     * un'installazione nuova nasce con 6 (`buildDefaultSettings` scrive
+     * `SCHEMA_VERSION`). Due installazioni con dati identici direbbero due cose
+     * diverse su come sono stati scritti, e la seconda sarebbe falsa.
+     * `idb.test.ts` lo prende: *expected 5 to be 6*.
+     *
+     * L'argomento dell'ADR resta intero perche' non nominava il singleton:
+     * parlava di **non riscrivere l'archivio**, che e' cio' che costa. Qui
+     * l'archivio esce **con lo stesso riferimento** con cui e' entrato — quindi
+     * `applyTransforms` scrive un record e zero spese — ed e' la stessa forma
+     * dei quattro passi pubblicati prima di questo.
+     *
+     * Restava l'altra strada: lasciare che il campo dica 5 e cambiare il test.
+     * Sarebbe stata la lettera dell'ADR contro l'unico campo che ha per mestiere
+     * dire con quale schema questi dati sono stati scritti.
+     */
+    transform: (data) => ({
+      ...data,
+      settings: data.settings.map((raw) => ({ ...raw, schemaVersion: 6 })),
     }),
   },
 ]

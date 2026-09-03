@@ -264,6 +264,7 @@ describe('previewMaterialization: cosa succede se salvo', () => {
       recurringRules: [rule],
       budgets: [],
       settings: null,
+      snapshot: null,
     }
     const persistence = createMemoryPersistence(disk)
     await materializeRecurring({
@@ -399,6 +400,7 @@ describe('previewMaterialization: cosa succede se salvo', () => {
         recurringRules: [rule],
         budgets: [],
         settings: null,
+        snapshot: null,
       }
       const persistence = createMemoryPersistence(disk)
       await materializeRecurring({
@@ -431,6 +433,7 @@ describe('previewMaterialization: cosa succede se salvo', () => {
       recurringRules: [rule],
       budgets: [],
       settings: null,
+      snapshot: null,
     }
     const persistence = createMemoryPersistence(disk)
     await materializeRecurring({
@@ -472,6 +475,7 @@ async function dateScritte(regola: RecurringRule, giorno: IsoDate): Promise<read
     recurringRules: [regola],
     budgets: [],
     settings: null,
+    snapshot: null,
   }
   const persistence = createMemoryPersistence(disk)
   await materializeRecurring({

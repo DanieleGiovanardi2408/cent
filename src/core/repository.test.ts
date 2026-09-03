@@ -13,10 +13,20 @@ import {
   openRepository,
 } from './repository'
 import type { Repository } from './repository'
-import { NO_OCCURRENCES, occupiedOccurrenceDates } from './recurrence'
+import { NO_OCCURRENCES, occupiedOccurrenceDates, recurringExpenseId } from './recurrence'
 import { previewMaterialization } from './recurring-plan'
 import type { Persistence } from './persistence'
-import { creaRegola, rivediRegola, sequentialIds, TEST_CATEGORY_NAMES, tickingClock } from './testing'
+import {
+  creaRegola,
+  makeCategory,
+  makeExpense,
+  makeRule,
+  makeSettings,
+  rivediRegola,
+  sequentialIds,
+  TEST_CATEGORY_NAMES,
+  tickingClock,
+} from './testing'
 import type { DataSet, Expense, RecurringRule } from './types'
 
 interface Fixture {
@@ -1654,7 +1664,9 @@ describe('rilettura al risveglio', () => {
         return inner.loadAll()
       },
       write: (batch) => inner.write(batch),
-      replaceAll: (data) => inner.replaceAll(data),
+      replaceAll: (data, takenAt) => inner.replaceAll(data, takenAt),
+      snapshotTakenAt: () => inner.snapshotTakenAt(),
+      restoreSnapshot: () => inner.restoreSnapshot(),
       close: () => inner.close(),
     }
     const repo = await openRepository(persistence, {
@@ -1692,7 +1704,9 @@ describe('import: la coda e sua', () => {
         loadAll: () => inner.loadAll(),
         write: (batch) =>
           failing ? Promise.reject(new Error('disco non disponibile')) : inner.write(batch),
-        replaceAll: (data) => inner.replaceAll(data),
+        replaceAll: (data, takenAt) => inner.replaceAll(data, takenAt),
+        snapshotTakenAt: () => inner.snapshotTakenAt(),
+        restoreSnapshot: () => inner.restoreSnapshot(),
         close: () => inner.close(),
       },
       fail: (on) => {
@@ -2829,5 +2843,203 @@ describe('ADR 018: il segnaposto arretra solo su richiesta', () => {
     // La riconciliazione che prima non tornava, scritta come identita': le sei
     // che si vedono sono le quattro annunciate piu' le due che c'erano gia'.
     expect(vive).toHaveLength(anteprima.count + 2)
+  })
+})
+
+/**
+ * ADR 018, emendata il 3 settembre: **`import` esce dall'elenco degli inneschi
+ * chiusi**, e il segnaposto puo' arretrare attraverso quel confine.
+ *
+ * Questo blocco esiste per una ragione sola, ed e' scritta nella conseguenza 3
+ * dell'emendamento: *"e' l'unico modo di accorgersi se un domani qualcuno
+ * ripara questo comportamento — e senza, la prossima persona che legge la sonda
+ * la leggera' come un bug"*. Chi trovasse `lastMaterializedDate` che arretra
+ * dopo un import penserebbe a una svista e aggiungerebbe una guardia; la
+ * guardia farebbe sparire l'affitto di agosto e settembre.
+ *
+ * ## Lo stato di partenza, coi numeri
+ *
+ * Regola mensile, ancora al giorno 1, canone 900,00, dal 1 luglio. Oggi e' il
+ * 2 settembre 2026.
+ *
+ *   sul telefono          segnaposto 2026-09-02, 4 spese
+ *     rec:...:2026-07-01  920,00   <- la correzione dell'utente
+ *     rec:...:2026-08-01  900,00   <- cancellata: c'e' la lapide
+ *     rec:...:2026-09-01  900,00
+ *     e-agosto            15,00    manuale, del 15 agosto
+ *
+ *   nel file di backup    segnaposto 2026-07-01, 2 spese
+ *     rec:...:2026-07-01  900,00
+ *     e-giugno             8,00    manuale, del 20 giugno
+ *
+ * Dopo l'import e la materializzazione fino a oggi ci si aspetta **esattamente**
+ * cio' che la data del file implica: 4 spese, di cui 3 ricorrenti da 900,00 —
+ * luglio come stava nel file, agosto e settembre **rigenerate**. La correzione
+ * a 920,00 e la lapide non ci sono piu' perche' il 1 luglio non esistevano.
+ */
+describe('import e segnaposto: ADR 018 emendata', () => {
+  const OGGI = '2026-09-02'
+  const CANONE = 90_000
+
+  function id(giorno: string): string {
+    return recurringExpenseId('r-affitto', giorno)
+  }
+
+  /** Il telefono com'e' un istante prima dell'import. */
+  function telefono(): MemoryDisk {
+    return {
+      ...emptyDisk(),
+      categories: [makeCategory({ id: 'cat-1', name: 'Casa' })],
+      recurringRules: [
+        makeRule({
+          id: 'r-affitto',
+          cadence: 'monthly',
+          anchorDay: 1,
+          amountCents: CANONE,
+          categoryId: 'cat-1',
+          startDate: '2026-07-01',
+          lastMaterializedDate: OGGI,
+        }),
+      ],
+      expenses: [
+        makeExpense({
+          id: id('2026-07-01'),
+          date: '2026-07-01',
+          amountCents: 92_000,
+          source: 'recurring',
+          recurringId: 'r-affitto',
+        }),
+        makeExpense({
+          id: id('2026-08-01'),
+          date: '2026-08-01',
+          amountCents: CANONE,
+          source: 'recurring',
+          recurringId: 'r-affitto',
+          deletedAt: '2026-08-02T10:00:00.000Z',
+        }),
+        makeExpense({
+          id: id('2026-09-01'),
+          date: '2026-09-01',
+          amountCents: CANONE,
+          source: 'recurring',
+          recurringId: 'r-affitto',
+        }),
+        makeExpense({ id: 'e-agosto', date: '2026-08-15', amountCents: 1_500 }),
+      ],
+      settings: makeSettings(),
+    }
+  }
+
+  /** Il file: la stessa storia com'era il 1 luglio. */
+  function fileDiLuglio(disk: MemoryDisk): DataSet {
+    return {
+      categories: disk.categories,
+      budgets: [],
+      recurringRules: [
+        makeRule({
+          id: 'r-affitto',
+          cadence: 'monthly',
+          anchorDay: 1,
+          amountCents: CANONE,
+          categoryId: 'cat-1',
+          startDate: '2026-07-01',
+          lastMaterializedDate: '2026-07-01',
+        }),
+      ],
+      expenses: [
+        makeExpense({
+          id: id('2026-07-01'),
+          date: '2026-07-01',
+          amountCents: CANONE,
+          source: 'recurring',
+          recurringId: 'r-affitto',
+        }),
+        makeExpense({ id: 'e-giugno', date: '2026-06-20', amountCents: 800 }),
+      ],
+      settings: makeSettings(),
+    }
+  }
+
+  it('il segnaposto arretra, e non e un difetto: e la data del file', async () => {
+    const disk = telefono()
+    const repo = await openRepository(createMemoryPersistence(disk), {
+      defaultCategoryNames: TEST_CATEGORY_NAMES,
+      now: tickingClock(),
+      newId: sequentialIds('imp'),
+    })
+    expect(repo.getState().recurringRules[0]?.lastMaterializedDate).toBe(OGGI)
+    expect(repo.getState().expenses).toHaveLength(4)
+
+    await repo.importBackup(fileDiLuglio(disk))
+
+    // Il fatto che ADR 018 dichiarava chiuso e che nessuna riga di codice
+    // garantiva. Se un domani qualcuno "ripara" l'arretramento, questa cade.
+    expect(repo.getState().recurringRules[0]?.lastMaterializedDate).toBe('2026-07-01')
+    expect(repo.getState().expenses).toHaveLength(2)
+  })
+
+  it('dopo l import lo stato e quello del file piu la materializzazione fino a oggi', async () => {
+    const disk = telefono()
+    const repo = await openRepository(createMemoryPersistence(disk), {
+      defaultCategoryNames: TEST_CATEGORY_NAMES,
+      now: tickingClock(),
+      newId: sequentialIds('imp'),
+    })
+    await repo.importBackup(fileDiLuglio(disk))
+    await repo.materializeRecurring(OGGI)
+    await repo.flush()
+
+    const spese = repo.getState().expenses
+    // Quattro: le due del file piu' le due rigenerate. Nessun duplicato — gli
+    // id sono deterministici, quindi due materializzazioni non ne fanno otto.
+    expect(spese).toHaveLength(4)
+    await repo.materializeRecurring(OGGI)
+    await repo.flush()
+    expect(repo.getState().expenses).toHaveLength(4)
+
+    const ricorrenti = spese.filter((e) => e.source === 'recurring')
+    expect(ricorrenti.map((e) => e.date).sort()).toEqual([
+      '2026-07-01',
+      '2026-08-01',
+      '2026-09-01',
+    ])
+    // Tutte e tre al canone del file: 2.700,00 in centesimi.
+    expect(ricorrenti.reduce((somma, e) => somma + e.amountCents, 0)).toBe(270_000)
+    expect(ricorrenti.every((e) => e.deletedAt === undefined)).toBe(true)
+
+    // I due fatti che la conferma dell'import deve dire, verificati uno per uno.
+    // 1. la correzione a 920,00 non c'e' piu': al 1 luglio non era stata fatta.
+    expect(spese.find((e) => e.id === id('2026-07-01'))?.amountCents).toBe(CANONE)
+    // 2. la lapide non c'e' piu', quindi agosto e' rinato vivo.
+    expect(spese.find((e) => e.id === id('2026-08-01'))?.deletedAt).toBeUndefined()
+    // 3. le spese registrate dopo la data del file non ci sono piu'.
+    expect(spese.find((e) => e.id === 'e-agosto')).toBeUndefined()
+    expect(spese.find((e) => e.id === 'e-giugno')).toBeDefined()
+    // E il segnaposto e' tornato a oggi: la finestra e' stata considerata tutta.
+    expect(repo.getState().recurringRules[0]?.lastMaterializedDate).toBe(OGGI)
+  })
+
+  it('cio che l import cancella resta nello scatto, e il ripristino lo rimette', async () => {
+    // La meta' di ADR 026 che rende accettabile la meta' di ADR 018: la storia
+    // sostituita non e' perduta, e non serve nessun file per riaverla.
+    const disk = telefono()
+    const persistence = createMemoryPersistence(disk)
+    const repo = await openRepository(persistence, {
+      defaultCategoryNames: TEST_CATEGORY_NAMES,
+      now: tickingClock(),
+      newId: sequentialIds('imp'),
+    })
+    await repo.importBackup(fileDiLuglio(disk))
+    await repo.materializeRecurring(OGGI)
+    await repo.flush()
+
+    const tornato = await persistence.restoreSnapshot()
+    expect(tornato?.expenses).toHaveLength(4)
+    expect(tornato?.recurringRules[0]?.lastMaterializedDate).toBe(OGGI)
+    expect(tornato?.expenses.find((e) => e.id === id('2026-07-01'))?.amountCents).toBe(92_000)
+    expect(tornato?.expenses.find((e) => e.id === id('2026-08-01'))?.deletedAt).toBe(
+      '2026-08-02T10:00:00.000Z',
+    )
+    expect(tornato?.expenses.find((e) => e.id === 'e-agosto')).toBeDefined()
   })
 })

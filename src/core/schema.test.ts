@@ -2,13 +2,14 @@ import { describe, expect, it } from 'vitest'
 import {
   MIGRATIONS,
   SCHEMA_VERSION,
-  STORE_NAMES,
   SchemaTooNewError,
   emptyRawDataSet,
   migrateRawData,
   pendingMigrations,
 } from './schema'
+import { MIGRATED_STORES, REPLACED_STORES } from './schema'
 import type { MigrationStep, RawDataSet, RawRecord } from './schema'
+import { ALL_STORES, ARCHIVE_STORES, SYSTEM_STORES } from './types'
 
 /**
  * Due gruppi di test, e fanno due mestieri diversi.
@@ -109,9 +110,22 @@ describe('migrazione da N-1 a N', () => {
 })
 
 describe('schema corrente', () => {
-  it('la versione 1 crea tutti gli store dichiarati', () => {
+  it('le migrazioni creano tutti gli store dichiarati, delle due famiglie', () => {
     const creati = MIGRATIONS.flatMap((s) => s.createStores ?? []).map((s) => s.name)
-    expect([...creati].sort()).toEqual([...STORE_NAMES].sort())
+    expect([...creati].sort()).toEqual([...ALL_STORES].sort())
+  })
+
+  it('lo store di sistema non e nelle liste dell archivio', () => {
+    // Il terzo dei tre danni di ADR 026 §2, e l'unico fatale: se lo scatto
+    // fosse in `REPLACED_STORES` verrebbe cancellato dalla stessa transazione
+    // che deve proteggerlo. Qui si guarda **il valore**, non il tipo, perche' il
+    // tipo lo garantisce gia' — e un giorno qualcuno potrebbe allargarlo.
+    for (const nome of SYSTEM_STORES) {
+      expect([...MIGRATED_STORES]).not.toContain(nome)
+      expect([...REPLACED_STORES]).not.toContain(nome)
+      expect([...ARCHIVE_STORES]).not.toContain(nome)
+    }
+    expect([...ALL_STORES]).toContain('preImportSnapshot')
   })
 
   it('le spese hanno l indice per data, ed e l unico', () => {

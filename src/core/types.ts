@@ -287,7 +287,98 @@ export interface DataSet {
   readonly settings: Settings
 }
 
-export type StoreName = 'expenses' | 'categories' | 'recurringRules' | 'budgets' | 'settings'
+/**
+ * ## Due famiglie di store, e la differenza non e' documentale
+ *
+ * Fino allo schema 5 il database aveva **una** famiglia sola, e tre domande
+ * diverse avevano per caso la stessa risposta: cosa una migrazione trasforma,
+ * cosa finisce nel backup, cosa `replaceAll` cancella. ADR 026 lo dice come va
+ * detto: *che le tre liste coincidano oggi e' una coincidenza, non un fatto*.
+ *
+ * - **archivio** (`StoreName`) — i dati dell'utente. Si migrano, escono nel
+ *   backup, e sono cio' che un import sostituisce.
+ * - **sistema** (`SystemStoreName`) — cio' che l'app tiene su se stessa. Non si
+ *   migra insieme all'archivio, non esce nel backup, e **sopravvive a un
+ *   import**: lo scatto pre-import verrebbe distrutto dalla stessa transazione
+ *   che deve proteggerlo.
+ *
+ * I due tipi si derivano dalle due liste, non viceversa: cosi' aggiungere un
+ * sesto store d'archivio e aggiungere un secondo store di sistema restano
+ * **due gesti diversi** (due liste diverse), e chi mette un nome nella famiglia
+ * sbagliata non compila — `RawDataSet`, `emptyRawDataSet`, i `counts`
+ * dell'anteprima e `BackupFile.data` sono tutti indicizzati su `StoreName`.
+ */
+export const ARCHIVE_STORES = [
+  'expenses',
+  'categories',
+  'recurringRules',
+  'budgets',
+  'settings',
+] as const
+
+export type StoreName = (typeof ARCHIVE_STORES)[number]
+
+export const SYSTEM_STORES = ['preImportSnapshot'] as const
+
+export type SystemStoreName = (typeof SYSTEM_STORES)[number]
+
+/** Ogni store del database, di qualunque famiglia. Solo `StoreSpec` la usa. */
+export type AnyStoreName = StoreName | SystemStoreName
+
+/** Tutti gli store che devono esistere allo schema corrente. */
+export const ALL_STORES: readonly AnyStoreName[] = [...ARCHIVE_STORES, ...SYSTEM_STORES]
+
+/**
+ * Record singolo dello store di sistema: **ne esiste sempre e solo uno**.
+ *
+ * L'id e' una costante, quindi la regola di scarto di ADR 026 — *"il ripristino
+ * successivo sovrascrive lo scatto precedente"* — e' vera **per costruzione** e
+ * non per disciplina: un `put` sullo stesso id non puo' produrre il secondo.
+ * Nessun orologio e nessuna scadenza: le altre due strade chiedevano
+ * rispettivamente un orologio (che un'app senza account non ha, e' la stessa
+ * obiezione di `updatedAt`) e un bottone.
+ */
+export const PRE_IMPORT_SNAPSHOT_ID = 'pre-import'
+
+/**
+ * Lo stato dell'archivio **un istante prima** dell'import che l'ha sostituito.
+ *
+ * Esiste perche' sarebbe assurdo che l'unica operazione irreversibile dell'app
+ * fosse proprio il ripristino, cioe' la schermata che esiste perche' i dati non
+ * si perdano (ADR 026 §2). L'Annulla che c'era prima viveva in memoria e moriva
+ * con la chiusura dell'app; questo sta sul disco.
+ *
+ * Non e' un `BackupFile`: un backup e' un file che esce dall'app e che qualcuno
+ * puo' aver modificato, e va quindi validato in ingresso. Questo l'ha scritto
+ * quest'app dieci minuti fa nello stesso database, e si rilegge con la stessa
+ * fiducia con cui `idb.ts` rilegge una spesa.
+ */
+export interface PreImportSnapshot {
+  readonly id: typeof PRE_IMPORT_SNAPSHOT_ID
+  /**
+   * Quando lo scatto e' stato preso, cioe' **la data dello stato a cui
+   * riporterebbe**: e' quello che la voce in Impostazioni deve dire, perche' un
+   * "Annulla" nudo non dice a cosa.
+   *
+   * E' anche la chiave dell'indice `by-takenAt`, che e' l'unico modo di sapere
+   * se lo scatto c'e' e di che giorno e' **senza leggerne il carico** — che a
+   * 5.000 spese vale 1,3 MB, cioe' un costo che nessuna schermata deve pagare
+   * per dipingere una riga.
+   */
+  readonly takenAt: Timestamp
+  /**
+   * La versione dello schema con cui il carico e' stato scritto.
+   *
+   * Non e' decorativa e non e' sempre uguale a `SCHEMA_VERSION`: lo scatto
+   * sopravvive agli aggiornamenti dell'app, e le migrazioni **non lo toccano**
+   * (e' di un'altra famiglia). Il ripristino la legge e porta il carico alla
+   * versione corrente prima di riscriverlo: senza, un aggiornamento fra
+   * l'import e il ripristino rimetterebbe nell'archivio dei record di forma
+   * vecchia — cioe' un danno silenzioso su dati irripetibili.
+   */
+  readonly schemaVersion: number
+  readonly data: DataSet
+}
 
 /**
  * UUID v4 costruito a mano da 16 byte casuali.

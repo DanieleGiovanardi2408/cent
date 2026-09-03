@@ -26,7 +26,15 @@ import type {
   RecurringRuleRewind,
   RecurringRuleRewindRequest,
 } from './recurring-plan'
-import type { Budget, Category, DataSet, Expense, RecurringRule, Settings, Timestamp } from './types'
+import type {
+  Budget,
+  Category,
+  DataSet,
+  Expense,
+  RecurringRule,
+  Settings,
+  Timestamp,
+} from './types'
 
 /** Quello che c'e' su disco all'avvio. `settings: null` = database mai inizializzato. */
 export interface LoadedData {
@@ -283,8 +291,94 @@ export interface Persistence {
    * conforme al tipo e sbagliata.
    */
   write(batch: WriteBatch): Promise<WriteResult>
-  /** Svuota e riscrive tutto, in una transazione. Serve all'import. */
-  replaceAll(data: DataSet): Promise<void>
+  /**
+   * Sostituisce l'archivio con `data` **e nello stesso gesto ne salva lo stato
+   * precedente** nello scatto pre-import. Una transazione sola.
+   *
+   * ## Non e' un parametro in piu': e' cosa significa l'operazione
+   *
+   * Lo scatto non e' un'opzione di `replaceAll`, e' la meta' di cio' che
+   * `replaceAll` fa. Se fossero due chiamate esisterebbe uno stato osservabile
+   * *"import senza scatto"* — un'interruzione fra le due, e iOS termina le web
+   * app in background — che e' esattamente lo stato da cui lo scatto protegge.
+   * ADR 008 lo dice come regola generale; qui la conseguenza e' che non esiste
+   * una firma per fare l'import senza la rete.
+   *
+   * ## E lo scatto si prende **dal disco**, dentro la transazione
+   *
+   * Non lo porta il chiamante. Il valore da scrivere e' *"cio' che c'e' gia'
+   * li'"*, cioe' il caso che ADR 008 obbliga a decidere dentro la transazione:
+   * chi chiama tiene un mirror, e un mirror puo' avere in piu' le spese che
+   * la coda non ha ancora scritto e in meno quelle scritte da un altro
+   * contesto. Uno scatto costruito dal mirror non riporterebbe l'utente allo
+   * stato che aveva: lo riporterebbe a una versione plausibile di quello stato.
+   *
+   * ## Cosa vale dopo, in tutti i casi
+   *
+   * Lo store di sistema contiene **esattamente uno** scatto — quello appena
+   * preso — oppure nessuno se non c'era niente da salvare (nessun record
+   * `settings`: database mai inizializzato, quindi nessuno stato a cui tornare).
+   * Lo scatto precedente viene scartato in tutti e due i casi: ne esiste sempre
+   * e solo uno, l'ultimo.
+   *
+   * Restituisce la data dello scatto rimasto, o `null` se non c'era niente da
+   * salvare: e' la stessa risposta di `snapshotTakenAt` senza una seconda
+   * lettura, ed e' cio' che serve per dire subito dopo l'import a cosa si
+   * tornerebbe. Il ramo `null` e' l'unico modo per cui la rete puo' non esserci
+   * dopo un import, e restituirlo lo rende osservabile invece che silenzioso.
+   *
+   * @param takenAt l'istante dello scatto, pregenerato **fuori** come ogni
+   * timestamp che attraversa questo confine (corollario di ADR 008): un
+   * ritentativo della stessa operazione riscrive lo stesso scatto invece di
+   * spostarne la data.
+   */
+  replaceAll(data: DataSet, takenAt: Timestamp): Promise<Timestamp | null>
+  /**
+   * Quando e' stato preso lo scatto, o `null` se non ce n'e' uno.
+   *
+   * E' l'unica lettura che serve per decidere se la voce di ripristino esiste e
+   * cosa dice, ed e' separata da `loadAll` di proposito: il carico dello scatto
+   * puo' valere 1,3 MB e non deve stare sulla strada del primo frame. ADR 026
+   * chiede la **data di cio' a cui riporterebbe**, non un "Annulla" nudo, e
+   * quella data e' questa.
+   */
+  snapshotTakenAt(): Promise<Timestamp | null>
+  /**
+   * Rimette dentro lo scatto: l'archivio torna com'era prima dell'import.
+   * Una transazione sola, come `replaceAll`.
+   *
+   * Restituisce lo stato ripristinato — la versione autorevole, con cui chi
+   * tiene un mirror si allinea — oppure `null` se non c'era nessuno scatto, e in
+   * quel caso **non scrive niente**: nessun archivio svuotato per un ripristino
+   * che non aveva materiale.
+   *
+   * ## Lo scatto viene consumato, e non e' un dettaglio
+   *
+   * Dopo un ripristino riuscito lo store di sistema resta vuoto, quindi la voce
+   * sparisce. Le tre ragioni, in ordine:
+   *
+   * 1. **tenerlo direbbe una cosa falsa.** La voce dichiara la data dello stato
+   *    a cui riporta, e dopo il ripristino quello stato e' quello in cui si e'
+   *    gia': un'azione che non fa niente, con accanto un fatto che lo schermo
+   *    non conferma;
+   * 2. **scambiarlo** — mettere al suo posto i dati importati, per poter
+   *    disfare il disfacimento — sarebbe un redo che nessuno ha chiesto, e in
+   *    uno slot solo: la rete diventerebbe un interruttore fra due stati, che
+   *    e' un'altra funzione;
+   * 3. **cio' che si perde ha gia' un'altra copia.** Il file importato l'ha
+   *    scelto l'utente e sta ancora dove stava; lo stato pre-import invece non
+   *    esisteva da nessun'altra parte, ed e' l'unica cosa che questa rete e'
+   *    nata per tenere.
+   *
+   * Il carico viene portato alla versione corrente dello schema prima di essere
+   * riscritto (`PreImportSnapshot.schemaVersion`): fra l'import e il ripristino
+   * ci puo' stare un aggiornamento dell'app, e le migrazioni non toccano gli
+   * store di sistema.
+   *
+   * Chi la chiama deve allineare il proprio mirror con cio' che torna: questa e'
+   * la porta verso il disco, non conosce nessun mirror.
+   */
+  restoreSnapshot(): Promise<DataSet | null>
   close(): void
 }
 
