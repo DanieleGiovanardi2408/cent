@@ -47,7 +47,7 @@ import type { CategoryDeletion, CategoryPlacement } from './categories'
 import { isAfter } from './date'
 import { NOTHING_SKIPPED } from './persistence'
 import type { LoadedData, Persistence, WriteBatch, WriteResult } from './persistence'
-import { buildPreImportSnapshot, snapshotPayload } from './snapshot'
+import { buildPreImportSnapshot } from './snapshot'
 import type {
   AnyStoreName,
   Budget,
@@ -635,56 +635,6 @@ export function createIdbPersistence(options: OpenOptions = {}): IdbPersistence 
             settings: data.settings,
           })
           return snapshot === null ? null : snapshot.takenAt
-        } catch (error) {
-          await rollback(tx)
-          throw error
-        }
-      })
-    },
-
-    async snapshotTakenAt(): Promise<Timestamp | null> {
-      return withDb(async (connection) => {
-        // Cursore di **sole chiavi** sull'indice: la chiave dell'indice e'
-        // `takenAt`, quindi la data arriva senza che il carico venga letto. E'
-        // l'unica ragione per cui l'indice esiste, ed e' la stessa forma di
-        // `by-date` — un indice si aggiunge quando c'e' una lettura vera che
-        // senza costerebbe troppo, non per simmetria.
-        const cursor = await connection
-          .transaction('preImportSnapshot')
-          .store.index('by-takenAt')
-          .openKeyCursor()
-        return cursor === null ? null : cursor.key
-      })
-    },
-
-    async restoreSnapshot(): Promise<DataSet | null> {
-      return withDb(async (connection) => {
-        const tx = connection.transaction([...ALL_STORES], 'readwrite') as WriteTx
-        try {
-          const store = tx.objectStore('preImportSnapshot')
-          const snapshot = await store.get(PRE_IMPORT_SNAPSHOT_ID)
-          // Nessuno scatto: non si scrive niente. Svuotare l'archivio per un
-          // ripristino che non ha materiale sarebbe il danno che l'operazione
-          // esiste per evitare.
-          if (snapshot === undefined) {
-            await rollback(tx)
-            return null
-          }
-          // Il carico puo' essere stato scritto da una versione precedente
-          // dell'app: le migrazioni non toccano gli store di sistema.
-          const restored = snapshotPayload(snapshot)
-          // Consumato: dopo il ripristino la rete non c'e' piu', e la voce
-          // sparisce. La ragione per esteso sta su `Persistence.restoreSnapshot`.
-          await store.delete(PRE_IMPORT_SNAPSHOT_ID)
-          await Promise.all(REPLACED_STORES.map((name) => tx.objectStore(name).clear()))
-          await runBatch(tx, {
-            expenses: restored.expenses,
-            categories: restored.categories,
-            recurringRules: restored.recurringRules,
-            budgets: restored.budgets,
-            settings: restored.settings,
-          })
-          return restored
         } catch (error) {
           await rollback(tx)
           throw error

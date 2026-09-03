@@ -334,51 +334,33 @@ export interface Persistence {
    */
   replaceAll(data: DataSet, takenAt: Timestamp): Promise<Timestamp | null>
   /**
-   * Quando e' stato preso lo scatto, o `null` se non ce n'e' uno.
+   * **Qui c'erano `snapshotTakenAt` e `restoreSnapshot`, e sono state differite.**
    *
-   * E' l'unica lettura che serve per decidere se la voce di ripristino esiste e
-   * cosa dice, ed e' separata da `loadAll` di proposito: il carico dello scatto
-   * puo' valere 1,3 MB e non deve stare sulla strada del primo frame. ADR 026
-   * chiede la **data di cio' a cui riporterebbe**, non un "Annulla" nudo, e
-   * quella data e' questa.
+   * Lo scatto si prende gia' — `replaceAll` qui sopra — ma **niente lo legge e
+   * niente lo ripristina**, perche' non esiste ancora una schermata che lo
+   * chieda. La regola e' quella del progetto: **una funzione si spedisce insieme
+   * al suo chiamante, o non si spedisce.** E' la stessa con cui
+   * `expensesInRange` e `planBudgetChange` sono state cancellate — API di
+   * dominio senza chiamanti di produzione, tenute vive dai test che le
+   * chiamavano — e con cui `RecurringRule.note` e `endDate` sono uscite dai tipi.
+   *
+   * **Il tetto del bundle ha fatto solo da rivelatore**: con le due dentro, il
+   * primo caricamento valeva 61.554 byte contro un tetto di 61.440. Togliendole
+   * restano 225 byte di margine. Ma il numero non e' la ragione — se il tetto
+   * fosse stato piu' alto la regola sarebbe valsa lo stesso, e vale la pena
+   * scriverlo perche' fra sei mesi la tentazione sara' di rimetterle "tanto
+   * adesso c'e' spazio".
+   *
+   * **Condizione**: arrivano nel commit che le chiama, cioe' quello del dialogo
+   * di ripristino. **Se quel dialogo non arriva in fase 7, non arrivano nemmeno
+   * loro** — e lo scatto resta una rete che nessuno puo' tirare, che e' un
+   * difetto suo e va guardato allora.
+   *
+   * Gli argomenti che le riguardavano non sono andati persi: stanno in
+   * [ADR 026](../../docs/adr/026-l-import-sostituisce-e-lascia-una-rete.md),
+   * §"Il lato lettura, differito" — perche' sono **decisioni**, e una decisione
+   * non vive in un commento di una funzione che non esiste.
    */
-  snapshotTakenAt(): Promise<Timestamp | null>
-  /**
-   * Rimette dentro lo scatto: l'archivio torna com'era prima dell'import.
-   * Una transazione sola, come `replaceAll`.
-   *
-   * Restituisce lo stato ripristinato — la versione autorevole, con cui chi
-   * tiene un mirror si allinea — oppure `null` se non c'era nessuno scatto, e in
-   * quel caso **non scrive niente**: nessun archivio svuotato per un ripristino
-   * che non aveva materiale.
-   *
-   * ## Lo scatto viene consumato, e non e' un dettaglio
-   *
-   * Dopo un ripristino riuscito lo store di sistema resta vuoto, quindi la voce
-   * sparisce. Le tre ragioni, in ordine:
-   *
-   * 1. **tenerlo direbbe una cosa falsa.** La voce dichiara la data dello stato
-   *    a cui riporta, e dopo il ripristino quello stato e' quello in cui si e'
-   *    gia': un'azione che non fa niente, con accanto un fatto che lo schermo
-   *    non conferma;
-   * 2. **scambiarlo** — mettere al suo posto i dati importati, per poter
-   *    disfare il disfacimento — sarebbe un redo che nessuno ha chiesto, e in
-   *    uno slot solo: la rete diventerebbe un interruttore fra due stati, che
-   *    e' un'altra funzione;
-   * 3. **cio' che si perde ha gia' un'altra copia.** Il file importato l'ha
-   *    scelto l'utente e sta ancora dove stava; lo stato pre-import invece non
-   *    esisteva da nessun'altra parte, ed e' l'unica cosa che questa rete e'
-   *    nata per tenere.
-   *
-   * Il carico viene portato alla versione corrente dello schema prima di essere
-   * riscritto (`PreImportSnapshot.schemaVersion`): fra l'import e il ripristino
-   * ci puo' stare un aggiornamento dell'app, e le migrazioni non toccano gli
-   * store di sistema.
-   *
-   * Chi la chiama deve allineare il proprio mirror con cio' che torna: questa e'
-   * la porta verso il disco, non conosce nessun mirror.
-   */
-  restoreSnapshot(): Promise<DataSet | null>
   close(): void
 }
 

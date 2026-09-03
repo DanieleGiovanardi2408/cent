@@ -1665,8 +1665,6 @@ describe('rilettura al risveglio', () => {
       },
       write: (batch) => inner.write(batch),
       replaceAll: (data, takenAt) => inner.replaceAll(data, takenAt),
-      snapshotTakenAt: () => inner.snapshotTakenAt(),
-      restoreSnapshot: () => inner.restoreSnapshot(),
       close: () => inner.close(),
     }
     const repo = await openRepository(persistence, {
@@ -1705,8 +1703,6 @@ describe('import: la coda e sua', () => {
         write: (batch) =>
           failing ? Promise.reject(new Error('disco non disponibile')) : inner.write(batch),
         replaceAll: (data, takenAt) => inner.replaceAll(data, takenAt),
-        snapshotTakenAt: () => inner.snapshotTakenAt(),
-        restoreSnapshot: () => inner.restoreSnapshot(),
         close: () => inner.close(),
       },
       fail: (on) => {
@@ -3046,7 +3042,11 @@ describe('import e segnaposto: ADR 018 emendata', () => {
     await repo.materializeRecurring(OGGI)
     await repo.flush()
 
-    const tornato = await persistence.restoreSnapshot()
+    // Lo scatto tiene lo stato di prima, e si legge **dal disco** — non da
+    // `restoreSnapshot`, che e' differita al commit che la chiama: il disco in
+    // memoria e' l'oggetto che questo test ha costruito, quindi non serve
+    // nessuna cucitura in `src/core` per guardarci dentro.
+    const tornato = disk.snapshot?.data
     expect(tornato?.expenses).toHaveLength(4)
     expect(tornato?.recurringRules[0]?.lastMaterializedDate).toBe(OGGI)
     expect(tornato?.expenses.find((e) => e.id === id('2026-07-01'))?.amountCents).toBe(92_000)

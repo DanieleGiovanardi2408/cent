@@ -38,7 +38,7 @@ import type {
   WriteBatch,
   WriteResult,
 } from './persistence'
-import { buildPreImportSnapshot, snapshotPayload } from './snapshot'
+import { buildPreImportSnapshot } from './snapshot'
 import type {
   Budget,
   Category,
@@ -346,29 +346,6 @@ export function createMemoryPersistence(seed: MemoryDiskSeed = emptyDisk()): Mem
       return snapshot === null ? null : snapshot.takenAt
     },
 
-    async snapshotTakenAt(): Promise<Timestamp | null> {
-      if (dead) throw new SimulatedCrashError()
-      return disk.snapshot?.takenAt ?? null
-    },
-
-    async restoreSnapshot(): Promise<DataSet | null> {
-      guard()
-      const snapshot = disk.snapshot
-      // Nessuno scatto, nessuna scrittura: l'archivio non si svuota per un
-      // ripristino che non ha materiale. Come in `idb.ts`, dove il ramo e' un
-      // `rollback` prima di qualunque `put`.
-      if (snapshot === null) return null
-      const restored = structuredClone(snapshotPayload(snapshot))
-      disk.expenses = [...restored.expenses]
-      disk.categories = [...restored.categories]
-      disk.recurringRules = [...restored.recurringRules]
-      disk.budgets = [...restored.budgets]
-      disk.settings = restored.settings
-      // Consumato. La ragione per esteso sta su `Persistence.restoreSnapshot`.
-      disk.snapshot = null
-      writes += 1
-      return restored
-    },
     close(): void {
       dead = true
     },

@@ -642,8 +642,6 @@ describe('morte a meta su un database vero', () => {
         return inner.write(batch)
       },
       replaceAll: (data, takenAt) => inner.replaceAll(data, takenAt),
-      snapshotTakenAt: () => inner.snapshotTakenAt(),
-      restoreSnapshot: () => inner.restoreSnapshot(),
       close: () => inner.close(),
     }
   }
