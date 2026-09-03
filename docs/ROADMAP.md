@@ -25,18 +25,18 @@ sa gia', e per questo non puo' invecchiare. I giudizi — cosa e' in volo, cosa
 aspetta una persona — stanno sotto, scritti a mano e timbrati con lo SHA a cui
 sono stati rivisti.
 
-- **Ultimo commit**: `9c045cd` — docs: DEBITO §12 ha preso una terza strada, e §14 e' l'invariante che nessuno guarda
-- **Data**: 03/09/2026 19:10
+- **Ultimo commit**: `8644f2e` — fix: la frase del "troppo nuovo" prometteva una cosa e il bottone ne faceva un'altra
+- **Data**: 04/09/2026 00:12
 - **Ramo**: `fase7/scatto-pre-import`
-- **Pushato**: si, `origin/fase7/scatto-pre-import` e' allo stesso commit
-- **Rispetto a `origin/main`**: 13 commit avanti
-- **Albero di lavoro**: **non pulito**, ci sono modifiche non committate
+- **Pushato**: **no: 2 commit non pushati su `origin/fase7/scatto-pre-import`**
+- **Rispetto a `origin/main`**: 17 commit avanti
+- **Albero di lavoro**: pulito
 
 - **Test unitari**: 796 in 27 file, tutti verdi
-- **Test e2e dichiarati**: 436 in 14 file, su 4 progetti (iphone-se, iphone-14, landscape, dark)
-- **Test e2e eseguiti**: non misurato — l'ultima esecuzione e' **parziale** — 4 test su 436 dichiarati, probabilmente un `-g` o un `--project`: va rilanciata intera
-- **Bundle iniziale**: 64.6 KB gzip su 65.0 KB (0.4 KB di margine)
-- **Disco**: 5.6 GB liberi, 74% pieno. Non e' un giudizio e non porta un timbro: cambia da solo, quindi si rigenera.
+- **Test e2e dichiarati**: 448 in 15 file, su 4 progetti (iphone-se, iphone-14, landscape, dark)
+- **Test e2e eseguiti**: 422 passati, 26 saltati, in 2.8 minuti. I saltati sono condizionali (ADR 013): solo un'esecuzione li vede.
+- **Bundle iniziale**: 64.9 KB gzip su 65.0 KB (0.1 KB di margine)
+- **Disco**: 4.4 GB liberi, 79% pieno. Non e' un giudizio e non porta un timbro: cambia da solo, quindi si rigenera.
 
 - **Schema del database**: 6. La scala delle migrazioni:
   - **1** — Schema iniziale: expenses, categories, recurringRules, budgets, settings
@@ -55,7 +55,7 @@ sono stati rivisti.
 ## In volo adesso
 
 <!-- JUDGMENT rivisto=c4d1ef7 -->
-> Rivisto a `c4d1ef7`, 17 commit fa. **Da riguardare.**
+> Rivisto a `c4d1ef7`, 21 commit fa. **Da riguardare.**
 
 **Ri-derivato**: `git rev-parse HEAD origin/main` da' lo stesso commit e l'ultimo
 workflow `Deploy` su `main` e' `success`, quindi le tre posizioni — albero,
