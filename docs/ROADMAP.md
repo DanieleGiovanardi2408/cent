@@ -25,18 +25,18 @@ sa gia', e per questo non puo' invecchiare. I giudizi — cosa e' in volo, cosa
 aspetta una persona — stanno sotto, scritti a mano e timbrati con lo SHA a cui
 sono stati rivisti.
 
-- **Ultimo commit**: `c5b032a` — refactor: il lato lettura dello scatto si spedisce col suo chiamante
-- **Data**: 03/09/2026 12:03
+- **Ultimo commit**: `f083d57` — docs: DEBITO §12 era doppio — e' DEBITO §1 dentro DEBITO
+- **Data**: 03/09/2026 13:54
 - **Ramo**: `fase7/scatto-pre-import`
 - **Pushato**: si, `origin/fase7/scatto-pre-import` e' allo stesso commit
-- **Rispetto a `origin/main`**: 3 commit avanti
+- **Rispetto a `origin/main`**: 10 commit avanti
 - **Albero di lavoro**: **non pulito**, ci sono modifiche non committate
 
-- **Test unitari**: 771 in 26 file, tutti verdi
+- **Test unitari**: 782 in 26 file, tutti verdi
 - **Test e2e dichiarati**: 436 in 14 file, su 4 progetti (iphone-se, iphone-14, landscape, dark)
 - **Test e2e eseguiti**: non misurato — l'ultima esecuzione e' piu' vecchia dei sorgenti — va rilanciata
-- **Bundle iniziale**: 59.8 KB gzip su 60.0 KB (0.2 KB di margine)
-- **Disco**: 7.8 GB liberi, 68% pieno. Non e' un giudizio e non porta un timbro: cambia da solo, quindi si rigenera.
+- **Bundle iniziale**: 59.9 KB gzip su 60.0 KB (0.1 KB di margine)
+- **Disco**: 5.4 GB liberi, 75% pieno. Non e' un giudizio e non porta un timbro: cambia da solo, quindi si rigenera.
 
 - **Schema del database**: 6. La scala delle migrazioni:
   - **1** — Schema iniziale: expenses, categories, recurringRules, budgets, settings
@@ -55,7 +55,7 @@ sono stati rivisti.
 ## In volo adesso
 
 <!-- JUDGMENT rivisto=c4d1ef7 -->
-> Rivisto a `c4d1ef7`, 7 commit fa. **Da riguardare.**
+> Rivisto a `c4d1ef7`, 14 commit fa. **Da riguardare.**
 
 **Ri-derivato**: `git rev-parse HEAD origin/main` da' lo stesso commit e l'ultimo
 workflow `Deploy` su `main` e' `success`, quindi le tre posizioni — albero,
@@ -2579,6 +2579,82 @@ ne ha escluse**. Una statistica che scarta record in silenzio mente — e qui
 scarterebbe proprio le spese inserite in ritardo, che non sono un campione
 casuale.
 
+
+## Fase 7 — dove siamo, 3 settembre sera
+
+**Ramo `fase7/scatto-pre-import`**, otto commit sopra `main` (che e' fermo a
+`9958f4f`). Salvato qui perche' **la sessione e' morta due volte oggi** — una per
+il coperchio chiuso, una per il limite — e la seconda ha ucciso un agente mentre
+leggeva.
+
+### Fatto, e verificato
+
+| | |
+|---|---|
+| **Store di sistema** | `StoreName` sono i cinque dell'archivio; `SYSTEM_STORES` e' un'altra famiglia. Le tre liste — cosa si migra, cosa esce nel backup, cosa `replaceAll` cancella — erano una sola **per coincidenza**, adesso sono tre |
+| **Scatto pre-import** | `replaceAll(data, takenAt)` lo prende **dal disco, dentro la stessa transazione** (ADR 008). Ne esiste sempre e solo uno, l'ultimo — l'id e' una costante, nessun orologio |
+| **Migrazione 5 → 6** | Provata sulla catena **4 → 6** su una copia del backup reale: 18/18 spese, somma 88.493 identica, **6/6 lapidi**, un solo record cambiato |
+| **Lato lettura** | **Differito**, con la sua condizione (sotto) |
+| **`ImportPreview`** | `exportedAt`, `counts` su cio' che l'utente vedra', `ok` = nessuna issue `error`, `app` obbligatorio, zero categorie rifiutate |
+| **`Settings`** | Diviso: l'import non tocca `language`/`theme`/`onboardingCompletedAt`; `lastBackupAt` prende l'`exportedAt` del file |
+| **Ri-semina** | Chiusa **dov'e'**: `openRepository` semina anche con `settings` gia' scritto |
+
+**Numeri all'ultimo commit** (`f083d57`): tsc 0 · unit **782/782 in 26 file** ·
+audit A/B/C/D puliti · e2e **410 passati / 26 saltati / 0 falliti** (girata a
+`8ef9ce8`) · bundle **59,9 / 60,0**, margine **124 byte**.
+
+### Deciso, e non si riapre senza un fatto nuovo
+
+Tutto in [ADR 026](adr/026-l-import-sostituisce-e-lascia-una-rete.md). In breve:
+**sostituzione** (la fusione chiede un arbitro fra due dispositivi, e un arbitro
+chiede un tempo condiviso che un'app senza account non ha), **ADR 018 emendata**
+(l'arretramento del segnaposto su import e' la semantica del ripristino, non un
+difetto), **l'import accetta solo stati che l'app avrebbe potuto produrre** — e la
+derivazione di quella regola e' stata **corretta due volte**, l'ultima perche'
+cancellare tutte e otto le categorie **si puo'**.
+
+### Manca — ed e' il lavoro di adesso
+
+**Giro A — anteprima e conferma.** Si costruisce e si prova **senza selettore**,
+perche' il dominio e' pronto: `exportedAt` dentro la frase, il **prima/dopo** dei
+conteggi, i **quattro** stati di lettura, i messaggi col rimedio eseguibile dal
+telefono.
+
+**Giro B — selettore di file e stringhe.** `accept` provato **sul dispositivo**,
+un file da iCloud Drive, le due lingue.
+
+**Due giri e non uno, e la ragione e' misurata**: un agente che consegna tutto
+alla fine perde tutto se muore, ed e' successo due volte oggi. Due giri da venti
+minuti sopravvivono a un limite; uno da quaranta no.
+
+### I quattro stati della lettura, e sono quattro non tre
+
+1. **sto leggendo** — su iCloud puo' durare secondi;
+2. **non si e' potuto leggere** — rimedio: riprova, o scarica il file sul telefono;
+3. **letto, non e' un backup di Cent** — rimedio: scegli un altro file;
+4. **letto, e' un backup ma un record e' illeggibile** — rimedio **diverso dal 3**.
+
+Il 2 e il 3 hanno cause opposte; il 3 e il 4 anche — nel 3 il file e' la cosa
+sbagliata, nel 4 e' il file giusto con un difetto localizzato. E il messaggio del
+4 e' cio' che rende accettabile il rifiuto totale ([DEBITO.md](DEBITO.md) §13):
+senza, il tutto-o-niente e' un vicolo cieco.
+
+### Aperto, con la condizione
+
+- **`restoreSnapshot` e `snapshotTakenAt` non esistono.** Lo scatto si prende e
+  **nessuno lo puo' tirare**. Condizione: arrivano nel commit del dialogo di
+  ripristino; se quel dialogo non arriva in fase 7, **lo scatto e' una rete che
+  nessuno puo' usare, e quello e' un difetto suo da guardare allora**. Nessun
+  agente le riaggiunge di iniziativa: e' una decisione con un'ADR dietro.
+- **Il bundle ha 124 byte di margine**, e il commit delle stringhe lo sfora quasi
+  certamente. Quando succede: si misura di quanto, **non si tocca il tetto**.
+  Alzarlo e' una decisione di prodotto, e si prende con un confronto **in secondi**
+  a 60 e a 65 KB su una connessione lenta — l'argomento del tetto e' fatto di
+  secondi e si aggiorna con dei secondi.
+- **DEBITO §12** (le issue in italiano) e **§13** (il rifiuto totale), tutte e due
+  con la loro condizione.
+- **2g** riparte su un albero fermo con una porta sua. C'e' un worktree pronto in
+  `wt-clausole`, fermo a `d91965f`.
 
 ## Fase 7 — le decisioni sono prese, e stanno in ADR 026
 
