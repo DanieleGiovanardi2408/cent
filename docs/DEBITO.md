@@ -716,6 +716,39 @@ di lasciarla. Fino ad allora vale la contromisura a occhio: **un nome comune per
 un campo nuovo e' una scelta contro di noi**, e conviene sceglierne uno che nel
 progetto non esista gia'.
 
+## 12. I messaggi di `ImportIssue` sono in italiano, in un'app il cui default e' inglese
+
+**Stato: aperto.** Nato il 3 settembre 2026, mentre l'anteprima dell'import
+imparava a rifiutare.
+
+**Cosa.** `ImportIssue.message` e' una stringa italiana scritta dentro
+`src/core/backup.ts` — *"importo non intero in centesimi"*, *"il file non
+contiene nessuna categoria: senza griglia non si puo inserire nessuna spesa"*.
+Sono trentaquattro punti di emissione — 18 `c.error`, 10 `c.warn`, 6 rifiuti — e non passano da `t()`: non possono, perche' `src/core` non
+conosce i dizionari e non deve. Il default dell'app e' **inglese**, e la prima
+persona che vedra' un rifiuto d'import fuori dall'Italia lo leggera' in italiano.
+
+**Perche' fino a ieri non mordeva.** Nessuna schermata leggeva
+`ImportPreview`: le issue esistevano solo per i test. Da oggi esistono anche i
+rifiuti — `ok: false` con un `error` che nomina il punto — ed e' proprio quella
+la riga che una persona **deve** poter leggere, perche' e' l'unica cosa che le
+dice come rimediare.
+
+**Non e' stato riparato adesso** perche' la riparazione ha una forma sola e non
+e' una traduzione: la issue deve portare **un codice** (un discriminante chiuso)
+e la UI deve tenere le due frasi nei dizionari. Un codice e' un campo, e un
+campo si spedisce col suo lettore: il lettore e' la schermata d'import, che non
+esiste ancora. Aggiungerlo prima vorrebbe dire due chiavi i18n senza lettore
+raggiungibile, cioe' il controllo B di `dead-surface` rosso — e il precedente e'
+`rule.preview.done`.
+
+**La condizione che la chiude**: **il commit che disegna la schermata d'import**.
+Se quella schermata mostra `issue.message` a schermo, il debito e' scaduto lo
+stesso giorno in cui e' diventato visibile. Se invece mostra solo una frase
+generica e tiene le issue per il log, la condizione si sposta al primo rifiuto
+che una persona vera non sa spiegarsi — che e' peggio, perche' non lo vedra'
+nessuno di noi.
+
 ## 3. Rischi noti gia' scritti altrove
 
 Non si duplicano qui, per non creare la diciannovesima copia che parafrasa:

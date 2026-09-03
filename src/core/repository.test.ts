@@ -34,10 +34,21 @@ interface Fixture {
   readonly disk: MemoryDisk
 }
 
-async function open(disk: MemoryDisk = emptyDisk(), prefix = 'id'): Promise<Fixture> {
+/**
+ * `installataIl` esiste per una ragione sola, e vale la pena scriverla: con
+ * l'orologio di default **due dispositivi diversi nascono con lo stesso
+ * `createdAt`**, e un test che confronta la data d'installazione passa anche se
+ * quella data arriva dal file. E' successo: la prova di fallimento su
+ * `createdAt: device.createdAt -> imported.createdAt` restava verde.
+ */
+async function open(
+  disk: MemoryDisk = emptyDisk(),
+  prefix = 'id',
+  installataIl?: string,
+): Promise<Fixture> {
   const repo = await openRepository(createMemoryPersistence(disk), {
     defaultCategoryNames: TEST_CATEGORY_NAMES,
-    now: tickingClock(),
+    now: installataIl === undefined ? tickingClock() : tickingClock(installataIl),
     newId: sequentialIds(prefix),
   })
   return { repo, disk }
@@ -1373,7 +1384,12 @@ describe('export e import dal repository', () => {
     // Il telefono che importa: chiaro, inglese, guida vista qui. Chi importa ha
     // appena dimostrato di non essere alle prime armi: rimettergli la guida
     // davanti ai dati appena ripristinati e' il difetto che ADR 026 §4 chiude.
-    const destinazione = await open(emptyDisk(), 'dest')
+    // Installato **dopo** quello che ha scritto il file: senza date diverse,
+    // `createdAt` che arriva dal file passerebbe inosservato.
+    const destinazione = await open(emptyDisk(), 'dest', '2026-08-29T09:00:00.000Z')
+    expect(destinazione.repo.getState().settings.createdAt).not.toBe(
+      sorgente.repo.getState().settings.createdAt,
+    )
     destinazione.repo.updateSettings({
       theme: 'light',
       language: 'en',
@@ -1394,6 +1410,10 @@ describe('export e import dal repository', () => {
     // L'unico dei quattro che non e' ne' importato ne' conservato: **derivato**.
     // Dopo un ripristino l'ultimo backup e' proprio il file appena importato.
     expect(dopo.lastBackupAt).toBe(file.exportedAt)
+    // `updatedAt` non e' ne' del file ne' del disco: questo record e' il loro
+    // innesto, e l'unico istante vero e' quello in cui viene scritto.
+    expect(dopo.updatedAt).not.toBe(sorgente.repo.getState().settings.updatedAt)
+    expect(dopo.updatedAt).not.toBe(dispositivo.updatedAt)
     // E il disco dice la stessa cosa del mirror: la divisione non vive solo in
     // memoria.
     expect(destinazione.disk.settings).toEqual(dopo)

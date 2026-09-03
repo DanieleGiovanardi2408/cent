@@ -337,6 +337,13 @@ describe('file rotti: si racconta il problema, non si esplode', () => {
     const preview = parseBackup({ schemaVersion: SCHEMA_VERSION, data: {} })
     expect(preview.ok).toBe(false)
     expect(preview.issues[0]?.path).toBe('file.app')
+    // I due messaggi restano due. Una prova di fallimento l'ha trovato: se le
+    // due condizioni tornassero una sola — `app !== undefined && app !== 'cent'`
+    // preceduta dal rifiuto generico — il file continuerebbe a essere rifiutato
+    // e il test resterebbe verde, ma leggendo *"questo file dice di appartenere
+    // a «undefined»"*, cioe' un fatto che nel file non c'e'.
+    expect(preview.issues[0]?.message).not.toContain('undefined')
+    expect(parseBackup({ ...valido(), app: 'altra-app' }).issues[0]?.message).toContain('altra-app')
     // E un backup vero, che quel campo ce l'ha, continua a passare.
     expect(parseBackup(valido()).ok).toBe(true)
   })
