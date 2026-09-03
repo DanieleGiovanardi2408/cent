@@ -51,15 +51,82 @@ decisione sbagliata. Tutto il resto dell'app e' secondario a questo flusso.
 - Zero altre dipendenze runtime senza una ADR scritta in `docs/adr/`.
 
 ## Performance budget (verificabile)
-- **Primo caricamento < 60 KB gzip, JS + CSS insieme.** Se si supera, si taglia —
+- **Primo caricamento < 65 KB gzip, JS + CSS insieme.** Se si supera, si taglia —
   oppure si alza il tetto **con la ragione scritta accanto**, mai in silenzio.
 
   **Il numero e' nostro, e la ragione e' di prodotto**: la prima persona che
   aprira' questa app lo fara' su una connessione dati estera, in Erasmus, con un
-  piano che si paga a megabyte. Sessanta chilobyte sono circa un secondo su una
-  3G lenta, ed e' il tempo entro cui una PWA smette di sembrare un sito e comincia
-  a sembrare un'app. Non e' una soglia di performance astratta: e' quanto siamo
-  disposti a far pagare a qualcuno per la prima apertura.
+  piano che si paga a megabyte. Non e' una soglia di performance astratta: e'
+  quanto siamo disposti a far pagare a qualcuno per la prima apertura.
+
+  ### Qui c'era un'equivalenza falsa, ed e' stata misurata
+
+  Diceva: *"sessanta chilobyte sono circa un secondo su una 3G lenta"*. **E'
+  sbagliata di piu' del doppio**, e ha retto delle decisioni per una settimana.
+
+  Misurato il 3 settembre 2026 — **400 kbps in discesa, 400 ms di RTT** (slow 3G
+  come lo definisce Chrome DevTools), cache vuota, `navigator.standalone`
+  dichiarato come in `tests/e2e/installed.ts`, **nove giri** per configurazione,
+  mediana e min-max:
+
+      59,9 KB    FCP  2,12s  (2,08-2,22)    guscio a schermo  2,25s  (2,24-2,35)
+      64,6 KB    FCP  2,18s  (2,14-2,22)    guscio a schermo  2,25s  (2,24-2,29)
+
+  L'equivalenza contava **solo il trasferimento del JS**: ignorava il round-trip
+  dell'HTML, il CSS e il parse, che su una rete a 400 ms di RTT sono la
+  maggioranza del tempo.
+
+  ### Il tetto resta in byte, e non diventa secondi
+
+  La tentazione, davanti a una misura del genere, e' mettere il tetto su cio' che
+  interessa davvero — l'FCP. **Non si fa, e il motivo e' un numero**: lo scarto
+  della misura in secondi (±0,07) e' **maggiore dell'effetto da sorvegliare**
+  (0,06). Un tetto in secondi fallirebbe a caso, e **un controllo che fallisce a
+  caso e' peggio di nessun controllo**: insegna a ignorare il rosso, e allora
+  smette di proteggere anche il giorno in cui ha ragione.
+
+  E' il caso 1 della tassonomia piu' sotto — una soglia dell'ambiente proxy al
+  posto di una nostra — con la conclusione opposta a quella solita: qui
+  l'indicatore batte la causa, **perche' l'indicatore non trema**.
+
+  ### Cosa questo tetto e' davvero: un cricchetto, non una soglia
+
+  Va scritto perche' finora non lo era, e senza si legge male.
+
+  **In questa regione la curva e' piatta**: 4,6 KB in piu' valgono 0,06 s di FCP e
+  **zero** sul guscio. Non c'e' nessun punto, fra 60 e 65, in cui succede
+  qualcosa. Il tetto non e' una soglia oltre la quale l'app peggiora.
+
+  > **E' un cricchetto: costringe a un argomento a ogni crescita.**
+
+  Ed e' in quel ruolo che ha funzionato questa settimana. Ha fatto emergere
+  `restoreSnapshot` e `snapshotTakenAt` **senza chiamanti di produzione** — un
+  risultato che non ha niente a che vedere con la velocita', e che nessuna misura
+  di FCP avrebbe mai prodotto. Il tetto non ha protetto la prima apertura: ha
+  protetto **l'albero**, obbligando a guardare cosa stava entrando.
+
+  ### Come si alza, d'ora in poi
+
+  **Ogni aumento vuole un argomento su cosa comprano i byte e se sono
+  irriducibili.** Non vuole una misura nuova: la curva e' piatta e **l'abbiamo
+  gia' misurata**.
+
+  Una misura nuova serve in due casi soli: **sopra i ~100 KB**, dove la curva
+  smette di essere piatta, oppure **se cambia la struttura** — una dipendenza
+  runtime nuova, uno split di chunk, un font. Scritto qui perche' altrimenti fra
+  un mese qualcuno rifara' quaranta minuti di misura per due chilobyte.
+
+  ### La leva che esiste e non tiriamo
+
+  `parseBackup` e le sue dipendenze — **2,2 KB**, il dominio dell'import — si
+  potrebbero caricare **a richiesta** sul percorso d'import. Uscirebbero dal
+  bundle iniziale, e a differenza di uno split qualunque **questa volta l'FCP ne
+  beneficerebbe davvero**: il service worker precarica tutto, ma **dopo** il primo
+  disegno.
+
+  Non la tiriamo per 2,2 KB su una curva piatta. Sta scritta perche' **il giorno
+  in cui il numero contera' si sappia gia' dov'e' la leva**, invece di cercarla
+  sotto pressione.
 
   Questa riga diceva *"JS"* e lo script misura **JS + CSS** (`scripts/size.mjs`,
   `npm run size`): il documento si allinea allo script e non viceversa, perche' e'
@@ -302,7 +369,7 @@ E' lo stesso principio del mirror che e' una cache, applicato alla UI.
 
 ## Due lingue: it / en
 - **Nessuna libreria.** Un modulo in `src/ui/i18n`, due dizionari, una `t()`. Il
-  budget e' 60 KB e siamo a 28,4: una libreria di i18n costerebbe piu' di tutto il
+  budget e' 65 KB e siamo a 64,6: una libreria di i18n costerebbe piu' di tutto il
   resto dell'app.
 - **La parita' delle chiavi la garantisce il compilatore, non un test**: il
   dizionario inglese e' tipizzato come `Record<keyof typeof it, string>`. Una

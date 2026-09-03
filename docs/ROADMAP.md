@@ -25,18 +25,18 @@ sa gia', e per questo non puo' invecchiare. I giudizi — cosa e' in volo, cosa
 aspetta una persona — stanno sotto, scritti a mano e timbrati con lo SHA a cui
 sono stati rivisti.
 
-- **Ultimo commit**: `f083d57` — docs: DEBITO §12 era doppio — e' DEBITO §1 dentro DEBITO
-- **Data**: 03/09/2026 13:54
+- **Ultimo commit**: `9c045cd` — docs: DEBITO §12 ha preso una terza strada, e §14 e' l'invariante che nessuno guarda
+- **Data**: 03/09/2026 19:10
 - **Ramo**: `fase7/scatto-pre-import`
 - **Pushato**: si, `origin/fase7/scatto-pre-import` e' allo stesso commit
-- **Rispetto a `origin/main`**: 10 commit avanti
+- **Rispetto a `origin/main`**: 13 commit avanti
 - **Albero di lavoro**: **non pulito**, ci sono modifiche non committate
 
-- **Test unitari**: 782 in 26 file, tutti verdi
+- **Test unitari**: 796 in 27 file, tutti verdi
 - **Test e2e dichiarati**: 436 in 14 file, su 4 progetti (iphone-se, iphone-14, landscape, dark)
-- **Test e2e eseguiti**: non misurato — l'ultima esecuzione e' piu' vecchia dei sorgenti — va rilanciata
-- **Bundle iniziale**: 59.9 KB gzip su 60.0 KB (0.1 KB di margine)
-- **Disco**: 5.4 GB liberi, 75% pieno. Non e' un giudizio e non porta un timbro: cambia da solo, quindi si rigenera.
+- **Test e2e eseguiti**: non misurato — l'ultima esecuzione e' **parziale** — 4 test su 436 dichiarati, probabilmente un `-g` o un `--project`: va rilanciata intera
+- **Bundle iniziale**: 64.6 KB gzip su 65.0 KB (0.4 KB di margine)
+- **Disco**: 5.6 GB liberi, 74% pieno. Non e' un giudizio e non porta un timbro: cambia da solo, quindi si rigenera.
 
 - **Schema del database**: 6. La scala delle migrazioni:
   - **1** — Schema iniziale: expenses, categories, recurringRules, budgets, settings
@@ -55,7 +55,7 @@ sono stati rivisti.
 ## In volo adesso
 
 <!-- JUDGMENT rivisto=c4d1ef7 -->
-> Rivisto a `c4d1ef7`, 14 commit fa. **Da riguardare.**
+> Rivisto a `c4d1ef7`, 17 commit fa. **Da riguardare.**
 
 **Ri-derivato**: `git rev-parse HEAD origin/main` da' lo stesso commit e l'ultimo
 workflow `Deploy` su `main` e' `success`, quindi le tre posizioni — albero,
@@ -1376,7 +1376,7 @@ cancellati per questo.
 -->
 > **Applicata**, verificato da: `STATE:BEGIN`.
 
-`tsc`, `audit:source` (A, B, C, D), `state --check`; bundle sotto 60 KB; e2e **col
+`tsc`, `audit:source` (A, B, C, D), `state --check`; bundle sotto il tetto; e2e **col
 suo numero**, non "verde". Stanno tutti nel blocco rigenerato in cima, quindi
 questa voce chiede solo che quel blocco esista e sia fresco.
 

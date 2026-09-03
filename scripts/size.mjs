@@ -5,7 +5,16 @@ import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { gzipSync } from 'node:zlib'
 import { join, relative } from 'node:path'
 
-const BUDGET_BYTES = 60 * 1024
+// **65 e non 60, dal 3 settembre 2026.** L'aumento e' argomentato in CLAUDE.md
+// (§"Performance budget"): l'import entra nel bundle, e **2,2 dei 4,6 KB sono
+// `parseBackup`** — il dominio, irriducibile senza togliere la funzione. Fin qui
+// l'app sapeva scrivere un backup e non leggerlo, e quel codice mancante **era**
+// la promessa non mantenuta.
+//
+// Il tetto resta in **byte** e non in secondi, e il motivo e' un numero: lo
+// scarto della misura in secondi (±0,07) e' maggiore dell'effetto da sorvegliare
+// (0,06). Un controllo che fallisce a caso insegna a ignorare il rosso.
+export const BUDGET_BYTES = 65 * 1024
 const DIST = 'dist'
 
 function walk(dir) {
@@ -14,6 +23,19 @@ function walk(dir) {
     return statSync(path).isDirectory() ? walk(path) : [path]
   })
 }
+
+/**
+ * **Il corpo gira solo se lo script e' invocato direttamente.**
+ *
+ * `state.mjs` importa `BUDGET_BYTES` da qui per non averne una seconda copia, e
+ * senza questa guardia quell'import **eseguirebbe tutta la misura** — stampando
+ * il referto in mezzo all'output di un altro comando, e leggendo un `dist/` che
+ * a `state.mjs` non serve. Un modulo che si importa per una costante non deve
+ * fare niente mentre lo si importa.
+ */
+if (import.meta.url !== `file://${process.argv[1]}`) {
+  // Importato: si esporta la costante e basta.
+} else {
 
 let files
 try {
@@ -113,3 +135,5 @@ console.log(
     : `\n  ✓ Budget rispettato: ${kb(total)} / ${kb(BUDGET_BYTES)} (${kb(BUDGET_BYTES - total)} di margine)\n`,
 )
 process.exit(over ? 1 : 0)
+
+}

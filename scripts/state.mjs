@@ -80,7 +80,19 @@ import { join, relative } from 'node:path'
 const ROADMAP = 'docs/ROADMAP.md'
 const SCHEMA = 'src/core/schema.ts'
 const DIST = 'dist'
-const BUDGET_BYTES = 60 * 1024
+/**
+ * **Il tetto si legge, non si ricopia.**
+ *
+ * Qui c'era `60 * 1024`, e per mezz'ora del 3 settembre e' stato **60 mentre
+ * `size.mjs` diceva 65**: il blocco rigenerato in cima alla ROADMAP annunciava un
+ * budget sforato di 4,6 KB che sforato non era. Due copie della stessa costante
+ * in due script che si leggono insieme — la seconda fonte di verita' che questo
+ * progetto elimina da giorni, questa volta dentro gli strumenti che la cercano.
+ *
+ * Il fatto che `state.mjs` **rigeneri** non lo salva: rigenerare una copia
+ * sbagliata la rende solo piu' credibile.
+ */
+import { BUDGET_BYTES } from './size.mjs'
 
 /**
  * Oltre quanti commit un giudizio va riguardato.
