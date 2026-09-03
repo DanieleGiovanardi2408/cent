@@ -1093,6 +1093,34 @@ parte**, e lo si prova mutando. Qui la prova e' che la forma nuova cade su una
 `.home` resa scorrevole a parita' di posizioni — dove quella a piega restava
 verde.
 
+### Un fatto rigenerato dev'essere derivabile allo STESSO VALORE ovunque
+
+Lo spazio libero sul disco e' passato dai giudizi ai fatti rigenerati per la
+ragione giusta — cambia da solo, e un timbro su una quantita' che cambia da sola
+non certifica niente. **Ma nessuno si e' chiesto su quale macchina si rigenera.**
+
+`df` sul portatile dice una cosa, `df` sul runner di GitHub ne dice un'altra: il
+blocco committato e quello rigenerato in CI non possono coincidere, e
+`state --check` ha detto *"Fatti: stantii"* a ogni push. **Tre commit su `main`
+rossi**, e nessuno se n'e' accorto perche' erano commit di **documenti**.
+
+> **La divisione non e' fra "derivabile" e "non derivabile": e' fra "derivabile
+> allo stesso valore ovunque" e "derivabile qui".**
+
+Il conteggio dei test, il peso del bundle e la scala delle migrazioni sono fatti
+**del repository**: chiunque li rigeneri ottiene gli stessi numeri, ed e' per
+questo che confrontarli significa qualcosa. Il disco e' un fatto **della
+macchina**, e ha lo stesso posto delle righe di identita' del commit — vero
+quando si scrive, utile a chi legge, **inconfrontabile**.
+
+Resta nel documento perche' serve; esce dal confronto perche' non e' condiviso.
+
+**E il corollario operativo, che e' costato tre commit rossi: dopo un push su
+`main` si guarda la CI, anche quando il commit tocca solo `docs/`.** Un commit di
+documenti sembra non poter rompere niente — e infatti non ha rotto il prodotto:
+ha rotto **il controllo che sorveglia i documenti**, che e' l'unica cosa che quel
+commit poteva rompere.
+
 ### Un controllo fallisce quando la riparazione e' meccanica, avvisa quando richiede un giudizio
 
 E' la riga che decide i due esiti di `state --check`, e vale per il prossimo

@@ -25,12 +25,12 @@ sa gia', e per questo non puo' invecchiare. I giudizi — cosa e' in volo, cosa
 aspetta una persona — stanno sotto, scritti a mano e timbrati con lo SHA a cui
 sono stati rivisti.
 
-- **Ultimo commit**: `d143f2f` — docs: i fatti dopo il selettore di file
-- **Data**: 04/09/2026 00:12
+- **Ultimo commit**: `18c1af9` — docs: i fatti dopo il push
+- **Data**: 04/09/2026 00:23
 - **Ramo**: `fase7/scatto-pre-import`
-- **Pushato**: **no: 3 commit non pushati su `origin/fase7/scatto-pre-import`**
-- **Rispetto a `origin/main`**: 18 commit avanti
-- **Albero di lavoro**: pulito
+- **Pushato**: si, `origin/fase7/scatto-pre-import` e' allo stesso commit
+- **Rispetto a `origin/main`**: 19 commit avanti
+- **Albero di lavoro**: **non pulito**, ci sono modifiche non committate
 
 - **Test unitari**: 796 in 27 file, tutti verdi
 - **Test e2e dichiarati**: 448 in 15 file, su 4 progetti (iphone-se, iphone-14, landscape, dark)
@@ -54,13 +54,21 @@ sono stati rivisti.
 
 ## In volo adesso
 
-<!-- JUDGMENT rivisto=c4d1ef7 -->
-> Rivisto a `c4d1ef7`, 22 commit fa. **Da riguardare.**
+<!-- JUDGMENT rivisto=d143f2f -->
+> Rivisto a `d143f2f`, un commit fa.
 
-**Ri-derivato**: `git rev-parse HEAD origin/main` da' lo stesso commit e l'ultimo
-workflow `Deploy` su `main` e' `success`, quindi le tre posizioni — albero,
-remoto, Pages — coincidono ancora. La chiusura della fase 6 e' passata dal ramo
-`fase-6-chiusura`, gia' fuso.
+**Ri-derivato il 4 settembre, e stavolta il fatto e' un altro**: si lavora sul
+ramo `fase7/scatto-pre-import`, e `main` e' fermo a `9958f4f`.
+
+**E la CI su `main` e' ROSSA da tre commit** — `33671564470`, `33738482024`,
+`33738767441`, tutti e tre di **documenti**. La causa e' `state --check`: il
+disco era appena diventato un fatto rigenerato, e `df` sul portatile non da' lo
+stesso numero di `df` sul runner. Nessuno se n'e' accorto perche' erano commit di
+documenti e **il verde si dava per scontato**.
+
+Riparato escludendo il disco dal confronto (e' un fatto **della macchina**, come
+le righe di identita'), ma il fatto operativo resta: **dopo un push su `main` si
+guarda la CI**, anche quando il commit tocca solo `docs/`.
 
 **Il lavoro della fase 6 e' su `main`, e `main` e' su Pages.** Ri-derivato il 2
 settembre guardando `git rev-parse HEAD origin/main` e l'ultimo deploy: le tre
@@ -963,7 +971,7 @@ differenza fra il modello mentale della richiesta e la configurazione dei dati.
 Sono ferme dal **24 agosto** e vanno fatte **in quest'ordine**, che non e' una
 preferenza: ogni passo distrugge la possibilita' di fare il precedente.
 
-<!-- JUDGMENT rivisto=c4d1ef7 -->
+<!-- JUDGMENT rivisto=d143f2f -->
 > Rivisto a `547fba4`, 6 commit fa. **Da riguardare.**
 
 **Riletto, non ri-derivato, e la differenza e' il contenuto della voce**: i passi
@@ -1426,7 +1434,7 @@ giorno in cui serviva davvero.
 
 ## Decisioni prese e non ancora applicate
 
-<!-- JUDGMENT rivisto=c4d1ef7 -->
+<!-- JUDGMENT rivisto=d143f2f -->
 > Rivisto a `547fba4`. **Ri-derivato**: `npm run state -- --check` da' ancora
 > **14/14 applicate**, cioe' nessuna decisione dichiarata qui e assente dal
 > codice. E' l'unico dei quattro giudizi la cui verita' e' interamente

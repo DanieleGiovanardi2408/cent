@@ -809,13 +809,36 @@ if (!facts.bundle.ok) unmeasurable.push({ label: 'Bundle iniziale', why: facts.b
  * timbro dentro il diff avrebbe fatto dire "da rigenerare" a ogni push — di nuovo
  * la guardia che grida al lupo, ricomparsa un piano piu' sotto dopo essere stata
  * chiusa un piano piu' sopra.
+ *
+ * ## 3. Il disco, e ha reso rossa la CI per tre commit
+ *
+ * Il 3 settembre lo spazio libero e' passato dai **giudizi** ai **fatti
+ * rigenerati**, per la ragione giusta: cambia da solo, e un timbro su una
+ * quantita' che cambia da sola non certifica niente. Ma nessuno si e' chiesto
+ * **su quale macchina** si rigenera.
+ *
+ * `df` sul portatile dice una cosa, `df` sul runner di GitHub ne dice un'altra:
+ * il blocco committato e quello rigenerato in CI **non possono coincidere**, e
+ * `--check` ha detto "Fatti: stantii" a ogni push. Tre commit su `main` rossi, e
+ * nessuno se n'e' accorto perche' erano commit di **documenti** e il verde si
+ * dava per scontato.
+ *
+ * **La divisione vera non e' fra "derivabile" e "non derivabile": e' fra
+ * "derivabile allo stesso valore ovunque" e "derivabile qui".** Il conteggio dei
+ * test, il peso del bundle e la scala delle migrazioni sono fatti **del
+ * repository**: chiunque li rigeneri ottiene gli stessi numeri. Il disco e' un
+ * fatto **della macchina**, e ha lo stesso posto delle righe di identita' — vero
+ * quando si scrive, utile a chi legge, **inconfrontabile**.
+ *
+ * Resta nel documento perche' serve; esce dal confronto perche' non e' un fatto
+ * condiviso.
  */
 const withoutIdentity = (s) =>
   s
     .split('\n')
     .filter(
       (line) =>
-        !/^- \*\*(Ultimo commit|Data|Ramo|Pushato|Rispetto a `origin\/main`|Albero di lavoro)\*\*/.test(
+        !/^- \*\*(Ultimo commit|Data|Ramo|Pushato|Rispetto a `origin\/main`|Albero di lavoro|Disco)\*\*/.test(
           line,
         ) &&
         !/^> Rivisto a /.test(line) &&
