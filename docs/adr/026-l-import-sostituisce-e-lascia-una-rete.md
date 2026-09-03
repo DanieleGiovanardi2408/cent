@@ -202,9 +202,36 @@ deriva:
 > **L'import accetta solo stati che l'app avrebbe potuto produrre.**
 
 **Zero spese e' producibile** — e' l'export di un'installazione nuova. **Zero
-categorie no**: l'app le semina al primo avvio e il tetto di otto attive non
-permette di archiviarle tutte. **Il criterio cade quindi sulle categorie, non
-sulle spese**, e non l'ha scelto nessuno.
+categorie no. Il criterio cade quindi sulle categorie, non sulle spese**, e non
+l'ha scelto nessuno.
+
+### La prima derivazione era sbagliata, e quella giusta e' piu' forte
+
+Questa riga diceva: *"l'app le semina al primo avvio e **il tetto di otto attive
+non permette di archiviarle tutte**"*. **Archiviarle** tutte davvero non si puo'.
+Ma **cancellarle** si': `planCategoryDeletion` non ha nessun pavimento, e su
+un'installazione nuova — senza spese e senza regole — le otto se ne vanno una per
+una. Misurato:
+
+    8:ok 7:ok 6:ok 5:ok 4:ok 3:ok 2:ok 1:ok   ->   restano 0
+
+Quindi **lo stato e' producibile**, e un export preso li' e' un file vero che
+questa regola rifiuta. La regola non cade: cambia argomento, e il nuovo e' piu'
+forte.
+
+> **Cio' che non e' producibile non e' lo stato: e' sopravvivergli a una
+> riapertura.**
+
+Con la ri-semina, importare quel file scriverebbe uno stato che **l'app disfa da
+sola al prossimo avvio** — e nel frattempo lascerebbe a schermo una griglia da cui
+non si puo' inserire niente, cioe' il principio guida n.1 azzerato senza un
+messaggio. Rifiutare all'ingresso e' l'unico dei due modi che lo dice.
+
+**E la coppia va letta insieme**: `openRepository` semina anche con `settings`
+gia' scritto, `parseBackup` rifiuta un file senza categorie. Sono la stessa
+affermazione — *un archivio inizializzato ha sempre categorie* — detta da due
+porte, e nessuna delle due basta da sola: la prima ripara dopo, la seconda
+impedisce prima.
 
 Nello stesso giro, la stessa famiglia:
 
