@@ -749,6 +749,34 @@ generica e tiene le issue per il log, la condizione si sposta al primo rifiuto
 che una persona vera non sa spiegarsi — che e' peggio, perche' non lo vedra'
 nessuno di noi.
 
+### Il commit e' arrivato, e la condizione va riscritta: nessuno dei due rami
+
+**3 settembre 2026, sera.** La schermata esiste (`ImportSheet`), e ha preso una
+terza strada che la condizione non prevedeva:
+
+- **`issue.message` non arriva a schermo**, mai: il debito non e' scaduto;
+- **e non e' nemmeno "una frase generica"**: la UI classifica sul **`path`**
+  della issue — che non e' prosa, e' un percorso — e sceglie fra quattro
+  rifiuti, ognuno con la propria coppia di frasi nei due dizionari. La persona
+  legge il fatto e il rimedio nella sua lingua; il `path` lo legge com'e',
+  perche' e' la stringa da cercare dentro il file da un computer.
+
+**Cosa resta di aperto, ed e' diverso da com'era scritto.** Il debito non e'
+piu' *"la lingua sbagliata a schermo"*: e' che **il discriminante e' un
+prefisso di stringa**. Se `backup.ts` rinominasse `file.app`, o spostasse la
+riga delle categorie assenti su un altro path, la UI cadrebbe sul rifiuto
+sbagliato **senza un errore di compilazione**.
+
+Il presidio, oggi, e' un test che **non costruisce issue a mano**:
+`import-view.test.ts` fabbrica file rotti veri, li fa passare da `parseBackup` e
+asserisce la classificazione. Cade il giorno in cui un path cambia — che e'
+esattamente il giorno in cui deve cadere.
+
+**La condizione nuova**: il giorno in cui due rifiuti **diversi** condividono lo
+stesso `path`, o in cui serve una distinzione che il path non porta. Li' il
+discriminante deve diventare un campo — un `code` chiuso su `ImportIssue` — e
+quel campo arriva col suo lettore, cioe' con la riparazione, non prima.
+
 ## 13. Un record illeggibile su cento rifiuta tutto il file
 
 **Stato: aperto, e deliberato.** Nato il 3 settembre 2026 insieme a
@@ -781,6 +809,39 @@ convivono perche' rispondono a due domande diverse — *"questo file e' integro?
 
 **Oggi non serve. Il giorno che serve, serve tantissimo**, e sara' il giorno
 peggiore per progettarlo: per questo la voce esiste adesso, con il suo nome.
+
+## 14. La geometria della schermata d'import e' misurata e non sorvegliata
+
+**Stato: aperto.** Nato il 3 settembre 2026, insieme alla schermata.
+
+**Cosa.** `ImportSheet` ha un invariante di layout preciso: **intestazione,
+corpo e piede non si muovono di un pixel fra i sette contenuti** che la
+schermata puo' avere (i quattro stati della lettura, i tre rifiuti che non sono
+il quarto, l'anteprima). E' cio' che impedisce alla pagina di saltare
+nell'istante in cui il file arriva da iCloud — e in quell'istante il pollice e'
+gia' fermo sopra la schermata, in attesa.
+
+**E' stato misurato**, sul componente vero costruito con il CSS vero, su
+375x667, 390x844 e 320x568, in due lingue: `head 12→56`, `corpo 68→595`,
+`piede 607→651` **identici in tutti e sette gli stati**, zero scroll
+orizzontale, contenuto al massimo 270 px su 527 disponibili, bersagli 44x44 e
+343x44. La prova che la misura poteva fallire: togliendo
+`min-block-size: var(--tap-min)` dal piede, il corpo passa da `68→595` a
+`68→639` nello stato "sto leggendo" e la sonda lo dice.
+
+**Ma la misura non e' in nessuna suite**, perche' la schermata **non ha ancora
+un ingresso in produzione**: la sorgente del testo e' un parametro di `App` che
+arriva col selettore di file. La misura e' girata su un montaggio costruito e
+smontato apposta, che non e' rimasto nell'albero.
+
+E' il caso di scuola gia' scritto in CLAUDE.md: **il costo di un invariante non
+meccanizzato non e' che il difetto resta, e' che cresce** — `.blank__text` e'
+passata da 663,8 a 689,81 px in tre giorni, mentre la schermata veniva
+migliorata altrove.
+
+**La condizione che lo chiude**: il commit del selettore di file. Nello stesso
+istante in cui la schermata diventa raggiungibile, l'invariante diventa
+asseribile da una e2e normale, e va asserito **li'**, non nel giro dopo.
 
 ## 3. Rischi noti gia' scritti altrove
 
