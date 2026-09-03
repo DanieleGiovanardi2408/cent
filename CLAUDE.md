@@ -694,6 +694,39 @@ un'affermazione senza cifre.
 
 **Il criterio e' sul fatto, non sulla sua forma numerica.**
 
+### E la terza forma: un rimedio che il dispositivo non puo' eseguire
+
+Le prime due forme di questa regola guardano il **fatto**: non affermarne uno che
+l'utente non puo' verificare, con o senza numeri. La terza guarda il **rimedio**.
+
+> **Un messaggio che nomina un rimedio non eseguibile sul dispositivo che lo
+> mostra e' un messaggio che non aiuta.**
+
+Il caso: l'import rifiuta un backup in cui **un record su cento** e' illeggibile,
+e la issue nomina `expenses[12].amountCents`. Il fatto e' vero **e verificabile**
+— il file ce l'ha in mano chi importa — quindi la regola vecchia e' soddisfatta.
+Ma il rimedio implicito e' *"apri il file e togli quel record"*, e **su un iPhone
+non si puo' fare**: non c'e' un editor di testo che apra un JSON da iCloud Drive e
+lo risalvi.
+
+Un messaggio cosi' e' peggio di uno vago: e' preciso, quindi sembra utile, e
+lascia la persona a cercare per dieci minuti una cosa che il suo telefono non ha.
+
+**La forma che aiuta dice il fatto E cosa e' possibile da dove si e':**
+
+> Questo backup ha un record illeggibile (la spesa numero 12). **Da qui** puoi
+> provare un altro backup; **da un computer** puoi aprire il file e togliere
+> quella riga.
+
+Non e' verbosita': sono due rami, e uno dei due e' l'unico eseguibile dove il
+messaggio compare. Scrivere solo il path e' vero e **inutilizzabile**.
+
+**Corollario, e vale oltre l'import**: prima di scrivere un messaggio d'errore,
+chiediti **su quale dispositivo verra' letto** e cosa quel dispositivo puo' fare.
+Questa app gira su un telefono, e un telefono non ha un filesystem che si sfoglia,
+non ha un editor, non ha una riga di comando. Un rimedio che li presuppone e' un
+rimedio scritto per la macchina di chi sviluppa.
+
 ## Un argomento spostato di contesto va ri-derivato, non copiato
 *"Si annuncia piu' di quanto si fa"* e' una scelta giusta quando copre una
 **corsa**: fra l'anteprima e la conferma qualcosa puo' cambiare, e sbagliare per

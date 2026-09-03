@@ -749,6 +749,56 @@ generica e tiene le issue per il log, la condizione si sposta al primo rifiuto
 che una persona vera non sa spiegarsi — che e' peggio, perche' non lo vedra'
 nessuno di noi.
 
+## 12. I messaggi dell'anteprima d'import sono in italiano, in un'app che parte in inglese
+
+**Stato: aperto.** Nato il 3 settembre 2026 con l'anteprima.
+
+**Cosa.** `parseBackup` emette 34 messaggi di issue, tutti scritti in italiano
+dentro `src/core/backup.ts`. Il default dell'app e' **l'inglese** quando la lingua
+del telefono non e' italiana — cioe' per quasi tutti quelli che la useranno.
+
+**Perche' non e' stato riparato adesso.** La riparazione e' un **codice** nella
+issue al posto della frase, e il codice e' un campo che va spedito **col suo
+lettore**: oggi nessuna schermata legge `ImportPreview`, quindi le chiavi i18n
+corrispondenti non avrebbero lettori e `dead-surface` B andrebbe rosso — e' quello
+che e' successo a `rule.preview.done`.
+
+**La condizione che la chiude: il commit della schermata d'import.** E' lo stesso
+commit che porta i lettori, quindi non c'e' un secondo giro da ricordarsi.
+
+## 13. Un record illeggibile su cento rifiuta tutto il file
+
+**Stato: aperto, e deliberato.** Nato il 3 settembre 2026 insieme a
+`ok = nessuna issue error`.
+
+**Cosa.** L'import e' tutto-o-niente: **una** spesa con un importo non intero
+rende non importabile un backup di cento. La ragione e' buona — l'import
+**sostituisce**, quindi un "va bene" su un file monco scambia un archivio con una
+copia mutilata, e nessuno se ne accorgerebbe.
+
+**Perche' oggi e' accettabile**, ed e' l'unica cosa che lo rende tale: **il
+messaggio dice quale record e cosa si puo' fare da dove si e'** (CLAUDE.md, *"un
+rimedio che il dispositivo non puo' eseguire"*). La riparazione a mano da un
+computer e' possibile, quindi il rifiuto totale non e' un vicolo cieco.
+
+**La condizione che lo rende non piu' accettabile.**
+
+> **Quando qualcuno perde davvero il telefono e ha solo quel file.**
+
+Li' rifiutare non protegge i dati: **li perde tutti**. La purezza del
+tutto-o-niente serve all'**archivio** — la sua coerenza — non alla **persona**, e
+quando le due cose divergono non c'e' dubbio su quale delle due si serve.
+
+**Cosa si costruisce quel giorno**: l'**import parziale consensuale** — *"100
+spese, 1 illeggibile: importo le altre 99 e ti dico quale salto"*, con la scelta
+in mano a chi importa e il record saltato **nominato**, non contato. Non e' un
+allentamento del controllo: e' un secondo esito accanto al rifiuto, e i due
+convivono perche' rispondono a due domande diverse — *"questo file e' integro?"* e
+*"cosa posso salvare di quello che ho?"*.
+
+**Oggi non serve. Il giorno che serve, serve tantissimo**, e sara' il giorno
+peggiore per progettarlo: per questo la voce esiste adesso, con il suo nome.
+
 ## 3. Rischi noti gia' scritti altrove
 
 Non si duplicano qui, per non creare la diciannovesima copia che parafrasa:
