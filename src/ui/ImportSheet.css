@@ -1,0 +1,145 @@
+/* Ripristino da un backup: tre fasce, e quella di mezzo e' l'unica che si muove.
+ *
+ * `head` e `foot` hanno un'altezza dichiarata (`--tap-min`), il corpo prende
+ * quello che resta e **scorre**. Il testo qui dentro cambia lunghezza fra i
+ * quattro stati della lettura e fra le due lingue: se fosse la pagina intera a
+ * crescere, il bottone si sposterebbe sotto il pollice fra un frame e l'altro —
+ * e nello stato "sto leggendo" il pollice e' gia' li' che aspetta.
+ *
+ * Nessuna animazione: non c'e' niente che si muova, quindi non c'e' niente da
+ * spegnere sotto prefers-reduced-motion.
+ */
+
+.restore {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-panel);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding-block: max(var(--sp-3), var(--safe-top)) max(var(--sp-4), var(--safe-bottom));
+  padding-inline: max(var(--sp-4), var(--safe-left)) max(var(--sp-4), var(--safe-right));
+  background-color: var(--bg);
+}
+
+.restore__head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  min-block-size: var(--tap-min);
+}
+
+.restore__title {
+  flex: 1;
+  min-inline-size: 0;
+  font-size: var(--fs-400);
+  font-weight: var(--fw-semibold);
+  letter-spacing: var(--tracking-tight);
+}
+
+.restore__close {
+  flex: none;
+  display: grid;
+  place-items: center;
+  inline-size: var(--tap-min);
+  block-size: var(--tap-min);
+  border-radius: var(--radius-full);
+}
+
+.restore__close svg {
+  fill: none;
+  stroke: var(--text-muted);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+/* Il corpo scorre, e il piede resta fuori: e' cio' che rende il bottone
+ * raggiungibile anche a 375x667 con il rifiuto piu' lungo delle due lingue. */
+.restore__body {
+  flex: 1;
+  min-block-size: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+.restore__lead {
+  font-size: var(--fs-300);
+  line-height: var(--lh-body);
+  color: var(--text);
+  /* Il punto del record — `expenses[12].amountCents` — non ha spazi e non si
+   * spezza: senza questa riga a 375 punti esce dal corpo e finisce sopra quello
+   * che ha accanto. */
+  overflow-wrap: anywhere;
+}
+
+.restore__note {
+  font-size: var(--fs-200);
+  line-height: var(--lh-body);
+  color: var(--text-muted);
+}
+
+/* Il prima/dopo. Due colonne di numeri accostate: e' una misura, non un
+ * avvertimento, quindi nessun colore d'allarme e nessun peso in piu' sulla
+ * colonna "dopo". Chi legge deve poter fare la sottrazione, non spaventarsi. */
+.restore__table {
+  inline-size: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-200);
+}
+
+.restore__table th,
+.restore__table td {
+  padding-block: var(--sp-2);
+  text-align: end;
+  color: var(--text);
+}
+
+.restore__table thead th {
+  color: var(--text-muted);
+  font-weight: var(--fw-regular);
+}
+
+.restore__table tbody th {
+  text-align: start;
+  font-weight: var(--fw-regular);
+  color: var(--text-muted);
+}
+
+.restore__table tbody td {
+  font-family: var(--font-numeric);
+  font-variant-numeric: tabular-nums;
+}
+
+.restore__table tbody tr + tr th,
+.restore__table tbody tr + tr td {
+  border-block-start: 1px solid var(--line);
+}
+
+.restore__foot {
+  flex: none;
+  display: flex;
+  /* Dichiarata anche quando dentro non c'e' niente: nello stato "sto leggendo"
+   * il piede e' vuoto, e senza questa riga l'arrivo del bottone alzerebbe tutto
+   * il corpo di 44 px nell'istante in cui si sta leggendo. */
+  min-block-size: var(--tap-min);
+}
+
+.restore__action {
+  flex: 1;
+  min-block-size: var(--tap-min);
+  min-inline-size: var(--tap-min);
+  padding-inline: var(--sp-4);
+  border-radius: var(--radius-2);
+  background-color: var(--brand);
+  color: var(--on-brand);
+  font-size: var(--fs-300);
+  font-weight: var(--fw-semibold);
+}
+
+.restore__action:active {
+  opacity: 0.9;
+}

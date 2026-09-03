@@ -21,6 +21,9 @@ import { ExpenseActions } from './ExpenseActions'
 import { Fit } from './Fit'
 import { Guide } from './Guide'
 import { History } from './History'
+import { ImportSheet } from './ImportSheet'
+import { currentCounts, exportedDay, stepFromText } from './import-view'
+import type { BackupReader, ImportStep } from './import-view'
 import { Stats } from './Stats'
 import { Home } from './Home'
 import { Mark } from './Mark'
@@ -122,7 +125,27 @@ export function savedByHand(expenses: readonly Expense[], stopAt: number): numbe
   return count
 }
 
-export function App() {
+/**
+ * **La sorgente del testo di un backup e' un parametro di `App`, e oggi nessuno
+ * la passa.**
+ *
+ * E' il confine fra il pezzo che dipende dal dispositivo — un
+ * `<input type="file">`, il suo `accept` che su iOS si risolve in UTI, un file
+ * su iCloud Drive che arriva lento o non arriva — e tutto il resto del
+ * ripristino, che non ci dipende: anteprima, rifiuti, conferma. Il primo si
+ * verifica solo su un telefono vero; il secondo si e' verificato senza.
+ *
+ * Finche' il parametro non arriva, **la voce "Ripristina da un backup" non
+ * compare in Impostazioni**: e' assenza strutturale, non un bottone che non fa
+ * niente. La condizione che la fa comparire e' scritta e ha un commit suo — il
+ * selettore di file — e finche' non arriva questa schermata non e'
+ * raggiungibile da nessun percorso dell'app.
+ */
+interface AppProps {
+  readonly readBackup?: BackupReader
+}
+
+export function App({ readBackup }: AppProps) {
   const app = useApp()
 
   /**
@@ -163,6 +186,27 @@ export function App() {
   const [panel, setPanel] = useState<string | null>(null)
   /** La spesa su cui si e' toccato nello Storico: apre il foglio delle azioni. */
   const [picked, setPicked] = useState<Expense | null>(null)
+  /**
+   * Il ripristino da un backup: `null` quando la schermata non c'e'.
+   *
+   * Lo stato vive qui e non dentro il componente perche' la lettura comincia
+   * **prima** che la schermata abbia qualcosa da dire, e perche' cio' che si
+   * scrive alla conferma e' lo stesso oggetto che si sta guardando: due
+   * esemplari sarebbero il posto in cui un giorno si conferma un'anteprima e se
+   * ne scrive un'altra.
+   */
+  const [importing, setImporting] = useState<ImportStep | null>(null)
+  /**
+   * Quale lettura e' quella corrente.
+   *
+   * Una lettura da iCloud puo' durare secondi, e in quei secondi si puo'
+   * chiudere la schermata o ricominciare. Senza questo numero una risposta in
+   * ritardo **riaprirebbe** una schermata che l'utente ha chiuso, o
+   * sovrascriverebbe l'esito della lettura successiva con quello della
+   * precedente. E' la stessa dottrina del toast riconciliato al risveglio: uno
+   * stato dell'interfaccia non sopravvive a un'attesa senza essere riconciliato.
+   */
+  const importSeq = useRef(0)
   /**
    * L'editor delle categorie. Tiene **l'id**, non la categoria: dopo uno
    * spostamento o una modifica il record e' cambiato, e un oggetto congelato
@@ -867,6 +911,86 @@ export function App() {
     showToast(t('toast.restored'))
   }
 
+  /* --- il ripristino da un backup ---------------------------------------- *
+   *
+   * Quattro stati di lettura, e sono quattro perche' hanno quattro rimedi
+   * diversi: sto leggendo / non si e' potuto leggere / letto ma non e' un
+   * backup / letto, e' un backup, ma un record e' illeggibile. Il secondo e il
+   * terzo hanno cause opposte — la rete e il file — e collassarli manda a
+   * cercare un altro file quando bastava riprovare. La classificazione sta in
+   * `import-view.ts`; qui c'e' solo la sequenza.
+   */
+
+  function beginImport(): void {
+    const read = readBackup
+    // Non e' difensivo: senza sorgente la voce non esiste in Impostazioni, e
+    // questa funzione non ha nessun chiamante. Vedi `AppProps`.
+    if (read === undefined) return
+    // Come per ogni foglio: un "Annulla" appeso a una spesa che non si sta piu'
+    // guardando non deve sopravvivere dietro a una schermata piena.
+    clearToast()
+    const mine = ++importSeq.current
+    // Il primo dei quattro stati **prima** di chiamare la sorgente: su iCloud la
+    // risposta puo' arrivare secondi dopo, e un tocco senza riscontro entro 100
+    // ms si legge come un tocco che non e' arrivato — quindi si tocca di nuovo.
+    setImporting({ kind: 'reading' })
+    void read().then(
+      (result) => {
+        if (importSeq.current !== mine) return
+        if (result.kind === 'cancelled') setImporting(null)
+        else if (result.kind === 'unreadable') setImporting({ kind: 'unreadable' })
+        else setImporting(stepFromText(result.text))
+      },
+      // Una promessa rifiutata non e' nel contratto di `BackupReader` (ha
+      // `unreadable` per quello), ma un errore che nessuno ha previsto non puo'
+      // finire in un `catch` vuoto: lascerebbe la schermata su "sto leggendo"
+      // per sempre, che e' il modo peggiore di fallire fra quelli disponibili.
+      () => {
+        if (importSeq.current !== mine) return
+        setImporting({ kind: 'unreadable' })
+      },
+    )
+  }
+
+  /** Chiude, e **invalida la lettura in volo**: quello che torna dopo non riapre niente. */
+  function closeImport(): void {
+    importSeq.current += 1
+    setImporting(null)
+  }
+
+  /**
+   * Scrive il backup che si sta guardando, e atterra sulla **Home**.
+   *
+   * Non in Impostazioni: il senso di ripristinare e' **vedere che i dati ci
+   * sono**, e restare qui lascerebbe a fissare un elenco di voci chiedendosi se
+   * ha funzionato — la risposta a quella domanda non e' in questa schermata
+   * (ADR 026 §6e).
+   *
+   * Ottimistica come ogni scrittura locale: niente attesa e niente rotella. La
+   * transazione e' atomica, quindi un fallimento non lascia niente a meta' e il
+   * messaggio puo' dire il vero — *"i tuoi dati sono quelli di prima"* — con la
+   * Home dietro che lo conferma. E' l'unica forma di rollback che serve qui:
+   * non c'e' niente da disfare.
+   */
+  function applyImport(): void {
+    const repo = app.repo
+    const step = importing
+    if (!repo || step === null || step.kind !== 'ready') return
+    const when = exportedDay(step.exportedAt)
+    closeImport()
+    setView('home')
+    void repo.importBackup(step.data).then(
+      () => {
+        showToast(
+          when === null
+            ? t('toast.importedUndated')
+            : t('toast.imported', { day: fullDayLabel(when, app.day) }),
+        )
+      },
+      () => showToast(t('toast.importFailed')),
+    )
+  }
+
   function exportNow(): void {
     const repo = app.repo
     if (!repo) return
@@ -1169,7 +1293,8 @@ export function App() {
     (sheet !== null && !sheet.leaving) ||
     (catSheet !== null && !catSheet.leaving) ||
     picked !== null ||
-    panel !== null
+    panel !== null ||
+    importing !== null
 
   /**
    * La regola che il foglio delle spese fisse sta mostrando, **riletta dal
@@ -1470,6 +1595,11 @@ export function App() {
               onNewRule={() => openSheet('rule')}
               onEditRule={(rule) => openSheet('rule', rule.id)}
               onExport={exportNow}
+              /* `undefined` quando non c'e' nessuna sorgente da cui leggere: la
+                 voce non compare invece di comparire spenta. Una voce spenta
+                 dice "qui c'e' qualcosa che a te non e' concesso"; questa
+                 funzione non esiste ancora per nessuno. */
+              onImport={readBackup === undefined ? undefined : beginImport}
               onReplayGuide={replayGuide}
             />
           )}
@@ -1601,6 +1731,26 @@ export function App() {
           `z-index`. Come i fogli, sta fuori da `.app`: dentro, l'`aria-hidden`
           che nasconde lo sfondo nasconderebbe anche lei. */}
       {guide ? <Guide categories={categories} onDone={completeGuide} /> : null}
+
+      {importing === null ? null : (
+        <ImportSheet
+          step={importing}
+          /* I conteggi di adesso, ricalcolati a ogni render come `ruleTarget`:
+             mentre la schermata e' aperta una materializzazione puo' aver
+             aggiunto delle spese, e un "adesso" congelato all'apertura direbbe
+             un numero che sul disco non c'e' piu' — proprio nella riga che
+             serve a fare la sottrazione. */
+          now={currentCounts(
+            app.data?.expenses ?? [],
+            app.data?.categories ?? [],
+            app.data?.recurringRules ?? [],
+          )}
+          day={app.day}
+          onRead={beginImport}
+          onConfirm={applyImport}
+          onClose={closeImport}
+        />
+      )}
 
       {panel === null ? null : (
         <BackupPanel

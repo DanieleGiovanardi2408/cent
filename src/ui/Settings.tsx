@@ -87,6 +87,17 @@ interface Props {
   readonly onEditRule: (rule: RecurringRule) => void
   readonly onExport: () => void
   /**
+   * Apre il ripristino da un backup. **`undefined` = la voce non compare.**
+   *
+   * Non e' uno stato vuoto ed e' la stessa distinzione della striscia dei sette
+   * giorni sulla Home: *una sezione non sparisce perche' i suoi dati sono
+   * vuoti; sparisce se la funzione a cui appartiene non esiste per questo
+   * utente*. Oggi non esiste per nessuno — manca la sorgente da cui leggere il
+   * file (vedi `AppProps` in `App.tsx`) — e un bottone spento al suo posto
+   * direbbe che c'e' qualcosa di negato invece di qualcosa che non c'e'.
+   */
+  readonly onImport?: (() => void) | undefined
+  /**
    * Rimette la guida davanti. **Cancella** `onboardingCompletedAt` invece di
    * aprire un pannello: la guida e' agganciata a quello stato e a nient'altro,
    * e un secondo innesco sarebbe un secondo modo di mostrarla che il giorno che
@@ -114,6 +125,7 @@ export function Settings({
   onNewRule,
   onEditRule,
   onExport,
+  onImport,
   onReplayGuide,
 }: Props) {
   return (
@@ -228,6 +240,15 @@ export function Settings({
         <button type="button" class="prefs__action" disabled={!ready} onClick={onExport}>
           {t('settings.data.export')}
         </button>
+        {/* Sotto l'export, e non sopra: si esporta ogni due settimane e si
+            ripristina una volta nella vita di un telefono — di solito su un
+            telefono nuovo, dove questa sezione e' l'unica cosa che si viene a
+            cercare. L'ordine e' la frequenza, non l'importanza. */}
+        {onImport === undefined ? null : (
+          <button type="button" class="prefs__action" disabled={!ready} onClick={onImport}>
+            {t('import.open')}
+          </button>
+        )}
       </section>
 
       {/* Ultima, ed e' la posizione giusta: e' la voce che si cerca una volta

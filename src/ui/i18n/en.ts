@@ -77,6 +77,9 @@ export const en: Record<keyof typeof it, string> = {
   'toast.backupUnavailable': 'I can’t prepare the backup.',
   'toast.backupFileFailed': 'The file was not saved.',
   'toast.showData': 'Show the data',
+  'toast.imported': 'Restored the backup from {day}.',
+  'toast.importedUndated': 'Backup restored.',
+  'toast.importFailed': 'The restore did not go through: your data is the one you had before.',
   'toast.languageFailed': 'I could not change the language. Try again.',
   'toast.guideFailed': 'I could not reopen the guide. Try again.',
   'toast.catAdded': '“{name}” is on the grid',
@@ -235,6 +238,50 @@ export const en: Record<keyof typeof it, string> = {
   'backup.copy': 'Copy everything',
   'backup.copiedShort': 'Copied',
   'backup.shareTitle': 'Cent backup',
+
+  /* --- ripristino da un backup -------------------------------------------- *
+   *
+   * Quattro stati di lettura e quattro rimedi diversi, piu' la conferma. Ogni
+   * frase di rifiuto dice **il fatto e cosa e' possibile da dove si e'**: un
+   * rimedio che il dispositivo non puo' eseguire non aiuta nessuno, e su un
+   * iPhone non esiste un editor che apra un JSON da iCloud Drive.
+   *
+   * Il tono della conferma non spaventa, e non e' gentilezza: lo scatto
+   * pre-import rende il tocco recuperabile, e una conferma drammatica su
+   * un'operazione reversibile insegna a temere la cosa sbagliata (ADR 026 §6d). */
+  'import.open': 'Restore from a backup',
+  'import.title': 'Restore a backup',
+  'import.close': 'Close',
+  'import.reading': 'Reading the backup…',
+  'import.reading.note': 'If the file is in iCloud Drive it can take a few seconds.',
+  'import.unreadable': 'That file could not be read.',
+  'import.unreadable.note':
+    'Try again. If it is in iCloud Drive, download it to this phone first: a file that lives only in the cloud does not always arrive.',
+  'import.retry': 'Try again',
+  'import.notBackup': 'This file is not a Cent backup.',
+  'import.notBackup.note':
+    'Trying the same file again will not help. A Cent backup is a .json file, and its name starts with cent-.',
+  'import.another': 'Pick another file',
+  'import.tooNew': 'This backup comes from a newer version of Cent than the one on this phone.',
+  'import.tooNew.note':
+    'Opening it here would quietly drop what this version does not know about. Close Cent and open it again to update it, then try once more.',
+  'import.noCategories': 'This backup has no categories.',
+  'import.noCategories.note':
+    'Without categories there is no grid, and no expense could be saved. From here you can try another backup.',
+  'import.damaged': 'This backup has one record Cent cannot read: {where}.',
+  'import.damaged.more': 'Others like it: {more}.',
+  'import.damaged.note':
+    'From here you can try another backup. From a computer you can open the file, remove that record and try again.',
+  'import.ready':
+    'Restoring the backup from {day}: the expenses you saved after that day are gone, and the fixed ones are created again from that day on.',
+  'import.ready.undated':
+    'This backup does not say when it was made. Restoring it: the expenses you saved after it are gone, and the fixed ones are created again.',
+  'import.now': 'now',
+  'import.next': 'after',
+  'import.rows.expenses': 'Expenses',
+  'import.rows.categories': 'Categories',
+  'import.rows.rules': 'Fixed costs',
+  'import.confirm': 'Restore',
 
   /* --- avviso di aggiornamento -------------------------------------------- */
   'update.ready': 'New version available',

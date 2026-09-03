@@ -93,6 +93,9 @@ export const it = {
   'toast.backupUnavailable': 'Non riesco a preparare il backup.',
   'toast.backupFileFailed': 'Il file non si è salvato.',
   'toast.showData': 'Mostra i dati',
+  'toast.imported': 'Ripristinato il backup del {day}.',
+  'toast.importedUndated': 'Backup ripristinato.',
+  'toast.importFailed': 'Il ripristino non è andato: i tuoi dati sono quelli di prima.',
   'toast.languageFailed': 'Non sono riuscito a cambiare lingua. Riprova.',
   'toast.guideFailed': 'Non sono riuscito a riaprire la guida. Riprova.',
   // Le categorie: cosa e' successo, con i nomi veri dentro. Archiviare si
@@ -308,6 +311,43 @@ export const it = {
   'backup.copy': 'Copia tutto',
   'backup.copiedShort': 'Copiato',
   'backup.shareTitle': 'Backup di Cent',
+
+  /* --- ripristino da un backup -------------------------------------------- *
+   * L'originale e' l'inglese: vedi `en.ts` per gli argomenti. */
+  'import.open': 'Ripristina da un backup',
+  'import.title': 'Ripristina un backup',
+  'import.close': 'Chiudi',
+  'import.reading': 'Sto leggendo il backup…',
+  'import.reading.note': 'Se il file è su iCloud Drive può metterci qualche secondo.',
+  'import.unreadable': 'Non sono riuscito a leggere quel file.',
+  'import.unreadable.note':
+    'Riprova. Se è su iCloud Drive, scaricalo prima su questo telefono: un file che sta solo nella nuvola non sempre arriva.',
+  'import.retry': 'Riprova',
+  'import.notBackup': 'Questo file non è un backup di Cent.',
+  'import.notBackup.note':
+    'Riprovare con lo stesso file non serve. Un backup di Cent è un file .json, e il suo nome comincia per cent-.',
+  'import.another': 'Scegli un altro file',
+  'import.tooNew':
+    'Questo backup viene da una versione di Cent più nuova di quella su questo telefono.',
+  'import.tooNew.note':
+    'Aprirlo qui butterebbe via in silenzio quello che questa versione non conosce. Chiudi Cent e riaprila per aggiornarla, poi riprova.',
+  'import.noCategories': 'Questo backup non ha nessuna categoria.',
+  'import.noCategories.note':
+    'Senza categorie non c’è la griglia, e non si potrebbe registrare nessuna spesa. Da qui puoi provare un altro backup.',
+  'import.damaged': 'In questo backup c’è un record che Cent non riesce a leggere: {where}.',
+  'import.damaged.more': 'Altri come questo: {more}.',
+  'import.damaged.note':
+    'Da qui puoi provare un altro backup. Da un computer puoi aprire il file, togliere quel record e riprovare.',
+  'import.ready':
+    'Ripristinando il backup del {day}: le spese registrate dopo quel giorno non ci sono più, e le fisse vengono ricreate da quel giorno in poi.',
+  'import.ready.undated':
+    'Questo backup non dice quando è stato fatto. Ripristinandolo: le spese registrate dopo non ci sono più, e le fisse vengono ricreate.',
+  'import.now': 'adesso',
+  'import.next': 'dopo',
+  'import.rows.expenses': 'Spese',
+  'import.rows.categories': 'Categorie',
+  'import.rows.rules': 'Spese fisse',
+  'import.confirm': 'Ripristina',
 
   /* --- avviso di aggiornamento -------------------------------------------- */
   'update.ready': 'Nuova versione disponibile',
