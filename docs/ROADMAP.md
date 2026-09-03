@@ -25,8 +25,8 @@ sa gia', e per questo non puo' invecchiare. I giudizi — cosa e' in volo, cosa
 aspetta una persona — stanno sotto, scritti a mano e timbrati con lo SHA a cui
 sono stati rivisti.
 
-- **Ultimo commit**: `bd87864` — docs: quattro regole dalla sessione, e il disco smette di essere un giudizio
-- **Data**: 02/09/2026 21:08
+- **Ultimo commit**: `7e63c39` — docs: la fase 6 chiude — la voce 5 e' soddisfatta
+- **Data**: 03/09/2026 11:22
 - **Ramo**: `main`
 - **Pushato**: si, `origin/main` e' allo stesso commit
 - **Albero di lavoro**: **non pulito**, ci sono modifiche non committate
@@ -53,7 +53,7 @@ sono stati rivisti.
 ## In volo adesso
 
 <!-- JUDGMENT rivisto=c4d1ef7 -->
-> Rivisto a `c4d1ef7`, 2 commit fa.
+> Rivisto a `c4d1ef7`, 3 commit fa.
 
 **Ri-derivato**: `git rev-parse HEAD origin/main` da' lo stesso commit e l'ultimo
 workflow `Deploy` su `main` e' `success`, quindi le tre posizioni — albero,
@@ -2577,6 +2577,45 @@ ne ha escluse**. Una statistica che scarta record in silenzio mente — e qui
 scarterebbe proprio le spese inserite in ritardo, che non sono un campione
 casuale.
 
+
+## Fase 7 — le decisioni sono prese, e stanno in ADR 026
+
+**3 settembre 2026.** Sette domande poste prima di costruire, sette risposte. La
+motivazione per esteso sta in
+[ADR 026](adr/026-l-import-sostituisce-e-lascia-una-rete.md); qui c'e' solo cosa
+si costruisce e in che ordine, **senza ricopiare gli argomenti** — sarebbe una
+copia che parafrasa ([DEBITO.md](DEBITO.md) §1).
+
+| | decisione |
+|---|---|
+| **D1** | **Sostituzione.** La fusione chiede un arbitro fra due dispositivi, e un arbitro chiede un tempo condiviso che un'app senza account non ha |
+| **D2** | Segue da D1: la lapide del file e' l'unico stato che sopravvive |
+| **D3** | **Chiusa a costo zero**: le migrazioni sono gia' una fonte sola, `SchemaTooNewError` rifiuta prima di scrivere |
+| **D4** | **Il codice ha ragione, ADR 018 emendata.** Nessuna modifica al codice, un test che ne difende la semantica |
+| **D5** | La conferma dice la data **dentro** la frase; `exportedAt` smette di essere buttato via |
+| **D6** | **L'import accetta solo stati che l'app avrebbe potuto produrre** — il criterio cade sulle categorie, non sulle spese |
+| **D7** | **`endDate` esce dalla fase**, nel suo commit |
+
+**Piu' due cose che non erano fra le sette domande**: la divisione di `Settings`
+(l'import non tocca `language`, `theme`, `onboardingCompletedAt`; `lastBackupAt`
+prende l'`exportedAt` del file) e **lo scatto pre-import**, che rende la
+sostituzione reversibile.
+
+### L'ordine, e perche' e' quello
+
+1. **La separazione degli store di sistema** e il nuovo contratto di
+   `replaceAll`, con la migrazione 5→6 e la seconda implementazione in
+   `memory-persistence.ts`. Viene prima perche' **il debito che scopre esiste gia'**:
+   che le tre liste — cosa si migra, cosa finisce nel backup, cosa `replaceAll`
+   cancella — coincidano oggi e' una coincidenza.
+2. **Anteprima e conferma.** Prima il dominio, poi le stringhe.
+3. **Il selettore di file e l'i18n.** Ultime perche' le chiavi arrivano
+   **insieme al dialogo che le mostra** — decisione della fase 5, e il controllo B
+   di `dead-surface.mjs` la rende una regola invece che un'intenzione.
+
+**Verifica sui dati veri**: l'export di Daniele come fixture **a runtime**. Mai
+committato, e il suo percorso assoluto mai dentro un test — e' gia' successo in
+fase 3, e quei test furono cancellati per questo.
 
 ## Compiti espliciti della fase 7
 

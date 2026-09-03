@@ -10,7 +10,12 @@ attraverso `rewindRecurringRule`** — cioe' solo per un'operazione **nominata**
 anteprima e conferma esplicita dell'utente.
 
 **Non arretra mai come effetto collaterale**: non per orologio, non per fuso, non
-per import, non per ricalcolo.
+per ricalcolo.
+
+> **Emendata il 3 settembre 2026: `import` esce da questo elenco.** L'ADR
+> affermava una garanzia che il codice non ha mai dato **e che non deve dare**.
+> L'argomento e' sotto, in "L'import non e' un effetto collaterale: e' un altro
+> inizio".
 
 ## Perche' questa formulazione e non "non arretra mai"
 
@@ -24,10 +29,73 @@ l'utente in uno stato da cui non esce dall'interno: la regola ha gia' generato
 un'istanza, quindi `planRecurringRuleDeletion` la rifiuta per sempre, e non
 esisteva nessuna schermata capace di spostare il segnaposto.
 
-Questa formulazione tiene chiusi i due inneschi che erano stati ri-derivati al gate
-— **l'orologio** (un telefono con la data avanti, un volo Amsterdam→Tokyo) e
-**`importBackup`** — e apre l'unica porta che serve, **con la maniglia dalla parte
-dell'utente**.
+Questa formulazione tiene chiuso l'innesco che era stato ri-derivato al gate —
+**l'orologio** (un telefono con la data avanti, un volo Amsterdam→Tokyo) — e apre
+l'unica porta che serve, **con la maniglia dalla parte dell'utente**.
+
+Qui era nominato anche **`importBackup`**, ed e' l'emendamento del 3 settembre.
+
+## L'import non e' un effetto collaterale: e' un altro inizio
+
+**Emendamento del 3 settembre 2026.** Questa ADR elencava `import` fra gli inneschi
+chiusi. **Nessuna riga di codice lo garantiva**, e la verifica e' stata eseguita su
+tutte e due le implementazioni di `Persistence` — in memoria e su IndexedDB:
+
+    marker prima = 2026-09-02   dopo = 2026-07-01
+    spese  prima = 4            dopo = 2
+    la correzione a 920,00 sopravvive?  no
+    la lapide sopravvive?               no
+
+La guardia di monotonia esiste, ma su un'altra porta: `idb.ts`, ramo
+`advanceRecurringMarkers`. **`replaceAll` non passa di li'** — fa `clear()` e poi
+un `put` liscio.
+
+### E il comportamento misurato non e' un difetto: e' la semantica del ripristino
+
+**Ripristinare un backup del 1º luglio significa tornare al 1º luglio.** Le
+correzioni fatte il 5 agosto non sono nel file perche' **a luglio non esistevano**,
+e perderle e' cio' che "ripristina" vuol dire. L'istanza cancellata il 2 settembre
+torna viva perche' al 1º luglio **non era ne' creata ne' cancellata**: la lapide
+non c'era. Il motore non sta sbagliando, sta rigenerando dal punto in cui il backup
+lo lascia — e **se non lo facesse, l'affitto di agosto e settembre mancherebbe**.
+
+> **La monotonia del segnaposto vale dentro una storia continua.** Un import
+> **sostituisce** la storia, e chiedere monotonia attraverso quel confine e' come
+> chiedere a un orologio di essere monotono attraverso l'atto di rimetterlo.
+
+### Perche' l'errore e' finito qui, che e' la parte da ricordare
+
+**Questa ADR e' stata scritta per il rewind, dove le spese restano.** Li' la
+sicurezza dell'arretramento poggia su due proprieta' vere: gli id deterministici di
+ADR 006 sono **gia' occupati**, quindi `add` salta e la correzione dell'utente
+sopravvive; e la lapide **e' un record**, quindi occupa l'id e l'istanza non
+risorge.
+
+**Sull'import nessuna delle due vale**, perche' `replaceAll` ha appena fatto
+`clear()`: gli id non sono piu' occupati e le lapidi non ci sono piu'. L'argomento
+e' stato **esteso a un caso che non nominava, senza essere ri-derivato li'** — ed
+e' *"una decisione vale dove vale il suo argomento"* nella forma che questo
+progetto ha gia' visto otto volte, stavolta dentro una ADR invece che dentro il
+codice.
+
+Il codice sapeva gia' di sapere: `recurring-plan.ts` nomina l'import fra le cause
+per cui il segnaposto puo' trovarsi **oltre** `today`, e lo gestisce. La direzione
+opposta — troppo **indietro** — non era nominata da nessuna parte, e nessuno se
+l'era chiesta.
+
+### Conseguenze
+
+1. **Nessuna modifica al codice.** `advanceRecurringMarkers` tiene la guardia dove
+   serve; `replaceAll` non deve averla.
+2. **La conferma dell'import lo dice**, con la data del file **dentro** la frase:
+   ripristinando un backup del ‹data›, le spese registrate dopo quella data non ci
+   sono piu', e le ricorrenti verranno rigenerate da quella data in poi. E' un
+   fatto che l'utente puo' verificare nello Storico — la regola che vale qui e' il
+   suo rovescio: **un fatto vero che nessun messaggio dice**.
+3. **Un test** che dopo l'import lo stato e' esattamente quello implicato dalla
+   data del backup **piu' la materializzazione fino a oggi**. E' l'unico modo di
+   accorgersi se un domani qualcuno "ripara" questo comportamento — e senza, la
+   prossima persona che legge la sonda la leggera' come un bug.
 
 ## Perche' arretrare il segnaposto e' sicuro
 
