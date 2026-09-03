@@ -749,23 +749,6 @@ generica e tiene le issue per il log, la condizione si sposta al primo rifiuto
 che una persona vera non sa spiegarsi — che e' peggio, perche' non lo vedra'
 nessuno di noi.
 
-## 12. I messaggi dell'anteprima d'import sono in italiano, in un'app che parte in inglese
-
-**Stato: aperto.** Nato il 3 settembre 2026 con l'anteprima.
-
-**Cosa.** `parseBackup` emette 34 messaggi di issue, tutti scritti in italiano
-dentro `src/core/backup.ts`. Il default dell'app e' **l'inglese** quando la lingua
-del telefono non e' italiana — cioe' per quasi tutti quelli che la useranno.
-
-**Perche' non e' stato riparato adesso.** La riparazione e' un **codice** nella
-issue al posto della frase, e il codice e' un campo che va spedito **col suo
-lettore**: oggi nessuna schermata legge `ImportPreview`, quindi le chiavi i18n
-corrispondenti non avrebbero lettori e `dead-surface` B andrebbe rosso — e' quello
-che e' successo a `rule.preview.done`.
-
-**La condizione che la chiude: il commit della schermata d'import.** E' lo stesso
-commit che porta i lettori, quindi non c'e' un secondo giro da ricordarsi.
-
 ## 13. Un record illeggibile su cento rifiuta tutto il file
 
 **Stato: aperto, e deliberato.** Nato il 3 settembre 2026 insieme a
