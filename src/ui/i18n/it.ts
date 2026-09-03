@@ -330,7 +330,7 @@ export const it = {
   'import.tooNew':
     'Questo backup viene da una versione di Cent più nuova di quella su questo telefono.',
   'import.tooNew.note':
-    'Aprirlo qui butterebbe via in silenzio quello che questa versione non conosce. Chiudi Cent e riaprila per aggiornarla, poi riprova.',
+    'Aprirlo qui butterebbe via in silenzio quello che questa versione non conosce. Chiudi Cent e riaprila per aggiornarla, poi torna su questa schermata.',
   'import.noCategories': 'Questo backup non ha nessuna categoria.',
   'import.noCategories.note':
     'Senza categorie non c’è la griglia, e non si potrebbe registrare nessuna spesa. Da qui puoi provare un altro backup.',

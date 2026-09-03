@@ -2620,8 +2620,23 @@ perche' il dominio e' pronto: `exportedAt` dentro la frase, il **prima/dopo** de
 conteggi, i **quattro** stati di lettura, i messaggi col rimedio eseguibile dal
 telefono.
 
-**Giro B — selettore di file e stringhe.** `accept` provato **sul dispositivo**,
-un file da iCloud Drive, le due lingue.
+**Giro B — selettore di file e stringhe.** ~~Da fare.~~ **Fatto il 4 settembre**
+(`src/app/backup-read.ts`): la schermata e' raggiungibile da Impostazioni, e con
+lei arriva la e2e che chiude [DEBITO.md](DEBITO.md) §14 — le tre fasce identiche
+nei sette contenuti, su tre viewport.
+
+Le due azioni sono separate come ADR 026 §6f pretende: *"Riprova"* rilegge lo
+stesso `File` senza riaprire il foglio del sistema, *"Scegli un altro file"* lo
+riapre. Non e' disciplina: l'esito `unreadable` **porta con se'** la chiusura che
+rilegge, quindi non e' costruibile senza dire come si ritenta.
+
+Le sette schermate sono state guardate in **tutte e due le lingue**, ed e' li'
+che si e' visto l'unico difetto che nessuna misura poteva vedere: la frase di
+`too-new` finiva con *"poi riprova"* mentre il bottone diceva *"Scegli un altro
+file"*.
+
+**Cosa resta, e non e' un debito**: `accept` e le due sonde dell'annullamento
+sono in "Verificabili solo sul dispositivo", con i tre file da provare scritti.
 
 **Due giri e non uno, e la ragione e' misurata**: un agente che consegna tutto
 alla fine perde tutto se muore, ed e' successo due volte oggi. Due giri da venti
@@ -2646,11 +2661,13 @@ senza, il tutto-o-niente e' un vicolo cieco.
   ripristino; se quel dialogo non arriva in fase 7, **lo scatto e' una rete che
   nessuno puo' usare, e quello e' un difetto suo da guardare allora**. Nessun
   agente le riaggiunge di iniziativa: e' una decisione con un'ADR dietro.
-- **Il bundle ha 124 byte di margine**, e il commit delle stringhe lo sfora quasi
-  certamente. Quando succede: si misura di quanto, **non si tocca il tetto**.
-  Alzarlo e' una decisione di prodotto, e si prende con un confronto **in secondi**
-  a 60 e a 65 KB su una connessione lenta — l'argomento del tetto e' fatto di
-  secondi e si aggiorna con dei secondi.
+- **Il bundle.** Il numero e il margine stanno nel blocco rigenerato in cima e
+  non si ricopiano qui — questa riga ne portava uno (*"124 byte"*) misurato
+  contro un tetto che nel frattempo era cambiato. Quel che resta e' la regola:
+  se si sfora, si misura **di quanto** e lo si riporta; **non si tocca il
+  tetto**. Alzarlo e' una decisione di prodotto, e da `9a61cf2` vuole un
+  argomento su **cosa comprano i byte e se sono irriducibili** — non una misura
+  nuova, perche' fra 60 e 65 la curva e' gia' stata misurata ed e' piatta.
 - **DEBITO §12** (le issue in italiano) e **§13** (il rifiuto totale), tutte e due
   con la loro condizione.
 - **2g** riparte su un albero fermo con una porta sua. C'e' un worktree pronto in
@@ -2984,6 +3001,37 @@ con un test — verrebbe verde senza provare niente, che e' il difetto peggiore.
   WebKit+SF Pro.
 - **Il font delle emoji** (Apple Color Emoji contro Noto): dichiarato fuori scopo
   in ADR 013 e resta tale.
+- **`accept` del selettore di backup, e le due sonde dell'annullamento** — nato
+  il 4 settembre 2026 col selettore di file (`src/app/backup-read.ts`).
+
+  Su iOS `accept` **si risolve in UTI**, e Chromium non lo fa: qui la stringa non
+  filtra niente e ogni test passa qualunque cosa ci sia scritta. Sul telefono,
+  filtrare male vuol dire **file JSON grigi e non selezionabili** — la funzione
+  non parte proprio, e il difetto si presenta come *"il mio backup non c'e'"*,
+  cioe' indistinguibile da un bug del salvataggio. Si spedisce
+  `accept="application/json,.json"`, tipo MIME **e** estensione, perche' e' la
+  forma che degrada meglio se una delle due non e' riconosciuta — non perche' si
+  sappia quale delle due funzioni.
+
+  **Cosa va provato, prima che il link vada a qualcuno**, e sono due file perche'
+  sono due strade diverse dentro il foglio File:
+
+  1. un backup **scaricato sul telefono** (Sul mio iPhone → Cent, o Download):
+     il file dev'essere **selezionabile**, non grigio;
+  2. lo stesso backup **su iCloud Drive e non ancora scaricato**: dev'essere
+     selezionabile, e l'attesa dev'essere quella dello stato "sto leggendo" —
+     non un tap che sembra non aver fatto niente.
+
+  E la terza, che vale quanto le due: **chiudere il foglio File senza scegliere
+  niente**. La schermata deve sparire, non restare su "sto leggendo". Le sonde
+  sono due — l'evento `cancel` dell'input, che WebKit ha da iOS 16.4, e il
+  ritorno del fuoco alla finestra dopo `GRAZIA` millisecondi. In Chromium
+  nessuna delle due si esercita come sul telefono: il foglio File non esiste,
+  quindi non c'e' ne' `cancel` ne' un blur vero. **La sonda del fuoco e' quella
+  che puo' sbagliare**, e sbaglia in un verso solo: se `change` arrivasse piu' di
+  `GRAZIA` dopo il fuoco, un file scelto davvero verrebbe letto come un
+  ripensamento e la schermata si chiuderebbe da sola. Se succede sul telefono, si
+  vede subito ed e' quello il numero da alzare.
 
 Sono il **caso 2 della tassonomia** in CLAUDE.md — asserzione esatta, premessa che
 dipende dall'ambiente — nella sua forma piu' pura: qui la premessa non e' solo

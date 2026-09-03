@@ -810,9 +810,13 @@ convivono perche' rispondono a due domande diverse — *"questo file e' integro?
 **Oggi non serve. Il giorno che serve, serve tantissimo**, e sara' il giorno
 peggiore per progettarlo: per questo la voce esiste adesso, con il suo nome.
 
-## 14. La geometria della schermata d'import e' misurata e non sorvegliata
+## 14. La geometria della schermata d'import e' misurata e non sorvegliata — **CHIUSA**
 
-**Stato: aperto.** Nato il 3 settembre 2026, insieme alla schermata.
+**Stato: chiusa il 4 settembre 2026**, dal commit del selettore di file — cioe'
+esattamente dalla condizione che era scritta qui sotto, allo stesso giro e non
+al successivo. La chiusura sta in fondo alla voce; il resto e' com'era.
+
+Nato il 3 settembre 2026, insieme alla schermata.
 
 **Cosa.** `ImportSheet` ha un invariante di layout preciso: **intestazione,
 corpo e piede non si muovono di un pixel fra i sette contenuti** che la
@@ -842,6 +846,34 @@ migliorata altrove.
 **La condizione che lo chiude**: il commit del selettore di file. Nello stesso
 istante in cui la schermata diventa raggiungibile, l'invariante diventa
 asseribile da una e2e normale, e va asserito **li'**, non nel giro dopo.
+
+### Chiusa: `tests/e2e/ripristino.spec.ts`, tre viewport, sette contenuti
+
+    iphone-se   head 12→56  corpo 68→595  piede 607→651
+    iphone-14   head 12→56  corpo 68→772  piede 784→828
+    landscape   head 12→56  corpo 68→255  piede 267→311
+
+I numeri di iphone-se sono **gli stessi** della misura a mano del 3 settembre,
+il che dice una cosa sola e utile: la misura a mano era giusta, ed e' rimasta
+giusta per un giorno perche' nessuno ha toccato quella schermata. E' esattamente
+la finestra in cui un invariante non meccanizzato sembra non servire.
+
+**L'asserzione non e' su nessuno di questi numeri.** Il test misura il primo
+contenuto e chiede che gli altri sei siano **quello**: e' l'identita' fra le
+viste, non l'ordine giusto — la contromisura che resta vera il giorno in cui la
+schermata cambia di proposito, e cade solo sul difetto vero.
+
+**La prova che poteva fallire**, rifatta su albero committato: togliendo
+`min-block-size: var(--tap-min)` dal piede, il corpo passa da `68→595` a
+`68→639` nello stato "sto leggendo" e il test nomina lo stato nel messaggio.
+Rimessa la riga, il controllo e' tornato al numero di prima.
+
+**Cosa il test copre in meno della misura a mano**: le due lingue. La suite gira
+in `it-IT` (`playwright.config.ts`), e il rifiuto piu' lungo delle due lingue non
+e' detto sia l'italiano. Le sette schermate sono state **guardate a occhio in
+entrambe** durante questo giro — ed e' li' che si e' visto un difetto che nessuna
+geometria poteva vedere: la frase di `too-new` finiva con *"poi riprova"* mentre
+il bottone diceva *"Scegli un altro file"*.
 
 ## 3. Rischi noti gia' scritti altrove
 

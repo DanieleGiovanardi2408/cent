@@ -92,9 +92,11 @@ interface Props {
    * Non e' uno stato vuoto ed e' la stessa distinzione della striscia dei sette
    * giorni sulla Home: *una sezione non sparisce perche' i suoi dati sono
    * vuoti; sparisce se la funzione a cui appartiene non esiste per questo
-   * utente*. Oggi non esiste per nessuno — manca la sorgente da cui leggere il
-   * file (vedi `AppProps` in `App.tsx`) — e un bottone spento al suo posto
-   * direbbe che c'e' qualcosa di negato invece di qualcosa che non c'e'.
+   * utente*. Dal commit del selettore di file la sorgente c'e' (`pickBackup`,
+   * passato da `main.tsx`) e la voce compare; resta facoltativa perche'
+   * l'assenza e' uno stato vero — `App` senza sorgente — e un bottone spento al
+   * suo posto direbbe che c'e' qualcosa di negato invece di qualcosa che non
+   * c'e'.
    */
   readonly onImport?: (() => void) | undefined
   /**

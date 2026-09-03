@@ -329,6 +329,8 @@ test.describe('ImportSheet: le tre fasce non si muovono fra i sette contenuti', 
     readonly foot: string
     readonly overflowX: number
     readonly corpoScorre: boolean
+    readonly eccedenza: number
+    readonly corsa: number
     readonly piedeInFondo: number
     readonly bersagli: readonly { sel: string; w: number; h: number }[]
   }
@@ -365,6 +367,18 @@ test.describe('ImportSheet: le tre fasce non si muovono fra i sette contenuti', 
         // Con `overflow-y: hidden` un rifiuto piu' lungo del corpo diventerebbe
         // illeggibile senza che nessuna fascia si muova di un pixel.
         corpoScorre: ['auto', 'scroll', 'overlay'].includes(getComputedStyle(corpo).overflowY),
+        // Quanto contenuto avanza, e **quanto il dito riesce a portarne su**.
+        // I due numeri insieme sono l'invariante vero: non "sta sopra la piega",
+        // ma **raggiungibile**.
+        eccedenza: r(corpo.scrollHeight - corpo.clientHeight),
+        corsa: ((): number => {
+          if (!['auto', 'scroll', 'overlay'].includes(getComputedStyle(corpo).overflowY)) return 0
+          const prima = corpo.scrollTop
+          corpo.scrollTop = 1e6
+          const arrivo = corpo.scrollTop
+          corpo.scrollTop = prima
+          return r(arrivo)
+        })(),
         piedeInFondo: r(window.innerHeight - piede.getBoundingClientRect().bottom),
         bersagli,
       }
@@ -432,11 +446,32 @@ test.describe('ImportSheet: le tre fasce non si muovono fra i sette contenuti', 
           'stato e l\'altro, e il file arriva da iCloud mentre il pollice e\' gia\' li\'',
       ).toBe(`${primo.head} | ${primo.body} | ${primo.foot}`)
       expect(m.overflowX, `"${nome}": scroll orizzontale in pagina`).toBeLessThanOrEqual(0)
+      // **Due controlli, e sono due perche' misurano cose diverse — con la
+      // parte vuota dichiarata, che e' quella che di solito non si scrive.**
+      //
+      // Il secondo misura l'**effetto**: cio' che avanza si puo' portare a
+      // schermo. E' vero a vuoto dove non avanza niente, e **misurato** vale
+      // `eccedenza max 0` su iphone-se e iphone-14 e `32` in orizzontale — cioe'
+      // ha i denti su un progetto su tre, ed e' onesto dirlo invece di lasciar
+      // credere che copra tutti e tre.
+      //
+      // Il primo misura la **causa** — il corpo dichiara di scorrere prima che
+      // serva — e vale su tutti e tre. E' quello su cui e' caduta la mutazione
+      // `overflow-y: hidden`: con l'effetto da solo, a 375x667 e a 390x844 quel
+      // difetto sarebbe passato, perche' li' oggi non c'e' niente da scorrere.
+      // Serve il giorno in cui un rifiuto si allunga — un'altra lingua, un
+      // carattere di sistema piu' grande, un percorso di record piu' lungo — e
+      // nessuno rimisurera' questa schermata per accorgersene.
       expect(
         m.corpoScorre,
         `"${nome}": il corpo non si lascia scorrere — un testo piu' lungo del corpo diventa ` +
           'irraggiungibile senza che nessuna fascia si muova',
       ).toBe(true)
+      expect(
+        m.corsa,
+        `"${nome}": avanzano ${m.eccedenza}px di contenuto e il corpo si lascia scorrere di ` +
+          `${m.corsa}: quello che resta sotto non lo raggiunge nessuno`,
+      ).toBeGreaterThanOrEqual(m.eccedenza)
       expect(
         m.piedeInFondo,
         `"${nome}": il piede finisce a ${m.piedeInFondo}px dal fondo della finestra`,
@@ -450,7 +485,9 @@ test.describe('ImportSheet: le tre fasce non si muovono fra i sette contenuti', 
     // sotto e' asserito dal ciclo appena sopra.
     console.log(
       `  ripristino | head ${primo.head} · corpo ${primo.body} · piede ${primo.foot} ` +
-        `| ${sette.length} contenuti identici`,
+        `| ${sette.length} contenuti identici ` +
+        `| eccedenza max ${Math.max(...sette.map(([, m]) => m.eccedenza))} ` +
+        `su corsa ${Math.max(...sette.map(([, m]) => m.corsa))}`,
     )
   })
 })

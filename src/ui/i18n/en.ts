@@ -263,8 +263,15 @@ export const en: Record<keyof typeof it, string> = {
     'Trying the same file again will not help. A Cent backup is a .json file, and its name starts with cent-.',
   'import.another': 'Pick another file',
   'import.tooNew': 'This backup comes from a newer version of Cent than the one on this phone.',
+  /* Finiva con *"then try once more"* mentre il bottone di questo stato dice
+   * *"Pick another file"*: due istruzioni diverse a schermo nello stesso
+   * momento, e quella scritta piu' in grande era la meno utile. E' la stessa
+   * famiglia di ADR 026 §6f — un'etichetta e' una promessa sull'azione — presa
+   * dal lato del testo invece che da quello del bottone. Adesso la frase nomina
+   * un posto dove tornare, che e' l'unica cosa che dopo l'aggiornamento esiste
+   * ancora. */
   'import.tooNew.note':
-    'Opening it here would quietly drop what this version does not know about. Close Cent and open it again to update it, then try once more.',
+    'Opening it here would quietly drop what this version does not know about. Close Cent and open it again to update it, then come back to this screen.',
   'import.noCategories': 'This backup has no categories.',
   'import.noCategories.note':
     'Without categories there is no grid, and no expense could be saved. From here you can try another backup.',

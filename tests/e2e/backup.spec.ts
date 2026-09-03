@@ -150,8 +150,19 @@ async function apriImpostazioni(page: Page): Promise<void> {
   await expect(page.locator('.prefs')).toBeVisible()
 }
 
+/**
+ * Tocca **"Esporta tutto"**, nominandolo.
+ *
+ * Diceva `.prefs__action` e basta, ed era esatto finche' in quella sezione di
+ * bottoni ce n'era uno solo. Dal 4 settembre ce ne sono due — sotto l'export
+ * c'e' "Ripristina da un backup" — e il selettore ha smesso di identificare
+ * qualcosa: cinque test sono caduti insieme, tutti dentro questa riga.
+ *
+ * Non e' stato riparato con un `.first()`: la posizione e' proprio cio' che
+ * cambiera' di nuovo. Un bersaglio si nomina.
+ */
 async function esporta(page: Page): Promise<void> {
-  await sezioneDati(page).locator('.prefs__action').tap()
+  await sezioneDati(page).locator('.prefs__action', { hasText: 'Esporta tutto' }).tap()
   await expect(page.locator('.toast')).toBeVisible()
 }
 
