@@ -2974,6 +2974,14 @@ describe('import e segnaposto: ADR 018 emendata', () => {
 
     // Il fatto che ADR 018 dichiarava chiuso e che nessuna riga di codice
     // garantiva. Se un domani qualcuno "ripara" l'arretramento, questa cade.
+    //
+    // **Si guarda il disco, non solo il mirror**, e la ragione e' una prova:
+    // con la sola riga sul mirror una guardia di monotonia messa dentro
+    // `replaceAll` passava inosservata — `importBackup` riempie il mirror con
+    // il `DataSet` che ha in mano, quindi il mirror dice sempre la data del
+    // file qualunque cosa sia finita sul disco.
+    expect(disk.recurringRules[0]?.lastMaterializedDate).toBe('2026-07-01')
+    expect(disk.expenses).toHaveLength(2)
     expect(repo.getState().recurringRules[0]?.lastMaterializedDate).toBe('2026-07-01')
     expect(repo.getState().expenses).toHaveLength(2)
   })
@@ -2993,6 +3001,11 @@ describe('import e segnaposto: ADR 018 emendata', () => {
     // Quattro: le due del file piu' le due rigenerate. Nessun duplicato — gli
     // id sono deterministici, quindi due materializzazioni non ne fanno otto.
     expect(spese).toHaveLength(4)
+    // Il disco dice la stessa cosa del mirror. Sono due asserzioni e non una:
+    // il mirror lo riempie l'import con cio' che gli e' stato passato, quindi
+    // da solo non e' una prova di cosa sia successo sotto.
+    expect(disk.expenses.map((e) => e.id).sort()).toEqual(spese.map((e) => e.id).sort())
+    expect(disk.recurringRules[0]?.lastMaterializedDate).toBe(OGGI)
     await repo.materializeRecurring(OGGI)
     await repo.flush()
     expect(repo.getState().expenses).toHaveLength(4)

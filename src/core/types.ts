@@ -304,9 +304,27 @@ export interface DataSet {
  *
  * I due tipi si derivano dalle due liste, non viceversa: cosi' aggiungere un
  * sesto store d'archivio e aggiungere un secondo store di sistema restano
- * **due gesti diversi** (due liste diverse), e chi mette un nome nella famiglia
- * sbagliata non compila — `RawDataSet`, `emptyRawDataSet`, i `counts`
- * dell'anteprima e `BackupFile.data` sono tutti indicizzati su `StoreName`.
+ * **due gesti diversi**, perche' sono due liste diverse.
+ *
+ * ## Cosa garantisce il compilatore, e cosa no — misurato, non affermato
+ *
+ * La prima stesura di questa nota diceva *"chi sbaglia famiglia non compila"*.
+ * E' vero in **un verso solo**, e il verso che manca vale la pena scriverlo qui
+ * invece di lasciarlo scoprire a chi si fida della frase.
+ *
+ * - **Uno store di sistema messo fra quelli d'archivio: non compila.** Provato
+ *   aggiungendo `'preImportSnapshot'` a `ARCHIVE_STORES` — quattro errori, in
+ *   `backup.ts` (due volte i `counts`), `schema.ts` (`emptyRawDataSet`) e
+ *   `snapshot.ts`. Provato mettendolo in `REPLACED_STORES`: `TS2322` sul posto.
+ *   E' il verso che conta, perche' e' quello dei tre danni di ADR 026 §2.
+ * - **Uno store d'archivio dichiarato di sistema: compila.** Aggiungendo
+ *   `'budgets'` a `SYSTEM_STORES`, `tsc` tace: `AnyStoreName` e' gia' la loro
+ *   unione, quindi non cambia niente. A prenderlo sono **due test** di
+ *   `schema.test.ts`, e per questo esistono.
+ * - **Un sesto store d'archivio** costringe a decidere in nove punti, fra cui
+ *   `RawDataSet`, `emptyRawDataSet` e i `counts` dell'anteprima; `BackupFile`
+ *   no, e' un'interfaccia scritta a mano — la' il guardiano e' il test che
+ *   confronta le sue chiavi con `ARCHIVE_STORES`.
  */
 export const ARCHIVE_STORES = [
   'expenses',

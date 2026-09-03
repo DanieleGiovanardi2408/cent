@@ -18,7 +18,7 @@ import { createMemoryPersistence, emptyDisk } from './memory-persistence'
 import type { Persistence } from './persistence'
 import { MIGRATIONS, SCHEMA_VERSION } from './schema'
 import { buildPreImportSnapshot, snapshotPayload } from './snapshot'
-import { makeCategory, makeExpense, makeSettings } from './testing'
+import { makeCategory, makeExpense, makeRule, makeSettings } from './testing'
 import { ALL_STORES, ARCHIVE_STORES, PRE_IMPORT_SNAPSHOT_ID } from './types'
 import type { DataSet } from './types'
 
@@ -114,6 +114,32 @@ for (const { nome, apri } of implementazioni) {
       const dopo = await p.loadAll()
       expect(dopo.expenses.map((e) => e.id)).toEqual(['e-unico'])
       expect(dopo.settings).not.toBeNull()
+      p.close()
+    })
+
+    it('non protegge il segnaposto delle ricorrenti, e non deve (ADR 018)', async () => {
+      // Sta qui, sulle **due** implementazioni, perche' e' qui che la
+      // "riparazione" verrebbe scritta: `advanceRecurringMarkers` ha la sua
+      // guardia di monotonia, e chi la vedesse potrebbe pensare che manchi
+      // anche di qua. Non manca: manca apposta. Un import sostituisce la
+      // storia, e chiedere monotonia attraverso quel confine e' come chiedere a
+      // un orologio di essere monotono attraverso l'atto di rimetterlo.
+      const p = apri()
+      const avanti = {
+        ...stato('vecchio', 100),
+        recurringRules: [makeRule({ id: 'r-1', startDate: '2026-07-01', lastMaterializedDate: '2026-09-02' })],
+      }
+      await p.write(avanti)
+      const indietro = {
+        ...stato('nuovo', 900),
+        recurringRules: [makeRule({ id: 'r-1', startDate: '2026-07-01', lastMaterializedDate: '2026-07-01' })],
+      }
+      await p.replaceAll(indietro, PRIMA)
+
+      expect((await p.loadAll()).recurringRules[0]?.lastMaterializedDate).toBe('2026-07-01')
+      // E il ripristino riporta indietro anche questo: lo scatto e' lo stato,
+      // segnaposto compreso.
+      expect((await p.restoreSnapshot())?.recurringRules[0]?.lastMaterializedDate).toBe('2026-09-02')
       p.close()
     })
 

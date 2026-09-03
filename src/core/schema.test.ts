@@ -118,8 +118,14 @@ describe('schema corrente', () => {
   it('lo store di sistema non e nelle liste dell archivio', () => {
     // Il terzo dei tre danni di ADR 026 §2, e l'unico fatale: se lo scatto
     // fosse in `REPLACED_STORES` verrebbe cancellato dalla stessa transazione
-    // che deve proteggerlo. Qui si guarda **il valore**, non il tipo, perche' il
-    // tipo lo garantisce gia' — e un giorno qualcuno potrebbe allargarlo.
+    // che deve proteggerlo.
+    //
+    // Non e' un doppione del tipo, ed e' stato verificato invece che dedotto:
+    // il compilatore prende un nome di **sistema** messo fra quelli
+    // d'archivio, e non prende il verso opposto. Aggiungendo `'budgets'` a
+    // `SYSTEM_STORES`, `tsc` tace — `AnyStoreName` e' gia' la loro unione — e a
+    // cadere sono questo test e quello qui sopra. Sono l'unica guardia che
+    // esista in quella direzione.
     for (const nome of SYSTEM_STORES) {
       expect([...MIGRATED_STORES]).not.toContain(nome)
       expect([...REPLACED_STORES]).not.toContain(nome)
