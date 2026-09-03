@@ -330,6 +330,49 @@ riconosciuta. **Ma qual e' quella giusta e' un fatto del dispositivo**: da quest
 macchina non si deriva, e sta in "Verificabili solo sul dispositivo". Va provato
 con un file su iCloud Drive **e** uno locale, prima che il link vada a qualcuno.
 
+## 6f. L'azione dipende dallo stato, come il messaggio
+
+Ai quattro stati corrispondono **tre azioni diverse**, e non una con quattro
+etichette.
+
+| stato | azione |
+|---|---|
+| **sto leggendo** | nessuna |
+| **non si e' potuto leggere** | **Riprova** — e riprova *sul serio* |
+| **non e' un backup** | **Scegli un altro file** (riapre il selettore) |
+| **e' un backup, un record e' rotto** | **Scegli un altro file**, piu' il messaggio col path e i due rimedi |
+
+### "Riprova" deve rileggere lo stesso file
+
+**E' l'unico stato in cui riprovare ha senso**: il file va bene, e' la **lettura**
+che e' fallita. Su iCloud Drive la seconda volta spesso riesce, perche' nel
+frattempo il download e' partito — quindi il reader tiene l'ultimo `File` e lo
+**rilegge**, senza riaprire il foglio del sistema.
+
+### Perche' un "Riprova" che riapre il selettore e' una bugia
+
+Il giro A ha lasciato **un'azione sola** (`onRead`) con due etichette: il bottone
+dice *"Riprova"* e fa esattamente *"Scegli un altro file"*. E' il difetto scritto
+nel codice, ed e' peggio di quanto sembri.
+
+> Promette di **ritentare** e chiede invece di **ricominciare**.
+
+E l'esito e' prevedibile: l'utente ripesca **lo stesso file**, ottiene **lo stesso
+errore**, e conclude che **l'app e' rotta**. Non e' un fastidio: e' il momento in
+cui una persona smette di provare a recuperare i propri dati.
+
+E' la stessa famiglia della **terza forma** della regola sui messaggi — *un rimedio
+che il dispositivo non puo' eseguire* — applicata all'**azione** invece che al
+testo: qui il dispositivo potrebbe eseguirlo, ma il bottone non fa quello che dice.
+
+> **Un'etichetta e' una promessa sull'azione. Se l'azione e' la stessa per due
+> etichette diverse, una delle due sta mentendo.**
+
+E vale il rovescio, che e' il vero rischio di semplificazione: unificare le due
+etichette in *"Scegli un altro file"* farebbe sparire la bugia **e anche il
+rimedio giusto** — chi non e' riuscito a leggere un file da iCloud non ha bisogno
+di un altro file, ha bisogno di **quello**, un momento dopo.
+
 ## 6c. L'anteprima e' un prima/dopo, non un elenco
 
 Il fatto da capire in un colpo d'occhio e' **cosa cambia**, e con la sostituzione
