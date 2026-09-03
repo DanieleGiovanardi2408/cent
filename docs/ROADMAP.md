@@ -25,11 +25,11 @@ sa gia', e per questo non puo' invecchiare. I giudizi — cosa e' in volo, cosa
 aspetta una persona — stanno sotto, scritti a mano e timbrati con lo SHA a cui
 sono stati rivisti.
 
-- **Ultimo commit**: `8644f2e` — fix: la frase del "troppo nuovo" prometteva una cosa e il bottone ne faceva un'altra
+- **Ultimo commit**: `d143f2f` — docs: i fatti dopo il selettore di file
 - **Data**: 04/09/2026 00:12
 - **Ramo**: `fase7/scatto-pre-import`
-- **Pushato**: **no: 2 commit non pushati su `origin/fase7/scatto-pre-import`**
-- **Rispetto a `origin/main`**: 17 commit avanti
+- **Pushato**: **no: 3 commit non pushati su `origin/fase7/scatto-pre-import`**
+- **Rispetto a `origin/main`**: 18 commit avanti
 - **Albero di lavoro**: pulito
 
 - **Test unitari**: 796 in 27 file, tutti verdi
@@ -55,7 +55,7 @@ sono stati rivisti.
 ## In volo adesso
 
 <!-- JUDGMENT rivisto=c4d1ef7 -->
-> Rivisto a `c4d1ef7`, 21 commit fa. **Da riguardare.**
+> Rivisto a `c4d1ef7`, 22 commit fa. **Da riguardare.**
 
 **Ri-derivato**: `git rev-parse HEAD origin/main` da' lo stesso commit e l'ultimo
 workflow `Deploy` su `main` e' `success`, quindi le tre posizioni — albero,
