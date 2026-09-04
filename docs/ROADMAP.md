@@ -25,18 +25,18 @@ sa gia', e per questo non puo' invecchiare. I giudizi — cosa e' in volo, cosa
 aspetta una persona — stanno sotto, scritti a mano e timbrati con lo SHA a cui
 sono stati rivisti.
 
-- **Ultimo commit**: `18c1af9` — docs: i fatti dopo il push
-- **Data**: 04/09/2026 00:23
+- **Ultimo commit**: `e1617a8` — fix: il disco esce dal confronto di state --check, e main torna verde
+- **Data**: 04/09/2026 00:25
 - **Ramo**: `fase7/scatto-pre-import`
 - **Pushato**: si, `origin/fase7/scatto-pre-import` e' allo stesso commit
-- **Rispetto a `origin/main`**: 19 commit avanti
+- **Rispetto a `origin/main`**: 20 commit avanti
 - **Albero di lavoro**: **non pulito**, ci sono modifiche non committate
 
 - **Test unitari**: 796 in 27 file, tutti verdi
 - **Test e2e dichiarati**: 448 in 15 file, su 4 progetti (iphone-se, iphone-14, landscape, dark)
-- **Test e2e eseguiti**: 422 passati, 26 saltati, in 2.8 minuti. I saltati sono condizionali (ADR 013): solo un'esecuzione li vede.
+- **Test e2e eseguiti**: non misurato — l'ultima esecuzione e' **parziale** — 8 test su 448 dichiarati, probabilmente un `-g` o un `--project`: va rilanciata intera
 - **Bundle iniziale**: 64.9 KB gzip su 65.0 KB (0.1 KB di margine)
-- **Disco**: 4.4 GB liberi, 79% pieno. Non e' un giudizio e non porta un timbro: cambia da solo, quindi si rigenera.
+- **Disco**: 3.9 GB liberi, 81% pieno. Non e' un giudizio e non porta un timbro: cambia da solo, quindi si rigenera.
 
 - **Schema del database**: 6. La scala delle migrazioni:
   - **1** — Schema iniziale: expenses, categories, recurringRules, budgets, settings
@@ -55,7 +55,7 @@ sono stati rivisti.
 ## In volo adesso
 
 <!-- JUDGMENT rivisto=d143f2f -->
-> Rivisto a `d143f2f`, un commit fa.
+> Rivisto a `d143f2f`, 2 commit fa.
 
 **Ri-derivato il 4 settembre, e stavolta il fatto e' un altro**: si lavora sul
 ramo `fase7/scatto-pre-import`, e `main` e' fermo a `9958f4f`.
@@ -2587,6 +2587,37 @@ ne ha escluse**. Una statistica che scarta record in silenzio mente — e qui
 scarterebbe proprio le spese inserite in ritardo, che non sono un campione
 casuale.
 
+
+## Fase 7 — gli scatti sono stati guardati, 4 settembre
+
+**64 scatti approvati**: gli otto stati della schermata d'import — la voce in
+Impostazioni, "sto leggendo", "non si e' potuto leggere", "non e' un backup",
+"troppo nuovo", "senza categorie", "record rotto", "pronto" — a 375x667 e
+390x844, chiaro e scuro, **nelle due lingue**.
+
+**Confermato guardando** che le tre decisioni ci siano davvero: la **data dentro
+la frase** (*"Ripristinando il backup del 26 agosto…"*), il **prima/dopo**
+(`adesso 47 -> dopo 6`), e il **tono senza allarmi** — il bottone dice
+*"Ripristina"* e basta.
+
+### Tre errori nel produrli, e nessuno era dell'app
+
+Il primo giro ha prodotto uno scatto chiamato `7-pronto` che mostrava lo stato
+**"record rotto"**. Non era un difetto: la fixture aveva `deletedAt` come
+**numero**, e in questo progetto `Timestamp` e' una **stringa ISO** — le due spese
+cancellate erano invalide, quindi il backup "buono" non lo era. Gli altri due
+erano espressioni regolari che non tenevano conto degli accenti (`non e'` contro
+`non è`) e del fatto che *"Restoring"* non contiene *"Restore"*.
+
+**Li ha trovati tutti e tre l'asserzione prima dello scatto**: si aspetta che il
+testo giusto sia a schermo, e solo allora si scatta. Senza, sarebbero stati
+consegnati 64 file di cui un ottavo mostrava lo stato sbagliato — e l'avrebbe
+scoperto chi guarda.
+
+E' la stessa lezione degli scatti della fase 6, dove la scena era sbagliata
+(spese fisse fuori dal periodo): **si verifica che la scena sia quella, non solo
+che la schermata sia giusta.** La differenza fra le due volte e' che qui il
+controllo c'era, e ha funzionato.
 
 ## Fase 7 — dove siamo, 3 settembre sera
 
