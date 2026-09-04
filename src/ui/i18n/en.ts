@@ -79,6 +79,7 @@ export const en: Record<keyof typeof it, string> = {
   'toast.showData': 'Show the data',
   'toast.imported': 'Restored the backup from {day}.',
   'toast.importedUndated': 'Backup restored.',
+  'toast.importUndone': 'Back to how it was.',
   'toast.importFailed': 'The restore did not go through: your data is the one you had before.',
   'toast.languageFailed': 'I could not change the language. Try again.',
   'toast.guideFailed': 'I could not reopen the guide. Try again.',
@@ -275,10 +276,11 @@ export const en: Record<keyof typeof it, string> = {
   'import.noCategories': 'This backup has no categories.',
   'import.noCategories.note':
     'Without categories there is no grid, and no expense could be saved. From here you can try another backup.',
-  'import.damaged': 'This backup has one record Cent cannot read: {where}.',
+  'import.damaged': 'This backup has one record Cent cannot read. Its id is {where}.',
+  'import.damagedAt': 'This backup has one record Cent cannot read: {where}. That is a position in the file, not a word you can search for.',
   'import.damaged.more': 'Others like it: {more}.',
   'import.damaged.note':
-    'From here you can try another backup. From a computer you can open the file, remove that record and try again.',
+    'From here you can try another backup. On a computer you can open the file, search for that id, remove the record and try again.',
   'import.ready':
     'Restoring the backup from {day}: the expenses you saved after that day are gone, and the fixed ones are created again from that day on.',
   'import.ready.undated':

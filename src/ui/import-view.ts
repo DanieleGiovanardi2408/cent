@@ -104,8 +104,8 @@ export type BackupReader = () => Promise<BackupRead>
  *
  * Non contiene nessuna frase: le frasi stanno nei dizionari. Contiene i
  * **fatti** che le frasi useranno, e ognuno di quei fatti e' verificabile da
- * chi legge — `where` e' il punto esatto dentro il file che l'utente ha in
- * mano.
+ * chi legge — `where` e' come si trova, dentro il file che l'utente ha in
+ * mano, il record che non si e' potuto leggere.
  */
 export type ImportRefusal =
   /** Il file si e' letto e non parla di Cent: JSON di qualcun altro, o non JSON. */
@@ -120,15 +120,36 @@ export type ImportRefusal =
    */
   | { readonly kind: 'no-categories' }
   /**
-   * E' il file giusto con un difetto localizzato. `where` e' il punto —
-   * `expenses[12].amountCents` — e `more` quanti altri ce ne sono.
+   * E' il file giusto con un difetto localizzato. `more` dice quanti altri ce
+   * ne sono, e `where` **come si trova quello**.
    *
-   * **Il punto si mostra per esteso, e non e' gergo lasciato in giro**: e' cio'
-   * che rende eseguibile il ramo "da un computer", perche' e' la stringa da
-   * cercare dentro il file. Una forma piu' gentile ("la spesa numero 12") si
-   * legge meglio e **non si cerca**: in un editor di testo non trova niente.
+   * ## `where` era un indice, e un indice non si cerca
+   *
+   * Qui c'era scritto: *"il punto si mostra per esteso, ed e' la stringa da
+   * cercare dentro il file"*. Era **falso**: `expenses[12].amountCents` e' una
+   * **posizione** in un array, e nel JSON quella stringa non compare. Chi
+   * provava con Cmd-F non trovava niente — e il rimedio *"da un computer apri il
+   * file e togli quel record"* e' l'unica cosa che rende accettabile il rifiuto
+   * totale ([DEBITO.md](../../docs/DEBITO.md) §13). Un rimedio con
+   * un'indicazione che non porta da nessuna parte non e' un rimedio.
+   *
+   * Adesso `where` porta l'**id del record**, che nel file c'e' davvero ed e'
+   * unico: `"id": "e-42"` si trova.
+   *
+   * ## E quando l'id manca, si dice che e' una posizione
+   *
+   * Se il campo rotto e' proprio l'id, non c'e' niente da cercare. Li' si
+   * ripiega sull'indice **dichiarandolo** (`kind: 'posizione'`), e la frase lo
+   * dice: non e' una stringa da cercare, e' la tredicesima spesa da contare.
+   * **Onesto invece che comodo** — il ripiego silenzioso avrebbe rimesso in piedi
+   * lo stesso difetto, con l'aggravante di sembrare riparato.
    */
-  | { readonly kind: 'damaged'; readonly where: string; readonly more: number }
+  | {
+      readonly kind: 'damaged'
+      readonly where: string
+      readonly comeSiTrova: 'id' | 'posizione'
+      readonly more: number
+    }
 
 /** I tre numeri del prima/dopo. Ognuno e' visibile in una schermata. */
 export interface ImportCounts {
@@ -251,7 +272,9 @@ export function refusalOf(preview: ImportPreview): ImportRefusal {
   if (first === undefined) {
     return errors.length > 0 ? { kind: 'no-categories' } : { kind: 'not-backup' }
   }
-  return { kind: 'damaged', where: first.path, more: records.length - 1 }
+  return first.recordId === undefined
+    ? { kind: 'damaged', where: first.path, comeSiTrova: 'posizione', more: records.length - 1 }
+    : { kind: 'damaged', where: first.recordId, comeSiTrova: 'id', more: records.length - 1 }
 }
 
 /**

@@ -996,11 +996,40 @@ export function App({ readBackup }: AppProps) {
     closeImport()
     setView('home')
     void repo.importBackup(step.data).then(
-      () => {
+      (precedente) => {
+        /* **L'Annulla, e il materiale ce l'aveva gia' in mano.**
+         *
+         * `importBackup` restituisce l'archivio **com'era un istante prima**, e
+         * fino al 4 settembre quel valore veniva costruito, pagato — una copia di
+         * fino a 5.000 spese — e **buttato via**: `showToast` era chiamata con un
+         * argomento solo. L'unica operazione distruttiva dell'app era l'unica
+         * senza rete, mentre ogni cancellazione di una singola spesa ce l'ha.
+         *
+         * L'ha trovata il gate. Il percorso dal bottone al disco non aveva
+         * nessun test: `ripristino.spec.ts` copriva sette contenuti e due azioni,
+         * e mai la conferma.
+         *
+         * **Il limite di questa rete e' che vive in memoria**, ed e' quello gia'
+         * scritto in `docs/ROADMAP.md`: se l'app muore nella finestra del toast,
+         * l'annullamento non c'e' piu'. La rete che sopravvive alla chiusura e'
+         * lo scatto su disco, che `replaceAll` scrive gia' e che nessuno legge
+         * ancora — con la sua scadenza in ADR 026. */
         showToast(
           when === null
             ? t('toast.importedUndated')
             : t('toast.imported', { day: fullDayLabel(when, app.day) }),
+          {
+            label: t('toast.undo'),
+            run: () => {
+              void repo.importBackup(precedente.data).then(
+                () => {
+                  showToast(t('toast.importUndone'))
+                  void repo.materializeRecurring(getAppState().day).catch(() => {})
+                },
+                () => showToast(t('toast.importFailed')),
+              )
+            },
+          },
         )
         /* **Le fisse si generano qui, come nelle altre tre porte che scrivono
          * una regola.**

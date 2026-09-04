@@ -74,17 +74,52 @@ describe('i quattro stati della lettura', () => {
    * e' l'unico che rende accettabile il rifiuto totale (DEBITO §13). Un backup
    * di cento spese che ne ha una illeggibile non si importa, e la sola cosa che
    * impedisce a quel rifiuto di essere un vicolo cieco e' che il messaggio dica
-   * **quale** record — cioe' `where`, che e' la stringa da cercare nel file da
-   * un computer.
+   * **come si trova** quel record dentro il file.
+   *
+   * ## L'asserzione non e' una stringa: e' che quella stringa si trovi
+   *
+   * Questo test confrontava `where` con `'expenses[0].amountCents'`, ed era
+   * verde su un difetto: quel testo e' un **indice**, e nel JSON **non compare**.
+   * Il rimedio "da un computer apri il file e cerca" non portava da nessuna
+   * parte, e nessuna asserzione poteva accorgersene perche' asseriva la stessa
+   * stringa che il codice produceva.
+   *
+   * Adesso asserisce la **proprieta'**: `where` dev'essere **dentro il testo del
+   * file**. E' piu' severa, non dipende da come si chiama un campo, e cade il
+   * giorno in cui qualcuno ci rimette un indice — che e' esattamente cio' che
+   * la vecchia forma non poteva fare.
    */
-  it('un record illeggibile e\' il caso 4, e porta con se\' il punto esatto', () => {
+  it('un record illeggibile porta come si trova, e si trova davvero', () => {
     const testo = fileCon(archivio(), (json) => {
       const spesa = body(json)['expenses']?.[0] as Record<string, unknown>
       spesa['amountCents'] = 12.5
     })
-    expect(rifiuto(stepFromText(testo))).toEqual({
+    const esito = rifiuto(stepFromText(testo))
+    expect(esito).toEqual({ kind: 'damaged', where: expect.any(String), comeSiTrova: 'id', more: 0 })
+    if (esito?.kind !== 'damaged') throw new Error('scena sbagliata')
+    expect(
+      testo.includes(esito.where),
+      `"${esito.where}" non compare nel file: il rimedio "cercalo da un computer" ` +
+        'manda a cercare una cosa che li dentro non c\'e\'',
+    ).toBe(true)
+  })
+
+  /**
+   * **E quando a mancare e' l'id, si ripiega sulla posizione dicendolo.**
+   *
+   * Li' non c'e' niente da cercare, e un ripiego silenzioso avrebbe rimesso in
+   * piedi lo stesso difetto con l'aggravante di sembrare riparato.
+   */
+  it('senza id si ripiega sulla posizione, e lo dichiara', () => {
+    const testo = fileCon(archivio(), (json) => {
+      const spesa = body(json)['expenses']?.[0] as Record<string, unknown>
+      delete spesa['id']
+    })
+    const esito = rifiuto(stepFromText(testo))
+    expect(esito).toEqual({
       kind: 'damaged',
-      where: 'expenses[0].amountCents',
+      where: 'expenses[0].id',
+      comeSiTrova: 'posizione',
       more: 0,
     })
   })
@@ -95,11 +130,10 @@ describe('i quattro stati della lettura', () => {
       spese[0]!['amountCents'] = 12.5
       spese[1]!['date'] = 'domani'
     })
-    expect(rifiuto(stepFromText(testo))).toEqual({
-      kind: 'damaged',
-      where: 'expenses[0].amountCents',
-      more: 1,
-    })
+    const esito = rifiuto(stepFromText(testo))
+    expect(esito).toEqual({ kind: 'damaged', where: expect.any(String), comeSiTrova: 'id', more: 1 })
+    if (esito?.kind !== 'damaged') throw new Error('scena sbagliata')
+    expect(testo.includes(esito.where)).toBe(true)
   })
 
   /**
@@ -150,11 +184,16 @@ describe('i quattro stati della lettura', () => {
       delete categorie[0]!['name']
       delete categorie[1]!['name']
     })
-    expect(rifiuto(stepFromText(testo))).toEqual({
+    const esito = rifiuto(stepFromText(testo))
+    expect(esito).toEqual({
       kind: 'damaged',
-      where: 'categories[0].name',
+      where: expect.any(String),
+      comeSiTrova: 'id',
       more: 1,
     })
+    // Vale anche qui: cio' che il messaggio dice di cercare dev'essere nel file.
+    if (esito?.kind !== 'damaged') throw new Error('scena sbagliata')
+    expect(testo.includes(esito.where)).toBe(true)
   })
 
   it('un backup sano arriva all\'anteprima con la sua data e i suoi conteggi', () => {

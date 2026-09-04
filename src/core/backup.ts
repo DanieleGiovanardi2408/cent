@@ -68,6 +68,27 @@ export interface ImportIssue {
   readonly severity: IssueSeverity
   /** Dove, in forma leggibile: `expenses[12].amountCents`. */
   readonly path: string
+  /**
+   * **L'id del record, quando c'e' — ed e' l'unica cosa di questa issue che si
+   * puo' cercare dentro il file.**
+   *
+   * `path` porta un **indice**: `expenses[12]` e' la tredicesima posizione di un
+   * array, e nel JSON quella stringa **non compare**. Il commento che
+   * giustificava di mostrarlo diceva *"e' la stringa da cercare in un editor"*,
+   * e non lo era: chi ci provava con Cmd-F non trovava niente, e il rimedio
+   * *"da un computer apri il file e togli quel record"* — l'unica cosa che rende
+   * accettabile il rifiuto totale (DEBITO §13) — non portava da nessuna parte.
+   *
+   * `recordId` invece nel file c'e' **davvero**, ed e' unico: `"id": "e-42"` si
+   * trova. Il nome non e' `id` di proposito — DEBITO §11: il controllo A di
+   * `dead-surface` cerca il **nome** e non il tipo, e un campo chiamato `id`
+   * risulterebbe vivo per omonimia con mezzo progetto.
+   *
+   * E' `undefined` quando **e' l'id stesso a mancare**: li' non c'e' niente da
+   * cercare, e la schermata ripiega sull'indice **dicendo che e' una posizione**.
+   * Onesto invece che comodo.
+   */
+  readonly recordId?: string
   readonly message: string
 }
 
@@ -149,8 +170,8 @@ export interface ImportPreview {
 
 class Collector {
   readonly issues: ImportIssue[] = []
-  error(path: string, message: string): null {
-    this.issues.push({ severity: 'error', path, message })
+  error(path: string, message: string, recordId?: string): null {
+    this.issues.push({ severity: 'error', path, message, ...(recordId === undefined ? {} : { recordId }) })
     return null
   }
   warn(path: string, message: string): void {
@@ -221,11 +242,11 @@ function parseExpense(raw: RawRecord, path: string, c: Collector): Expense | nul
   const b = base(raw, path, c)
   if (b === null) return null
   const amountCents = intCents(raw['amountCents'])
-  if (amountCents === null) return c.error(`${path}.amountCents`, 'importo non intero in centesimi')
+  if (amountCents === null) return c.error(`${path}.amountCents`, 'importo non intero in centesimi', b.id)
   const categoryId = str(raw['categoryId'])
-  if (categoryId === null) return c.error(`${path}.categoryId`, 'categoria assente')
+  if (categoryId === null) return c.error(`${path}.categoryId`, 'categoria assente', b.id)
   const date = isoDate(raw['date'])
-  if (date === null) return c.error(`${path}.date`, `data non valida: ${String(raw['date'])}`)
+  if (date === null) return c.error(`${path}.date`, `data non valida: ${String(raw['date'])}`, b.id)
   const source = raw['source'] === 'recurring' ? 'recurring' : 'manual'
   const note = optionalStr(raw['note'])
   const recurringId = optionalStr(raw['recurringId'])
@@ -251,7 +272,7 @@ function parseCategory(raw: RawRecord, path: string, c: Collector): Category | n
   const b = base(raw, path, c)
   if (b === null) return null
   const name = str(raw['name'])
-  if (name === null) return c.error(`${path}.name`, 'nome assente')
+  if (name === null) return c.error(`${path}.name`, 'nome assente', b.id)
   const order = raw['order']
   return {
     ...b,
@@ -267,19 +288,19 @@ function parseRule(raw: RawRecord, path: string, c: Collector): RecurringRule | 
   const b = base(raw, path, c)
   if (b === null) return null
   const amountCents = intCents(raw['amountCents'])
-  if (amountCents === null) return c.error(`${path}.amountCents`, 'importo non intero in centesimi')
+  if (amountCents === null) return c.error(`${path}.amountCents`, 'importo non intero in centesimi', b.id)
   const categoryId = str(raw['categoryId'])
-  if (categoryId === null) return c.error(`${path}.categoryId`, 'categoria assente')
+  if (categoryId === null) return c.error(`${path}.categoryId`, 'categoria assente', b.id)
   const cadence = raw['cadence']
   if (cadence !== 'daily' && cadence !== 'weekly' && cadence !== 'monthly') {
-    return c.error(`${path}.cadence`, `cadenza sconosciuta: ${String(cadence)}`)
+    return c.error(`${path}.cadence`, `cadenza sconosciuta: ${String(cadence)}`, b.id)
   }
   const interval = raw['interval']
   if (typeof interval !== 'number' || !Number.isInteger(interval) || interval < 1) {
-    return c.error(`${path}.interval`, `intervallo non valido: ${String(interval)}`)
+    return c.error(`${path}.interval`, `intervallo non valido: ${String(interval)}`, b.id)
   }
   const startDate = isoDate(raw['startDate'])
-  if (startDate === null) return c.error(`${path}.startDate`, 'data di inizio non valida')
+  if (startDate === null) return c.error(`${path}.startDate`, 'data di inizio non valida', b.id)
   // `endDate` non si legge piu', e non e' una perdita: il campo non esiste piu'
   // sul record (vedi `RecurringRuleCommon`), e **con zero produttori nemmeno un
   // backup poteva contenerlo** — un backup e' l'export di dati scritti da
@@ -349,14 +370,14 @@ function parseBudget(raw: RawRecord, path: string, c: Collector): Budget | null 
   if (b === null) return null
   const period = raw['period']
   if (period !== 'weekly' && period !== 'monthly') {
-    return c.error(`${path}.period`, `periodo sconosciuto: ${String(period)}`)
+    return c.error(`${path}.period`, `periodo sconosciuto: ${String(period)}`, b.id)
   }
   const amountCents = intCents(raw['amountCents'])
-  if (amountCents === null) return c.error(`${path}.amountCents`, 'importo non intero in centesimi')
+  if (amountCents === null) return c.error(`${path}.amountCents`, 'importo non intero in centesimi', b.id)
   const effectiveFrom = isoDate(raw['effectiveFrom'])
-  if (effectiveFrom === null) return c.error(`${path}.effectiveFrom`, 'inizio validita non valido')
+  if (effectiveFrom === null) return c.error(`${path}.effectiveFrom`, 'inizio validita non valido', b.id)
   const effectiveTo = optionalIsoDate(raw['effectiveTo'])
-  if (effectiveTo === false) return c.error(`${path}.effectiveTo`, 'data di fine non valida')
+  if (effectiveTo === false) return c.error(`${path}.effectiveTo`, 'data di fine non valida', b.id)
   // `categoryId` non si legge: il campo non esiste piu' su `Budget` (vedi
   // `types.ts`). Con zero produttori nemmeno un backup puo' contenerlo, quindi
   // sostenerlo qui sarebbe un ramo raggiungibile solo da un JSON scritto a

@@ -37,11 +37,30 @@ import './ImportSheet.css'
  *
  * ## Cosa NON c'e', ed e' voluto
  *
- * Nessun "scrivi CANCELLA", nessun rosso, nessun punto esclamativo: lo scatto
- * pre-import rende il tocco recuperabile, e una conferma drammatica su
- * un'operazione reversibile insegna a temere la cosa sbagliata (ADR 026 §6d).
- * Il prima/dopo mostra la distruzione **senza drammatizzarla**: due numeri
- * accostati, non un avvertimento.
+ * Nessun "scrivi CANCELLA", nessun rosso, nessun punto esclamativo: una conferma
+ * drammatica su un'operazione **reversibile** insegna a temere la cosa sbagliata
+ * (ADR 026 §6d). Il prima/dopo mostra la distruzione **senza drammatizzarla**:
+ * due numeri accostati, non un avvertimento.
+ *
+ * ## E cosa rende reversibile il tocco, oggi
+ *
+ * **L'Annulla sul toast**, in `App.applyImport`: `importBackup` restituisce
+ * l'archivio com'era un istante prima, e quel valore diventa l'azione del toast.
+ *
+ * Questa riga diceva *"lo scatto pre-import rende il tocco recuperabile"*, ed
+ * era **falsa**: lo scatto si scrive sul disco e **nessuno lo legge**
+ * (`restoreSnapshot` e' differita, ADR 026). L'argomento che ha deciso di non
+ * mettere attriti poggiava su una rete che non esisteva.
+ *
+ * La conclusione non e' cambiata — la conferma resta calma — ma **il meccanismo
+ * si', e va detto qui**: un commento che diventa vero nella conclusione e resta
+ * falso nel meccanismo e' peggio di uno falso, perche' insegna il modello
+ * sbagliato a chi lo legge e nessuno lo rilegge piu'.
+ *
+ * **Il limite della rete di oggi**: vive in memoria, quindi muore con l'app. Se
+ * l'app viene chiusa nella finestra del toast, l'annullamento non c'e' piu'. La
+ * rete che sopravvive alla chiusura e' lo scatto su disco, e ha una scadenza in
+ * ADR 026.
  */
 
 interface Props {
@@ -238,7 +257,15 @@ function Refused({ refusal }: { readonly refusal: ImportRefusal }) {
     case 'damaged':
       return (
         <>
-          <p class="restore__lead">{t('import.damaged', { where: refusal.where })}</p>
+          {/* Due frasi, perche' sono due rimedi. Con l'id si **cerca**; con la
+              posizione si **conta**, e dirlo e' l'unica forma onesta — vedi
+              `ImportRefusal` in `import-view.ts`. */}
+          <p class="restore__lead">
+            {t(
+              refusal.comeSiTrova === 'id' ? 'import.damaged' : 'import.damagedAt',
+              { where: refusal.where },
+            )}
+          </p>
           {refusal.more > 0 ? (
             <p class="restore__note">{t('import.damaged.more', { more: refusal.more })}</p>
           ) : null}

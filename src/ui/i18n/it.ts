@@ -95,6 +95,7 @@ export const it = {
   'toast.showData': 'Mostra i dati',
   'toast.imported': 'Ripristinato il backup del {day}.',
   'toast.importedUndated': 'Backup ripristinato.',
+  'toast.importUndone': 'Torna a com\u2019era.',
   'toast.importFailed': 'Il ripristino non è andato: i tuoi dati sono quelli di prima.',
   'toast.languageFailed': 'Non sono riuscito a cambiare lingua. Riprova.',
   'toast.guideFailed': 'Non sono riuscito a riaprire la guida. Riprova.',
@@ -334,10 +335,12 @@ export const it = {
   'import.noCategories': 'Questo backup non ha nessuna categoria.',
   'import.noCategories.note':
     'Senza categorie non c’è la griglia, e non si potrebbe registrare nessuna spesa. Da qui puoi provare un altro backup.',
-  'import.damaged': 'In questo backup c’è un record che Cent non riesce a leggere: {where}.',
+  'import.damaged': 'In questo backup c’è un record che Cent non riesce a leggere. Il suo id è {where}.',
+  'import.damagedAt':
+    'In questo backup c’è un record che Cent non riesce a leggere: {where}. È una posizione nel file, non una parola da cercare.',
   'import.damaged.more': 'Altri come questo: {more}.',
   'import.damaged.note':
-    'Da qui puoi provare un altro backup. Da un computer puoi aprire il file, togliere quel record e riprovare.',
+    'Da qui puoi provare un altro backup. Da un computer puoi aprire il file, cercare quell’id, togliere il record e riprovare.',
   'import.ready':
     'Ripristinando il backup del {day}: le spese registrate dopo quel giorno non ci sono più, e le fisse vengono ricreate da quel giorno in poi.',
   'import.ready.undated':
