@@ -98,6 +98,42 @@ const BUONO = {
   },
 }
 
+/**
+ * Lo stesso file **con una regola mensile arretrata**.
+ *
+ * **Oggi, nell'orologio fisso della suite, e' il 19 agosto 2026.** Il segnaposto
+ * del file e' al **1 luglio** e la regola scatta il **primo** del mese: fra il
+ * segnaposto e oggi c'e' **una** occorrenza — il 1 agosto — che nessuno ha
+ * ancora creato. E' il caso su cui la frase di conferma promette *"le fisse
+ * vengono ricreate da quel giorno in poi"*.
+ *
+ * La prima stesura metteva il segnaposto al **26 agosto**, cioe' **nel futuro**
+ * rispetto all'orologio: la finestra usciva vuota (`from > to`) e il test
+ * cadeva anche con la riparazione applicata. Una scena che non contiene il caso
+ * non prova che la riparazione non funzioni: prova che la scena e' sbagliata.
+ */
+const CON_REGOLA = {
+  ...BUONO,
+  data: {
+    ...BUONO.data,
+    recurringRules: [
+      {
+        id: 'r1',
+        createdAt: '2026-06-01T09:00:00.000Z',
+        updatedAt: '2026-07-01T09:00:00.000Z',
+        amountCents: 50_700,
+        categoryId: 'c1',
+        cadence: 'monthly',
+        interval: 1,
+        anchorDay: 1,
+        startDate: '2026-06-01',
+        lastMaterializedDate: '2026-07-01',
+        active: true,
+      },
+    ],
+  },
+}
+
 /** Lo stesso file con una spesa illeggibile: `expenses[0].amountCents`. */
 const ROTTO = {
   ...BUONO,
@@ -322,6 +358,47 @@ test.describe('l\'azione dipende dallo stato, e non e\' un\'etichetta', () => {
  * delle due lingue — tre paragrafi, uno dei quali contiene un percorso senza
  * spazi che non va a capo da solo.
  */
+/**
+ * **La conferma promette che le fisse vengono ricreate: questo test guarda che
+ * ci siano davvero, subito.**
+ *
+ * Trovato dal gate della fase 7 e non da un test, perche' **il percorso dal
+ * bottone al disco non ne aveva nessuno**: `ripristino.spec.ts` copriva sette
+ * contenuti e due azioni, e mai la conferma.
+ *
+ * `applyImport` non chiamava `materializeRecurring`, mentre le altre tre porte
+ * che scrivono una regola lo fanno tutte. L'argomento era gia' scritto sopra
+ * `saveRule` — *chi ha appena confermato "questa regola creera' 8 spese"
+ * chiuderebbe il foglio e non ne vedrebbe nessuna fino alla prossima apertura* —
+ * e **non nominava quel foglio**: valeva identico qui.
+ *
+ * E qui vale di piu': si atterra sulla Home **apposta**, per far vedere che i
+ * dati ci sono, e la frase di conferma lo promette per iscritto. Senza la
+ * chiamata, l'affitto comparirebbe solo dopo una sospensione o un riavvio —
+ * cioe' **dopo** che la persona ha gia' deciso se il ripristino e' andato bene.
+ */
+test('dopo il ripristino le fisse ci sono, senza aspettare una riapertura', async ({ page }) => {
+  serviIlSelettore(page, () => CON_REGOLA)
+  await apriImpostazioni(page)
+  await bottoneRipristina(page).tap()
+  await expect(page.locator('.restore__action')).toHaveText('Ripristina')
+
+  await page.locator('.restore__action').tap()
+  // Si atterra sulla Home: e' la decisione di ADR 026 §6e, ed e' anche la
+  // ragione per cui questo difetto era visibile proprio li'.
+  await expect(page.locator('.home')).toBeVisible()
+
+  // La regola scatta il primo del mese e il segnaposto del file e' al 26 agosto:
+  // fra il backup e oggi c'e' almeno un'occorrenza che nessuno aveva creato.
+  await page.locator('.nav__tab').nth(1).tap()
+  await expect(page.locator('.list')).toBeVisible()
+  await expect(
+    page.locator('.row').filter({ hasText: '507,00' }).first(),
+    'nessuna spesa fissa a schermo dopo il ripristino: la conferma aveva promesso ' +
+      'che venivano ricreate, e lo Storico la smentisce',
+  ).toBeVisible({ timeout: 5000 })
+})
+
 test.describe('ImportSheet: le tre fasce non si muovono fra i sette contenuti', () => {
   interface Fasce {
     readonly head: string

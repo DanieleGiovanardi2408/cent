@@ -1002,6 +1002,28 @@ export function App({ readBackup }: AppProps) {
             ? t('toast.importedUndated')
             : t('toast.imported', { day: fullDayLabel(when, app.day) }),
         )
+        /* **Le fisse si generano qui, come nelle altre tre porte che scrivono
+         * una regola.**
+         *
+         * L'argomento sta venti righe sopra `saveRule` e **non nomina quel
+         * foglio**: *chi ha appena confermato "questa regola creera' 8 spese"
+         * chiuderebbe il foglio e non ne vedrebbe nessuna fino alla prossima
+         * apertura — l'anteprima avrebbe detto il vero e la schermata l'avrebbe
+         * smentita*. Vale identico qui, e qui vale **di piu'**: la frase di
+         * conferma promette per iscritto che *"le fisse vengono ricreate da quel
+         * giorno in poi"*, e si atterra sulla Home proprio per far vedere che i
+         * dati ci sono. Senza questa riga l'affitto del mese comparirebbe solo
+         * dopo una sospensione o un riavvio, cioe' **dopo** che la persona ha
+         * gia' deciso se il ripristino e' andato bene.
+         *
+         * E' "una decisione vale dove vale il suo argomento" per la decima volta
+         * in questo progetto — trovata dal gate, non da un test, perche' il
+         * percorso dal bottone al disco non ne aveva nessuno.
+         *
+         * `catch` vuoto e non `void` nudo, per la stessa ragione delle altre
+         * tre: `materializeRecurring` rifiuta, e cio' che conta e' gia' in
+         * `writeFailures`. */
+        void repo.materializeRecurring(getAppState().day).catch(() => {})
       },
       () => showToast(t('toast.importFailed')),
     )
