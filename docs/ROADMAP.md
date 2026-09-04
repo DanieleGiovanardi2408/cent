@@ -25,18 +25,18 @@ sa gia', e per questo non puo' invecchiare. I giudizi — cosa e' in volo, cosa
 aspetta una persona — stanno sotto, scritti a mano e timbrati con lo SHA a cui
 sono stati rivisti.
 
-- **Ultimo commit**: `e1617a8` — fix: il disco esce dal confronto di state --check, e main torna verde
-- **Data**: 04/09/2026 00:25
+- **Ultimo commit**: `a794c8b` — wip: prima di mutare
+- **Data**: 04/09/2026 10:43
 - **Ramo**: `fase7/scatto-pre-import`
-- **Pushato**: si, `origin/fase7/scatto-pre-import` e' allo stesso commit
-- **Rispetto a `origin/main`**: 20 commit avanti
+- **Pushato**: **no: 2 commit non pushati su `origin/fase7/scatto-pre-import`**
+- **Rispetto a `origin/main`**: 23 commit avanti
 - **Albero di lavoro**: **non pulito**, ci sono modifiche non committate
 
-- **Test unitari**: 796 in 27 file, tutti verdi
-- **Test e2e dichiarati**: 448 in 15 file, su 4 progetti (iphone-se, iphone-14, landscape, dark)
-- **Test e2e eseguiti**: non misurato — l'ultima esecuzione e' **parziale** — 8 test su 448 dichiarati, probabilmente un `-g` o un `--project`: va rilanciata intera
-- **Bundle iniziale**: 64.9 KB gzip su 65.0 KB (0.1 KB di margine)
-- **Disco**: 3.9 GB liberi, 81% pieno. Non e' un giudizio e non porta un timbro: cambia da solo, quindi si rigenera.
+- **Test unitari**: 797 in 27 file, tutti verdi
+- **Test e2e dichiarati**: 451 in 15 file, su 4 progetti (iphone-se, iphone-14, landscape, dark)
+- **Test e2e eseguiti**: non misurato — l'ultima esecuzione e' piu' vecchia dei sorgenti — va rilanciata
+- **Bundle iniziale**: non misurato — `dist/` e' piu' vecchio dei sorgenti — va ricostruito
+- **Disco**: 4 GB liberi, 81% pieno. Non e' un giudizio e non porta un timbro: cambia da solo, quindi si rigenera.
 
 - **Schema del database**: 6. La scala delle migrazioni:
   - **1** — Schema iniziale: expenses, categories, recurringRules, budgets, settings
@@ -55,7 +55,7 @@ sono stati rivisti.
 ## In volo adesso
 
 <!-- JUDGMENT rivisto=d143f2f -->
-> Rivisto a `d143f2f`, 2 commit fa.
+> Rivisto a `d143f2f`, 5 commit fa.
 
 **Ri-derivato il 4 settembre, e stavolta il fatto e' un altro**: si lavora sul
 ramo `fase7/scatto-pre-import`, e `main` e' fermo a `9958f4f`.

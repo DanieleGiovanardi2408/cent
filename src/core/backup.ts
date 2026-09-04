@@ -506,8 +506,31 @@ export function settingsAfterImport(
  * `activeCategories`, cioe' `order` e poi due livelli deterministici: mai
  * l'ordine in cui il file le elencava.
  *
- * E non e' silenzioso: l'anteprima lo dice, e l'anteprima e' il posto dove
- * l'utente decide se importare.
+ * **E oggi e' silenzioso, che e' il contrario di quello che qui c'era scritto.**
+ *
+ * La riga diceva *"non e' silenzioso: l'anteprima lo dice, e l'anteprima e' il
+ * posto dove l'utente decide se importare"*. Falsa: `ImportStep.ready` non porta
+ * le issue, e la schermata nel ramo "pronto" disegna solo la frase e la tabella
+ * del prima/dopo. La `warning` di questa funzione — come quella sulle
+ * impostazioni assenti e quella sulle spese orfane — **non arriva a schermo**.
+ * Chi importa un file con dieci categorie ne trova due in archivio, e lo scopre
+ * aprendo il tastierino.
+ *
+ * Era **la giustificazione per archiviare invece di rifiutare**, ed e' stata
+ * scritta contro un canale che non esiste — la sesta affermazione falsa di
+ * questa fase, e la quarta dentro un documento o un commento scritto durante la
+ * fase stessa. Vedi la nota in testa ad ADR 026.
+ *
+ * **Perche' archiviare resta comunque la scelta giusta**, e adesso l'argomento e'
+ * un altro: rifiutare un file per una categoria di troppo butterebbe un archivio
+ * intero per una cosa che l'app **sa gia' fare da sola** — il tetto di otto
+ * attive e' un invariante che `capActiveCategories` mantiene a ogni ingresso,
+ * non una condizione che il file deve soddisfare. E' la stessa forma della
+ * ri-semina: si ripara, non si rifiuta.
+ *
+ * **Cio' che resta aperto e' il canale**, ed e' scritto in `docs/DEBITO.md` §15
+ * con la sua condizione: le warning che cambiano cio' che l'utente vedra' devono
+ * comparire nell'anteprima, dove la decisione si prende.
  */
 function capActiveCategories(categories: readonly Category[], c: Collector): Category[] {
   const keep = new Set(activeCategories(categories).map((cat) => cat.id))

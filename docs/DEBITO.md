@@ -875,6 +875,40 @@ entrambe** durante questo giro — ed e' li' che si e' visto un difetto che ness
 geometria poteva vedere: la frase di `too-new` finiva con *"poi riprova"* mentre
 il bottone diceva *"Scegli un altro file"*.
 
+## 15. L'anteprima dell'import butta via tutte le warning
+
+**Stato: aperto.** Nato il 4 settembre 2026, trovato dal gate della fase 7.
+
+**Cosa.** `ImportStep.ready` non porta `preview.issues`, e la schermata nel ramo
+"pronto" disegna solo la frase e la tabella del prima/dopo. Tre warning non
+arrivano mai a schermo:
+
+- **due categorie archiviate** perche' il file ne aveva dieci
+  (`capActiveCategories`) — e `counts.categories` conta anche le archiviate, di
+  proposito, quindi **nemmeno il numero lo tradisce**;
+- **impostazioni assenti nel file**, quindi si usano quelle di default;
+- **spese orfane**, importate lo stesso di proposito.
+
+Chi importa un file con dieci categorie ne trova due in archivio, e lo scopre la
+prima volta che apre il tastierino.
+
+**Perche' conta piu' di quanto sembri.** Quella prima warning era **la
+giustificazione scritta** per archiviare invece di rifiutare — *"non e'
+silenzioso: l'anteprima lo dice"* — e la giustificazione poggiava su un canale
+che non esiste. La decisione resta giusta con un altro argomento (si ripara, non
+si rifiuta: e' la stessa forma della ri-semina), ma il canale manca davvero.
+
+**Perche' non e' stato riparato adesso.** Serve **una** riga di anteprima e una
+chiave, non trentaquattro: bastano i casi che cambiano **cio' che l'utente
+vedra'**. Ma quale sia quell'insieme e' una decisione di prodotto — le spese
+orfane, per esempio, non cambiano niente di visibile — e prenderla di corsa
+dentro una riparazione di gate significherebbe deciderla senza guardarla.
+
+**La condizione che la chiude**: il primo commit che tocca la schermata d'import
+per qualunque altra ragione. Oppure — ed e' il caso che la rende urgente — **il
+giorno in cui qualcuno importa un file con piu' di otto categorie e non capisce
+dove sono finite**: li' il costo non e' il debito, e' la fiducia.
+
 ## 3. Rischi noti gia' scritti altrove
 
 Non si duplicano qui, per non creare la diciannovesima copia che parafrasa:

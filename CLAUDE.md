@@ -369,7 +369,11 @@ E' lo stesso principio del mirror che e' una cache, applicato alla UI.
 
 ## Due lingue: it / en
 - **Nessuna libreria.** Un modulo in `src/ui/i18n`, due dizionari, una `t()`. Il
-  budget e' 65 KB e siamo a 64,6: una libreria di i18n costerebbe piu' di tutto il
+  budget e' 65 KB e il margine e' quello scritto nel blocco rigenerato in cima a
+  `docs/ROADMAP.md` — **qui non si ricopia**: una cifra a mano accanto a un tetto
+  e' la seconda fonte di verita' della stessa costante, cioe' la famiglia appena
+  chiusa in `state.mjs`. E' gia' invecchiata una volta in due giorni. Una libreria
+  di i18n costerebbe piu' di tutto il
   resto dell'app.
 - **La parita' delle chiavi la garantisce il compilatore, non un test**: il
   dizionario inglese e' tipizzato come `Record<keyof typeof it, string>`. Una

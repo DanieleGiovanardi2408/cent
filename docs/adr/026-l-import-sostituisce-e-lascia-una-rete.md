@@ -5,6 +5,28 @@ sui fatti derivati dall'albero, non su una proposta: cio' che il codice **fa
 oggi** e' citato con file e riga, e cio' che e' stato **misurato** e' segnato
 come tale.
 
+> ## Come si legge questa ADR
+>
+> **Scritta in fretta durante la fase che decide, e quindi materiale di lavoro,
+> non un atto.** Si rilegge con la stessa diffidenza del codice.
+>
+> Il conto, al 4 settembre: in questa fase sono state trovate **sei affermazioni
+> false**, e **quattro** stavano in un documento o in un commento scritto durante
+> la fase stessa — tre qui dentro. Nell'ordine:
+>
+> 1. §3, *"il tetto di otto attive non permette di archiviarle tutte"* —
+>    archiviarle no, **cancellarle si'**, misurato `8:ok … 1:ok -> restano 0`;
+> 2. §2, *"uno step con `createStores` e senza `transform` non tocca nessun
+>    record"* — senza `transform`, `Settings.schemaVersion` restava a 5;
+> 3. §6b, i **tre** stati della lettura — sono **quattro**: "non e' un backup" e
+>    "e' un backup con un record rotto" hanno rimedi opposti;
+> 4. e fuori di qui, `ImportSheet.tsx`, *"lo scatto pre-import rende il tocco
+>    recuperabile"* — lo scatto si scrive e **nessuno lo legge**.
+>
+> Tutte e quattro sono state prese da una misura o da un gate, **nessuna
+> rileggendo**. La differenza fra un'ADR e il codice non e' l'affidabilita': e'
+> che il codice ha dei test.
+
 ## 1. Sostituzione, non fusione — e non e' un compromesso
 
 **L'import sostituisce tutto.** Non fonde, e la fusione non e' una versione piu'
@@ -178,6 +200,30 @@ account **un orologio ha lo stesso problema di `updatedAt` al punto 1**: e' la
 stessa obiezione, in una stanza piu' piccola.
 
 Costo massimo: 1,3 MB costanti.
+
+### La scadenza: il lettore arriva entro la fine della fase 8, o la scrittura esce
+
+**4 settembre.** Lo scatto si scrive — fino a **1,3 MB** al tetto delle 5.000
+spese — e **nessuno lo legge**. La rete che l'utente ha oggi e' l'Annulla sul
+toast, che vive in memoria e muore con l'app.
+
+E' la **seconda volta** che questo progetto spedisce qualcosa senza il suo
+lettore, e la prima l'aveva presa il tetto del bundle (`restoreSnapshot`, uscita
+per quello). Qui non la prende niente: una scrittura non pesa sul bundle, quindi
+puo' restare inerte per sempre senza che nessun controllo lo dica.
+
+> **Il lettore arriva entro la fine della fase 8, oppure la scrittura esce.**
+
+**La conseguenza, scritta invece che auspicata.** Se la fase 8 — il test degli
+amici — si chiude senza `snapshotTakenAt`, `restoreSnapshot` e la voce in
+Impostazioni, allora `replaceAll` smette di prendere lo scatto, lo store di
+sistema esce con la sua migrazione, e resta il solo Annulla del toast. Non e' una
+minaccia: e' cio' che va fatto, perche' pagare 1,3 MB e una migrazione di schema
+per una rete che nessuno puo' tirare e' peggio che non averla — **fa credere di
+avere una protezione che non c'e'**, ed e' esattamente l'errore che
+`ImportSheet.tsx` aveva scritto nel proprio commento.
+
+**Una condizione senza scadenza non e' una condizione.** Questa ce l'ha.
 
 ### E dev'essere trovabile, o e' una rete che nessuno sa di avere
 
