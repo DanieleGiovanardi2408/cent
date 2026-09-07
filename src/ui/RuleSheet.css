@@ -117,6 +117,39 @@
   gap: var(--sp-2);
 }
 
+/* --- fino a quando -------------------------------------------------------- */
+/*
+ * Gli stessi due chip della riga sopra, e la stessa riga di CSS: "Non finisce"
+ * e il selettore. Non eredita da `.starts` perche' non e' la stessa riga —
+ * `.starts` cambia forma in modifica (diventa una colonna di sola lettura) e
+ * questa no, e due regole che si somigliano oggi ma cambiano per ragioni
+ * diverse domani non condividono un selettore.
+ */
+.ends {
+  display: flex;
+  gap: var(--sp-2);
+}
+
+/* Cosa la fine non fa. **Il posto e' riservato**, non calcolato dal contenuto:
+ * la frase compare quando si sceglie una data e sparisce quando si torna a
+ * "Non finisce", e sotto c'e' il tastierino. Senza riserva quei tasti si
+ * sposterebbero di due righe nel frame del tap — che e' lo stesso difetto del
+ * piede, un blocco piu' in su.
+ *
+ * **Tre righe, e la terza e' il margine.** Misurato a 320 punti su Chromium: la
+ * frase inglese — la piu' lunga delle due — occupa 296px su una riga larga 296,
+ * cioe' **esattamente** due righe, 32,5px su 32,5 di riserva. Zero margine e' la
+ * stessa cosa di nessuna riserva il giorno in cui la parola cambia o il font non
+ * e' quello: i test girano su Chromium coi font di sistema, l'app su Safari con
+ * SF Pro, e li' quel pareggio puo' diventare una riga in piu'.
+ *
+ * Quindi la riserva e' di tre, e la terza non si vede mai qui: e' lo scambio di
+ * `.rule__confirmSlot` — qualche pixel vuoto costa meno di un salto — e si paga
+ * solo in modifica, dove il corpo scorre gia'. */
+.ends__kept {
+  min-block-size: calc(3 * var(--fs-100) * var(--lh-snug));
+}
+
 /* --- la data d'inizio in modifica: si legge (ADR 018) --------------------- */
 /*
  * Qui i due chip non ci sono. Spostare la data in avanti orfanerebbe le istanze

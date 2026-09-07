@@ -368,6 +368,22 @@ export function RuleSheet({
    * ricopiare in uno stato all'apertura, dove poi divergerebbe dal mirror.
    */
   const [anchor, setAnchor] = useState<number | null>(null)
+  /**
+   * **La fine scelta qui dentro**, o `null` finche' non se ne sceglie nessuna.
+   *
+   * E' una scatola e non una data, perche' i valori sono **tre** e non due:
+   * "non l'ho toccata" (`null`, e allora vale quella del record), "finisce il
+   * giorno X" (`{ date: X }`) e "non finisce" (`{ date: null }`). Senza il
+   * terzo, togliere una fine sarebbe inesprimibile — e togliere una fine e'
+   * un'operazione che l'utente fa davvero, il giorno in cui il contratto viene
+   * rinnovato.
+   *
+   * Stessa forma dell'ancora, per la stessa ragione: la scelta sta separata dal
+   * valore in vigore, cosi' il default resta quello del record **riletto a ogni
+   * render** invece di una copia fatta all'apertura, che poi divergerebbe dal
+   * mirror se un altro contesto cambiasse la regola.
+   */
+  const [ending, setEnding] = useState<{ readonly date: IsoDate | null } | null>(null)
   /** La firma della bozza confermata, o `null`. Vedi la testata. */
   const [armed, setArmed] = useState<string | null>(null)
   /** Cio' che la scrittura ha rifiutato, gia' in parole. Vedi `Props.onSave`. */
@@ -425,13 +441,16 @@ export function RuleSheet({
    * e non da `startDate`, o annuncerebbe mesi di arretrati che sono gia' nello
    * Storico.
    *
-   * Gli altri due se ne sono andati per due ragioni opposte, e la differenza
-   * vale la pena di dirla. **`endDate` non esiste piu'**: era un campo senza
-   * nessun produttore, quindi le righe che lo conservavano conservavano un
-   * valore che nessuno poteva aver scritto. **L'ancora invece si mostra e si
-   * cambia** (vedi `anchorDay` qui sotto): e' passata da "campo da conservare
-   * di nascosto" a campo del foglio, che e' l'unico posto in cui un numero che
-   * governa i soldi puo' stare.
+   * Gli altri due hanno fatto la stessa strada, a un mese di distanza: da
+   * "campo da conservare di nascosto" a **campo del foglio**, che e' l'unico
+   * posto in cui un dato che governa i soldi puo' stare. L'ancora con ADR 020,
+   * la fine adesso (vedi `ending` e `ends`).
+   *
+   * E la differenza fra conservare e produrre e' precisamente cio' che questo
+   * giro e' venuto a chiudere: finche' la fine si limitava a passare da qui a
+   * `draft.endDate` e ritorno, nessun valore entrava mai da fuori, e un campo
+   * senza un valore che entra da fuori e' un campo morto per quanto lo si
+   * legga.
    */
   const keptAnchor = target?.anchorDay
   const marker = target?.lastMaterializedDate
@@ -498,6 +517,16 @@ export function RuleSheet({
    * *La regola descrive il futuro; le istanze sono il passato.*
    */
   const anchorDay = anchor ?? keptAnchor ?? dayOfMonth(start)
+  /**
+   * La fine che il foglio usa: quella scelta qui, oppure — finche' non si e'
+   * scelto niente — quella che il record ha adesso.
+   *
+   * `undefined` vuol dire "non finisce", che e' lo stesso significato che ha
+   * l'assenza del campo sul record: la bozza lo omette, e `ruleFromDraft`
+   * costruisce una regola senza fine.
+   */
+  const ends: IsoDate | undefined =
+    (ending === null ? target?.endDate : ending.date) ?? undefined
 
   function calendar(): WithCadence<unknown> {
     if (cadence !== 'monthly') return { cadence }
@@ -541,6 +570,7 @@ export function RuleSheet({
           amountCents: 1,
           interval,
           startDate: start,
+          ...(ends !== undefined ? { endDate: ends } : {}),
           ...keep(),
           ...calendar(),
         },
@@ -552,7 +582,7 @@ export function RuleSheet({
         // nello Storico, invece dell'ampiezza del calendario.
         occupied,
       ),
-    [cadence, start, day, interval, anchorDay, marker, occupied],
+    [cadence, start, ends, day, interval, anchorDay, marker, occupied],
   )
 
   /**
@@ -575,10 +605,26 @@ export function RuleSheet({
       }
     : null
 
+  /**
+   * La bozza che si salva.
+   *
+   * **`endDate` entra qui, e questa e' la riga per cui il campo esiste**:
+   * `ends` viene dal selettore qui sotto, cioe' e' un valore che entra da
+   * fuori. Finche' questo file si limitava a ricopiare `target?.endDate`
+   * dentro la bozza — come fa `keptAnchor` col giorno del mese, che pero' un
+   * selettore ce l'ha — la catena era fatta di sole copie e girava a vuoto:
+   * il campo risultava letto da quindici posti e scritto da nessuno.
+   *
+   * E finche' la bozza **non** lo portava, `ruleFromDraft` — che costruisce il
+   * record intero da qui e da nient'altro — toglieva in silenzio la fine a
+   * qualunque regola arrivata da un backup, nell'istante in cui la si apriva
+   * per cambiarle la categoria.
+   */
   const draft: RecurrenceDraft = {
     amountCents: cents,
     interval,
     startDate: start,
+    ...(ends !== undefined ? { endDate: ends } : {}),
     ...keep(),
     ...calendar(),
   }
@@ -596,9 +642,12 @@ export function RuleSheet({
    *
    * L'ancora e' entrata qui **insieme al selettore che la cambia**, non dopo:
    * un campo che sposta ogni occorrenza futura e non sta nella firma lascia
-   * spuntata una conferma che dichiarava altre date.
+   * spuntata una conferma che dichiarava altre date. La fine e' entrata alla
+   * stessa condizione, e con l'effetto piu' grosso di tutti: **toglierla apre
+   * la finestra fino a oggi**, cioe' puo' passare da "non succede niente" a
+   * otto spese arretrate senza che la casella se ne accorga.
    */
-  const signature = `${cents}|${cadence}|${start}|${anchorDay}|${day}|${marker ?? ''}`
+  const signature = `${cents}|${cadence}|${start}|${ends ?? ''}|${anchorDay}|${day}|${marker ?? ''}`
   const confirmed = armed === signature
   const needsConfirm = copy?.confirm === true
   const ready = !empty && categoryId !== null && copy !== null && (!needsConfirm || confirmed)
@@ -799,19 +848,41 @@ export function RuleSheet({
       : null
   const grid = orphan === null ? categories : [...categories, orphan]
 
+  /*
+   * L'unico rifiuto che `previewMaterialization` puo' rispondere a questo
+   * foglio, e adesso e' raggiungibile.
+   *
+   * Gli altri quattro non lo sono per costruzione: l'importo che entra qui e'
+   * il sintetico `1`, l'intervallo e' `1` o quello del record, l'ancora esce da
+   * un elenco di trentuno e le date arrivano da un `input type="date"`. Resta
+   * la relazione fra i due estremi — una fine che precede l'inizio — che due
+   * selettori indipendenti possono comporre in tutti e due i versi: scegliendo
+   * una fine prima dell'inizio, o (in creazione) spostando l'inizio dopo una
+   * fine gia' scelta.
+   *
+   * Il `min` sul selettore della fine chiude il primo verso quasi ovunque e non
+   * chiude affatto il secondo. Senza questa riga il bottone resterebbe spento
+   * con la riga in cima che dice "Controlla ogni quanto e da quando": vero, e
+   * inutile, perche' non nomina la cosa da cambiare. E' l'unico ramo che manda
+   * `copy` a `null` senza che l'importo sia vuoto.
+   */
+  const disordered = !schedule.ok
+
   const hint = panel
     ? t('rewind.hint')
-    : atMax
-      ? t('rule.hint.max')
-      : empty
-        ? t('rule.hint.empty')
-        : categoryId === null
-          ? t('rule.hint.category')
-          : mode === 'reactivate'
-            ? t('rule.hint.on')
-            : mode === 'edit'
-              ? t('rule.hint.edit')
-              : t('rule.hint.check')
+    : disordered
+      ? t('rule.hint.order')
+      : atMax
+        ? t('rule.hint.max')
+        : empty
+          ? t('rule.hint.empty')
+          : categoryId === null
+            ? t('rule.hint.category')
+            : mode === 'reactivate'
+              ? t('rule.hint.on')
+              : mode === 'edit'
+                ? t('rule.hint.edit')
+                : t('rule.hint.check')
 
   return (
     <>
@@ -1070,6 +1141,76 @@ export function RuleSheet({
                   </label>
                 ) : null}
               </div>
+            )}
+
+            {/* Fino a quando.
+
+                Due chip, **gli stessi due della data d'inizio**: uno dice il
+                caso normale ("Non finisce") e l'altro apre la rotella di iOS.
+                Non e' la tastiera di sistema — quella e' vietata sugli importi,
+                e infatti l'importo qui sotto ha il suo tastierino — e' il
+                selettore di date, lo stesso da cui esce `startDate` due righe
+                sopra e lo stesso da cui esce la data del riavvolgimento.
+
+                **In modifica c'e' anche questo**, al contrario della data
+                d'inizio: la fine non ha nessuno dei due difetti che l'hanno
+                resa di sola lettura (ADR 018). Spostarla in avanti non orfana
+                niente — riapre la finestra, e cio' che nasce lo dichiara il
+                piede — e spostarla indietro non e' un no-op silenzioso: cambia
+                cio' che la regola fara' da domani in poi.
+
+                `min` e' la data d'inizio: una regola che finisce il giorno in
+                cui comincia e' legittima (scatta una volta sola), una che
+                finisce prima non si puo' leggere. */}
+            <div class="ends" role="group" aria-label={t('rule.end')}>
+              <button
+                type="button"
+                class="chip"
+                aria-pressed={ends === undefined}
+                onClick={() => change(setEnding)({ date: null })}
+              >
+                {t('rule.end.never')}
+              </button>
+              <label class="chip chip--date" data-on={ends !== undefined || undefined}>
+                <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true">
+                  <rect x="3" y="5" width="18" height="16" rx="3" />
+                  <path d="M3 10h18M8 3v4M16 3v4" />
+                </svg>
+                <span>{ends === undefined ? t('rule.end.other') : dayChipLabel(ends)}</span>
+                <input
+                  class="chip__input"
+                  type="date"
+                  value={ends ?? ''}
+                  min={start}
+                  aria-label={t('rule.end.pick')}
+                  onChange={(event) => {
+                    const picked = event.currentTarget.value
+                    if (picked !== '') change(setEnding)({ date: picked })
+                  }}
+                />
+              </label>
+            </div>
+
+            {/* Cosa la fine **non** fa.
+
+                Una regola finita smette di generare; le spese che ha gia'
+                generato dopo quel giorno restano dove sono, e chi mette una
+                fine per "ripulire" i mesi di troppo deve saperlo prima, non
+                dopo aver guardato lo Storico.
+
+                Solo in modifica, perche' solo li' c'e' qualcosa di gia' creato
+                di cui parlare, e il posto e' **riservato** invece che comparire
+                e sparire: qui sotto c'e' il tastierino, e una riga che nasce
+                sopra i tasti li sposta mentre il pollice ci sta andando. E' la
+                stessa riserva del piede, per la stessa ragione. Quanto si
+                riserva, e perche' tre righe e non le due misurate, sta in
+                `RuleSheet.css`.
+
+                Non porta nessun numero: le occorrenze gia' occupate includono
+                le lapidi, quindi contarle direbbe un numero che nello Storico
+                non si trova. Il fatto e' generale e vero comunque. */}
+            {target === null ? null : (
+              <p class="editor__note ends__kept">{ends === undefined ? '' : t('rule.end.kept')}</p>
             )}
 
             {/* Gli stessi chip dell'inserimento, e qui **selezionano**: non

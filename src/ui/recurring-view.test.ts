@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { toDateParts } from '../core/date'
 import type { IsoDate } from '../core/date'
-import { NO_OCCURRENCES } from '../core/recurrence'
+import { NO_OCCURRENCES, validateRule } from '../core/recurrence'
 import { previewMaterialization } from '../core/recurring-plan'
 import type {
   MaterializationPreview,
@@ -260,6 +260,41 @@ describe('l anteprima prima di scrivere', () => {
     expect(copy.saveLabel).toContain('3 spese')
   })
 
+  it('una regola finita lo dice, invece di nascondersi dietro "niente da recuperare"', () => {
+    // `nextDate === null` e segnaposto in fondo alla finestra: una regola
+    // finita **e** in pari cade in tutti e due i rami. "Non c'e' niente da
+    // recuperare" sarebbe vero e tacerebbe il fatto piu' grosso — che non ne
+    // creera' piu' nessuna, mai.
+    const copy = copyOf(
+      mensile('2026-01-01', { endDate: '2026-06-01', lastMaterializedDate: '2026-06-01' }),
+      'edit',
+    )
+    expect(copy.text).toBe('Questa spesa fissa è finita: non creerà altre spese.')
+    expect(copy.confirm).toBe(false)
+  })
+
+  it('una regola che finisce oggi e genera oggi annuncia la spesa, non la fine', () => {
+    // **L'altro verso della stessa omissione**, ed e' il motivo per cui il ramo
+    // della fine sta dopo quello della finestra e non prima: qui `nextDate` e'
+    // gia' `null` — dopo oggi non c'e' piu' niente — ma oggi una spesa nasce, e
+    // dire solo "e' finita" tacerebbe proprio quella.
+    const copy = copyOf(mensile(OGGI, { endDate: OGGI }))
+    expect(copy.text).toBe('Prima spesa: oggi.')
+  })
+
+  it('una regola finita con dell arretrato conta le spese che nascono, non solo la fine', () => {
+    // `count > 0` e `nextDate === null` nella stessa anteprima: una regola
+    // scaduta a giugno e mai materializzata scrive comunque i suoi arretrati —
+    // quei soldi sono usciti davvero — e sono sei spese, non zero.
+    const copy = copyOf(mensile('2026-01-01', { endDate: '2026-06-01' }))
+    // `5400,00` senza puntino: `minimumGroupingDigits: 2` in `it-IT`, come nel
+    // caso del brief qui sopra. E' il locale a saperlo.
+    expect(norm(copy.text)).toBe(
+      'Questa regola creerà 6 spese arretrate: 1 gennaio – 1 giugno, 5400,00 € in totale.',
+    )
+    expect(copy.confirm).toBe(true)
+  })
+
   it('senza arretrati il bottone dice il gesto, e cambia con la porta', () => {
     const bozza = mensile(OGGI, { lastMaterializedDate: OGGI })
     expect(copyOf(bozza, 'new').saveLabel).toBe('Crea la spesa fissa')
@@ -366,6 +401,24 @@ describe('quale porta aprire', () => {
     expect(calendarChanged(regola, mensile('2026-01-01', { anchorDay: 15 }))).toBe(true)
   })
 
+  it('mettere una fine e un cambio di calendario, o non arriverebbe mai al disco', () => {
+    // **Il caso che senza questa riga si perde in silenzio.** Una fine nel
+    // futuro non cambia nessun numero annunciato — la finestra chiude a oggi
+    // comunque — quindi `backdated` e' falso; se non fosse nemmeno un cambio di
+    // calendario, `saveRule` prenderebbe il ramo che non riscrive niente e la
+    // fine resterebbe a schermo senza essere mai stata scritta.
+    expect(calendarChanged(regola, mensile('2026-01-01', { endDate: '2026-12-31' }))).toBe(true)
+  })
+
+  it('togliere una fine e un cambio di calendario, e li i numeri cambiano davvero', () => {
+    const finita = makeRule({
+      startDate: '2026-01-01',
+      amountCents: 90_000,
+      endDate: '2026-06-30',
+    })
+    expect(calendarChanged(finita, mensile('2026-01-01'))).toBe(true)
+  })
+
   it('il segnaposto non e un campo da modificare: non conta come cambio', () => {
     expect(calendarChanged(regola, mensile('2026-01-01', { lastMaterializedDate: OGGI }))).toBe(
       false,
@@ -412,14 +465,79 @@ describe('l elenco delle spese fisse', () => {
   })
 
   it('una regola spenta resta in elenco, fuori dal totale, e dice che e spenta', () => {
-    // Qui c'era la regola **finita**, tolta insieme a `endDate`: senza scadenza
-    // quello stato non e' raggiungibile. Resta l'altro motivo per cui una riga
-    // non pesa sul mese, ed e' l'unico dei due che si cambia con un tap.
+    // E' l'unico dei tre motivi che si cambia con un tap, quindi viene per
+    // primo anche quando ne varrebbe piu' d'uno.
     const spenta = makeRule({ startDate: '2026-01-01', amountCents: 50_000, active: false })
     const list = fixedList([spenta], OGGI)
     expect(list.lines[0]?.monthlyCents).toBeNull()
     expect(list.lines[0]?.aside).toBe('spenta')
     expect(list.totalCents).toBe(0)
+  })
+
+  it('una regola finita resta in elenco, fuori dal totale, e dice da quando', () => {
+    // Il terzo motivo. Non sparisce e non vale zero: `null` non e' zero, e una
+    // riga da "0,00 €" accanto a "Palestra" sarebbe un numero sbagliato con
+    // l'aria di essere giusto.
+    const finita = makeRule({ startDate: '2026-01-01', amountCents: 50_000, endDate: '2026-06-30' })
+    const list = fixedList([finita], OGGI)
+    expect(list.lines[0]?.monthlyCents).toBeNull()
+    expect(list.lines[0]?.aside).toBe('finita: 30 giugno')
+    expect(list.totalCents).toBe(0)
+  })
+
+  it('il giorno stesso della fine e ancora un costo: pesa, e non porta nessuna parola', () => {
+    // Il predicato e' **stretto** in tutti e due i posti che lo scrivono. Quel
+    // giorno la regola genera, quindi quel giorno quei soldi escono davvero.
+    const ultimo = makeRule({ startDate: '2026-01-01', amountCents: 90_000, endDate: OGGI })
+    const list = fixedList([ultimo], OGGI)
+    expect(list.lines[0]?.monthlyCents).toBe(90_000)
+    expect(list.lines[0]?.aside).toBeNull()
+    expect(list.totalCents).toBe(90_000)
+  })
+
+  it('ogni riga fuori dal totale porta una parola, o e un record che non si legge', () => {
+    // **L'invariante che sorveglia lo specchio.** Chi decide se una regola pesa
+    // sul mese e' `monthlyFixedCosts`; chi dice perche' non pesa e' `asideFor`,
+    // che ricostruisce a mano gli stessi predicati. Il giorno che divergono —
+    // un quarto criterio di la', nessuna parola di qua — l'elenco mostra una
+    // riga muta, indistinguibile dal record rotto, che di parola non ne ha per
+    // scelta.
+    //
+    // Il limite dichiarato: prende un criterio nuovo **solo se una di queste
+    // regole ci cade dentro**. E' un test, non una derivazione — la
+    // derivazione, e perche' non e' stata fatta, stanno in `docs/DEBITO.md` §18.
+    const regole = [
+      makeRule({ startDate: '2026-01-01', amountCents: 90_000 }),
+      makeRule({ startDate: '2026-01-01', amountCents: 50_000, active: false }),
+      makeRule({ startDate: '2026-09-01', amountCents: 50_000 }),
+      makeRule({ startDate: '2026-01-01', amountCents: 50_000, endDate: '2026-06-30' }),
+      makeRule({ startDate: '2026-01-01', amountCents: 50_000, interval: 0 }),
+    ]
+    const fuori = fixedList(regole, OGGI).lines.filter((line) => line.monthlyCents === null)
+    // La premessa, prima dell'invariante: se il corpus non escludesse niente,
+    // il ciclo qui sotto passerebbe a vuoto.
+    expect(fuori).toHaveLength(4)
+    for (const line of fuori) {
+      if (line.aside !== null) continue
+      expect(validateRule(line.rule)).not.toBeNull()
+    }
+    // E l'unica muta e' quella rotta: se una parola sparisse, questo conto
+    // salirebbe a due senza che il ciclo qui sopra se ne accorga.
+    expect(fuori.filter((line) => line.aside === null)).toHaveLength(1)
+  })
+
+  it('le due parole della fine esistono in inglese, e non sono le italiane', () => {
+    // La parita' delle chiavi la garantisce il compilatore; qui si guarda che
+    // i due rami nuovi passino davvero dal dizionario attivo. Sono le due
+    // chiavi uscite in fase 5 insieme al campo — `fixed.ended` e
+    // `rule.preview.done` — e rientrano coi rami che le leggono.
+    setLanguage('en')
+    const finita = makeRule({ startDate: '2026-01-01', endDate: '2026-06-30' })
+    expect(fixedList([finita], OGGI).lines[0]?.aside).toBe('ended: 30 June')
+    expect(
+      copyOf(mensile('2026-01-01', { endDate: '2026-06-01', lastMaterializedDate: '2026-06-01' })),
+    ).toMatchObject({ text: 'This fixed cost has ended: it will not create any more expenses.' })
+    setLanguage('it')
   })
 
   it('senza regole non c e nessuna riga e il totale e zero', () => {
@@ -563,16 +681,23 @@ describe('la bozza del riavvolgimento', () => {
     expect(bozza.anchorDay).toBeUndefined()
   })
 
+  it('la data di fine viaggia: senza, l impronta non tornerebbe mai piu', () => {
+    // **Non e' una copia decorativa: senza, il pannello e' un vicolo cieco.**
+    // `planRecurringRuleRewind` spreme il record, quindi taglia la finestra
+    // sulla fine; la bozza che l'ha persa annuncerebbe le occorrenze fino a
+    // oggi. Due impronte diverse sullo stesso gesto vuol dire `stale-preview` a
+    // ogni tentativo, cioe' una casella che si rispegne per sempre.
+    const bozza = rewindDraft(
+      makeRule({ startDate: '2026-08-01', anchorDay: 1, endDate: '2026-09-30' }),
+      '2026-01-01',
+    )
+    expect(bozza.endDate).toBe('2026-09-30')
+  })
+
   it('la bozza porta solo cio che la regola ha: nessun campo inventato', () => {
-    // Qui c'era "la data di fine viaggia, perche' restringe la finestra". Non
-    // c'e' piu' niente da far viaggiare: `endDate` e' stata tagliata per zero
-    // produttori, e un test che la costruiva a mano avrebbe tenuto in vita un
-    // campo che nessuna schermata poteva scrivere.
-    //
-    // Cio' che resta e' la proprieta' che conta: la bozza del rewind e'
-    // **esattamente** quella di una regola appena creata con quella data —
-    // stesso ramo di `materializationWindow`, quindi niente da verificare caso
-    // per caso.
+    // Una regola senza fine non se ne fa inventare una. E' la meta' che rende
+    // il test qui sopra una proprieta' e non un caso: cio' che viaggia e'
+    // quello che c'e', ne' piu' ne' meno.
     const bozza = rewindDraft(
       makeRule({ startDate: '2026-08-01', cadence: 'monthly', anchorDay: 1 }),
       '2026-01-01',

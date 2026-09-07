@@ -637,10 +637,13 @@ export const it = {
   // vede anche perche' non e' nel totale.
   'fixed.later': 'parte: {day}',
   // Una regola spenta resta nell'elenco e si legge per intero: e' l'unico dei
-  // due motivi che si cambia con un tap, quindi e' anche l'unico che deve
-  // portare a qualcosa. ("finita" non c'e' piu': una regola non finisce, e la
-  // chiave e' uscita insieme a `endDate` invece di restare senza lettore.)
+  // tre motivi che si cambia con un tap, quindi e' anche l'unico che deve
+  // portare a qualcosa.
   'fixed.off': 'spenta',
+  // Il terzo motivo, tornato con `endDate`. Il giorno stesso della fine conta
+  // ancora — quel giorno la regola genera, quindi e' ancora un costo — ed e' lo
+  // stesso confronto stretto che fa `monthlyFixedCosts`.
+  'fixed.ended': 'finita: {day}',
   // **Il giorno di pagamento nell'elenco.** Senza, una mensile riavvolta al 1
   // febbraio si legge "ogni mese" mentre esce il 25, e il 25 non compare da
   // nessuna parte: un numero che governa i soldi e che nessuna schermata cita.
@@ -671,6 +674,11 @@ export const it = {
   'rule.hint.on': 'Guarda cosa succede quando la riaccendi',
   'rule.hint.failed': 'Non sono riuscito a creare la regola. Tocca di nuovo Crea.',
   'rule.hint.max': 'Importo massimo raggiunto',
+  // L'unico rifiuto che `previewMaterialization` puo' rispondere a questo
+  // foglio: l'importo sintetico e' 1, l'intervallo e' 1, l'ancora esce da un
+  // elenco di 31. Resta una fine che precede l'inizio, e dirlo e' cio' che
+  // impedisce al bottone spento di essere un no senza parole.
+  'rule.hint.order': 'La fine viene prima dell’inizio',
   'rule.cadence': 'Ogni quanto',
   'rule.cadence.monthly': 'Al mese',
   'rule.cadence.weekly': 'A settimana',
@@ -680,6 +688,16 @@ export const it = {
   'rule.start.today': 'Oggi',
   'rule.start.pick': 'Scegli il giorno da cui parte',
   'rule.start.other': 'Un’altra data',
+  // Fino a quando. Le spese fisse di un Erasmus finiscono tutte — la palestra a
+  // giugno, il tram ad agosto, l'affitto con il contratto — e una regola senza
+  // fine costringe a ricordarsi di disattivarla nel giorno giusto.
+  'rule.end': 'Fino a quando',
+  'rule.end.never': 'Non finisce',
+  'rule.end.other': 'Una data di fine',
+  'rule.end.pick': 'Scegli l’ultimo giorno in cui esce',
+  // Solo in modifica, dove la regola puo' aver gia' generato qualcosa. Nomina
+  // lo Storico perche' e' li' che si va a guardare.
+  'rule.end.kept': 'Una fine non cancella le spese già create: restano nello Storico.',
   // Il giorno del mese in cui la regola scatta, nel foglio. Si legge come un
   // fatto e si cambia toccandolo: e' l'unico modo perche' l'ancora congelata di
   // ADR 020 sia un default e non una trappola.
@@ -723,11 +741,13 @@ export const it = {
   // Una regola gia' in pari: `count: 0` qui non vuol dire "parte piu' avanti",
   // vuol dire "non c'e' niente da recuperare". Dire "Prima spesa: 1 gennaio"
   // sarebbe falso — quella spesa e' nello Storico da mesi.
-  // Copriva anche il caso della regola finita, che dalla fase 5 non esiste:
-  // senza `endDate` una regola non finisce, quindi `rule.preview.done` e' uscita
-  // dal dizionario invece di restare viva nel codice e morta nei fatti. Torna
-  // con la scadenza, in fase 7.
   'rule.preview.settled': 'Non c’è niente da recuperare.',
+  // `nextDate === null`, e sta **prima** di "in pari": una regola finita e in
+  // pari cade in tutte e due, e "non c'e' niente da recuperare" tacerebbe il
+  // fatto piu' grosso. Non sta prima di "Prima spesa: oggi", pero': una regola
+  // che finisce oggi e genera oggi sta creando una spesa, e dire solo che e'
+  // finita tacerebbe quella.
+  'rule.preview.done': 'Questa spesa fissa è finita: non creerà altre spese.',
 
   /* --- quando la scrittura dice di no ------------------------------------- *
    *

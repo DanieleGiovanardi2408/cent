@@ -1,7 +1,7 @@
 # La mappa
 
 <!-- JUDGMENT rivisto=2acb995 -->
-> Rivisto a `2acb995`, cioe' a questo commit.
+> Rivisto a `2acb995`, 5 commit fa.
 
 **Questo blocco dice la forma, non i fatti.** Non porta nessun numero: quelli si
 rigenerano qui sotto, e una cifra scritta a mano accanto a una rigenerata e' la
@@ -61,18 +61,18 @@ sa gia', e per questo non puo' invecchiare. I giudizi — cosa e' in volo, cosa
 aspetta una persona — stanno sotto, scritti a mano e timbrati con lo SHA a cui
 sono stati rivisti.
 
-- **Ultimo commit**: `a794c8b` — wip: prima di mutare
-- **Data**: 04/09/2026 10:43
+- **Ultimo commit**: `1fc9c9e` — feat: le parole del pavimento, e le warning dell'import arrivano a schermo
+- **Data**: 07/09/2026 21:14
 - **Ramo**: `fase7/scatto-pre-import`
-- **Pushato**: **no: 2 commit non pushati su `origin/fase7/scatto-pre-import`**
-- **Rispetto a `origin/main`**: 23 commit avanti
+- **Pushato**: si, `origin/fase7/scatto-pre-import` e' allo stesso commit
+- **Rispetto a `origin/main`**: 35 commit avanti
 - **Albero di lavoro**: **non pulito**, ci sono modifiche non committate
 
-- **Test unitari**: 797 in 27 file, tutti verdi
-- **Test e2e dichiarati**: 451 in 15 file, su 4 progetti (iphone-se, iphone-14, landscape, dark)
-- **Test e2e eseguiti**: non misurato — l'ultima esecuzione e' piu' vecchia dei sorgenti — va rilanciata
-- **Bundle iniziale**: non misurato — `dist/` e' piu' vecchio dei sorgenti — va ricostruito
-- **Disco**: 4 GB liberi, 81% pieno. Non e' un giudizio e non porta un timbro: cambia da solo, quindi si rigenera.
+- **Test unitari**: 850 in 27 file, tutti verdi
+- **Test e2e dichiarati**: 466 in 15 file, su 4 progetti (iphone-se, iphone-14, landscape, dark)
+- **Test e2e eseguiti**: 440 passati, 26 saltati, in 3.0 minuti. I saltati sono condizionali (ADR 013): solo un'esecuzione li vede.
+- **Bundle iniziale**: 65.4 KB gzip su 65.0 KB (-0.4 KB di margine)
+- **Disco**: 3.7 GB liberi, 82% pieno. Non e' un giudizio e non porta un timbro: cambia da solo, quindi si rigenera.
 
 - **Schema del database**: 6. La scala delle migrazioni:
   - **1** — Schema iniziale: expenses, categories, recurringRules, budgets, settings
@@ -91,7 +91,7 @@ sono stati rivisti.
 ## In volo adesso
 
 <!-- JUDGMENT rivisto=d143f2f -->
-> Rivisto a `d143f2f`, 5 commit fa.
+> Rivisto a `d143f2f`, 17 commit fa. **Da riguardare.**
 
 **Ri-derivato il 4 settembre, e stavolta il fatto e' un altro**: si lavora sul
 ramo `fase7/scatto-pre-import`, e `main` e' fermo a `9958f4f`.
@@ -2685,7 +2685,18 @@ un file su iCloud si apre.
 
 <!-- USCITA
      present: src/core/types.ts :: readonly endDate?: IsoDate
+     present: src/ui/RuleSheet.tsx :: endDate: ends
+     present: src/ui/recurring-view.ts :: rule.preview.done
+     present: src/ui/recurring-view.ts :: fixed.ended
 -->
+> **Applicata**, verificato da: `readonly endDate?: IsoDate`, `endDate: ends`, `rule.preview.done`, `fixed.ended`.
+
+**I tre aghi oltre al primo sono il criterio vero**, e il primo da solo non lo
+era: il tipo esiste anche il giorno in cui nessuno lo scrive — e' esattamente lo
+stato da cui la fase 5 l'ha tagliata. `endDate: ends` e' la riga in cui il valore
+digitato entra nella bozza (`ends` viene dal selettore, non da `target?.endDate`,
+che sarebbe una copia), e le altre due sono i rami di lettura che erano usciti
+dai dizionari insieme al campo e rientrano con lui.
 
 E' **l'altra meta' di A2**, che nomina la fase 7 come *"import del backup di Cent,
 con `ImportPreview.exportedAt` e `RecurringRule.endDate` col suo campo di input"*.
@@ -2696,11 +2707,31 @@ fase dalla sua condizione credendolo un fatto stantio.
 Torna col suo **produttore**, non da sola: un campo di input e' un valore che
 entra da fuori, e senza di lui `dead-surface.mjs` la trova morta lo stesso giorno.
 
+**Fatta il 7 settembre**, e la prova che il produttore e' un produttore e' una
+mutazione: rimessa la copia (`{ endDate: target.endDate }`) al posto di
+`{ endDate: ends }`, `tsc` resta verde e `npm run audit:source` torna rosso su
+`RecurringRuleCommon.endDate` con 65 occorrenze in 11 file. Ripristinata, esce 0.
+
+Con lei sono rientrati i due rami di lettura e le loro chiavi — `rule.preview.done`
+(la fine sta **prima** di "in pari" e **dopo** "c'e' qualcosa nella finestra": una
+regola finita e in pari cade in tutti e due i primi, una che finisce oggi e genera
+oggi cade negli altri due, e in ognuno dei casi la frase sbagliata tace il fatto
+piu' grosso) e `fixed.ended`, terzo motivo per cui una riga dell'elenco non pesa
+sul mese.
+
+E ha chiuso un buco che era **vivo**: `ruleFromDraft` ricostruisce il record
+intero dalla bozza, quindi una regola con la fine arrivata da un backup la perdeva
+in silenzio appena la si apriva e se ne cambiava l'importo. Il ramo che lo prende
+e' in `tests/e2e/ricorrenze.spec.ts`.
+
+Cio' che **non** e' stato fatto, con la sua condizione: [DEBITO.md](DEBITO.md) §18.
+
 #### 2. Lo scatto pre-import ha una scadenza scritta in un file
 
 <!-- USCITA
      present: docs/adr/026-l-import-sostituisce-e-lascia-una-rete.md :: fine della fase 8
 -->
+> **Applicata**, verificato da: `fine della fase 8`.
 
 Lo scatto si scrive e nessuno lo legge. Non e' un difetto finche' la scadenza
 esiste **con il suo esito**: il lettore arriva entro la fine della fase 8, oppure
@@ -2713,6 +2744,7 @@ con la sua migrazione.
      present: src/ui/ImportSheet.tsx :: case 'unreadable':
      present: src/ui/import-view.ts :: readonly again: BackupReader
 -->
+> **Applicata**, verificato da: `case 'unreadable':`, `readonly again: BackupReader`.
 
 Non per disciplina: l'esito `unreadable` **porta con se'** la chiusura che rilegge
 lo stesso file, quindi non e' costruibile senza dire come si ritenta. Il giro A
@@ -2723,6 +2755,7 @@ aveva un'azione sola sotto due etichette.
 <!-- USCITA
      present: tests/e2e/ripristino.spec.ts :: otto contenuti, una sola geometria
 -->
+> **Applicata**, verificato da: `otto contenuti, una sola geometria`.
 
 Chiude [DEBITO.md](DEBITO.md) §14. L'asserzione non e' su nessun numero: e'
 l'**identita'** fra le viste, che resta vera il giorno in cui la schermata cambia
@@ -2734,6 +2767,7 @@ di proposito e cade solo sul difetto vero.
      present: src/core/backup.test.ts :: un file senza nessuna categoria non si importa
      present: src/core/backup.test.ts :: senza app non e un backup di Cent
 -->
+> **Applicata**, verificato da: `un file senza nessuna categoria non si importa`, `senza app non e un backup di Cent`.
 
 `app` assente, zero categorie, una qualunque issue `error`, uno schema piu' nuovo
 di questo. E' D6 di ADR 026, e il criterio cade sulle categorie.
@@ -2743,6 +2777,7 @@ di questo. E' D6 di ADR 026, e il criterio cade sulle categorie.
 <!-- USCITA
      present: src/core/repository.test.ts :: lo stato del dispositivo non entra dal file
 -->
+> **Applicata**, verificato da: `lo stato del dispositivo non entra dal file`.
 
 L'import non tocca `language`, `theme`, `onboardingCompletedAt`; `lastBackupAt`
 prende l'`exportedAt` del file. Meta' di quel record descrive il **telefono**, non
@@ -2753,6 +2788,7 @@ i dati.
 <!-- USCITA
      present: tests/e2e/ripristino.spec.ts :: dopo il ripristino le fisse ci sono
 -->
+> **Applicata**, verificato da: `dopo il ripristino le fisse ci sono`.
 
 Nato dal gate precedente, che aveva trovato una conferma che prometteva la
 ricreazione delle fisse mentre nessuno le creava. **L'aveva trovata perche' quel
@@ -2763,6 +2799,7 @@ percorso non aveva nessun test.**
 <!-- USCITA
      present: src/core/categories.ts :: reason: 'last'
 -->
+> **Non applicata**: manca `reason: 'last'` in `src/core/categories.ts`.
 
 `planCategoryDeletion` non aveva nessun pavimento: su un'installazione senza spese
 e senza regole le otto si cancellano una per una, e da li' **non si puo' piu'
@@ -2775,6 +2812,7 @@ scriveva un file che l'app non riprende.
 <!-- USCITA
      present: src/ui/ImportSheet.tsx :: import.archived
 -->
+> **Non applicata**: manca `import.archived` in `src/ui/ImportSheet.tsx`.
 
 Chiude [DEBITO.md](DEBITO.md) §15. La sua condizione era *"il primo commit che
 tocca la schermata d'import per qualunque altra ragione"*, e in questa chiusura
@@ -2785,6 +2823,7 @@ paga invece di riscriverla — che e' l'errore diagnosticato in
 #### 10. Ogni ramo di rifiuto e' stato letto a schermo, in tutte e due le lingue
 
 <!-- USCITA -->
+> **Giudizio**, senza controllo per costruzione: nessuna macchina puo' dirlo.
 
 Non e' la geometria, che e' misurata: e' **cosa c'e' scritto**. Il difetto che ha
 prodotto questa voce nessuna misura poteva vederlo — la frase del *"troppo nuovo"*
@@ -2794,6 +2833,7 @@ l'ha visto una persona che guardava.
 #### 11. `accept`, il file da iCloud non scaricato e le due sonde, provati su un iPhone
 
 <!-- USCITA -->
+> **Giudizio**, senza controllo per costruzione: nessuna macchina puo' dirlo.
 
 Sono in "Verificabili solo sul dispositivo", con le tre prove scritte passo per
 passo. **E' la sola voce che decide se la funzione esiste davvero**: `accept` su
@@ -2803,6 +2843,7 @@ qualunque cosa ci sia scritta.
 #### 12. Nessuna affermazione falsa residua nella prosa scritta in questa fase
 
 <!-- USCITA -->
+> **Giudizio**, senza controllo per costruzione: nessuna macchina puo' dirlo.
 
 Il conto sta in testa ad [ADR 026](adr/026-l-import-sostituisce-e-lascia-una-rete.md),
 ed e' **sedici**. Questa voce non chiede che non ce ne siano mai state: chiede che

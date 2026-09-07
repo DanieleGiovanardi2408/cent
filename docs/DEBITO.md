@@ -1072,6 +1072,65 @@ Costruirlo vuol dire riaprire quella decisione, non aggiungere una schermata.
 quella non e' pronto, e la riga sopra non e' soddisfatta da una schermata che
 scrive un campo.
 
+## 18. Chi pesa sul mese e perche' non pesa sono due elenchi, e adesso sono tre voci
+
+**Stato: aperto, e accettato con un test invece che con una derivazione.** Nato
+il 7 settembre 2026, col ritorno di `RecurringRule.endDate`.
+
+**Cosa.** `monthlyFixedCosts` (in `src/core/recurring-plan.ts`) decide **chi**
+pesa sul mese con tre predicati: spenta, non ancora cominciata, finita. `asideFor`
+(in `src/ui/recurring-view.ts`) dice **perche'** una riga non pesa, e ricostruisce
+a mano gli stessi tre. Erano due specchiati fino a ieri; oggi sono tre.
+
+Il giorno che divergono — un quarto criterio di la', nessuna parola di qua —
+l'elenco delle spese fisse mostra una riga **senza numero e senza parola
+accanto**. E non e' un vuoto che si nota: e' **indistinguibile** dal quarto caso,
+il record che `validateRule` rifiuta, che di parola non ne ha **per scelta** (dire
+"regola non valida" a chi non l'ha scritta a mano non aiuta nessuno).
+
+**La riparazione che rende la divergenza impossibile**, ed e' una sola: far
+tornare a `monthlyFixedCosts` anche le righe **escluse**, ognuna col proprio
+motivo come discriminante chiuso, e far scegliere alla UI la parola con uno
+`switch` esaustivo — dove un motivo nuovo senza la sua frase **non compila**. E'
+la stessa forma con cui la didascalia della guida deriva il proprio elenco dalle
+schede.
+
+**Perche' non e' stata fatta in questo giro**, e l'argomento va letto con la sua
+obiezione dentro:
+
+- e' un cambio di **API di dominio** il cui unico lettore vivrebbe in `src/ui`, e
+  questo repo ha gia' cancellato due superfici di `src/core` (`expensesInRange`,
+  `planBudgetChange`) per una ragione vicina;
+- **ma la ragione non e' la stessa, e va detto**: quelle due non avevano
+  **nessun** chiamante di produzione ed erano tenute vive dai test. Un
+  `MonthlyFixedCosts.excluded` letto da `fixedList`, che disegna una schermata,
+  un chiamante di produzione ce l'ha. Citare quel precedente qui e' un argomento
+  **trapiantato**, e la regola di questo progetto dice di ri-derivarlo o
+  lasciarlo stare;
+- cio' che resta, ri-derivato: la UI dovrebbe comunque scegliere una chiave e
+  formattare `{day}` per motivo, quindi il dominio guadagnerebbe un tipo nuovo
+  senza che la UI perda una diramazione. Guadagna **l'esaustivita'**, che e'
+  reale, e la paga con una firma di dominio disegnata su una schermata;
+- e il momento: questo e' il commit che riporta un campo **e il suo produttore**,
+  con il tetto del bundle gia' sforato. Un cambio di firma nel dominio dentro lo
+  stesso giro sarebbe stato il secondo rimedio spedito insieme al primo, cioe'
+  quello di cui fra un mese nessuno saprebbe piu' se serviva.
+
+**Cosa c'e' al suo posto.** Un invariante in `src/ui/recurring-view.test.ts`:
+*ogni riga fuori dal totale porta una parola, oppure e' un record che
+`validateRule` rifiuta*. Prende la divergenza — provato mutando: sostituendo la
+parola della fine con `null` il test cade — **con un limite dichiarato**: la
+prende solo se una delle regole del corpus ricade nel criterio nuovo. Un test si
+accorge di una divergenza; una derivazione la rende impossibile, e qui la
+derivazione non c'e'.
+
+**La condizione che lo chiude, con il suo esito.** Al **quarto** criterio in
+`monthlyFixedCosts` — o al primo che entri li' senza entrare in `asideFor` — non
+si aggiunge una quarta faccia allo specchio: si fa tornare il motivo dal dominio
+e si passa allo `switch` esaustivo. Chi tocca `monthlyFixedCosts` e trova questa
+riga ha gia' la risposta; se invece aggiunge il quarto `continue` e va avanti,
+questo paragrafo e' stato inutile ed e' il caso di dirlo qui sotto.
+
 ## 3. Rischi noti gia' scritti altrove
 
 Non si duplicano qui, per non creare la diciannovesima copia che parafrasa:

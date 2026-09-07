@@ -537,6 +537,10 @@ export const en: Record<keyof typeof it, string> = {
   'fixed.list': 'Your fixed costs',
   'fixed.later': 'starts: {day}',
   'fixed.off': 'off',
+  // The third reason a row does not weigh on the month, back with `endDate`.
+  // The day itself still counts: a rule generates on its last day, so that day
+  // it is still a cost — the same strict comparison `monthlyFixedCosts` makes.
+  'fixed.ended': 'ended: {day}',
   'fixed.anchor': '{every}, on day {day}',
 
   'cad.daily.one': 'every day',
@@ -555,6 +559,11 @@ export const en: Record<keyof typeof it, string> = {
   'rule.hint.on': 'Check what happens when you switch it back on',
   'rule.hint.failed': 'I could not create the rule. Tap Create again.',
   'rule.hint.max': 'Highest amount reached',
+  // The only refusal `previewMaterialization` can answer to this sheet: the
+  // synthetic amount is 1, the interval is 1, the anchor comes from a list of
+  // 31. What is left is an end that precedes the start, and saying so is what
+  // keeps the disabled button from being a silent no.
+  'rule.hint.order': 'The end comes before the start',
   'rule.cadence': 'How often',
   'rule.cadence.monthly': 'Monthly',
   'rule.cadence.weekly': 'Weekly',
@@ -564,6 +573,17 @@ export const en: Record<keyof typeof it, string> = {
   'rule.start.today': 'Today',
   'rule.start.pick': 'Pick the day it starts from',
   'rule.start.other': 'Another date',
+  // Until when. Erasmus fixed costs all end — the gym in June, the tram in
+  // August, the rent with the contract — and a rule without an end asks you to
+  // remember to switch it off on the right day.
+  'rule.end': 'Until when',
+  'rule.end.never': 'No end',
+  'rule.end.other': 'An end date',
+  'rule.end.pick': 'Pick the last day it goes out',
+  // Shown while editing, where a rule may already have generated something.
+  // It names History because that is where you can go and look.
+  'rule.end.kept':
+    'An end does not delete the expenses already created: they stay in History.',
   'rule.anchor.day': 'Every month, on day {day}',
   'rule.anchor.pick': 'Change the day of the month it goes out',
 
@@ -580,6 +600,10 @@ export const en: Record<keyof typeof it, string> = {
   'rule.save.edit': 'Save',
   'rule.save.on': 'Switch back on',
   'rule.preview.settled': 'There is nothing to catch up on.',
+  // `nextDate === null`, and it comes before "settled": a rule that is both
+  // finished and up to date falls in both, and "nothing to catch up on" would
+  // keep quiet about the bigger fact.
+  'rule.preview.done': 'This fixed cost has ended: it will not create any more expenses.',
 
   'rule.refused.stale':
     'Those numbers were from {day}: midnight changed them. I have redone them below — check and confirm.',

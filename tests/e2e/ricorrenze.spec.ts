@@ -93,7 +93,16 @@ async function apriPrimaRegola(page: Page): Promise<void> {
 /** Le regole sul **disco**: e' li' che si legge l'importo che il permesso ha scritto. */
 async function regoleSuDisco(
   page: Page,
-): Promise<readonly { id: string; amountCents: number; active: boolean; startDate: string; anchorDay?: number }[]> {
+): Promise<
+  readonly {
+    id: string
+    amountCents: number
+    active: boolean
+    startDate: string
+    endDate?: string
+    anchorDay?: number
+  }[]
+> {
   return page.evaluate(async () => {
     const db: IDBDatabase = await new Promise((resolve, reject) => {
       const request = indexedDB.open('cent')
@@ -105,6 +114,7 @@ async function regoleSuDisco(
       amountCents: number
       active: boolean
       startDate: string
+      endDate?: string
       anchorDay?: number
     }[] =
       await new Promise((resolve, reject) => {
@@ -660,6 +670,122 @@ test('cancellare si puo solo finche non ha creato niente, e il rifiuto porta il 
   // davanti.
   await expect(rifiuto).toContainText('Disattivala')
   await expect(page.locator('.rule__second')).toBeVisible()
+})
+
+test('la fine si sceglie, accorcia l annuncio, arriva al disco e sopravvive a una modifica che non la nomina', async ({
+  page,
+}) => {
+  // **Il campo torna col suo produttore, e questo e' il produttore.** La catena
+  // intera in un test solo, perche' e' una catena sola: il valore entra da un
+  // selettore, taglia la finestra, viene annunciato, arriva su IndexedDB, e
+  // resta li' quando si riapre il foglio per cambiare l'importo — che e' il
+  // gesto che riscrive il record **intero** dalla bozza.
+  expect(giornoDichiarato()).toBe('2026-08-19')
+
+  await page.goto('./')
+  await expect(page.locator('.fab')).toBeEnabled()
+  await chiudiGuida(page)
+  await apriFoglioRegola(page)
+
+  await digita(page, '5000')
+  await page.locator('.cats--pick .cat').filter({ hasText: 'Casa' }).tap()
+
+  // --- Il caso normale e' "non finisce", ed e' premuto senza che nessuno lo
+  //     tocchi: una spesa fissa che finisce e' la scelta, non il default.
+  const mai = page.locator('.ends .chip').first()
+  await expect(mai).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.locator('.ends')).toContainText('Una data di fine')
+
+  // --- Otto arretrate, come nel caso del brief: e' il termine di paragone.
+  await page.locator('.starts .chip__input').fill('2026-01-01')
+  await expect(page.locator('.rule__preview')).toContainText('8 spese arretrate')
+
+  // --- **Metterla accorcia l'annuncio**, e passa dall'anteprima: da gennaio a
+  //     giugno sono sei, non otto, e le due che spariscono sono due spese che
+  //     non nasceranno.
+  await page.locator('.ends .chip__input').fill('2026-06-30')
+  await expect(mai).toHaveAttribute('aria-pressed', 'false')
+  await expect(page.locator('.ends')).toContainText('30 giu')
+  const anteprima = page.locator('.rule__preview')
+  await expect(anteprima).toContainText('6 spese arretrate')
+  await expect(anteprima).toContainText('1 giugno')
+  await expect(anteprima).toContainText('300,00')
+
+  // --- E dice cosa **non** fa. Chi mette una fine per ripulire dei mesi di
+  //     troppo deve saperlo prima, non dopo aver guardato lo Storico. Alla
+  //     creazione non c'e' niente di gia' creato, quindi la riga non c'e'.
+  await expect(page.locator('.ends__kept')).toHaveCount(0)
+
+  const conferma = page.locator('.rule__confirm')
+  await expect(conferma).toContainText('6 spese arretrate')
+  await conferma.tap()
+  await page.locator('.save').tap()
+  await expect(page.locator('.sheet--rule')).toHaveCount(0)
+
+  // --- Sul **disco**, non nel mirror.
+  const dopoCreazione = await regoleSuDisco(page)
+  expect(dopoCreazione).toHaveLength(1)
+  expect(dopoCreazione[0]?.endDate).toBe('2026-06-30')
+
+  // --- E nell'elenco: fuori dal totale, con la parola che dice perche'. E' il
+  //     terzo motivo, accanto a "spenta" e "parte: …".
+  const riga = page.locator('.fixed__row').first()
+  await expect(riga.locator('.fixed__note')).toContainText('finita: 30 giugno')
+  await expect(riga.locator('.fixed__amount')).toHaveText('')
+
+  // --- Riaperta, la fine c'e' e si legge. Se il foglio la mostrasse vuota, il
+  //     primo salvataggio la cancellerebbe senza che nessuno l'abbia toccata.
+  await apriPrimaRegola(page)
+  await expect(page.locator('.ends')).toContainText('30 giu')
+  await expect(page.locator('.ends .chip').first()).toHaveAttribute('aria-pressed', 'false')
+  // Adesso qualcosa di gia' creato c'e', e la riga lo dice.
+  await expect(page.locator('.ends__kept')).toContainText('restano nello Storico')
+  // La regola e' finita e in pari: il piede lo dice, invece di fermarsi a "non
+  // c'e' niente da recuperare" — che sarebbe vero e tacerebbe il fatto grosso.
+  await expect(page.locator('.rule__preview')).toHaveText(
+    'Questa spesa fissa è finita: non creerà altre spese.',
+  )
+
+  // --- **Il buco che questo giro chiude.** Cambiare l'importo e' un cambio di
+  //     calendario, quindi si passa da `reviseRecurringRule`, che ricostruisce
+  //     il record **intero** dalla bozza: una bozza senza fine gliela toglieva
+  //     in silenzio.
+  await digita(page, '0')
+  await expect(page.locator('.amount')).toContainText('500')
+  await page.locator('.save').tap()
+  await expect(page.locator('.sheet--rule')).toHaveCount(0)
+
+  const dopoModifica = await regoleSuDisco(page)
+  expect(dopoModifica[0]?.amountCents).toBe(50_000)
+  expect(dopoModifica[0]?.endDate).toBe('2026-06-30')
+
+  // --- **E toglierla riallarga l'annuncio**, dallo stesso selettore e per la
+  //     stessa porta: luglio e agosto tornano dentro, e sono due spese che
+  //     nascono davvero. Il contratto e' stato rinnovato.
+  await apriPrimaRegola(page)
+  // Il posto della riga e' **riservato**, quindi togliere la fine la svuota
+  // senza muovere i tasti che stanno sotto. Il numero e' asserito e non
+  // stampato: e' l'unico modo in cui la riserva smette di essere una promessa
+  // scritta in un commento.
+  const tastiPrima = await page.locator('.pad').evaluate((el) => el.getBoundingClientRect().top)
+  await page.locator('.ends .chip').first().tap()
+  await expect(page.locator('.ends')).toContainText('Una data di fine')
+  await expect(page.locator('.ends__kept')).toHaveText('')
+  const tastiDopo = await page.locator('.pad').evaluate((el) => el.getBoundingClientRect().top)
+  expect(tastiDopo).toBeCloseTo(tastiPrima, 2)
+  await expect(page.locator('.rule__preview')).toContainText('2 spese arretrate')
+  await page.locator('.rule__confirm').tap()
+  await page.locator('.save').tap()
+  await expect(page.locator('.sheet--rule')).toHaveCount(0)
+
+  const dopoRimozione = await regoleSuDisco(page)
+  expect(dopoRimozione[0]?.endDate).toBeUndefined()
+  // E la riga torna a pesare sul mese: nessuna parola accanto, e un numero
+  // nella colonna.
+  await expect(page.locator('.fixed__row').first().locator('.fixed__note')).not.toContainText(
+    'finita',
+  )
+  await expect(page.locator('.fixed__row').first().locator('.fixed__amount')).toContainText('500')
 })
 
 test('modificare l importo passa dall anteprima; cambiare la categoria no', async ({ page }) => {
