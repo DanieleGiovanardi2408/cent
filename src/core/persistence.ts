@@ -359,9 +359,9 @@ export interface Persistence {
    * adesso c'e' spazio".
    *
    * **Condizione**: arrivano nel commit che le chiama, cioe' quello del dialogo
-   * di ripristino. **Finche' quel dialogo non c'e', non ci sono nemmeno loro**
-   * — e lo scatto resta una rete che nessuno puo' tirare, che e' un difetto suo
-   * e va guardato per conto suo, non rimandato a una fase.
+   * di ripristino. **Se quel dialogo non arriva in fase 7, non arrivano nemmeno
+   * loro** — e lo scatto resta una rete che nessuno puo' tirare, che e' un
+   * difetto suo e va guardato allora.
    *
    * Gli argomenti che le riguardavano non sono andati persi: stanno in
    * [ADR 026](../../docs/adr/026-l-import-sostituisce-e-lascia-una-rete.md),

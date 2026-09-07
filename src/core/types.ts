@@ -105,7 +105,7 @@ export type Cadence = 'daily' | 'weekly' | 'monthly'
  *
  * Nessuna migrazione, per lo stesso motivo di `note`: nessun record puo' averla.
  *
- * **L'idea non e' morta**, ed e' in `docs/ROADMAP.md` con il suo
+ * **L'idea non e' morta**, ed e' in `docs/ROADMAP.md` per la fase 7 con il suo
  * argomento vero — le spese fisse di un Erasmus finiscono tutte: la palestra a
  * giugno, il tram ad agosto, l'affitto con il contratto. Torna **insieme al suo
  * campo di input**, nello stesso commit.

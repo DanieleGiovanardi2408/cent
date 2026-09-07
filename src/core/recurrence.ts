@@ -114,8 +114,8 @@ function monthlyOccurrence(rule: RecurringRule, anchorDay: number, k: number): I
  *
  * **Non risponde mai `null`** da quando `endDate` non esiste: una regola non
  * finisce piu'. Il tipo lo dichiara ancora perche' il giorno in cui la scadenza
- * torna (vedi `docs/ROADMAP.md`; torna insieme al suo campo di input) `null` e'
- * la risposta giusta, e i chiamanti la gestiscono gia'.
+ * torna (ROADMAP fase 7, insieme al suo campo di input) `null` e' la risposta
+ * giusta, e i chiamanti la gestiscono gia'.
  *
  * Non guarda `active`: descrive il calendario della regola, non se sia il caso
  * di applicarlo. Non fa nemmeno un ciclo giorno per giorno: l'indice
