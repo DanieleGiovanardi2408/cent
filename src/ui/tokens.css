@@ -248,10 +248,18 @@
 }
 
 /* --- tema scuro --------------------------------------------------------- */
-/* Una sola definizione. La preferenza esplicita chiaro/scuro/auto arrivera' in
- * fase 5 con la schermata Impostazioni (vedi docs/ROADMAP.md); allora andranno
- * aggiornati anche i due <meta name="theme-color"> di index.html, che le media
- * query da sole coprono benissimo finche' la scelta manuale non esiste. */
+/* Una sola definizione: la palette scura vive in questo blocco e in nessun
+ * altro posto.
+ *
+ * **Finche' il tema lo decide il sistema**, i due <meta name="theme-color"> di
+ * index.html bastano cosi' come sono: le media query li coprono da sole. Il
+ * giorno in cui in Impostazioni comparisse una preferenza esplicita
+ * chiaro/scuro/auto, quei due vanno aggiornati insieme a lei — e' l'unico posto
+ * che una media query non raggiunge.
+ *
+ * Qui c'era scritto *"arrivera' in fase 5"*, e la fase 5 e' passata: un numero
+ * di fase in un commento e' un fatto derivabile dal repository scritto a mano,
+ * cioe' vero per una settimana. Resta la condizione, che non invecchia. */
 @media (prefers-color-scheme: dark) {
   :root {
     color-scheme: dark;

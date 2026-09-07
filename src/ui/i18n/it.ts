@@ -341,6 +341,8 @@ export const it = {
   'import.damaged.more': 'Altri come questo: {more}.',
   'import.damaged.note':
     'Da qui puoi provare un altro backup. Da un computer puoi aprire il file, cercare quell’id, togliere il record e riprovare.',
+  'import.damagedAt.note':
+    'Da qui puoi provare un altro backup. Da un computer puoi aprire il file e contare in quella lista: il numero fra parentesi parte da zero, quindi [3] è il quarto record. Toglilo e riprova.',
   'import.ready':
     'Ripristinando il backup del {day}: le spese registrate dopo quel giorno non ci sono più, e le fisse vengono ricreate da quel giorno in poi.',
   'import.ready.undated':

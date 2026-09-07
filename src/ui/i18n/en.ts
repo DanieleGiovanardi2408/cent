@@ -242,14 +242,26 @@ export const en: Record<keyof typeof it, string> = {
 
   /* --- ripristino da un backup -------------------------------------------- *
    *
-   * Quattro stati di lettura e quattro rimedi diversi, piu' la conferma. Ogni
-   * frase di rifiuto dice **il fatto e cosa e' possibile da dove si e'**: un
-   * rimedio che il dispositivo non puo' eseguire non aiuta nessuno, e su un
-   * iPhone non esiste un editor che apra un JSON da iCloud Drive.
+   * Ogni stato della lettura porta **il fatto e cosa e' possibile da dove si
+   * e'**: un rimedio che il dispositivo non puo' eseguire non aiuta nessuno, e
+   * su un iPhone non esiste un editor che apra un JSON da iCloud Drive.
    *
-   * Il tono della conferma non spaventa, e non e' gentilezza: lo scatto
-   * pre-import rende il tocco recuperabile, e una conferma drammatica su
-   * un'operazione reversibile insegna a temere la cosa sbagliata (ADR 026 §6d). */
+   * Per questo le note sono **piu' delle forme di rifiuto**: `damaged` ne ha
+   * due, perche' con l'id si **cerca** e con la posizione si **conta**, e
+   * mandare a cercare un id che nel file non c'e' e' il vicolo cieco che
+   * DEBITO §13 non accetta.
+   *
+   * Il tono della conferma non spaventa, e non e' gentilezza — **ma il
+   * meccanismo non e' lo scatto pre-import**: quello si scrive sul disco e
+   * nessuno lo legge (`restoreSnapshot` e' differita, con la sua scadenza in
+   * ADR 026). Cio' che rende il tocco recuperabile **oggi** e' l'Annulla sul
+   * toast: `importBackup` restituisce l'archivio com'era un istante prima, e
+   * quel valore diventa l'azione del toast (`App.applyImport`).
+   *
+   * **Il limite di quella rete**: vive in memoria, quindi muore con l'app — se
+   * l'app viene chiusa nella finestra del toast, l'annullamento non c'e' piu'.
+   * La conclusione di ADR 026 §6d non cambia: una conferma drammatica su
+   * un'operazione reversibile insegna a temere la cosa sbagliata. */
   'import.open': 'Restore from a backup',
   'import.title': 'Restore a backup',
   'import.close': 'Close',
@@ -281,6 +293,13 @@ export const en: Record<keyof typeof it, string> = {
   'import.damaged.more': 'Others like it: {more}.',
   'import.damaged.note':
     'From here you can try another backup. On a computer you can open the file, search for that id, remove the record and try again.',
+  /* Il gemello del ramo `posizione`, e la differenza non e' di tono: li' l'id
+   * manca, quindi non c'e' niente da cercare e il rimedio passa dal **contare**.
+   * Il "parte da zero" non e' pedanteria — chi conta a partire da uno toglie il
+   * record sbagliato, cioe' una spesa buona, mentre sta cercando di recuperare
+   * i propri dati. */
+  'import.damagedAt.note':
+    'From here you can try another backup. On a computer you can open the file and count down that list: the number in brackets starts at zero, so [3] is the fourth record. Remove it and try again.',
   'import.ready':
     'Restoring the backup from {day}: the expenses you saved after that day are gone, and the fixed ones are created again from that day on.',
   'import.ready.undated':

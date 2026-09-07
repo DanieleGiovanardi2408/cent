@@ -269,7 +269,19 @@ function Refused({ refusal }: { readonly refusal: ImportRefusal }) {
           {refusal.more > 0 ? (
             <p class="restore__note">{t('import.damaged.more', { more: refusal.more })}</p>
           ) : null}
-          <p class="restore__note">{t('import.damaged.note')}</p>
+          {/* **E anche le note sono due, per la stessa ragione della frase
+              sopra.** Qui ce n'era una sola, scritta per il ramo `id`: diceva
+              *"da un computer cerca quell'id"* due righe sotto una frase che ha
+              appena dichiarato che quella e' una posizione e **non** una parola
+              da cercare. Il pronome restava senza referente e il rimedio mandava
+              a cercare esattamente la cosa che manca — cioe' il vicolo cieco che
+              DEBITO §13 non accetta, ricostruito nel ramo che nessuno guardava.
+
+              Nel ramo `posizione` il rimedio passa dal **contare**, ed e' l'unica
+              cosa che la posizione permetta di fare. */}
+          <p class="restore__note">
+            {t(refusal.comeSiTrova === 'id' ? 'import.damaged.note' : 'import.damagedAt.note')}
+          </p>
         </>
       )
     default: {

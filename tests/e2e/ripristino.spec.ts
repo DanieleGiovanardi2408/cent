@@ -42,6 +42,8 @@
  */
 import { chiudiGuida, expect, test } from './installed'
 import { fissaOrologio } from './clock'
+import { it as dizionario } from '../../src/ui/i18n/it'
+import { en as inglese } from '../../src/ui/i18n/en'
 import type { Page } from '@playwright/test'
 
 /** Un backup buono: due categorie, una spesa viva e una lapide. */
@@ -150,6 +152,41 @@ const ROTTO = {
   },
 }
 
+/**
+ * Lo stesso file con una spesa **senza id**: e' l'altro ramo di `damaged`.
+ *
+ * Quando a mancare e' proprio l'id non c'e' niente da cercare, e la schermata
+ * ripiega sull'**indice dichiarandolo**. Questo ramo aveva un test di
+ * classificazione in `import-view.test.ts` e **zero copertura a schermo**: la
+ * frase e la nota che ci finiscono non le guardava nessuno, ed e' li' che il
+ * rimedio si era ricostruito sbagliato — *"cerca quell'id"* sotto una frase che
+ * ha appena detto che un id non c'e'.
+ */
+function senzaId(spesa: Record<string, unknown>): Record<string, unknown> {
+  const copia = { ...spesa }
+  delete copia['id']
+  return copia
+}
+
+const SENZA_ID = {
+  ...BUONO,
+  data: {
+    ...BUONO.data,
+    expenses: BUONO.data.expenses.map((spesa, i) => (i === 0 ? senzaId(spesa) : spesa)),
+  },
+}
+
+/**
+ * La posizione che la schermata deve nominare, **contata sulla fixture**.
+ *
+ * Non e' scritta a mano, e la ragione e' costata due commit rossi: l'attesa del
+ * ramo `id` era un letterale (`expenses[0].amountCents`) ed e' rimasta indietro
+ * quando `where` ha smesso di essere un indice. Qui l'indice si deriva dal
+ * record a cui l'id manca, quindi rompere la fixture in un altro punto sposta
+ * l'attesa da sola.
+ */
+const POSIZIONE_ROTTA = `expenses[${SENZA_ID.data.expenses.findIndex((s) => !('id' in s))}].id`
+
 /** Un backup senza nessuna categoria: uno stato a cui l'app non sopravvive. */
 const SENZA_CATEGORIE = { ...BUONO, data: { ...BUONO.data, categories: [] } }
 
@@ -251,9 +288,14 @@ async function apriImpostazioni(page: Page): Promise<void> {
   await expect(page.locator('.prefs')).toBeVisible()
 }
 
-/** Il bottone "Ripristina da un backup", che esiste solo perche' esiste il selettore. */
-function bottoneRipristina(page: Page) {
-  return page.locator('.prefs__action', { hasText: 'Ripristina da un backup' })
+/**
+ * Il bottone "Ripristina da un backup", che esiste solo perche' esiste il
+ * selettore. L'etichetta **si deriva dal dizionario** e prende la lingua in
+ * argomento: il blocco inglese qui sotto tocca lo stesso bottone, e due
+ * letterali per una stringa sola divergerebbero al primo ritocco di copy.
+ */
+function bottoneRipristina(page: Page, etichetta: string = dizionario['import.open']) {
+  return page.locator('.prefs__action', { hasText: etichetta })
 }
 
 test.describe('il selettore di file apre il ripristino', () => {
@@ -347,7 +389,110 @@ test.describe('l\'azione dipende dallo stato, e non e\' un\'etichetta', () => {
 })
 
 /**
- * **La geometria non si muove fra i sette contenuti** — DEBITO §14.
+ * **`damaged` ha due rami, e quindi due rimedi.**
+ *
+ * Con l'id si **cerca**: la stringa nel file c'e'. Senza l'id si **conta**: cio'
+ * che la schermata nomina e' una posizione, e cercarla non porta da nessuna
+ * parte. Fino a qui la nota era **una sola**, scritta per il primo ramo, e nel
+ * secondo mandava a cercare esattamente la cosa che manca — due righe sotto la
+ * frase che dichiara che quella non e' una parola da cercare.
+ *
+ * E' la ragione per cui DEBITO §13 accetta il rifiuto totale (un record rotto
+ * su cento butta il file intero): **che il messaggio dica quale record e cosa si
+ * puo' fare da dove si e'**. In questo ramo quella ragione era nulla.
+ *
+ * ## L'asserzione non e' il testo della nota: e' che le note siano due
+ *
+ * Confrontare la nota del ramo `posizione` con una stringa scritta qui sarebbe
+ * verde anche il giorno in cui torna a essere quella del ramo `id`, se qualcuno
+ * aggiorna tutte e due. Cio' che deve restare vero e' che **i due rami non
+ * dicano la stessa cosa**, piu' il verbo del rimedio eseguibile: si conta.
+ */
+test('con l\'id si cerca, senza l\'id si conta: due rami, due rimedi', async ({ page }) => {
+  let prossimo: unknown = ROTTO
+  serviIlSelettore(page, () => prossimo)
+  await apriImpostazioni(page)
+
+  await bottoneRipristina(page).tap()
+  await expect(page.locator('.restore__lead')).toContainText(BUONO.data.expenses[0]!.id)
+  const conId = await page.locator('.restore__note').innerText()
+  await page.locator('.restore__close').tap()
+  await expect(page.locator('.restore')).toHaveCount(0)
+
+  prossimo = SENZA_ID
+  await bottoneRipristina(page).tap()
+  await expect(
+    page.locator('.restore__lead'),
+    'la schermata non nomina la posizione del record a cui manca l\'id',
+  ).toContainText(POSIZIONE_ROTTA)
+  const conPosizione = await page.locator('.restore__note').innerText()
+
+  expect(
+    conPosizione,
+    'i due rami di `damaged` mostrano la stessa nota: nel ramo senza id quella nota manda a ' +
+      'cercare un id che nel file non c\'e\', cioe\' il vicolo cieco che DEBITO §13 non accetta',
+  ).not.toBe(conId)
+  expect(
+    conPosizione,
+    'il rimedio del ramo "posizione" non nomina il contare: e\' l\'unico gesto che una ' +
+      'posizione permette, ed e\' l\'unica cosa che rende quel rifiuto non cieco',
+  ).toContain('contare')
+  expect(
+    conPosizione,
+    'il rimedio del ramo "posizione" manda a cercare, e li\' non c\'e\' niente da cercare',
+  ).not.toContain('cercare')
+})
+
+/**
+ * **Le due note nuove, in inglese, sul pavimento** — 375x667 e' il viewport
+ * minimo supportato, e non e' il telefono di nessuno di noi.
+ *
+ * Il resto di questo file gira in italiano (`locale: 'it-IT'` sta in
+ * `playwright.config.ts`), e **l'inglese e' la lingua che leggeranno quasi
+ * tutti**: il default e' inglese quando il telefono non e' italiano. Fino a qui
+ * la schermata di ripristino non era misurata in inglese da nessuna parte —
+ * `grep restore tests/e2e` la trova solo qui dentro.
+ *
+ * Si guarda il ramo `posizione` perche' e' il corpo **piu' lungo** dei due
+ * rami e dei quattro rifiuti: la frase dichiara l'indice, la nota spiega come
+ * si conta. Se qualcosa trabocca, trabocca qui prima che altrove.
+ *
+ * L'invariante e' quello della schermata intera e non "sta sopra la piega":
+ * niente scroll orizzontale, e cio' che avanza **si raggiunge**.
+ */
+test.describe('il rifiuto piu\' lungo, in inglese', () => {
+  test.use({ locale: 'en-GB' })
+
+  test('la nota che dice di contare non fa traboccare niente', async ({ page }) => {
+    serviIlSelettore(page, () => SENZA_ID)
+    await apriImpostazioni(page)
+
+    await bottoneRipristina(page, inglese['import.open']).tap()
+    await expect(page.locator('.restore__lead')).toContainText(POSIZIONE_ROTTA)
+    // La nota **e' quella del ramo `posizione`**, e si prende dal dizionario:
+    // asserire la stringa a mano qui vorrebbe dire riscriverla a ogni ritocco.
+    await expect(
+      page.locator('.restore__note'),
+      'in inglese il ramo senza id mostra un\'altra nota',
+    ).toHaveText(inglese['import.damagedAt.note'])
+
+    const m = await fasce(page)
+    expect(m.overflowX, 'scroll orizzontale in pagina con la nota inglese').toBeLessThanOrEqual(0)
+    expect(
+      m.corsa,
+      `avanzano ${m.eccedenza}px di contenuto e il corpo si lascia scorrere di ${m.corsa}`,
+    ).toBeGreaterThanOrEqual(m.eccedenza)
+    expect(m.piedeInFondo, 'il piede esce dalla finestra').toBeGreaterThanOrEqual(0)
+    for (const b of m.bersagli) {
+      expect(Math.min(b.w, b.h), `${b.sel} misura ${b.w}x${b.h}`).toBeGreaterThanOrEqual(44)
+    }
+    // Il diario: due numeri, e tutti e due li asserisce la riga qui sopra.
+    console.log(`  ripristino en | eccedenza ${m.eccedenza} su corsa ${m.corsa}`)
+  })
+})
+
+/**
+ * **La geometria non si muove fra gli otto contenuti** — DEBITO §14.
  *
  * Intestazione, corpo e piede sono tre fasce fisse: cambia solo cio' che sta
  * dentro quella di mezzo. E' l'unica cosa che impedisce alla pagina di saltare
@@ -360,10 +505,12 @@ test.describe('l\'azione dipende dallo stato, e non e\' un\'etichetta', () => {
  * cambia di proposito, e cade solo sul difetto vero — la stessa contromisura con
  * cui le Statistiche sorvegliano l'ordine delle due viste.
  *
- * Sette e non quattro: i quattro stati della lettura, piu' i tre rifiuti che
- * hanno un corpo diverso l'uno dall'altro. Il rifiuto `damaged` e' il piu' lungo
- * delle due lingue — tre paragrafi, uno dei quali contiene un percorso senza
- * spazi che non va a capo da solo.
+ * Otto e non quattro: i quattro stati della lettura, piu' i **quattro corpi di
+ * rifiuto** diversi l'uno dall'altro — `damaged` ne vale due, perche' i suoi due
+ * rami cambiano sia la frase sia la nota. Il piu' lungo delle due lingue e'
+ * proprio il ramo `posizione`: la frase dichiara che quello e' un indice, la
+ * nota spiega come si conta, e l'indice e' un percorso senza spazi che non va a
+ * capo da solo.
  */
 /**
  * **La conferma promette che le fisse vengono ricreate: questo test guarda che
@@ -406,70 +553,78 @@ test('dopo il ripristino le fisse ci sono, senza aspettare una riapertura', asyn
   ).toBeVisible({ timeout: 5000 })
 })
 
-test.describe('ImportSheet: le tre fasce non si muovono fra i sette contenuti', () => {
-  interface Fasce {
-    readonly head: string
-    readonly body: string
-    readonly foot: string
-    readonly overflowX: number
-    readonly corpoScorre: boolean
-    readonly eccedenza: number
-    readonly corsa: number
-    readonly piedeInFondo: number
-    readonly bersagli: readonly { sel: string; w: number; h: number }[]
-  }
+/**
+ * **La misura delle tre fasce, e sta fuori dai due blocchi che la usano.**
+ *
+ * La geometria italiana la confronta fra otto contenuti; il blocco inglese
+ * guarda un contenuto solo e chiede meno. Sono due domande diverse sulla stessa
+ * cosa misurata, e misurarla in due posti vorrebbe dire due definizioni di
+ * "quanto avanza" che divergono al primo cambio.
+ */
+interface Fasce {
+  readonly head: string
+  readonly body: string
+  readonly foot: string
+  readonly overflowX: number
+  readonly corpoScorre: boolean
+  readonly eccedenza: number
+  readonly corsa: number
+  readonly piedeInFondo: number
+  readonly bersagli: readonly { sel: string; w: number; h: number }[]
+}
 
-  async function fasce(page: Page): Promise<Fasce> {
-    return page.evaluate(() => {
-      const r = (n: number): number => Math.round(n * 100) / 100
-      const box = (sel: string): string => {
+async function fasce(page: Page): Promise<Fasce> {
+  return page.evaluate(() => {
+    const r = (n: number): number => Math.round(n * 100) / 100
+    const box = (sel: string): string => {
+      const el = document.querySelector(sel)
+      if (!(el instanceof HTMLElement)) throw new Error(`fascia assente: ${sel}`)
+      const b = el.getBoundingClientRect()
+      return `${r(b.top)}→${r(b.bottom)}`
+    }
+    const corpo = document.querySelector('.restore__body')
+    const piede = document.querySelector('.restore__foot')
+    if (!(corpo instanceof HTMLElement) || !(piede instanceof HTMLElement)) {
+      throw new Error('la schermata di ripristino non e\' montata')
+    }
+    const bersagli = ['.restore__close', '.restore__action']
+      .map((sel) => {
         const el = document.querySelector(sel)
-        if (!(el instanceof HTMLElement)) throw new Error(`fascia assente: ${sel}`)
+        if (!(el instanceof HTMLElement)) return null
         const b = el.getBoundingClientRect()
-        return `${r(b.top)}→${r(b.bottom)}`
-      }
-      const corpo = document.querySelector('.restore__body')
-      const piede = document.querySelector('.restore__foot')
-      if (!(corpo instanceof HTMLElement) || !(piede instanceof HTMLElement)) {
-        throw new Error('la schermata di ripristino non e\' montata')
-      }
-      const bersagli = ['.restore__close', '.restore__action']
-        .map((sel) => {
-          const el = document.querySelector(sel)
-          if (!(el instanceof HTMLElement)) return null
-          const b = el.getBoundingClientRect()
-          return { sel, w: r(b.width), h: r(b.height) }
-        })
-        .filter((b): b is { sel: string; w: number; h: number } => b !== null)
-      return {
-        head: box('.restore__head'),
-        body: box('.restore__body'),
-        foot: box('.restore__foot'),
-        overflowX: document.documentElement.scrollWidth - document.documentElement.clientWidth,
-        // **Che il corpo si lasci scorrere davvero**, non che il contenuto ci
-        // stia: e' la differenza fra "sta sopra la piega" e "e' raggiungibile".
-        // Con `overflow-y: hidden` un rifiuto piu' lungo del corpo diventerebbe
-        // illeggibile senza che nessuna fascia si muova di un pixel.
-        corpoScorre: ['auto', 'scroll', 'overlay'].includes(getComputedStyle(corpo).overflowY),
-        // Quanto contenuto avanza, e **quanto il dito riesce a portarne su**.
-        // I due numeri insieme sono l'invariante vero: non "sta sopra la piega",
-        // ma **raggiungibile**.
-        eccedenza: r(corpo.scrollHeight - corpo.clientHeight),
-        corsa: ((): number => {
-          if (!['auto', 'scroll', 'overlay'].includes(getComputedStyle(corpo).overflowY)) return 0
-          const prima = corpo.scrollTop
-          corpo.scrollTop = 1e6
-          const arrivo = corpo.scrollTop
-          corpo.scrollTop = prima
-          return r(arrivo)
-        })(),
-        piedeInFondo: r(window.innerHeight - piede.getBoundingClientRect().bottom),
-        bersagli,
-      }
-    })
-  }
+        return { sel, w: r(b.width), h: r(b.height) }
+      })
+      .filter((b): b is { sel: string; w: number; h: number } => b !== null)
+    return {
+      head: box('.restore__head'),
+      body: box('.restore__body'),
+      foot: box('.restore__foot'),
+      overflowX: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      // **Che il corpo si lasci scorrere davvero**, non che il contenuto ci
+      // stia: e' la differenza fra "sta sopra la piega" e "e' raggiungibile".
+      // Con `overflow-y: hidden` un rifiuto piu' lungo del corpo diventerebbe
+      // illeggibile senza che nessuna fascia si muova di un pixel.
+      corpoScorre: ['auto', 'scroll', 'overlay'].includes(getComputedStyle(corpo).overflowY),
+      // Quanto contenuto avanza, e **quanto il dito riesce a portarne su**.
+      // I due numeri insieme sono l'invariante vero: non "sta sopra la piega",
+      // ma **raggiungibile**.
+      eccedenza: r(corpo.scrollHeight - corpo.clientHeight),
+      corsa: ((): number => {
+        if (!['auto', 'scroll', 'overlay'].includes(getComputedStyle(corpo).overflowY)) return 0
+        const prima = corpo.scrollTop
+        corpo.scrollTop = 1e6
+        const arrivo = corpo.scrollTop
+        corpo.scrollTop = prima
+        return r(arrivo)
+      })(),
+      piedeInFondo: r(window.innerHeight - piede.getBoundingClientRect().bottom),
+      bersagli,
+    }
+  })
+}
 
-  /** Apre la schermata su uno dei sette contenuti e aspetta che ci sia arrivata. */
+test.describe('ImportSheet: le tre fasce non si muovono fra gli otto contenuti', () => {
+  /** Apre la schermata su uno degli otto contenuti e aspetta che ci sia arrivata. */
   async function scena(
     page: Page,
     prepara: () => void,
@@ -486,12 +641,12 @@ test.describe('ImportSheet: le tre fasce non si muovono fra i sette contenuti', 
     return misura
   }
 
-  test('sette contenuti, una sola geometria', async ({ page }) => {
+  test('otto contenuti, una sola geometria', async ({ page }) => {
     let prossimo: unknown = BUONO
     serviIlSelettore(page, () => prossimo)
     await apriImpostazioni(page)
 
-    const sette: readonly (readonly [string, Fasce])[] = [
+    const otto: readonly (readonly [string, Fasce])[] = [
       [
         'sto leggendo',
         await scena(page, () => (prossimo = BUONO), 'mai', 'Sto leggendo il backup'),
@@ -527,13 +682,20 @@ test.describe('ImportSheet: le tre fasce non si muovono fra i sette contenuti', 
         await scena(page, () => (prossimo = ROTTO), 'ok', BUONO.data.expenses[0]!.id),
       ],
       [
+        // L'altro ramo di `damaged`: qui l'id manca, e cio' che si nomina e' la
+        // posizione. E' il corpo piu' lungo delle due lingue, quindi e' anche il
+        // caso in cui il corpo deve scorrere davvero.
+        'un record senza id',
+        await scena(page, () => (prossimo = SENZA_ID), 'ok', POSIZIONE_ROTTA),
+      ],
+      [
         'anteprima',
         await scena(page, () => (prossimo = BUONO), 'ok', 'Ripristinando il backup del'),
       ],
     ]
 
-    const [primoNome, primo] = sette[0] as readonly [string, Fasce]
-    for (const [nome, m] of sette) {
+    const [primoNome, primo] = otto[0] as readonly [string, Fasce]
+    for (const [nome, m] of otto) {
       expect(
         `${m.head} | ${m.body} | ${m.foot}`,
         `"${nome}" ha una geometria diversa da "${primoNome}": le tre fasce si muovono fra uno ` +
@@ -579,9 +741,9 @@ test.describe('ImportSheet: le tre fasce non si muovono fra i sette contenuti', 
     // sotto e' asserito dal ciclo appena sopra.
     console.log(
       `  ripristino | head ${primo.head} · corpo ${primo.body} · piede ${primo.foot} ` +
-        `| ${sette.length} contenuti identici ` +
-        `| eccedenza max ${Math.max(...sette.map(([, m]) => m.eccedenza))} ` +
-        `su corsa ${Math.max(...sette.map(([, m]) => m.corsa))}`,
+        `| ${otto.length} contenuti identici ` +
+        `| eccedenza max ${Math.max(...otto.map(([, m]) => m.eccedenza))} ` +
+        `su corsa ${Math.max(...otto.map(([, m]) => m.corsa))}`,
     )
   })
 })

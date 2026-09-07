@@ -444,6 +444,20 @@ distruttiva.
 conferma non deve spaventare: niente "scrivi CANCELLA per confermare", niente
 rosso, niente punti esclamativi. **Una frase chiara, e un Annulla visibile dopo.**
 
+> **La premessa qui sopra e' la quarta affermazione falsa elencata in cima a
+> questa ADR, e questo e' il terzo posto in cui viveva** — dopo `ImportSheet.tsx`
+> (corretto in `92c3a80`) e il commento di sezione di `src/ui/i18n/en.ts`.
+> Lo scatto si scrive sul disco e **nessuno lo legge**: `restoreSnapshot` e'
+> differita, con la sua scadenza piu' sotto. Cio' che rende il tocco recuperabile
+> **oggi** e' l'Annulla sul toast — `importBackup` restituisce l'archivio com'era
+> un istante prima, e `App.applyImport` ne fa l'azione del toast — e **il limite
+> di quella rete e' che vive in memoria**: se l'app viene chiusa nella finestra
+> del toast, l'annullamento non c'e' piu'.
+>
+> **La conclusione di questo paragrafo non cambia**, ed e' per questo che la
+> premessa andava corretta sul posto: un paragrafo che si cita per la conclusione
+> insegna la premessa insieme a lei, e l'ha gia' fatto due volte.
+
 > Una conferma drammatica su un'operazione **reversibile** insegna a temere la
 > cosa sbagliata — e poi la stessa persona tocchera' con leggerezza qualcosa che
 > reversibile non e'.
