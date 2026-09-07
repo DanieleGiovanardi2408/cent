@@ -102,6 +102,47 @@ export function archivedCategories(categories: readonly Category[]): readonly Ca
   return categories.filter((c) => !active.has(c.id)).sort(compareCategories)
 }
 
+/**
+ * **Togliere questa dalla griglia la lascerebbe vuota.**
+ *
+ * Un fatto solo, in un posto solo, perche' ha **tre lettori** che rispondono
+ * alla stessa domanda da tre porte: `planCategoryDeletion` (cancellare),
+ * `Repository.archiveCategory` (archiviare) e il foglio, che rifiuta prima di
+ * far toccare il bottone.
+ *
+ * ## Perche' non e' una proprieta' della cancellazione
+ *
+ * Il pavimento e' nato sulla cancellazione, e l'argomento che lo giustifica non
+ * la nomina: *"senza chip non esiste il tap che salva una spesa"*. Vale identico
+ * per l'archiviazione — otto archiviazioni lasciano otto record e **zero chip**,
+ * e quello stato non lo prende nessuno: `openRepository` risemina a zero
+ * **record**, non a zero chip, e `parseBackup` conta i record, archiviate
+ * comprese.
+ *
+ * Scriverlo dentro `planCategoryDeletion` avrebbe legato il fatto alla porta da
+ * cui e' entrato. E' *"una decisione vale dove vale il suo argomento"*, presa
+ * **mentre** si scriveva la riparazione invece che due gate dopo.
+ *
+ * ## E' la griglia, non l'archivio
+ *
+ * Si misura su `activeCategories`, che e' esattamente cio' che i chip mostrano.
+ * "L'ultima in assoluto" sarebbe piu' debole proprio dove serve di piu': con una
+ * attiva e tre archiviate, toglierla lascia tre record e zero chip — nessuna
+ * delle altre porte se ne accorge.
+ *
+ * ## Rifiuta un gesto, non uno stato
+ *
+ * *"Questa e' l'ultima"*, non *"dopo non ne resta nessuna"*: la seconda, in uno
+ * stato gia' a zero attive (un file importato puo' produrlo), bloccherebbe anche
+ * di toccare **le archiviate** — una pulizia che non toglie niente a nessuno,
+ * impedita per proteggere una griglia gia' vuota. Da uno stato illegale si puo'
+ * solo scendere o restare, mai peggiorare.
+ */
+export function isLastOnGrid(categories: readonly Category[], id: string): boolean {
+  const grid = activeCategories(categories)
+  return grid.length === 1 && grid[0]?.id === id
+}
+
 /** Quanti posti liberi restano in griglia. Mai negativo. */
 export function freeCategorySlots(categories: readonly Category[]): number {
   return Math.max(0, MAX_ACTIVE_CATEGORIES - activeCategories(categories).length)
@@ -257,6 +298,17 @@ export interface CategoryDeletionRequest {
 export type CategoryDeletion =
   | { readonly ok: true; readonly deleted: Category }
   | { readonly ok: false; readonly reason: 'unknown' }
+  /**
+   * **E' l'ultima della griglia.** Cancellarla lascerebbe zero chip, e senza
+   * chip non esiste il tap che salva una spesa: il principio guida n.1 non
+   * peggiora di un tap, si azzera.
+   *
+   * Non porta nessun numero, e non e' una svista: il fatto affermato — *"e'
+   * l'ultima"* — lo conferma la griglia che sta dietro al velo mentre si legge
+   * il rifiuto. E' l'unico esito di questa funzione il cui fatto si vede senza
+   * andare da nessuna parte.
+   */
+  | { readonly ok: false; readonly reason: 'last-active' }
   | {
       readonly ok: false
       readonly reason: 'in-use'
@@ -272,10 +324,67 @@ export type CategoryDeletion =
 /**
  * Il piano per cancellare **davvero** una categoria.
  *
- * L'unica condizione e' che nessun record **visibile** la nomini: spese vive e
- * regole ricorrenti. **Le lapidi non bloccano piu'.**
+ * Due condizioni, e non sono parenti. La prima e' un **pavimento**: non si
+ * cancella l'ultima categoria della griglia. La seconda e' che nessun record
+ * **visibile** la nomini — spese vive e regole ricorrenti. **Le lapidi non
+ * bloccano piu'.**
  *
- * ## Perche' bloccavano, e perche' l'argomento era falso
+ * ## Il pavimento, e perche' e' sulla cancellazione
+ *
+ * Per un pezzo questa funzione non ne aveva nessuno, e la conseguenza si
+ * misurava in otto tap: su un'installazione appena aperta — zero spese, zero
+ * regole — **tutte e otto** le categorie passano il controllo dei record, una
+ * per una, e la griglia resta vuota. Non serve nessun file esterno, e non serve
+ * nessuno stato strano: e' la strada piu' corta che c'e'.
+ *
+ * Cosa lascia dietro, e sono due cose, non una:
+ *
+ * 1. **Non si puo' piu' inserire una spesa.** Il salvataggio *e'* il tap sulla
+ *    categoria: senza chip non esiste il gesto che conferma. La ri-semina che
+ *    ripara questo stato sta in `openRepository`, cioe' non succede finche'
+ *    l'app non viene chiusa davvero — e chi la sta usando non lo sa.
+ * 2. **L'export prodotto li' e' un file che `parseBackup` rifiuta**
+ *    (`error` su `categories`). L'app scrive una copia che l'app non riprende.
+ *
+ * Il pavimento va **qui e non sull'export**: un export non si rifiuta mai. Un
+ * indicatore di sicurezza sbaglia verso l'allarme, e negare l'uscita dei propri
+ * dati e' il verso opposto — si negherebbe all'utente la sua copia per
+ * proteggere una coerenza che non ha chiesto.
+ *
+ * ## E' l'ultima **attiva**, non l'ultima in assoluto
+ *
+ * Le due divergono appena c'e' qualcosa in archivio, e la risposta viene da
+ * cosa lo stato rotto rende impossibile — inserire una spesa dalla griglia —
+ * non da cosa sembra simmetrico. La griglia e' `activeCategories`, quindi il
+ * pavimento si misura li'.
+ *
+ * La prova che "in assoluto" sarebbe **piu' debole proprio dove serve di
+ * piu'**: con una attiva e tre archiviate, cancellare l'unica attiva lascia
+ * `categories.length === 3`. `openRepository` non risemina (risemina a zero
+ * record, non a zero chip) e `parseBackup` accetta (conta i record, archiviate
+ * comprese). Quello e' lo stato rotto che **nessun'altra porta prende**, ed e'
+ * esattamente quello che il pavimento "in assoluto" lascerebbe passare.
+ *
+ * ## Il pavimento rifiuta un gesto, non uno stato
+ *
+ * Il controllo non e' *"dopo il piano resta almeno una attiva"*: e' *"questa
+ * cancellazione toglie l'ultima attiva"*. La differenza si vede in uno stato
+ * gia' rotto — zero attive e qualcosa in archivio, che un file importato puo'
+ * produrre: li' la prima forma rifiuterebbe anche di cancellare **le
+ * archiviate**, cioe' bloccherebbe una pulizia che non toglie niente a nessuno
+ * per proteggere una griglia gia' vuota. Da uno stato illegale si puo' solo
+ * scendere o restare, mai peggiorare: e' la stessa lettura di
+ * `planCategoryPlacement` davanti a dieci attive arrivate da un import.
+ *
+ * ## Il pavimento viene **prima** di `in-use`, e cambia il rimedio
+ *
+ * L'ordine non e' estetico. Il rimedio di `in-use` e' *"archiviala"*, e
+ * sull'ultima della griglia sarebbe un consiglio che produce lo stesso stato
+ * rotto per un'altra porta — `archiveCategory` non ha nessun pavimento e non
+ * passa di qui. Chi sta guardando l'ultima categoria ha un rimedio solo, e non
+ * e' nessuno dei due: **prima un'altra, poi questa.**
+ *
+ * ## Le lapidi: perche' bloccavano, e perche' l'argomento era falso
  *
  * L'argomento era: `restoreExpense` puo' riportare in vita una lapide in un tap,
  * e la riga che torna avrebbe un `categoryId` che non punta a niente — *"un
@@ -367,6 +476,10 @@ export function planCategoryDeletion(
 ): CategoryDeletion {
   const target = categories.find((c) => c.id === request.id)
   if (target === undefined) return { ok: false, reason: 'unknown' }
+  // Il pavimento. La domanda — e con lei tutto l'argomento — sta in
+  // `isLastOnGrid`, perche' non e' una proprieta' della cancellazione: vale
+  // identica per l'archiviazione, che e' l'altra porta per arrivare a zero chip.
+  if (isLastOnGrid(categories, target.id)) return { ok: false, reason: 'last-active' }
   // Solo le vive: sono quelle che lo Storico mostra, cioe' le uniche che si
   // possono citare in un messaggio — **e le uniche che bloccano**. Una lapide
   // che tornasse in vita mostrerebbe "Categoria rimossa", che e' un fallback che

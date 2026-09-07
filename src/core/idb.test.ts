@@ -464,11 +464,22 @@ describe('cancellare una categoria: il permesso lo danno due store', () => {
    * sintomo. Su IndexedDB produce un `NotFoundError` su ogni cancellazione.
    */
 
+  /**
+   * Due categorie, e la seconda non e' decorazione: `planCategoryDeletion` ha
+   * un **pavimento** — non si cancella l'ultima della griglia — e con una sola
+   * sul disco questi due test riceverebbero `'last-active'` prima di arrivare a
+   * leggere gli store che sono il loro bersaglio. La domanda qui e' *"quali
+   * store danno il permesso"*, e il pavimento e' un'altra domanda, misurata in
+   * `categories.test.ts`.
+   */
   async function conCategoria(name: string): Promise<Persistence> {
     const persistence = createIdbPersistence({ name })
     await persistence.write({
       settings: makeSettings(),
-      categories: [makeCategory({ id: 'cat-svago', name: 'Leisure' })],
+      categories: [
+        makeCategory({ id: 'cat-svago', name: 'Leisure' }),
+        makeCategory({ id: 'cat-resta', name: 'Groceries', order: 20 }),
+      ],
     })
     return persistence
   }
@@ -488,7 +499,7 @@ describe('cancellare una categoria: il permesso lo danno due store', () => {
     })
 
     const suDisco = await persistence.loadAll()
-    expect(suDisco.categories).toHaveLength(1)
+    expect(suDisco.categories.map((c) => c.id).sort()).toEqual(['cat-resta', 'cat-svago'])
     persistence.close()
   })
 
@@ -510,7 +521,7 @@ describe('cancellare una categoria: il permesso lo danno due store', () => {
     expect(esito.categoryDeletion?.ok).toBe(true)
 
     const suDisco = await persistence.loadAll()
-    expect(suDisco.categories).toHaveLength(0)
+    expect(suDisco.categories.map((c) => c.id)).toEqual(['cat-resta'])
     expect(suDisco.budgets).toHaveLength(1)
     persistence.close()
   })

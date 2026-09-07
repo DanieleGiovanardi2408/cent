@@ -80,10 +80,15 @@ describe('primo avvio', () => {
     // restava senza categorie per sempre — cioe' in uno stato da cui non si
     // puo' inserire nessuna spesa, e da cui nessuna schermata sa uscire.
     //
-    // Non serve un import per arrivarci: `planCategoryDeletion` non ha nessun
-    // pavimento, quindi su un'installazione nuova le otto si cancellano una
-    // per una. L'import lo aveva solo reso raggiungibile con 54 byte, ed e'
-    // per questo che la riparazione sta qui e non alla porta dell'import.
+    // Non serviva un import per arrivarci: `planCategoryDeletion` non aveva
+    // nessun pavimento, quindi su un'installazione nuova le otto si
+    // cancellavano una per una. L'import lo aveva solo reso raggiungibile con
+    // 54 byte, ed e' per questo che la riparazione sta qui e non alla porta
+    // dell'import.
+    //
+    // Il pavimento adesso c'e' (`'last-active'`), e questa semina resta: la
+    // sua domanda e' **zero record**, che un import o una migrazione possono
+    // ancora produrre, non "zero chip".
     const { disk } = await open()
     disk.categories = []
     const impostazioniPrima = { ...disk.settings }
@@ -658,6 +663,31 @@ describe('categorie: il tetto di otto attive', () => {
     expect(esito.ok === true && esito.placed.order).toBe(90)
   })
 
+  /**
+   * **Il pavimento della griglia vale anche da questa porta**, ed e' la porta che
+   * il pavimento sulla cancellazione non chiudeva: otto archiviazioni lasciano
+   * otto record e **zero chip**, e quello stato non lo prende nessuno —
+   * `openRepository` risemina a zero *record*, e `parseBackup` conta i record,
+   * archiviate comprese.
+   *
+   * Il rifiuto della **penultima** sta qui accanto apposta: e' cio' che
+   * distingue *"questa e' l'ultima"* da *"si archivia sempre"*, e sarebbe verde
+   * anche su un pavimento che non lascia archiviare niente.
+   */
+  it('archiviare l ultima della griglia non si puo: resterebbero zero chip', async () => {
+    const { repo } = await open()
+    const tutte = repo.getState().categories
+    // Fino alla penultima si archivia: il pavimento e' sull'ultima, non su tutte.
+    for (const cat of tutte.slice(0, tutte.length - 1)) {
+      expect(repo.archiveCategory(cat.id)?.archived).toBe(true)
+    }
+    const ultima = tutte[tutte.length - 1]
+    expect(activeCategories(repo.getState().categories)).toHaveLength(1)
+    expect(repo.archiveCategory(ultima?.id ?? '')).toBeNull()
+    // E non e' rimasta a meta': sul mirror e' ancora in griglia.
+    expect(activeCategories(repo.getState().categories)).toHaveLength(1)
+  })
+
   it('archiviare non cancella: la categoria resta su tutte le spese', async () => {
     const { repo, disk } = await open()
     const svago = repo.getState().categories.find((c) => c.name === 'Leisure')
@@ -877,6 +907,53 @@ describe('categorie: cancellare davvero', () => {
     const { repo } = await open()
     const esito = await repo.deleteCategory('non-esiste')
     expect(esito.ok === false && esito.reason).toBe('unknown')
+  })
+
+  it('la griglia non si puo svuotare a tap, e cio che esporta resta importabile', async () => {
+    // Il difetto per intero, dalla porta da cui lo tocca un utente: su
+    // un'installazione appena aperta nessuna spesa e nessuna regola nomina
+    // niente, quindi la condizione sui record e' vera per tutte e otto.
+    //
+    // Le due conseguenze sono asserite tutte e due, perche' sono due:
+    // 1. senza chip non esiste il gesto che salva una spesa — il tap sulla
+    //    categoria **e'** la conferma — e la ri-semina che ripara sta in
+    //    `openRepository`, cioe' non succede finche' l'app resta aperta;
+    // 2. l'export prodotto in quel momento e' un file che `parseBackup`
+    //    rifiuta: l'app scrive una copia che l'app non riprende.
+    const { repo, disk } = await open()
+    const ids = repo.getState().categories.map((c) => c.id)
+    const esiti: string[] = []
+    for (const id of ids) {
+      const esito = await repo.deleteCategory(id)
+      esiti.push(esito.ok ? 'ok' : esito.reason)
+    }
+
+    expect(esiti).toEqual([...Array(DEFAULT_CATEGORY_SEEDS.length - 1).fill('ok'), 'last-active'])
+    expect(activeCategories(repo.getState().categories)).toHaveLength(1)
+    expect(disk.categories).toHaveLength(1)
+
+    const preview = parseBackup(JSON.parse(JSON.stringify(repo.exportBackup())))
+    expect(preview.ok).toBe(true)
+    expect(preview.counts.categories).toBe(1)
+  })
+
+  it('il pavimento lo tiene il disco: un mirror che ne vede otto non lo scavalca', async () => {
+    // Stessa forma della prova su `in-use`: il permesso passa dalla
+    // transazione (ADR 008), quindi vale anche per il pavimento. Il primo
+    // contesto ha otto chip nel suo mirror e non li ha piu' sul disco.
+    const { repo, disk } = await open()
+    const secondo = await openRepository(createMemoryPersistence(disk), {
+      defaultCategoryNames: TEST_CATEGORY_NAMES,
+      now: tickingClock(),
+      newId: sequentialIds('due'),
+    })
+    const ids = repo.getState().categories.map((c) => c.id)
+    for (const id of ids.slice(1)) await secondo.deleteCategory(id)
+
+    expect(repo.getState().categories).toHaveLength(DEFAULT_CATEGORY_SEEDS.length)
+    const esito = await repo.deleteCategory(ids[0] as string)
+    expect(esito.ok === false && esito.reason).toBe('last-active')
+    expect(disk.categories).toHaveLength(1)
   })
 })
 

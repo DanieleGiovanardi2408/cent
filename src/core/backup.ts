@@ -751,12 +751,25 @@ export function parseBackup(input: unknown): ImportPreview {
   //
   // Nota sulla derivazione, perche' ADR 026 la fa piu' corta di com'e': lo
   // dice "non producibile, il tetto di otto attive non permette di
-  // archiviarle tutte". Archiviarle tutte davvero non si puo' — ma
-  // `planCategoryDeletion` non ha nessun pavimento, e su un'installazione
-  // nuova (nessuna spesa, nessuna regola) le otto si **cancellano** una per
-  // una. Lo stato e' quindi producibile *dentro una sessione*; quello che non
-  // e' producibile e' **sopravviverci a una riapertura**. La riga sotto e la
-  // semina di `openRepository` dicono la stessa cosa da due porte.
+  // archiviarle tutte". **Le due meta' di quella frase sono state misurate, e
+  // una e' falsa.**
+  //
+  // - **Cancellarle tutte si poteva**, e su un'installazione nuova (zero spese,
+  //   zero regole) bastavano otto tap: `planCategoryDeletion` non aveva nessun
+  //   pavimento. Adesso ce l'ha — rifiuta l'ultima **attiva** con
+  //   `'last-active'` — e questa strada e' chiusa alla sorgente.
+  // - **Archiviarle tutte si puo' ancora.** `archiveCategory` non ha nessun
+  //   pavimento e non passa da `planCategoryDeletion`: otto archiviazioni
+  //   lasciano otto record e zero chip. Quello stato **non lo prende nessuno**
+  //   — la riga qui sotto conta i record, archiviate comprese, quindi il file
+  //   passa; e `openRepository` risemina a zero record, non a zero chip, quindi
+  //   sopravvive a una riapertura.
+  //
+  // Cioe': "non e' producibile sopravviverci a una riapertura" era vero della
+  // sola cancellazione. La riga qui sotto e la semina di `openRepository`
+  // restano d'accordo fra loro sulla stessa affermazione — *un archivio
+  // inizializzato ha delle categorie* — e nessuna delle due dice niente su
+  // *quante ne stanno in griglia*.
   if (cappedCategories.length === 0) {
     c.error('categories')
   }

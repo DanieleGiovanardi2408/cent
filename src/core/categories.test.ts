@@ -363,3 +363,98 @@ describe('cancellare davvero: solo se nessuno la nomina', () => {
     })
   })
 })
+
+describe('cancellare davvero: il pavimento della griglia', () => {
+  it('otto cancellazioni di fila si fermano alla settima: l ultima resta', () => {
+    // Il difetto, misurato: su un'installazione appena aperta — zero spese,
+    // zero regole — la condizione sui record e' vera per tutte e otto. Senza
+    // pavimento la griglia si svuota in otto tap, e da li' non si puo' piu'
+    // inserire nessuna spesa: il salvataggio **e'** il tap sulla categoria.
+    let rimaste: Category[] = grigliaPiena()
+    const esiti: string[] = []
+    for (const target of grigliaPiena()) {
+      const esito = planCategoryDeletion(rimaste, [], [], { id: target.id })
+      esiti.push(esito.ok ? 'ok' : esito.reason)
+      if (esito.ok) rimaste = rimaste.filter((c) => c.id !== target.id)
+    }
+
+    expect(esiti).toEqual([...Array(7).fill('ok'), 'last-active'])
+    expect(activeCategories(rimaste)).toHaveLength(1)
+  })
+
+  it('il rifiuto non porta nessun numero: il fatto lo dice la griglia', () => {
+    // "E' l'ultima" e' l'unico fatto di questa funzione che si vede senza
+    // andare da nessuna parte — sta a schermo, dietro al foglio. Un numero qui
+    // sarebbe una cifra in piu' da riconciliare per dire cio' che si conta a
+    // occhio.
+    const una = [makeCategory({ id: 'sola', name: 'Sola', order: 10 })]
+    expect(planCategoryDeletion(una, [], [], { id: 'sola' })).toEqual({
+      ok: false,
+      reason: 'last-active',
+    })
+  })
+
+  it('e l ultima ATTIVA, non l ultima in assoluto: le archiviate non fanno pavimento', () => {
+    // Le due formulazioni divergono qui, e "in assoluto" sarebbe piu' debole
+    // **proprio dove serve di piu'**: con una attiva e tre archiviate,
+    // cancellare l'unica attiva lascia tre record. `openRepository` non
+    // risemina (guarda i record, non i chip) e `parseBackup` accetta (conta i
+    // record, archiviate comprese). E' lo stato rotto che nessun'altra porta
+    // prende.
+    const cats = [
+      makeCategory({ id: 'attiva', name: 'Attiva', order: 10 }),
+      makeCategory({ id: 'arc-1', name: 'Vecchia 1', order: 20, archived: true }),
+      makeCategory({ id: 'arc-2', name: 'Vecchia 2', order: 30, archived: true }),
+      makeCategory({ id: 'arc-3', name: 'Vecchia 3', order: 40, archived: true }),
+    ]
+    expect(planCategoryDeletion(cats, [], [], { id: 'attiva' })).toEqual({
+      ok: false,
+      reason: 'last-active',
+    })
+    // E l'archivio resta cancellabile: non toglie nessun chip.
+    expect(planCategoryDeletion(cats, [], [], { id: 'arc-2' }).ok).toBe(true)
+  })
+
+  it('a griglia gia vuota il pavimento non blocca la pulizia dell archivio', () => {
+    // Il controllo rifiuta un **gesto** ("questa toglie l'ultimo chip"), non
+    // uno **stato** ("dopo deve restarne almeno uno"). La seconda forma, in uno
+    // stato gia' a zero attive — che un file importato puo' consegnare —
+    // bloccherebbe anche le archiviate: una pulizia vietata per proteggere una
+    // griglia che e' gia' vuota.
+    const tutteArchiviate = grigliaPiena().map((c) => ({ ...c, archived: true }))
+    expect(activeCategories(tutteArchiviate)).toEqual([])
+    expect(planCategoryDeletion(tutteArchiviate, [], [], { id: 'c-3' }).ok).toBe(true)
+  })
+
+  it('il pavimento viene prima di in-use, perche il rimedio e un altro', () => {
+    // Su un'ultima categoria che ha delle spese, `in-use` direbbe
+    // "archiviala": un consiglio che produce lo stesso stato rotto passando
+    // dall'altra porta. Chi guarda l'ultima ha un rimedio solo — prima
+    // un'altra, poi questa — e l'esito deve dire quello.
+    const una = [makeCategory({ id: 'sola', name: 'Sola', order: 10 })]
+    const spese = [makeExpense({ date: '2026-08-01', categoryId: 'sola' })]
+    const regole = [makeRule({ startDate: '2026-01-01', categoryId: 'sola' })]
+    expect(planCategoryDeletion(una, spese, regole, { id: 'sola' })).toEqual({
+      ok: false,
+      reason: 'last-active',
+    })
+  })
+
+  it('un id che non esiste resta unknown anche quando la griglia ha una sola casella', () => {
+    // L'ordine dei controlli non e' libero in quel verso: senza un bersaglio
+    // non c'e' nessun gesto da valutare.
+    const una = [makeCategory({ id: 'sola', name: 'Sola', order: 10 })]
+    expect(planCategoryDeletion(una, [], [], { id: 'mai-vista' })).toEqual({
+      ok: false,
+      reason: 'unknown',
+    })
+  })
+
+  it('la nona non e in griglia, quindi cancellarla non tocca nessun pavimento', () => {
+    // `activeCategories` taglia al tetto: la nona si comporta come archiviata,
+    // e il pavimento la vede cosi'. E' la stessa totalita' che regge la griglia
+    // davanti a dati illegali.
+    const cats = [...grigliaPiena(), makeCategory({ id: 'c-9', name: 'Nona', order: 90 })]
+    expect(planCategoryDeletion(cats, [], [], { id: 'c-9' }).ok).toBe(true)
+  })
+})

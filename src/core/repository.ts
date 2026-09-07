@@ -67,6 +67,7 @@
 
 import { isAfter, isIsoDate, localInstant } from './date'
 import type { IsoDate } from './date'
+import { isLastOnGrid } from './categories'
 import type {
   CategoryDeletion,
   CategoryPlacement,
@@ -849,11 +850,20 @@ export async function openRepository(
   // Impostazioni ma il principio guida n.1 e' in Home.
   //
   // Non e' uno stato che serve un import per raggiungere, ed e' per questo che
-  // la riparazione sta qui e non all'ingresso dell'import:
-  // `planCategoryDeletion` non ha nessun pavimento — permette di cancellare
-  // una categoria che nessuna spesa viva e nessuna regola nomina — quindi su
-  // un'installazione nuova le otto si cancellano una per una senza barare.
-  // L'import lo ha solo reso **facile**: 54 byte.
+  // la riparazione sta qui e non all'ingresso dell'import: quando questa riga
+  // e' stata scritta `planCategoryDeletion` non aveva nessun pavimento, quindi
+  // su un'installazione nuova le otto si cancellavano una per una senza
+  // barare. L'import lo aveva solo reso **facile**: 54 byte.
+  //
+  // Adesso il pavimento c'e' (`'last-active'`), e questa semina **non e'
+  // diventata inutile**: risponde a una domanda che il pavimento non fa, cioe'
+  // *zero record*, che un import o una migrazione possono ancora portare. Le
+  // due porte dicono la stessa cosa da posti diversi, ed e' voluto.
+  //
+  // Cio' che nessuna delle due prende: **otto categorie tutte archiviate**.
+  // Sono otto record, quindi qui non si semina, e sono zero chip, quindi non si
+  // puo' inserire nessuna spesa. Ci si arriva da `archiveCategory`, che non ha
+  // nessun pavimento — dichiarato qui invece che riparato di nascosto.
   //
   // La griglia si riempie con le stesse otto di sempre, non con le ultime
   // cancellate: ricostruirle vorrebbe dire tenere una lapide per categoria, e
@@ -1305,8 +1315,23 @@ export async function openRepository(
     },
 
     archiveCategory(id) {
-      const current = observable.get().categories.find((c) => c.id === id)
+      const state = observable.get()
+      const current = state.categories.find((c) => c.id === id)
       if (!current || current.archived) return null
+      // **Il pavimento della griglia, dalla seconda porta.** L'argomento e'
+      // scritto una volta sola, in `isLastOnGrid`: senza chip non esiste il tap
+      // che salva una spesa, e archiviare l'ultima ci arriva esattamente come
+      // cancellarla — con l'aggravante che quello stato **non lo prende
+      // nessuno**, perche' resta un record e la ri-semina guarda i record.
+      //
+      // Chi puo' arrivare qui, enumerato: **`App.archiveCategory` e nessun
+      // altro** (`grep archiveCategory src` — le altre occorrenze sono la
+      // dichiarazione dell'interfaccia, il decoratore dei test e
+      // `unarchiveCategory`, che e' un'altra funzione). Il foglio rifiuta prima,
+      // con le parole del rifiuto, quindi questa riga non e' il messaggio: e'
+      // cio' che rende il pavimento vero **per costruzione** invece che per
+      // disciplina della UI.
+      if (isLastOnGrid(state.categories, id)) return null
       const archived: Category = { ...current, archived: true, updatedAt: clock() }
       mutate((state) => ({ ...state, categories: replace(state.categories, archived) }))
       // Non un `put` della copia del mirror: l'intenzione e basta. Il record che
