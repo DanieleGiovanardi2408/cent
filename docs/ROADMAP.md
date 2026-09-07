@@ -1,3 +1,39 @@
+# La mappa
+
+<!-- JUDGMENT rivisto=2acb995 -->
+> Rivisto a `2acb995`, cioe' a questo commit.
+
+**Questo blocco dice la forma, non i fatti.** Non porta nessun numero: quelli si
+rigenerano qui sotto, e una cifra scritta a mano accanto a una rigenerata e' la
+seconda fonte di verita' di cui questo documento ha gia' ucciso tre copie.
+
+**Cos'e' Cent.** Un'app web installabile per segnare le spese quotidiane:
+local-first, senza account, i dati solo sul telefono, funziona offline. Segnare
+una spesa costa **due tap** oltre alle cifre dell'importo, e tutto il resto e'
+secondario a quel numero.
+
+**In quale fase siamo.** **Fase 7 — il ritorno dei dati**: il backup si rilegge,
+con anteprima e conferma. E' **A2** del binario A, e la ragione per cui viene
+prima di dare l'app a qualcuno e' che fino a ieri i dati uscivano e non
+rientravano.
+
+**Cosa manca per chiuderla.** Il gate a zero ALTO, il merge su `main` — che
+pubblica su Pages — e **le tre prove che solo un iPhone puo' dare**: `accept` nel
+foglio File, il file da iCloud non ancora scaricato, e la chiusura del selettore
+senza scegliere niente. Le voci per esteso stanno in "Criterio di chiusura della
+fase 7".
+
+**Cosa viene dopo, in ordine.**
+
+1. **Fase 8** — README, `METODO.md`, l'export CSV, e la scadenza dello scatto
+   pre-import.
+2. **A3, il test degli amici** — due o tre persone, un telefono pulito, una
+   settimana. E' l'unica cosa che separa Cent da *"finita"*, ed e' cio' che
+   **apre il link**.
+3. **Binario B** — crescere. Niente di B prima di A3, e la ragione e' scritta
+   li': ogni funzione aggiunta adesso viene disegnata sui dati di una persona
+   sola.
+
 # Stato corrente
 
 **Questa sezione ha due meta', e la divisione e' la cosa che la tiene vera.**
@@ -2588,6 +2624,191 @@ scarterebbe proprio le spese inserite in ritardo, che non sono un campione
 casuale.
 
 
+## Compiti espliciti della fase 8
+
+Scritti **quando sono stati concordati**, non quando saranno completati: una
+lista che arriva in chat e non compare in un file muore con la sessione che l'ha
+prodotta ([DEBITO.md](DEBITO.md), "Perche' questo file esiste").
+
+- **README e `METODO.md`.** Il primo serve ad A3 — chi installa l'app su un
+  telefono pulito deve sapere cos'e' prima di aprirla. Il secondo e' il metodo di
+  questo progetto scritto una volta sola, invece che dedotto da CLAUDE.md.
+- **L'export CSV.** Deciso il 7 settembre 2026: si costruisce, non esce dal brief.
+  Portava *"fase 7"* in due commenti e li' non e' arrivato. Vincolo gia' scritto e
+  gia' argomentato: **non passa da `money()`** ne' da una sua variante "senza
+  simbolo" — in italiano la virgola decimale dentro un CSV separato da virgole
+  spacca il campo, e in inglese lo fanno le migliaia. Resta
+  `(cents / 100).toFixed(2)`, che non dipende dal locale e non deve.
+- **La scadenza dello scatto pre-import.** Il lettore arriva **entro la fine di
+  questa fase, oppure la scrittura esce**: `replaceAll` smette di prenderlo e lo
+  store di sistema esce con la sua migrazione. Non e' un auspicio: e' una
+  biforcazione con l'esito scritto, ed e' l'unica forma di condizione che questa
+  fase abbia dimostrato di saper far scattare.
+- **Il tema esplicito, con la stessa forma.** [DEBITO.md](DEBITO.md) §17: arriva
+  col suo **lettore** entro la fine di questa fase, oppure escono i due membri di
+  `ThemePreference`, `SettingsPatch.theme` e la riga di `tokens.css` che li
+  promette. Chi lo costruisce porta con se' la risposta al **lampo al primo
+  frame**: la preferenza sta in IndexedDB, che si apre dopo il primo disegno, e un
+  colore non si riserva come si riserva una larghezza.
+
+**Cosa la fase 8 NON apre.** Il link agli amici e' A3, che viene dopo. La fase 8
+prepara le cose senza le quali A3 non si puo' fare, e non e' A3.
+
+## Criterio di chiusura della fase 7
+
+**Questa sezione non esisteva, e il gate di chiusura l'ha trovata mancante.** La
+fase 6 ha la sua, scritta perche' *"la fase 5 non l'aveva"*; la 7 e' arrivata a un
+passo dal merge senza. Senza una lista, una fase finisce **quando il critico e'
+soddisfatto** — e il mestiere del critico e' non esserlo.
+
+E il costo di non averla non e' teorico: e' che **meta' di cio' che A2 assegna
+alla fase 7 e' arrivata a fine fase senza che nessuno dicesse che mancava.**
+
+### La regola di uscita
+
+**La fase 7 chiude quando un gate produce zero ALTO, e ogni MEDIO e BASSO ha o una
+riparazione o una voce in [DEBITO.md](DEBITO.md) con la sua condizione di
+riapertura.** Gli ALTO bloccano; il resto no — un difetto accettato **con la sua
+condizione scritta** e' una decisione, uno accettato in silenzio e' un difetto.
+
+**E una condizione senza un esito scritto non e' una condizione: e' una data.**
+Lo ha insegnato questa fase, chiudendosi sopra una condizione gia' scaduta senza
+che scattasse niente ([DEBITO.md](DEBITO.md) §17).
+
+### Le voci
+
+Nove sono derivabili e portano il proprio controllo. **Tre sono giudizi**, e sono
+marcate come tali: nessuna macchina puo' dire se una schermata si legge, ne' se
+un file su iCloud si apre.
+
+#### 1. `RecurringRule.endDate` e' tornata, col suo campo di input
+
+<!-- USCITA
+     present: src/core/types.ts :: readonly endDate?: IsoDate
+-->
+
+E' **l'altra meta' di A2**, che nomina la fase 7 come *"import del backup di Cent,
+con `ImportPreview.exportedAt` e `RecurringRule.endDate` col suo campo di input"*.
+La prima meta' e' arrivata il 3 settembre; la seconda e' stata scoperta mancante
+**il giorno della chiusura**, da un agente che stava per togliere il numero di
+fase dalla sua condizione credendolo un fatto stantio.
+
+Torna col suo **produttore**, non da sola: un campo di input e' un valore che
+entra da fuori, e senza di lui `dead-surface.mjs` la trova morta lo stesso giorno.
+
+#### 2. Lo scatto pre-import ha una scadenza scritta in un file
+
+<!-- USCITA
+     present: docs/adr/026-l-import-sostituisce-e-lascia-una-rete.md :: fine della fase 8
+-->
+
+Lo scatto si scrive e nessuno lo legge. Non e' un difetto finche' la scadenza
+esiste **con il suo esito**: il lettore arriva entro la fine della fase 8, oppure
+la scrittura esce — `replaceAll` smette di prenderlo e lo store di sistema esce
+con la sua migrazione.
+
+#### 3. Le azioni dei quattro stati sono distinte per costruzione
+
+<!-- USCITA
+     present: src/ui/ImportSheet.tsx :: case 'unreadable':
+     present: src/ui/import-view.ts :: readonly again: BackupReader
+-->
+
+Non per disciplina: l'esito `unreadable` **porta con se'** la chiusura che rilegge
+lo stesso file, quindi non e' costruibile senza dire come si ritenta. Il giro A
+aveva un'azione sola sotto due etichette.
+
+#### 4. Le tre fasce non si muovono fra gli otto contenuti, su tre viewport
+
+<!-- USCITA
+     present: tests/e2e/ripristino.spec.ts :: otto contenuti, una sola geometria
+-->
+
+Chiude [DEBITO.md](DEBITO.md) §14. L'asserzione non e' su nessun numero: e'
+l'**identita'** fra le viste, che resta vera il giorno in cui la schermata cambia
+di proposito e cade solo sul difetto vero.
+
+#### 5. `parseBackup` rifiuta i quattro stati che l'app non avrebbe potuto produrre
+
+<!-- USCITA
+     present: src/core/backup.test.ts :: un file senza nessuna categoria non si importa
+     present: src/core/backup.test.ts :: senza app non e un backup di Cent
+-->
+
+`app` assente, zero categorie, una qualunque issue `error`, uno schema piu' nuovo
+di questo. E' D6 di ADR 026, e il criterio cade sulle categorie.
+
+#### 6. `Settings` resta diviso attraverso il round-trip
+
+<!-- USCITA
+     present: src/core/repository.test.ts :: lo stato del dispositivo non entra dal file
+-->
+
+L'import non tocca `language`, `theme`, `onboardingCompletedAt`; `lastBackupAt`
+prende l'`exportedAt` del file. Meta' di quel record descrive il **telefono**, non
+i dati.
+
+#### 7. Il percorso dal bottone al disco ha un test end-to-end
+
+<!-- USCITA
+     present: tests/e2e/ripristino.spec.ts :: dopo il ripristino le fisse ci sono
+-->
+
+Nato dal gate precedente, che aveva trovato una conferma che prometteva la
+ricreazione delle fisse mentre nessuno le creava. **L'aveva trovata perche' quel
+percorso non aveva nessun test.**
+
+#### 8. Cancellare non puo' lasciare la griglia vuota
+
+<!-- USCITA
+     present: src/core/categories.ts :: reason: 'last'
+-->
+
+`planCategoryDeletion` non aveva nessun pavimento: su un'installazione senza spese
+e senza regole le otto si cancellano una per una, e da li' **non si puo' piu'
+inserire nessuna spesa** — il salvataggio *e'* il tap sulla categoria. L'export
+prodotto in quel momento e' per giunta un file che `parseBackup` rifiuta: l'app
+scriveva un file che l'app non riprende.
+
+#### 9. Le warning che cambiano cio' che l'utente vedra' arrivano nell'anteprima
+
+<!-- USCITA
+     present: src/ui/ImportSheet.tsx :: import.archived
+-->
+
+Chiude [DEBITO.md](DEBITO.md) §15. La sua condizione era *"il primo commit che
+tocca la schermata d'import per qualunque altra ragione"*, e in questa chiusura
+quella schermata e' stata toccata **due volte**: la condizione e' scattata, e si
+paga invece di riscriverla — che e' l'errore diagnosticato in
+[DEBITO.md](DEBITO.md) §17 dodici ore prima.
+
+#### 10. Ogni ramo di rifiuto e' stato letto a schermo, in tutte e due le lingue
+
+<!-- USCITA -->
+
+Non e' la geometria, che e' misurata: e' **cosa c'e' scritto**. Il difetto che ha
+prodotto questa voce nessuna misura poteva vederlo — la frase del *"troppo nuovo"*
+finiva con *"poi riprova"* mentre il bottone diceva *"Scegli un altro file"* — e
+l'ha visto una persona che guardava.
+
+#### 11. `accept`, il file da iCloud non scaricato e le due sonde, provati su un iPhone
+
+<!-- USCITA -->
+
+Sono in "Verificabili solo sul dispositivo", con le tre prove scritte passo per
+passo. **E' la sola voce che decide se la funzione esiste davvero**: `accept` su
+iOS si risolve in UTI, e in Chromium non filtra niente — ogni test qui passa
+qualunque cosa ci sia scritta.
+
+#### 12. Nessuna affermazione falsa residua nella prosa scritta in questa fase
+
+<!-- USCITA -->
+
+Il conto sta in testa ad [ADR 026](adr/026-l-import-sostituisce-e-lascia-una-rete.md),
+ed e' **sedici**. Questa voce non chiede che non ce ne siano mai state: chiede che
+quelle trovate siano state corrette **sul posto**, e che il registro sia
+aggiornato — perche' il conto e' l'unica cosa per cui il registro esiste.
+
 ## Fase 7 — gli scatti sono stati guardati, 4 settembre
 
 **64 scatti approvati**: gli otto stati della schermata d'import — la voce in
@@ -3071,6 +3292,78 @@ con un test — verrebbe verde senza provare niente, che e' il difetto peggiore.
   `GRAZIA` dopo il fuoco, un file scelto davvero verrebbe letto come un
   ripensamento e la schermata si chiuderebbe da sola. Se succede sul telefono, si
   vede subito ed e' quello il numero da alzare.
+
+
+### Le tre prove che solo il telefono puo' dare
+
+**Nessuna chiede di confermare l'import.** Ci si ferma all'anteprima — il
+prima/dopo — e si chiude col ✕. Cio' che va provato e' la **lettura**, non la
+scrittura: cosi' costa cinque minuti e non mette a rischio nessun dato.
+
+**Prima di tutto**, in fondo a Impostazioni c'e' la riga `cent · <sha> · <data>`.
+Se lo sha non e' quello dell'ultimo deploy, l'aggiornamento non e' sceso: chiudi
+l'app dallo switcher, riaprila, accetta l'avviso.
+
+#### Preparazione — una volta sola, due minuti
+
+Lo stesso backup in quattro posti:
+
+1. Impostazioni → **Esporta** → "Salva su File" → **Sul mio iPhone**;
+2. in File, **copia** quel file anche su **iCloud Drive**;
+3. sulla copia iCloud: tieni premuto → **Rimuovi download**, finche' non compare
+   la nuvoletta;
+4. mandati lo stesso file via **Mail o WhatsApp**, e da li' "Salva su File".
+
+#### Prova 1 — `accept`: in tutti e quattro il file dev'essere selezionabile
+
+Impostazioni → **Ripristina da un backup**. Nel foglio File gira i quattro posti
+e **guarda soltanto**.
+
+> **Cosa devi vedere**: il `.json` **nero e toccabile**, in tutti e quattro.
+> **Se in uno e' grigio, fermati e dimmi quale.** Vuol dire che `accept` si
+> risolve male in UTI, e il difetto si presenta come *"il mio backup non c'e'"* —
+> indistinguibile da un bug del salvataggio.
+
+#### Prova 2 — il file da iCloud non scaricato, e "Riprova"
+
+E' il caso lento, ed e' l'unico su cui "Riprova" ha senso. Scegli **la copia con
+la nuvoletta**.
+
+> **Cosa devi vedere**: la schermata dice **"Sto leggendo il backup…"** — non un
+> tap che sembra non aver fatto niente. Poi o arriva l'anteprima, oppure
+> *"Non sono riuscito a leggere"* col bottone **"Riprova"**.
+>
+> Se compare "Riprova", **toccalo**: deve ritentare **lo stesso file**, non
+> riaprire il foglio File. Se ti riapre il selettore, dimmelo — il bottone
+> starebbe promettendo una cosa e facendone un'altra.
+>
+> E una cosa in piu', che si vede solo mentre succede: **quando l'esito arriva la
+> schermata non deve saltare.** Titolo, testo e bottone restano dove stanno.
+
+#### Prova 3 — chiudere il foglio senza scegliere niente
+
+Impostazioni → **Ripristina da un backup** → nel foglio File tocca **Annulla**.
+
+> **Cosa devi vedere**: la schermata di ripristino **sparisce**. Non deve restare
+> su "Sto leggendo…".
+
+**E il verso opposto, che e' quello che puo' smentirci.** La sonda che decide
+"ha cambiato idea" e' un'attesa di **800 ms** dopo che il fuoco torna all'app.
+Sbaglia in un verso solo: se il file scelto viene consegnato **piu' tardi** di
+cosi', un file scelto davvero viene letto come un ripensamento.
+
+> Rifai la **prova 2** — il file con la nuvoletta, che e' il piu' lento — e
+> guarda una cosa sola: **la schermata non deve chiudersi da sola.** Se sparisce
+> senza aver detto niente, la sonda e' sbagliata e gli 800 ms vanno alzati.
+> Dimmelo e basta: il numero lo cambiamo qui.
+
+**Perche' i posti sono quattro e non due.** Le prime due versioni di questa lista
+ne chiedevano due — un file locale e uno su iCloud — e sono due **strade** dentro
+il foglio File, non due posti. La copia iCloud gia' scaricata e quella arrivata da
+un'altra app passano da provider diversi, e `accept` si risolve in UTI **per
+provider**: un `.json` che arriva da Mail puo' presentarsi con un tipo che quello
+salvato da Cent non ha. Sono quattro perche' sono quattro modi in cui iOS decide
+cos'e' quel file.
 
 Sono il **caso 2 della tassonomia** in CLAUDE.md — asserzione esatta, premessa che
 dipende dall'ambiente — nella sua forma piu' pura: qui la premessa non e' solo

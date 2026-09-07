@@ -10,9 +10,10 @@ come tale.
 > **Scritta in fretta durante la fase che decide, e quindi materiale di lavoro,
 > non un atto.** Si rilegge con la stessa diffidenza del codice.
 >
-> Il conto, al 4 settembre: in questa fase sono state trovate **sei affermazioni
-> false**, e **quattro** stavano in un documento o in un commento scritto durante
-> la fase stessa — tre qui dentro. Nell'ordine:
+> Il conto, alla chiusura della fase (7 settembre): in questa fase sono state
+> trovate **sedici affermazioni false**, e **dieci sono uscite l'ultimo giorno**,
+> dal gate di chiusura e da cio' che il gate ha fatto guardare. Nell'ordine in cui
+> sono state trovate:
 >
 > 1. §3, *"il tetto di otto attive non permette di archiviarle tutte"* —
 >    archiviarle no, **cancellarle si'**, misurato `8:ok … 1:ok -> restano 0`;
@@ -20,12 +21,51 @@ come tale.
 >    record"* — senza `transform`, `Settings.schemaVersion` restava a 5;
 > 3. §6b, i **tre** stati della lettura — sono **quattro**: "non e' un backup" e
 >    "e' un backup con un record rotto" hanno rimedi opposti;
-> 4. e fuori di qui, `ImportSheet.tsx`, *"lo scatto pre-import rende il tocco
->    recuperabile"* — lo scatto si scrive e **nessuno lo legge**.
+> 4. `ImportSheet.tsx`, *"lo scatto pre-import rende il tocco recuperabile"* —
+>    lo scatto si scrive e **nessuno lo legge**;
+> 5. e 6. due fuori dai documenti, prese da una misura;
+> 7. `backup.ts`, sopra la riga che decide `ok`: *"la issue nomina il punto
+>    esatto (`expenses[12].amountCents`)"* — quella stringa nel JSON **non
+>    compare**, e' un indice;
+> 8. il doc di `ImportIssue.recordId`, *"e' `undefined` quando e' l'id stesso a
+>    mancare"* — due `c.error` lo smentivano avendo l'id in mano;
+> 9. `src/ui/i18n/en.ts`, la **gemella** della 4;
+> 10. **§6d di questa ADR**, la stessa premessa nel terzo posto in cui viveva;
+> 11. `types.ts`, il blocco *"misurato, non affermato"* — dichiarava **quattro**
+>     errori e ne nominava uno che non c'era piu'. E' il caso peggiore
+>     dell'elenco: quel paragrafo esiste **apposta perche' nessuno rimisuri**;
+> 12. `schema.ts`, *"`BackupFile.data` e i `counts`, tutti e due indicizzati su
+>     `StoreName`"* — `BackupFile` e' scritta a mano e non lo e' mai stata, e
+>     `types.ts` lo diceva venti righe piu' in la': **due file in disaccordo sullo
+>     stesso guardiano**;
+> 13. `idb.ts`, **tre** scrittori del record `settings` (sono due) e *"nessuno lo
+>     cancella"* (il `clear` di `replaceAll` lo cancella);
+> 14. `snapshot.ts`, *"due funzioni pure"* e *"come si rilegge"*;
+> 15. `persistence.ts`, il paragone con `snapshotTakenAt`, venti righe sopra il
+>     capoverso che ne annuncia l'assenza;
+> 16. e il messaggio di `0e252e2`, che dichiara tolti tre numeri di fase che il
+>     commit dopo ha rimesso. **E' l'unica dell'elenco che non si puo' correggere
+>     sul posto**, ed e' la ragione per cui il debito non si dichiara in un
+>     messaggio di commit.
 >
-> Tutte e quattro sono state prese da una misura o da un gate, **nessuna
-> rileggendo**. La differenza fra un'ADR e il codice non e' l'affidabilita': e'
-> che il codice ha dei test.
+> **Due cose che il solo numero non direbbe, e valgono piu' del numero.**
+>
+> **Sei su sedici** — dalla 11 alla 15, piu' una gemella — vengono da **un solo
+> commit**, `c5b032a`, che ha cancellato tre funzioni e ne ha lasciato viva la
+> prosa. Non erano sei sviste: era una cancellazione fatta a meta'. E due di
+> quelle sei non erano didascalie ma **prove**: un'enumerazione che reggeva una
+> dichiarazione di irraggiungibilita', e una misura scritta perche' nessuno la
+> rifacesse.
+>
+> **Tre su sedici — la 4, la 9 e la 10 — sono la stessa frase in tre posti.**
+> E' [DEBITO.md](../DEBITO.md) §1, le copie che parafrasano, applicato ai
+> commenti invece che alle stringhe: la 4 e' stata corretta da sola, e le altre
+> due sono sopravvissute alla propria riparazione perche' nessuno e' andato a
+> cercare dove altro viveva l'argomento.
+>
+> Nessuna delle sedici e' stata trovata **rileggendo**: tutte da una misura, da
+> un gate, o da una riparazione che ha inciampato nella vicina. La differenza fra
+> un'ADR e il codice non e' l'affidabilita': e' che il codice ha dei test.
 
 ## 1. Sostituzione, non fusione — e non e' un compromesso
 

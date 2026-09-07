@@ -939,6 +939,96 @@ per qualunque altra ragione. Oppure — ed e' il caso che la rende urgente — *
 giorno in cui qualcuno importa un file con piu' di otto categorie e non capisce
 dove sono finite**: li' il costo non e' il debito, e' la fiducia.
 
+## 16. L'Annulla dell'import butta via lo scatto e ne mette al suo posto il file importato
+
+**Stato: aperto, e oggi latente.** Nato il 7 settembre 2026, dal gate di chiusura
+della fase 7.
+
+**Cosa.** `replaceAll` fotografa il disco **in quel momento** e scrive lo scatto,
+e ne esiste sempre e solo uno, l'ultimo. L'Annulla del toast e' `importBackup`
+di nuovo, quindi passa da `replaceAll` una seconda volta. Con l'archivio O sul
+telefono e il file A da importare:
+
+    import di A   -> disco = A,  scatto = O   (giusto)
+    Annulla       -> disco = O,  scatto = A   (lo scatto e' il file importato)
+
+La rete su disco finisce per conservare **l'unico stato che esiste anche
+altrove** — il file che chi importa ha in mano — e butta via **l'unico che non
+esisteva da nessun'altra parte**, che e' la sola cosa per cui ADR 026 §2 dice che
+la rete esiste.
+
+**Perche' oggi non morde.** `restoreSnapshot` e' differita: lo scatto si scrive e
+nessuno lo legge, quindi il suo contenuto non ha ancora nessun effetto
+osservabile. L'Annulla funziona, perche' non passa dallo scatto — passa dal
+valore che `importBackup` restituisce, che vive in memoria.
+
+**Perche' e' scritto adesso e non quel giorno.** Perche' quel giorno nessuno lo
+rileggera': le tre ragioni di *"il ripristino consuma lo scatto"* scritte in ADR
+026 **non nominano mai l'Annulla**. E' "una decisione vale dove vale il suo
+argomento" con l'argomento gia' scritto e il caso non ancora guardato — la stessa
+forma che in questa fase e' uscita sei volte.
+
+**Perche' non e' stato riparato adesso.** Ripararlo vorrebbe dire dare a
+`replaceAll` un modo di **non** fotografare, cioe' esattamente il parametro
+opzionale che `persistence.ts` argomenta di non volere. Il costo del rimedio e'
+oggi piu' alto del difetto, che e' latente.
+
+**La condizione che lo chiude**: **il commit che introduce `restoreSnapshot`.**
+Li' l'Annulla del toast e il ripristino da scatto devono diventare **la stessa
+operazione** — oppure il secondo riporta al file che il primo aveva appena
+rifiutato. E' la stessa scadenza dello scatto (fine della fase 8): se lo scatto
+esce, esce anche questa voce, perche' non c'e' piu' niente da consumare.
+
+## 17. `ThemePreference` ha due membri che nessuno scrive e nessuno legge
+
+**Stato: aperto.** Nato il 7 settembre 2026, dal gate di chiusura della fase 7 —
+ma la condizione era gia' scritta, ed e' scaduta senza che nessuno se ne
+accorgesse. E' quella la parte da leggere.
+
+**Cosa.** `ThemePreference` e' `'light' | 'dark' | 'auto'`. `'auto'` ha un
+produttore (`buildDefaultSettings`); gli altri due no: nessuna schermata chiama
+`updateSettings` con `theme`. E **nessuno legge** `settings.theme`: il tema lo
+decide `@media (prefers-color-scheme)` in `tokens.css`. Il campo esiste, viaggia
+nel record, viene conservato all'import — e non fa niente.
+
+**La condizione precedente e' scaduta in silenzio, ed e' il rilievo vero.**
+`dead-surface.mjs` dichiara i due membri con la loro ragione, e chiude cosi':
+*"torna a essere un difetto il giorno in cui il selettore esiste e non scrive, **o
+se la fase 7 si chiude senza costruirlo**"*. La fase 7 si e' chiusa senza
+costruirlo. La condizione e' scattata, **e non e' successo niente**: non aveva un
+esito scritto, quindi non c'era niente da eseguire.
+
+> **Una condizione senza un esito scritto non e' una condizione: e' una data.**
+
+**Perche' costruirlo costa piu' di quanto sembra**, e non e' un segmented control
+da tre voci:
+
+- la palette scura vive in **un solo** `@media (prefers-color-scheme: dark)`, con
+  l'argomento scritto accanto — *"duplicarle per una scelta manuale significava
+  due copie che divergono in silenzio"*. Una scelta manuale obbliga a far
+  dipendere quel blocco da due condizioni invece che da una;
+- i due `<meta name="theme-color">` sono media query e **non rispondono a un
+  attributo**: vanno mossi a runtime;
+- e il costo che decide: **la preferenza sta in IndexedDB, che per l'ordine di
+  pittura si apre dopo il primo frame.** Chi ha il telefono chiaro e ha scelto
+  "scuro" vedrebbe un lampo chiaro **a ogni avvio**. La contromisura usata per il
+  lampo di lingua — *"si riserva la larghezza, non si cachea"* — qui non esiste:
+  **un colore non si riserva.**
+
+Costruirlo vuol dire riaprire quella decisione, non aggiungere una schermata.
+
+**La condizione che lo chiude, e stavolta con il suo esito**, nella forma che ADR
+026 ha usato per lo scatto:
+
+> Il tema esplicito arriva **col suo lettore** — qualcosa che legga
+> `settings.theme` e cambi lo schermo — **entro la fine della fase 8. Oppure
+> escono**: i due membri `'light'` e `'dark'`, `SettingsPatch.theme`, e la riga di
+> `tokens.css` che li promette.
+
+**Chi lo costruisce porta con se' la risposta al lampo al primo frame.** Senza
+quella non e' pronto, e la riga sopra non e' soddisfatta da una schermata che
+scrive un campo.
+
 ## 3. Rischi noti gia' scritti altrove
 
 Non si duplicano qui, per non creare la diciannovesima copia che parafrasa:
