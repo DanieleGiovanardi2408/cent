@@ -162,10 +162,13 @@ const NON_PRODUTTORI = new Map([
 const MEMBRI_DICHIARATI = new Map([
   [
     "ThemePreference.'light'",
-    'preferenza di tema esplicita, rimandata a fase 7 (vedi ROADMAP). Il campo ' +
-      "resta perche' `'auto'` un produttore ce l'ha, e nessuna schermata finge di " +
-      'cambiare il tema. Torna a essere un difetto **il giorno in cui il selettore ' +
-      'esiste e non scrive**, o se la fase 7 si chiude senza costruirlo.',
+    'preferenza di tema esplicita — **DEBITO.md §17**, e la condizione precedente ' +
+      "e' gia' scaduta: diceva \"o se la fase 7 si chiude senza costruirlo\", la " +
+      "fase 7 si e' chiusa senza, **e non e' successo niente**. Non aveva un esito " +
+      "scritto, quindi non c'era niente da eseguire. La nuova ce l'ha: il tema " +
+      'esplicito arriva **col suo lettore** entro la fine della fase 8, **oppure ' +
+      "escono** questi due membri, `SettingsPatch.theme` e la riga di `tokens.css` " +
+      'che li promette.',
   ],
   [
     "ThemePreference.'dark'",
