@@ -310,6 +310,75 @@ describe('file rotti: si racconta il problema, non si esplode', () => {
     expect(preview.issues[0]?.path).toBe('expenses[3].date')
   })
 
+  /**
+   * **`recordId` c'e' se e solo se l'id c'e', e l'invariante si prova su tutti
+   * i campi invece che sui due che vengono in mente.**
+   *
+   * Il doc di `ImportIssue.recordId` diceva gia' *"e' `undefined` quando e'
+   * l'id stesso a mancare"*, e **due siti la smentivano**: `campi opzionali di
+   * tipo sbagliato` e `lastMaterializedDate` passavano il solo `path` avendo
+   * `b.id` in mano. Li' la schermata diceva *"conta la quarta spesa"* dove
+   * poteva dire *"cerca questo id"* — il ripiego onesto usato dove non serviva.
+   *
+   * Non e' stato riparato asserendo quei due: una tabella di due casi e'
+   * un'enumerazione, e il prossimo `c.error` che dimentica l'id nascerebbe
+   * fuori da lei. La tabella rompe **un campo per volta su ogni entita'**
+   * tenendo l'id intatto, e chiede che **ogni** errore di record porti il suo
+   * id. Un sito nuovo che se lo dimentica cade qui.
+   *
+   * Il filtro e' `<store>[<n>]`, cioe' gli errori **di record**: quello su
+   * `categories` — il file senza nessuna categoria — non parla di un record e
+   * non ha nessun id da portare, ed e' giusto che resti fuori.
+   */
+  const guasti: readonly (readonly [string, string, (r: Record<string, unknown>) => void])[] = [
+    ['expenses', 'e1', (r) => (r['amountCents'] = 12.5)],
+    ['expenses', 'e1', (r) => (r['categoryId'] = 42)],
+    ['expenses', 'e1', (r) => (r['date'] = 'domani')],
+    ['expenses', 'e1', (r) => (r['note'] = 42)],
+    ['expenses', 'e1', (r) => (r['deletedAt'] = 0)],
+    ['categories', 'cat-1', (r) => (r['name'] = '')],
+    ['recurringRules', 'r1', (r) => (r['amountCents'] = 0.5)],
+    ['recurringRules', 'r1', (r) => (r['cadence'] = 'annuale')],
+    ['recurringRules', 'r1', (r) => (r['interval'] = 0)],
+    ['recurringRules', 'r1', (r) => (r['startDate'] = 'boh')],
+    ['recurringRules', 'r1', (r) => (r['lastMaterializedDate'] = 'boh')],
+    ['budgets', 'b1', (r) => (r['period'] = 'annuale')],
+    ['budgets', 'b1', (r) => (r['amountCents'] = 1.5)],
+    ['budgets', 'b1', (r) => (r['effectiveFrom'] = 'boh')],
+    ['budgets', 'b1', (r) => (r['effectiveTo'] = 'boh')],
+  ]
+
+  /** Gli errori che parlano di **un record**: `<store>[<n>]...`. */
+  const suRecord = (preview: ReturnType<typeof parseBackup>) =>
+    preview.issues.filter((i) => i.severity === 'error' && /^[a-zA-Z]+\[\d+\]/.test(i.path))
+
+  it.each(guasti)('un %s rotto con l id intatto porta l id (%s)', (store, id, rompi) => {
+    const file = valido()
+    const data = file['data'] as Record<string, Record<string, unknown>[]>
+    rompi(data[store]![0]!)
+    const preview = parseBackup(file)
+    expect(preview.ok).toBe(false)
+    const errori = suRecord(preview)
+    expect(errori.length).toBeGreaterThan(0)
+    for (const issue of errori) expect(issue.recordId).toBe(id)
+  })
+
+  /**
+   * **L'altra meta' del "se e solo se".** Senza questa, l'invariante si
+   * soddisferebbe passando sempre un id qualunque — e la schermata direbbe
+   * "cerca" davanti a un file dove non c'e' niente da cercare.
+   */
+  it('e quando a mancare e l id stesso, non porta nessun id', () => {
+    const file = valido()
+    const data = file['data'] as Record<string, Record<string, unknown>[]>
+    delete data['expenses']![0]!['id']
+    const preview = parseBackup(file)
+    expect(preview.ok).toBe(false)
+    const errori = suRecord(preview)
+    expect(errori.length).toBeGreaterThan(0)
+    for (const issue of errori) expect(issue.recordId).toBeUndefined()
+  })
+
   it('segnala le spese orfane di categoria ma le importa lo stesso', () => {
     // La categoria che manca e' **un'altra**, non tutte: un file senza
     // nessuna categoria e' un caso diverso, e ha il suo test.

@@ -105,9 +105,23 @@ export interface ImportIssue {
    * `dead-surface` cerca il **nome** e non il tipo, e un campo chiamato `id`
    * risulterebbe vivo per omonimia con mezzo progetto.
    *
-   * E' `undefined` quando **e' l'id stesso a mancare**: li' non c'e' niente da
-   * cercare, e la schermata ripiega sull'indice **dicendo che e' una posizione**.
-   * Onesto invece che comodo.
+   * E' `undefined` **se e solo se e' l'id stesso a mancare**: li' non c'e'
+   * niente da cercare, e la schermata ripiega sull'indice **dicendo che e' una
+   * posizione**. Onesto invece che comodo.
+   *
+   * ## Il "se e solo se" e' stato falso per un commit
+   *
+   * Questa riga diceva gia' *"e' `undefined` quando e' l'id stesso a mancare"*,
+   * e due `c.error` la smentivano: `campi opzionali di tipo sbagliato` in
+   * `parseExpense` e `lastMaterializedDate` in `parseRule` passavano il solo
+   * `path` **avendo `b.id` in mano**. Li' la schermata diceva *"conta la quarta
+   * spesa"* dove poteva dire *"cerca questo id"* — cioe' il ripiego onesto usato
+   * dove non serviva, che e' il modo in cui un ripiego smette di essere onesto.
+   *
+   * L'invariante non e' piu' sorvegliato da questa frase: `backup.test.ts`
+   * rompe **ogni** campo di **ogni** entita' tenendo l'id intatto e chiede che
+   * ogni `error` porti il suo `recordId`. Un sito nuovo che se lo dimentica cade
+   * li', senza che nessuno debba ricordarsi di questo capoverso.
    */
   readonly recordId?: string
 }
@@ -274,7 +288,10 @@ function parseExpense(raw: RawRecord, path: string, c: Collector): Expense | nul
   const recurringId = optionalStr(raw['recurringId'])
   const deletedAt = optionalStr(raw['deletedAt'])
   if (note === false || recurringId === false || deletedAt === false) {
-    return c.error(path)
+    // `b.id` e non niente: il record ce l'ha, e senza la schermata direbbe
+    // "conta la quarta spesa" dove poteva dire "cerca questo id". Vedi
+    // `ImportIssue.recordId`.
+    return c.error(path, b.id)
   }
   const timeMinutes = optionalTimeMinutes(raw['timeMinutes'], `${path}.timeMinutes`, c)
   return {
@@ -331,7 +348,7 @@ function parseRule(raw: RawRecord, path: string, c: Collector): RecurringRule | 
   // qualcuno abbia perso, e' una chiave che questa app non ha mai emesso.
   const lastMaterializedDate = optionalIsoDate(raw['lastMaterializedDate'])
   if (lastMaterializedDate === false) {
-    return c.error(path)
+    return c.error(path, b.id)
   }
   const common = {
     ...b,
