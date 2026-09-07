@@ -56,6 +56,13 @@ function stato(marca: string, importo: number): DataSet {
  * E' piu' severo dell'API che sostituisce: legge il record grezzo, quindi cade
  * anche se un giorno il ripristino sapesse ricostruire cio' che la scrittura non
  * ha messo.
+ *
+ * **Vale anche per il valore di ritorno di `replaceAll`**, uscito dopo, per la
+ * stessa ragione: nessun chiamante di produzione lo leggeva. Le due asserzioni
+ * che lo guardavano — `toBe(PRIMA)` e `toBeNull()` — dicevano cio' che la riga
+ * subito sotto dice gia' leggendo il disco (`scatto()`), quindi togliendole non
+ * e' caduta nessuna proprieta': e' caduto un secondo modo di chiedere la stessa
+ * cosa, quello che passava dall'API invece che dal record.
  */
 interface Aperta {
   readonly p: Persistence
@@ -121,7 +128,7 @@ for (const { nome, apri } of implementazioni) {
       const vecchio = stato('vecchio', 100)
       await p.write(vecchio)
 
-      expect(await p.replaceAll(stato('nuovo', 900), PRIMA)).toBe(PRIMA)
+      await p.replaceAll(stato('nuovo', 900), PRIMA)
 
       // L'archivio e' quello importato...
       const dopo = await p.loadAll()
@@ -188,7 +195,7 @@ for (const { nome, apri } of implementazioni) {
       const { p, scatto } = apri()
       // Nessun record `settings`: non esiste nessuno stato a cui tornare, e uno
       // scatto di niente sarebbe una voce che promette un ripristino vuoto.
-      expect(await p.replaceAll(stato('nuovo', 900), PRIMA)).toBeNull()
+      await p.replaceAll(stato('nuovo', 900), PRIMA)
       expect(await scatto()).toBeNull()
       p.close()
     })

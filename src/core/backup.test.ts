@@ -73,7 +73,6 @@ describe('round-trip export -> import', () => {
     const preview = roundTrip(originale)
     expect(preview.ok).toBe(true)
     expect(preview.issues).toEqual([])
-    expect(preview.discarded).toBe(0)
     expect(preview.data).not.toBeNull()
     expect(archivio(preview.data as DataSet)).toEqual(archivio(originale))
   })
@@ -192,8 +191,6 @@ describe('anteprima e conteggi', () => {
       expenses: 2,
       categories: 1,
       recurringRules: 1,
-      budgets: 2,
-      settings: 1,
     })
     expect(preview.fromSchemaVersion).toBe(SCHEMA_VERSION)
   })
@@ -304,8 +301,8 @@ describe('file rotti: si racconta il problema, non si esplode', () => {
     expect(preview.data).toBeNull()
     // Niente prima/dopo per un import che non avverra'.
     expect(preview.counts.expenses).toBe(0)
-    // Quanto e' grave: due record, non "questo non e' un backup".
-    expect(preview.discarded).toBe(2)
+    // Quanto e' grave: due record, non "questo non e' un backup". Si conta
+    // sulle issue, che e' da dove lo conta `refusalOf` per scriverlo a schermo.
     expect(preview.issues.filter((i) => i.severity === 'error')).toHaveLength(2)
     expect(preview.issues[0]?.path).toBe('expenses[3].date')
   })
@@ -479,7 +476,9 @@ describe('file rotti: si racconta il problema, non si esplode', () => {
     data['budgets'] = 'non un elenco'
     const preview = parseBackup(file)
     expect(preview.ok).toBe(true)
-    expect(preview.counts.budgets).toBe(0)
+    // Sui budget si guarda `data`, non un conteggio: `counts` ne ha tre, e i
+    // budget non ci sono perche' nessuna schermata li puo' mostrare.
+    expect(preview.data?.budgets).toEqual([])
     expect(preview.counts.expenses).toBe(2)
   })
 })
@@ -511,7 +510,9 @@ describe('orario: opzionale, validato, e se e sbagliato si butta', () => {
       // La spesa c'e' tutta: importo, data, categoria, nota. Due e il conto
       // delle vive, la terza del fixture e' una lapide.
       expect(preview.counts.expenses).toBe(2)
-      expect(preview.discarded).toBe(0)
+      // Nessun record perso: tre nel file, tre in `data` (la terza e' la
+      // lapide, che non entra nel conteggio e resta nei dati).
+      expect(preview.data?.expenses).toHaveLength(3)
       expect(preview.data?.expenses[0]?.amountCents).toBe(1_250)
       expect(preview.data?.expenses[0]?.note).toBe('Caffe e brioche')
       // L'orario no, e non viene nemmeno "aggiustato" a 1439 o a 0.
@@ -565,7 +566,6 @@ describe('un backup della versione 1 entra nella versione corrente', () => {
     const preview = parseBackup(fileV1())
     expect(preview.ok).toBe(true)
     expect(preview.fromSchemaVersion).toBe(1)
-    expect(preview.discarded).toBe(0)
     expect(preview.counts.expenses).toBe(2)
     expect(preview.data?.expenses.every((e) => !('timeMinutes' in e))).toBe(true)
     expect(preview.data?.expenses.map((e) => e.amountCents)).toEqual([1_250, 900])
@@ -711,7 +711,8 @@ describe('l ancora mensile all ingresso di un import', () => {
   it('schema 3: la migrazione gliela scrive, e la regola entra intera', () => {
     const preview = parseBackup(file(3, mensileSenzaAncora('2026-01-01')))
     expect(preview.ok).toBe(true)
-    expect(preview.discarded).toBe(0)
+    // Non scartata: e' in `data`, non solo nel conteggio.
+    expect(preview.data?.recurringRules).toHaveLength(1)
     expect(preview.counts.recurringRules).toBe(1)
     expect(preview.data?.recurringRules[0]?.anchorDay).toBe(1)
     expect(preview.data?.recurringRules[0]?.amountCents).toBe(90_000)
@@ -720,7 +721,7 @@ describe('l ancora mensile all ingresso di un import', () => {
   it('schema 2: la catena 2 -> 3 -> 4 arriva fino in fondo', () => {
     const preview = parseBackup(file(2, mensileSenzaAncora('2026-06-23')))
     expect(preview.ok).toBe(true)
-    expect(preview.discarded).toBe(0)
+    expect(preview.data?.recurringRules).toHaveLength(1)
     expect(preview.data?.recurringRules[0]?.anchorDay).toBe(23)
   })
 
@@ -730,7 +731,7 @@ describe('l ancora mensile all ingresso di un import', () => {
     // un import non deve poter produrre.
     const preview = parseBackup(file(SCHEMA_VERSION, mensileSenzaAncora('2026-03-09')))
     expect(preview.ok).toBe(true)
-    expect(preview.discarded).toBe(0)
+    expect(preview.data?.recurringRules).toHaveLength(1)
     expect(preview.counts.recurringRules).toBe(1)
     expect(preview.data?.recurringRules[0]?.anchorDay).toBe(9)
   })
@@ -743,7 +744,7 @@ describe('l ancora mensile all ingresso di un import', () => {
       file(SCHEMA_VERSION, { ...mensileSenzaAncora('2026-05-12'), anchorDay: 45 }),
     )
     expect(preview.ok).toBe(true)
-    expect(preview.discarded).toBe(0)
+    expect(preview.data?.recurringRules).toHaveLength(1)
     expect(preview.data?.recurringRules[0]?.anchorDay).toBe(12)
     expect(preview.issues.some((i) => i.path.endsWith('.anchorDay'))).toBe(true)
   })

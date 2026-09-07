@@ -598,8 +598,8 @@ export function createIdbPersistence(options: OpenOptions = {}): IdbPersistence 
       })
     },
 
-    async replaceAll(data: DataSet, takenAt: Timestamp): Promise<Timestamp | null> {
-      return withDb(async (connection) => {
+    async replaceAll(data: DataSet, takenAt: Timestamp): Promise<void> {
+      await withDb(async (connection) => {
         // La transazione si apre su **tutte e due** le famiglie: lo scatto e la
         // sostituzione sono la stessa operazione, e se fossero due transazioni
         // esisterebbe l'istante "import senza scatto" (ADR 008).
@@ -618,12 +618,14 @@ export function createIdbPersistence(options: OpenOptions = {}): IdbPersistence 
           // Il `delete` e' l'invariante scritta invece che argomentata, e vale
           // la pena dire quanto: oggi non e' raggiungibile, perche' per
           // arrivarci servirebbe un archivio **senza** `settings` che ha
-          // pero' gia' uno scatto — e gli scrittori del record `settings` sono
-          // tre, `WriteBatch.settings`, `replaceAll` e `restoreSnapshot`, che
-          // lo mettono e non lo tolgono mai. Nessuno lo cancella. Resta perche'
-          // costa una riga e rende l'invariante vera per costruzione invece che
-          // per una catena di tre argomenti che il prossimo lettore dovrebbe
-          // rifare.
+          // pero' gia' uno scatto. Chi scrive il record `settings` e'
+          // `WriteBatch.settings` e questa `replaceAll`, e passano tutti e due
+          // dallo stesso `put` di `runBatch`. L'unico che lo **toglie** e' il
+          // `clear` qui sotto, che sta nella stessa transazione del `put` che
+          // lo rimette: fuori da questa transazione un archivio senza
+          // `settings` non esiste. Resta perche' costa una riga e rende
+          // l'invariante vera per costruzione invece che per una catena di
+          // argomenti che il prossimo lettore dovrebbe rifare.
           if (snapshot === null) await store.delete(PRE_IMPORT_SNAPSHOT_ID)
           else await store.put(snapshot)
           await Promise.all(REPLACED_STORES.map((name) => tx.objectStore(name).clear()))
@@ -634,7 +636,6 @@ export function createIdbPersistence(options: OpenOptions = {}): IdbPersistence 
             budgets: data.budgets,
             settings: data.settings,
           })
-          return snapshot === null ? null : snapshot.takenAt
         } catch (error) {
           await rollback(tx)
           throw error

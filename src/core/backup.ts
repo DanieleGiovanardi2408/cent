@@ -11,8 +11,13 @@
  * stesse migrazioni del database (`schema.ts`) prima di essere validato, quindi
  * il validatore vede sempre e solo la forma corrente.
  *
- * Fuori da qui, di proposito: l'export CSV (fase 7, e non e' reimportabile per
- * definizione) e la fusione con i dati esistenti. L'import sostituisce tutto.
+ * Fuori da qui, di proposito: l'export CSV — **fase 8**, deciso il 7 settembre
+ * 2026 — e la fusione con i dati esistenti. L'import sostituisce tutto.
+ *
+ * Il numero di fase qui e' un rinvio con una data, non un fatto derivato: e'
+ * stato *"fase 7"* fino a oggi, cioe' fino alla fase che ha chiuso senza
+ * costruirlo. Quando arrivera' non passera' comunque da questo modulo, perche'
+ * un CSV non e' un file che `parseBackup` sappia rileggere.
  */
 
 import { activeCategories } from './categories'
@@ -160,15 +165,44 @@ export interface ImportPreview {
    *   di otto, cioe' quando `capActiveCategories` ne archivia il surplus e
    *   l'utente le ritroverebbe tutte in Impostazioni.
    *
-   * Regole e budget non hanno ne' lapidi ne' archivio: si contano tutti.
+   * - **le regole** non hanno ne' lapidi ne' archivio: si contano tutte, spente
+   *   comprese, perche' Impostazioni le elenca tutte.
+   *
+   * ## Tre chiavi, non cinque: le altre due non erano conteggi
+   *
+   * `Record<StoreName, number>` ne chiedeva cinque, e le due che avanzavano
+   * dicevano il falso ognuna a modo suo.
+   *
+   * - **`settings` valeva `1`**, scritto a mano. Non contava niente: era la
+   *   costante che serviva a soddisfare l'indice. *"Cio' che l'utente vedra'
+   *   dopo l'import"* non e' mai stato "una impostazione".
+   * - **`budgets`** era un conteggio vero e **non mostrabile**, e la ragione e'
+   *   gia' scritta accanto a `countRows` in `src/ui/import-view.ts`: i budget
+   *   sono storicizzati, quindi chi ha cambiato budget tre volte ne ha tre
+   *   record e ne vede uno. Un numero che l'utente non puo' riconciliare con lo
+   *   schermo non informa.
+   *
+   * Il tipo indicizzato faceva anche da guardiano — uno store di sistema fra
+   * quelli d'archivio non compilava, qui due volte — ma era **un guardiano per
+   * omonimia**, non per scelta: valeva finche' nessuno aveva una ragione di
+   * prodotto per restringere il record, cioe' finche' nessuno guardava. Quello
+   * scelto apposta e' `RawDataSet` in `schema.ts`, ed e' ancora li'.
    */
-  readonly counts: Readonly<Record<StoreName, number>>
-  /**
-   * Record scartati perche' irrecuperabili. Con `ok: true` e' sempre `0` — uno
-   * scarto e' una issue `error` — quindi qui vive per dire **quanto** e' grave
-   * un rifiuto: 2 record illeggibili non e' "questo non e' un backup".
-   */
-  readonly discarded: number
+  readonly counts: {
+    readonly expenses: number
+    readonly categories: number
+    readonly recurringRules: number
+  }
+  /* **Qui c'era `discarded`**, il numero di record scartati perche'
+   * irrecuperabili. Si giustificava dicendo di portare *"quanto e' grave un
+   * rifiuto"* — e a schermo quel "quanto" non l'ha mai portato lui: lo porta
+   * `more` di `ImportRefusal`, che `refusalOf` conta **sulle issue**. Il campo
+   * descriveva un lettore che non esisteva.
+   *
+   * E non porta via niente, perche' era derivabile da cio' che resta: ogni
+   * scarto passa da `Collector.error`, quindi `discarded > 0` e *"c'e' almeno
+   * una issue `error`"* sono la stessa frase — che e' anche l'unica riga che
+   * decide `ok`. */
   readonly issues: readonly ImportIssue[]
   /**
    * Versione dichiarata dal file, prima delle migrazioni. `null` quando il file
@@ -595,15 +629,14 @@ function parseList<T extends { readonly id: string }>(
   store: StoreName,
   parse: (raw: RawRecord, path: string, c: Collector) => T | null,
   c: Collector,
-): { readonly records: T[]; readonly discarded: number } {
+): T[] {
   const byId = new Map<string, T>()
-  let discarded = 0
   raws.forEach((raw, index) => {
     const record = parse(raw, `${store}[${index}]`, c)
-    if (record === null) {
-      discarded += 1
-      return
-    }
+    // Uno scarto non si conta qui: `parse` restituisce `null` passando da
+    // `Collector.error`, quindi lo scarto **e' gia'** una issue, ed e' li' che
+    // la schermata va a contare (`refusalOf`).
+    if (record === null) return
     // La `warning` segna **la seconda occorrenza**, cioe' quella che vince:
     // `byId.set` sovrascrive, quindi di due record con lo stesso id resta
     // l'ultimo del file. Il fatto stava dentro la frase e adesso sta qui.
@@ -612,15 +645,13 @@ function parseList<T extends { readonly id: string }>(
     }
     byId.set(record.id, record)
   })
-  return { records: [...byId.values()], discarded }
+  return [...byId.values()]
 }
 
-const EMPTY_COUNTS: Readonly<Record<StoreName, number>> = {
+const EMPTY_COUNTS: ImportPreview['counts'] = {
   expenses: 0,
   categories: 0,
   recurringRules: 0,
-  budgets: 0,
-  settings: 0,
 }
 
 /**
@@ -637,21 +668,20 @@ export function parseBackup(input: unknown): ImportPreview {
   /** Quello che si e' riusciti a leggere dell'intestazione, rifiuto compreso. */
   let declared: number | null = null
   let exportedAt: Timestamp | null = null
-  const refused = (discarded: number): ImportPreview => ({
+  const refused = (): ImportPreview => ({
     ok: false,
     data: null,
     // A zero, e non i record letti: `counts` dice **cosa ci sara' dopo**, e
     // dopo un rifiuto non c'e' nessun dopo. Lasciarli veri inviterebbe a
     // disegnare il prima/dopo di un import che non avverra'.
     counts: EMPTY_COUNTS,
-    discarded,
     issues: c.issues,
     fromSchemaVersion: declared,
     exportedAt,
   })
   const reject = (path: string): ImportPreview => {
     c.error(path)
-    return refused(0)
+    return refused()
   }
 
   if (!isRecord(input)) return reject('file')
@@ -706,7 +736,7 @@ export function parseBackup(input: unknown): ImportPreview {
   const budgets = parseList(migrated.budgets, 'budgets', parseBudget, c)
   const settings = parseSettings(migrated.settings[0], exportedAt, c)
 
-  const cappedCategories = capActiveCategories(categories.records, c)
+  const cappedCategories = capActiveCategories(categories, c)
 
   // **Zero categorie non e' uno stato in cui quest'app puo' vivere**, e la
   // regola non e' "rifiuta i backup vuoti" — quella sarebbe una preferenza. Si
@@ -732,20 +762,17 @@ export function parseBackup(input: unknown): ImportPreview {
   }
 
   const knownCategories = new Set(cappedCategories.map((cat) => cat.id))
-  const orphans = expenses.records.filter((e) => !knownCategories.has(e.categoryId)).length
+  const orphans = expenses.filter((e) => !knownCategories.has(e.categoryId)).length
   if (orphans > 0) {
     c.warn('expenses')
   }
-
-  const discarded =
-    expenses.discarded + categories.discarded + recurringRules.discarded + budgets.discarded
 
   // ## L'unica riga che decide `ok`
   //
   // Prima `ok` era `true` per costruzione appena il file aveva una forma: un
   // backup in cui **tutte** le spese erano illeggibili tornava
-  // `ok: true, counts.expenses: 0, discarded: 2` con due issue `error`
-  // accanto. La severita' esisteva e non decideva niente.
+  // `ok: true` con `counts.expenses: 0` e due issue `error` accanto. La
+  // severita' esisteva e non decideva niente.
   //
   // Il costo di questa riga e' dichiarato: **una sola spesa illeggibile su
   // cento rende il file non importabile**, e non e' un effetto collaterale.
@@ -763,28 +790,25 @@ export function parseBackup(input: unknown): ImportPreview {
   // posizione**. E' con quell'id in mano che il rifiuto totale resta
   // verificabile invece di essere un vicolo cieco (DEBITO §13).
   const fatal = c.issues.some((issue) => issue.severity === 'error')
-  if (fatal) return refused(discarded)
+  if (fatal) return refused()
 
   return {
     ok: true,
     data: {
-      expenses: expenses.records,
+      expenses,
       categories: cappedCategories,
-      recurringRules: recurringRules.records,
-      budgets: budgets.records,
+      recurringRules,
+      budgets,
       settings,
     },
     counts: {
       // Vive, non tutte: vedi `ImportPreview.counts`. Le lapidi restano dentro
       // `data` — un import che le perdesse resusciterebbe cio' che l'utente ha
       // cancellato — e non entrano in nessun numero a schermo.
-      expenses: expenses.records.filter(isLive).length,
+      expenses: expenses.filter(isLive).length,
       categories: cappedCategories.length,
-      recurringRules: recurringRules.records.length,
-      budgets: budgets.records.length,
-      settings: 1,
+      recurringRules: recurringRules.length,
     },
-    discarded,
     issues: c.issues,
     fromSchemaVersion: declared,
     exportedAt,

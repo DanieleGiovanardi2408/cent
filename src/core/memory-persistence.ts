@@ -309,7 +309,7 @@ export function createMemoryPersistence(seed: MemoryDiskSeed = emptyDisk()): Mem
         ...(ruleRewind !== undefined ? { recurringRuleRewind: ruleRewind } : {}),
       }
     },
-    async replaceAll(data: DataSet, takenAt: Timestamp): Promise<Timestamp | null> {
+    async replaceAll(data: DataSet, takenAt: Timestamp): Promise<void> {
       guard()
       // Lo scatto si prende **da qui**, cioe' dal "disco", e non da cio' che ha
       // in mano il chiamante: e' la stessa scelta di `idb.ts`, e il doppio deve
@@ -336,14 +336,13 @@ export function createMemoryPersistence(seed: MemoryDiskSeed = emptyDisk()): Mem
       disk.budgets = [...clone.budgets]
       disk.settings = clone.settings
       // Uno solo, l'ultimo: quello di ieri se ne va in tutti e due i rami.
-      // Il ramo `null` non e' raggiungibile oggi (nessuno cancella `settings`:
-      // vedi l'enumerazione degli scrittori in `idb.ts`), e sta qui perche' i
-      // due lati devono restare osservabilmente identici anche nei rami che
-      // nessuno percorre — il giorno in cui uno diventa raggiungibile, lo
-      // diventa per tutti e due.
+      // Il ramo `null` non e' raggiungibile oggi (nessuno lascia l'archivio
+      // senza `settings`: vedi l'enumerazione di chi lo scrive in `idb.ts`), e
+      // sta qui perche' i due lati devono restare osservabilmente identici
+      // anche nei rami che nessuno percorre — il giorno in cui uno diventa
+      // raggiungibile, lo diventa per tutti e due.
       disk.snapshot = snapshot
       writes += 1
-      return snapshot === null ? null : snapshot.takenAt
     },
 
     close(): void {

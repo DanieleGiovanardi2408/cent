@@ -1,12 +1,15 @@
 /**
- * Lo scatto pre-import: come si costruisce e come si rilegge.
+ * Lo scatto pre-import: come si costruisce.
  *
- * Due funzioni pure, e stanno qui invece che dentro le due implementazioni di
+ * `buildPreImportSnapshot` sta qui invece che dentro le due implementazioni di
  * `Persistence` per la ragione scritta in ADR 008: quella vera e il doppio in
  * memoria devono restare **osservabilmente identiche**, e il modo piu' corto
  * per garantirlo e' che la parte che decide qualcosa sia la **stessa riga di
- * codice** per tutte e due. Qui la parte che decide qualcosa e' la migrazione
- * del carico, che non e' banale e che nessuno vorrebbe scritta due volte.
+ * codice** per tutte e due. Qui decide l'id — uno solo e costante, quindi un
+ * `put` sostituisce lo scatto di ieri invece di affiancarglisi — e la
+ * `schemaVersion` con cui il carico viene timbrato.
+ *
+ * **Il lato lettura non abita qui**: vedi il commento in fondo al file.
  */
 
 import { SCHEMA_VERSION } from './schema'
@@ -34,10 +37,8 @@ export function buildPreImportSnapshot(data: DataSet, takenAt: Timestamp): PreIm
  * `restoreSnapshot`, il suo unico chiamante: **una funzione si spedisce insieme
  * al suo chiamante, o non si spedisce**.
  *
- * Il fatto che risolveva non e' decaduto — fra l'import e il ripristino ci sta
- * un aggiornamento della PWA, e le migrazioni non toccano gli store di sistema,
- * quindi il carico va migrato **al ripristino** e non all'upgrade. Per questo
- * `PreImportSnapshot.schemaVersion` resta scritto: e' l'unico momento in cui
- * quel numero si puo' sapere, e ricostruirlo dopo sarebbe indovinarlo.
- *
- * L'argomento per esteso sta in ADR 026, §"Il lato lettura, differito". */
+ * Il fatto che risolveva non e' decaduto, e non e' scritto qui: sta accanto a
+ * `MIGRATED_STORES` in `schema.ts` — il carico si migra **al ripristino**, non
+ * all'upgrade — ed e' la ragione per cui la riga qui sopra timbra
+ * `schemaVersion`. L'argomento per esteso e' in ADR 026, §"Il lato lettura,
+ * differito". */

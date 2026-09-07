@@ -321,20 +321,27 @@ export interface Persistence {
    * Lo scatto precedente viene scartato in tutti e due i casi: ne esiste sempre
    * e solo uno, l'ultimo.
    *
-   * Restituisce la data dello scatto rimasto, o `null` se non c'era niente da
-   * salvare: e' la stessa risposta di `snapshotTakenAt` senza una seconda
-   * lettura, ed e' cio' che serve per dire subito dopo l'import a cosa si
-   * tornerebbe. Il ramo `null` e' l'unico modo per cui la rete puo' non esserci
-   * dopo un import, e restituirlo lo rende osservabile invece che silenzioso.
-   *
    * @param takenAt l'istante dello scatto, pregenerato **fuori** come ogni
    * timestamp che attraversa questo confine (corollario di ADR 008): un
    * ritentativo della stessa operazione riscrive lo stesso scatto invece di
    * spostarne la data.
    */
-  replaceAll(data: DataSet, takenAt: Timestamp): Promise<Timestamp | null>
+  replaceAll(data: DataSet, takenAt: Timestamp): Promise<void>
   /**
-   * **Qui c'erano `snapshotTakenAt` e `restoreSnapshot`, e sono state differite.**
+   * **Qui c'erano `snapshotTakenAt` e `restoreSnapshot`, e sono state differite.
+   * Con loro se n'e' andato il valore di ritorno di `replaceAll`**, che diceva
+   * la data dello scatto rimasto (o `null` se non c'era niente da salvare).
+   *
+   * Quel valore si giustificava con un uso — *"dire subito dopo l'import a cosa
+   * si tornerebbe"* — che nessuno fa: l'unico chiamante di produzione,
+   * `Repository.importBackup`, lo buttava via. Era la meta' di lettura dello
+   * scatto travestita da valore di ritorno, cioe' la stessa superficie senza
+   * chiamante, presa dalla porta di servizio. Rientra col dialogo che la legge,
+   * e costa due implementazioni piu' il loro ramo per il caso vuoto.
+   *
+   * Cio' che quel valore rendeva osservabile non e' andato perso: lo scatto e'
+   * un record su disco, e i test lo leggono **da dove sta** — piu' severo di
+   * quanto fosse leggerlo qui.
    *
    * Lo scatto si prende gia' — `replaceAll` qui sopra — ma **niente lo legge e
    * niente lo ripristina**, perche' non esiste ancora una schermata che lo
@@ -352,9 +359,9 @@ export interface Persistence {
    * adesso c'e' spazio".
    *
    * **Condizione**: arrivano nel commit che le chiama, cioe' quello del dialogo
-   * di ripristino. **Se quel dialogo non arriva in fase 7, non arrivano nemmeno
-   * loro** — e lo scatto resta una rete che nessuno puo' tirare, che e' un
-   * difetto suo e va guardato allora.
+   * di ripristino. **Finche' quel dialogo non c'e', non ci sono nemmeno loro**
+   * — e lo scatto resta una rete che nessuno puo' tirare, che e' un difetto suo
+   * e va guardato per conto suo, non rimandato a una fase.
    *
    * Gli argomenti che le riguardavano non sono andati persi: stanno in
    * [ADR 026](../../docs/adr/026-l-import-sostituisce-e-lascia-una-rete.md),

@@ -35,9 +35,17 @@ export const SCHEMA_VERSION = 6
  * **quella** costante, e non ci sara' nessuna terza da ricordarsi.
  *
  * La terza lista non e' una lista, ed e' la ragione per cui non compare qui:
- * **cosa esce nel backup e' un tipo**, `BackupFile.data` piu' i `counts`
- * dell'anteprima, tutti e due indicizzati su `StoreName`. Uno store di sistema
- * li' dentro non compila, che e' meglio di non essere elencato.
+ * **cosa esce nel backup e' un tipo**, `BackupFile.data`. Non e' pero'
+ * indicizzato su `StoreName` — e' un'interfaccia scritta a mano — quindi li'
+ * il compilatore non dice niente, e a sorvegliarlo e' un test: `snapshot.ts`
+ * §"lo scatto e di un'altra famiglia" confronta le chiavi di `BackupFile.data`
+ * con `ARCHIVE_STORES` e chiede che non contengano lo store di sistema.
+ *
+ * Questo capoverso nominava anche i `counts` dell'anteprima come secondo tipo
+ * indicizzato. Non lo sono piu' — hanno le tre chiavi che una schermata sa
+ * mostrare — e non erano un guardiano scelto: erano un tipo di prodotto che per
+ * caso aveva la forma di un indice. Il guardiano di famiglia che regge sul
+ * compilatore e' `RawDataSet`, qui sotto.
  */
 
 /**

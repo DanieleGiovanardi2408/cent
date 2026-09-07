@@ -105,7 +105,7 @@ export type Cadence = 'daily' | 'weekly' | 'monthly'
  *
  * Nessuna migrazione, per lo stesso motivo di `note`: nessun record puo' averla.
  *
- * **L'idea non e' morta**, ed e' in `docs/ROADMAP.md` per la fase 7 con il suo
+ * **L'idea non e' morta**, ed e' in `docs/ROADMAP.md` con il suo
  * argomento vero — le spese fisse di un Erasmus finiscono tutte: la palestra a
  * giugno, il tram ad agosto, l'affitto con il contratto. Torna **insieme al suo
  * campo di input**, nello stesso commit.
@@ -323,18 +323,38 @@ export interface DataSet {
  * invece di lasciarlo scoprire a chi si fida della frase.
  *
  * - **Uno store di sistema messo fra quelli d'archivio: non compila.** Provato
- *   aggiungendo `'preImportSnapshot'` a `ARCHIVE_STORES` — quattro errori, in
- *   `backup.ts` (due volte i `counts`), `schema.ts` (`emptyRawDataSet`) e
- *   `snapshot.ts`. Provato mettendolo in `REPLACED_STORES`: `TS2322` sul posto.
- *   E' il verso che conta, perche' e' quello dei tre danni di ADR 026 §2.
+ *   aggiungendo `'preImportSnapshot'` a `ARCHIVE_STORES`: cade `schema.ts`,
+ *   dove `emptyRawDataSet` non soddisfa piu' `RawDataSet`. Provato mettendolo
+ *   in `REPLACED_STORES`: `TS2322` sul posto. E' il verso che conta, perche' e'
+ *   quello dei tre danni di ADR 026 §2.
  * - **Uno store d'archivio dichiarato di sistema: compila.** Aggiungendo
  *   `'budgets'` a `SYSTEM_STORES`, `tsc` tace: `AnyStoreName` e' gia' la loro
- *   unione, quindi non cambia niente. A prenderlo sono **due test** di
- *   `schema.test.ts`, e per questo esistono.
- * - **Un sesto store d'archivio** costringe a decidere in nove punti, fra cui
- *   `RawDataSet`, `emptyRawDataSet` e i `counts` dell'anteprima; `BackupFile`
- *   no, e' un'interfaccia scritta a mano — la' il guardiano e' il test che
- *   confronta le sue chiavi con `ARCHIVE_STORES`.
+ *   unione, quindi non cambia niente. A prenderlo sono i test — due in
+ *   `schema.test.ts`, uno in `snapshot.test.ts` — e per questo esistono.
+ * - **Un sesto store d'archivio** non compila: cadono `idb.ts`, dove il tipo
+ *   `CentDB` elenca gli store uno per uno e ogni transazione ci si appoggia, e
+ *   `schema.ts` con `RawDataSet`. `BackupFile` no, e' un'interfaccia scritta a
+ *   mano — la' il guardiano e' il test che confronta le sue chiavi con
+ *   `ARCHIVE_STORES`.
+ *
+ * ## Il guardiano si e' accorciato, e chi lo tiene su e' cambiato
+ *
+ * I `counts` dell'anteprima erano in tutti e tre gli elenchi qui sopra, perche'
+ * erano un `Record<StoreName, number>` e chiedevano una chiave per store. Non
+ * lo sono piu': `ImportPreview.counts` ha le tre chiavi che una schermata sa
+ * mostrare, e li' c'e' scritto perche'.
+ *
+ * Vale la pena dire cosa si e' imparato, e non che si e' perso qualcosa. Quel
+ * guardiano era **per omonimia**: teneva perche' un tipo di prodotto aveva per
+ * caso la forma di un indice sugli store, cioe' fino al primo che avesse avuto
+ * una ragione di prodotto per cambiarlo. Un guardiano che dipende dal fatto che
+ * nessuno guardi non e' un guardiano. Quello scelto apposta e' `RawDataSet`, e
+ * non ha altri mestieri.
+ *
+ * **E la misura sopra era vecchia prima di questo**: diceva "quattro errori" e
+ * ne nominava uno in `snapshot.ts`, che non c'e' da quando `snapshotPayload` e'
+ * uscita. Un numero e un elenco che dicono la stessa cosa divergono; qui sopra
+ * il numero e' stato tolto e l'elenco e' rimasto.
  */
 export const ARCHIVE_STORES = [
   'expenses',

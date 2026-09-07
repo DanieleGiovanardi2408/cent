@@ -347,7 +347,7 @@ export function variants(key: Key): readonly string[] {
  * su un intero gia' verificato da `assertCents`, e Intl arrotonda comunque a due
  * decimali.
  *
- * L'export CSV (fase 7) NON deve usare questa funzione ne' averne una variante
+ * L'export CSV (fase 8) NON deve usare questa funzione ne' averne una variante
  * "senza simbolo": in italiano la virgola decimale dentro un CSV separato da
  * virgole spacca il campo, e in inglese le migliaia fanno lo stesso. Per il CSV
  * resta `(cents / 100).toFixed(2)`, che non dipende dal locale — e non deve.
