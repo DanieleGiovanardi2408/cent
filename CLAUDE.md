@@ -51,8 +51,36 @@ decisione sbagliata. Tutto il resto dell'app e' secondario a questo flusso.
 - Zero altre dipendenze runtime senza una ADR scritta in `docs/adr/`.
 
 ## Performance budget (verificabile)
-- **Primo caricamento < 65 KB gzip, JS + CSS insieme.** Se si supera, si taglia —
+- **Primo caricamento < 68 KB gzip, JS + CSS insieme.** Se si supera, si taglia —
   oppure si alza il tetto **con la ragione scritta accanto**, mai in silenzio.
+
+  ### 60 -> 65 -> 68, e i due aumenti stanno a quattro giorni
+
+  Il secondo e' del **7 settembre 2026**, e il ritmo va letto insieme al numero.
+  I 436 byte che sforavano compravano: `RecurringRule.endDate` **col suo campo di
+  input** — meta' di cio' che ROADMAP A2 assegna alla fase 7 — le parole del
+  pavimento della griglia, la riga che dice quante categorie restano fuori dalla
+  griglia dopo un import, e il rimedio del ramo di rifiuto che non ce l'aveva.
+
+  **Quasi tutto stringhe in due lingue.** Comprimerle vuol dire togliere un fatto
+  a schermo, e le due che si potevano accorciare senza perderne uno erano gia'
+  state accorciate (−71 byte) prima che il numero arrivasse qui.
+
+  ### Il rovescio, che e' il costo vero di questo aumento
+
+  Il tetto e' **un cricchetto**: costringe a un argomento a ogni crescita. Con
+  **2,6 KB di margine quel ruolo si indebolisce**, e va detto invece di far finta.
+
+  E non c'e' nessuno script che lo sostituisca. Il cricchetto ha fatto emergere
+  `restoreSnapshot` e `snapshotTakenAt` **senza chiamanti di produzione**, e
+  `dead-surface.mjs` **non li avrebbe presi**: i suoi quattro controlli guardano
+  campi dei tipi, chiavi i18n, membri di unione e campi delle viste — **non
+  simboli esportati senza chiamante**.
+
+  Quindi, finche' quel controllo non esiste, cio' che guarda cosa entra
+  nell'albero e' **il gate a ogni chiusura di fase, cioe' una persona**. E' una
+  scelta presa sapendola, e sta scritta qui perche' fra un mese si sappia che il
+  buco e' noto e chi lo copre. Il controllo E e' un compito della fase 8.
 
   **Il numero e' nostro, e la ragione e' di prodotto**: la prima persona che
   aprira' questa app lo fara' su una connessione dati estera, in Erasmus, con un
@@ -109,7 +137,9 @@ decisione sbagliata. Tutto il resto dell'app e' secondario a questo flusso.
 
   **Ogni aumento vuole un argomento su cosa comprano i byte e se sono
   irriducibili.** Non vuole una misura nuova: la curva e' piatta e **l'abbiamo
-  gia' misurata**.
+  gia' misurata**. L'aumento del 7 settembre e' stato deciso cosi', e la misura
+  del 3 settembre copre anche i 68: 60 e 65 distano 0,06 s di FCP, e 68 sta
+  dentro lo stesso tratto piatto.
 
   Una misura nuova serve in due casi soli: **sopra i ~100 KB**, dove la curva
   smette di essere piatta, oppure **se cambia la struttura** — una dipendenza

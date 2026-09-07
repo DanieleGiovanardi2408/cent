@@ -5,16 +5,37 @@ import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { gzipSync } from 'node:zlib'
 import { join, relative } from 'node:path'
 
-// **65 e non 60, dal 3 settembre 2026.** L'aumento e' argomentato in CLAUDE.md
-// (§"Performance budget"): l'import entra nel bundle, e **2,2 dei 4,6 KB sono
-// `parseBackup`** — il dominio, irriducibile senza togliere la funzione. Fin qui
-// l'app sapeva scrivere un backup e non leggerlo, e quel codice mancante **era**
-// la promessa non mantenuta.
+// **68 e non 65, dal 7 settembre 2026** — e prima 65 e non 60, dal 3 settembre.
+// **Due aumenti in quattro giorni**, ed e' un dato sul ritmo dell'app, non solo
+// sul tetto: va letto insieme al numero, non dopo.
+//
+// L'argomento per esteso sta in CLAUDE.md (§"Performance budget"). In breve: i
+// 436 byte che sforavano compravano `RecurringRule.endDate` col suo campo di
+// input — meta' di cio' che ROADMAP A2 assegna alla fase 7 — le parole del
+// pavimento della griglia, la riga che dice quante categorie restano fuori dalla
+// griglia dopo un import, e il rimedio del ramo di rifiuto che non ce l'aveva.
+// Quasi tutto **stringhe in due lingue**: comprimerle vuol dire togliere un
+// fatto a schermo, e le due che si potevano accorciare sono gia' state
+// accorciate.
+//
+// **Il rovescio, scritto perche' e' il costo vero.** Il tetto e' un cricchetto:
+// serve a costringere a un argomento a ogni crescita, non a proteggere l'FCP —
+// fra 60 e 68 la curva e' piatta e la misura c'e' gia'. Con 2,6 KB di margine
+// **quel ruolo si indebolisce**, e non c'e' nessuno script che lo sostituisca:
+// il cricchetto ha fatto emergere `restoreSnapshot` e `snapshotTakenAt` senza
+// chiamanti di produzione, e **`dead-surface.mjs` non li avrebbe presi** — i
+// suoi quattro controlli guardano campi, chiavi e membri di unione, non simboli
+// esportati senza chiamante.
+//
+// Quindi finche' un controllo E non esiste (ROADMAP, compiti della fase 8), cio'
+// che guarda l'albero e' il gate a ogni chiusura di fase, cioe' una persona. E'
+// una scelta, non una svista: sta scritta qui perche' fra un mese si sappia che
+// il buco e' noto e chi lo copre.
 //
 // Il tetto resta in **byte** e non in secondi, e il motivo e' un numero: lo
 // scarto della misura in secondi (±0,07) e' maggiore dell'effetto da sorvegliare
 // (0,06). Un controllo che fallisce a caso insegna a ignorare il rosso.
-export const BUDGET_BYTES = 65 * 1024
+export const BUDGET_BYTES = 68 * 1024
 const DIST = 'dist'
 
 function walk(dir) {

@@ -1,7 +1,7 @@
 # La mappa
 
 <!-- JUDGMENT rivisto=2acb995 -->
-> Rivisto a `2acb995`, 5 commit fa.
+> Rivisto a `2acb995`, 6 commit fa. **Da riguardare.**
 
 **Questo blocco dice la forma, non i fatti.** Non porta nessun numero: quelli si
 rigenerano qui sotto, e una cifra scritta a mano accanto a una rigenerata e' la
@@ -61,18 +61,18 @@ sa gia', e per questo non puo' invecchiare. I giudizi — cosa e' in volo, cosa
 aspetta una persona — stanno sotto, scritti a mano e timbrati con lo SHA a cui
 sono stati rivisti.
 
-- **Ultimo commit**: `1fc9c9e` — feat: le parole del pavimento, e le warning dell'import arrivano a schermo
-- **Data**: 07/09/2026 21:14
+- **Ultimo commit**: `5156102` — feat: `endDate` ha un produttore — il selettore della fine nel foglio della regola
+- **Data**: 07/09/2026 21:45
 - **Ramo**: `fase7/scatto-pre-import`
 - **Pushato**: si, `origin/fase7/scatto-pre-import` e' allo stesso commit
-- **Rispetto a `origin/main`**: 35 commit avanti
+- **Rispetto a `origin/main`**: 36 commit avanti
 - **Albero di lavoro**: **non pulito**, ci sono modifiche non committate
 
 - **Test unitari**: 850 in 27 file, tutti verdi
 - **Test e2e dichiarati**: 466 in 15 file, su 4 progetti (iphone-se, iphone-14, landscape, dark)
 - **Test e2e eseguiti**: 440 passati, 26 saltati, in 3.0 minuti. I saltati sono condizionali (ADR 013): solo un'esecuzione li vede.
-- **Bundle iniziale**: 65.4 KB gzip su 65.0 KB (-0.4 KB di margine)
-- **Disco**: 3.7 GB liberi, 82% pieno. Non e' un giudizio e non porta un timbro: cambia da solo, quindi si rigenera.
+- **Bundle iniziale**: 65.4 KB gzip su 68.0 KB (2.6 KB di margine)
+- **Disco**: 5.4 GB liberi, 75% pieno. Non e' un giudizio e non porta un timbro: cambia da solo, quindi si rigenera.
 
 - **Schema del database**: 6. La scala delle migrazioni:
   - **1** — Schema iniziale: expenses, categories, recurringRules, budgets, settings
@@ -91,7 +91,7 @@ sono stati rivisti.
 ## In volo adesso
 
 <!-- JUDGMENT rivisto=d143f2f -->
-> Rivisto a `d143f2f`, 17 commit fa. **Da riguardare.**
+> Rivisto a `d143f2f`, 18 commit fa. **Da riguardare.**
 
 **Ri-derivato il 4 settembre, e stavolta il fatto e' un altro**: si lavora sul
 ramo `fase7/scatto-pre-import`, e `main` e' fermo a `9958f4f`.
@@ -2651,6 +2651,24 @@ prodotta ([DEBITO.md](DEBITO.md), "Perche' questo file esiste").
   frame**: la preferenza sta in IndexedDB, che si apre dopo il primo disegno, e un
   colore non si riserva come si riserva una larghezza.
 
+- **Il controllo E: simboli esportati senza chiamante di produzione.** Nato il 7
+  settembre 2026 come **contropartita di un aumento del tetto**, e la ragione e'
+  scritta in `scripts/size.mjs` accanto al numero: il cricchetto ha fatto
+  emergere `restoreSnapshot` e `snapshotTakenAt` senza chiamanti, e
+  `dead-surface.mjs` **non li avrebbe presi** — A guarda i campi dei tipi, B le
+  chiavi i18n, C i membri di unione, D i campi delle viste. Nessuno guarda un
+  `export function` che nessuno chiama.
+
+  Portando il tetto a 68 KB quel lavoro non lo fa piu' nessuna macchina: lo fa
+  **il gate a ogni chiusura di fase, cioe' una persona**. Il controllo E lo
+  rimette a una macchina.
+
+  **Attenzione alla forma**, perche' e' quella che decide se serve: dev'essere
+  mutato **prima** di crederci (forma 4 della tassonomia — un controllo la cui
+  copertura ha un buco di cui nessuno sa), e deve distinguere un simbolo
+  esportato per i test da uno esportato e basta, altrimenti dichiara morta meta'
+  di `src/core`.
+
 **Cosa la fase 8 NON apre.** Il link agli amici e' A3, che viene dopo. La fase 8
 prepara le cose senza le quali A3 non si puo' fare, e non e' A3.
 
@@ -2794,12 +2812,14 @@ Nato dal gate precedente, che aveva trovato una conferma che prometteva la
 ricreazione delle fisse mentre nessuno le creava. **L'aveva trovata perche' quel
 percorso non aveva nessun test.**
 
-#### 8. Cancellare non puo' lasciare la griglia vuota
+#### 8. Cancellare **e archiviare** non possono lasciare la griglia vuota
 
 <!-- USCITA
-     present: src/core/categories.ts :: reason: 'last'
+     present: src/core/categories.ts :: reason: 'last-active'
+     present: src/core/categories.ts :: export function isLastOnGrid
+     present: src/core/repository.ts :: isLastOnGrid(state.categories, id)
 -->
-> **Non applicata**: manca `reason: 'last'` in `src/core/categories.ts`.
+> **Applicata**, verificato da: `reason: 'last-active'`, `export function isLastOnGrid`, `isLastOnGrid(state.categories, id)`.
 
 `planCategoryDeletion` non aveva nessun pavimento: su un'installazione senza spese
 e senza regole le otto si cancellano una per una, e da li' **non si puo' piu'
@@ -2807,12 +2827,27 @@ inserire nessuna spesa** — il salvataggio *e'* il tap sulla categoria. L'expor
 prodotto in quel momento e' per giunta un file che `parseBackup` rifiuta: l'app
 scriveva un file che l'app non riprende.
 
+**E le porte erano due.** L'argomento — *"senza chip non esiste il tap che salva
+una spesa"* — non nominava la cancellazione, e valeva identico per
+l'archiviazione: otto archiviazioni lasciano otto record e zero chip, e quello
+stato non lo prende nessuno (`openRepository` risemina a zero **record**,
+`parseBackup` conta i record). Il fatto sta quindi in `isLastOnGrid`, con tre
+lettori, e i tre aghi qui sopra sorvegliano che restino tre.
+
+**Gli aghi di questa voce erano sbagliati quando sono stati scritti**, ed e'
+istruttivo: dicevano `reason: 'last'` e `import.archived`, cioe' i nomi che chi
+scriveva il criterio **si aspettava**, non quelli che il codice avrebbe avuto
+(`'last-active'`, `import.offGrid`). Un criterio scritto prima del codice
+descrive un'intenzione; quando il codice arriva, gli aghi si **derivano** —
+altrimenti il controllo dice "non applicata" su una cosa fatta, che e' il modo
+piu' rapido per insegnare a ignorarlo.
+
 #### 9. Le warning che cambiano cio' che l'utente vedra' arrivano nell'anteprima
 
 <!-- USCITA
-     present: src/ui/ImportSheet.tsx :: import.archived
+     present: src/ui/ImportSheet.tsx :: import.offGrid
 -->
-> **Non applicata**: manca `import.archived` in `src/ui/ImportSheet.tsx`.
+> **Applicata**, verificato da: `import.offGrid`.
 
 Chiude [DEBITO.md](DEBITO.md) §15. La sua condizione era *"il primo commit che
 tocca la schermata d'import per qualunque altra ragione"*, e in questa chiusura
