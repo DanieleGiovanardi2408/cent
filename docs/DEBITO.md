@@ -718,10 +718,13 @@ progetto non esista gia'.
 
 ## 12. I messaggi di `ImportIssue` sono in italiano, in un'app il cui default e' inglese
 
-**Stato: aperto.** Nato il 3 settembre 2026, mentre l'anteprima dell'import
+**Stato: la causa e' stata rimossa il 7 settembre 2026 — `ImportIssue.message`
+non esiste piu'. Resta aperta la seconda meta', il discriminante di stringa:
+vedi in fondo.** Nato il 3 settembre 2026, mentre l'anteprima dell'import
 imparava a rifiutare.
 
-**Cosa.** `ImportIssue.message` e' una stringa italiana scritta dentro
+**Cosa** (al 3 settembre; oggi il campo non esiste piu', vedi in fondo).
+`ImportIssue.message` era una stringa italiana scritta dentro
 `src/core/backup.ts` — *"importo non intero in centesimi"*, *"il file non
 contiene nessuna categoria: senza griglia non si puo inserire nessuna spesa"*.
 Sono trentaquattro punti di emissione — 18 `c.error`, 10 `c.warn`, 6 rifiuti — e non passano da `t()`: non possono, perche' `src/core` non
@@ -776,6 +779,33 @@ esattamente il giorno in cui deve cadere.
 stesso `path`, o in cui serve una distinzione che il path non porta. Li' il
 discriminante deve diventare un campo — un `code` chiuso su `ImportIssue` — e
 quel campo arriva col suo lettore, cioe' con la riparazione, non prima.
+
+### 7 settembre: la causa e' uscita dal codice, e non e' stata tradotta
+
+`ImportIssue.message` **non esiste piu'**. Non e' stato tradotto e non e'
+diventato un `code`: e' stato **tolto**.
+
+**Perche' si poteva.** Aveva zero lettori di produzione. L'unico modulo che
+legge `ImportPreview.issues` e' `refusalOf` in `src/ui/import-view.ts`, e la
+sua uscita e' funzione di `fromSchemaVersion`, `severity`, `path` e `recordId`
+— mai di `message`. Il campo viveva delle sole asserzioni dei test: sei, in
+`backup.test.ts`. E' la forma di `RecurringRule.note`, `expensesInRange`,
+`planBudgetChange`, `restoreSnapshot`.
+
+**La ragione scritta nel codice non e' il budget** — che pure ne beneficia — ma
+il principio che la causa: **il dominio non parla nessuna lingua.** `src/core`
+non conosce i dizionari e non deve; una frase emessa da li' e' italiana per
+costruzione, in un'app il cui default e' inglese. E' presentazione dentro il
+dominio, la stessa cosa gia' corretta togliendo `it-IT` da `money.ts`.
+
+**Cosa e' costato.** Un ramo: i due rifiuti su `file.app` — *"non dice di
+essere un backup"* e *"dice di appartenere a X"* — differivano solo nella
+frase, e senza la frase producevano due issue identiche. Sono uno solo, e il
+test asserisce adesso la loro **identita'** invece di due stringhe.
+
+**Cosa resta aperto, ed e' solo la seconda meta'**: il discriminante e' ancora
+un prefisso di stringa, sorvegliato dal test che fabbrica file rotti veri. La
+condizione qui sopra vale identica.
 
 ## 13. Un record illeggibile su cento rifiuta tutto il file
 

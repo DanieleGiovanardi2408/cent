@@ -15,11 +15,11 @@
  * definizione) e la fusione con i dati esistenti. L'import sostituisce tutto.
  */
 
-import { MAX_ACTIVE_CATEGORIES, activeCategories } from './categories'
+import { activeCategories } from './categories'
 import { isIsoDate, isTimeMinutes, toDateParts } from './date'
 import type { IsoDate } from './date'
 import { buildDefaultSettings } from './defaults'
-import { SCHEMA_VERSION, SchemaTooNewError, emptyRawDataSet, migrateRawData } from './schema'
+import { SCHEMA_VERSION, emptyRawDataSet, migrateRawData } from './schema'
 import type { RawDataSet, RawRecord } from './schema'
 import { isLive } from './stats'
 import type {
@@ -64,6 +64,27 @@ export function buildBackup(data: DataSet, now: () => Timestamp = nowTimestamp):
 
 export type IssueSeverity = 'error' | 'warning'
 
+/**
+ * Un rilievo sulla lettura del file: **quanto grave** e **dove**. Mai in che
+ * parole.
+ *
+ * ## Il dominio non parla nessuna lingua
+ *
+ * `src/core` non conosce i dizionari e non deve. Una frase emessa da qui
+ * sarebbe italiana per costruzione, in un'app il cui default e' **inglese**:
+ * e' presentazione dentro il dominio, la stessa cosa gia' corretta togliendo
+ * `it-IT` da `money.ts`.
+ *
+ * C'e' stato un campo `message`, e non e' stato tradotto: e' stato **tolto**.
+ * Aveva zero lettori di produzione — `refusalOf` classifica su `severity`,
+ * `path` e `recordId`, e le quattro coppie di frasi stanno nei due dizionari —
+ * quindi viveva delle sole asserzioni dei test, come `RecurringRule.note` e
+ * `expensesInRange` prima di lui.
+ *
+ * Cio' che resta sono **fatti**: una severita' che decide, un punto che si
+ * legge, e — quando c'e' — un id che si cerca dentro il file. Le parole le
+ * sceglie chi mostra, nella lingua di chi guarda.
+ */
 export interface ImportIssue {
   readonly severity: IssueSeverity
   /** Dove, in forma leggibile: `expenses[12].amountCents`. */
@@ -89,7 +110,6 @@ export interface ImportIssue {
    * Onesto invece che comodo.
    */
   readonly recordId?: string
-  readonly message: string
 }
 
 export interface ImportPreview {
@@ -151,7 +171,7 @@ export interface ImportPreview {
    * `fromSchemaVersion > SCHEMA_VERSION` su un `ok: false` significa "il file
    * viene da un'app piu' nuova di questa", e `null` significa "non c'era niente
    * da leggere". Resta vero che **la UI non ramifica sul solo `null`**: il
-   * messaggio da mostrare sta nell'issue.
+   * resto della classificazione viene dal `path` delle issue.
    */
   readonly fromSchemaVersion: number | null
   /**
@@ -170,12 +190,12 @@ export interface ImportPreview {
 
 class Collector {
   readonly issues: ImportIssue[] = []
-  error(path: string, message: string, recordId?: string): null {
-    this.issues.push({ severity: 'error', path, message, ...(recordId === undefined ? {} : { recordId }) })
+  error(path: string, recordId?: string): null {
+    this.issues.push({ severity: 'error', path, ...(recordId === undefined ? {} : { recordId }) })
     return null
   }
-  warn(path: string, message: string): void {
-    this.issues.push({ severity: 'warning', path, message })
+  warn(path: string): void {
+    this.issues.push({ severity: 'warning', path })
   }
 }
 
@@ -212,12 +232,14 @@ function optionalIsoDate(value: unknown): IsoDate | undefined | false {
  * l'importo, la data e la categoria sono intatti e sono cio' che conta — ma non
  * si aggiusta nemmeno: arrotondare `1500` a `1439` vorrebbe dire inventare le
  * 23:59, e il campo assente e' gia' il modo che il modello ha per dire "di
- * questa spesa non sappiamo l'ora". Si scarta e si dice che si e' scartato.
+ * questa spesa non sappiamo l'ora". Si scarta, e lo scarto **resta segnato**:
+ * una `warning` sul campo. Cosa ci sia scritto accanto non lo decide questo
+ * modulo — vedi `ImportIssue`.
  */
 function optionalTimeMinutes(value: unknown, path: string, c: Collector): number | undefined {
   if (value === undefined || value === null) return undefined
   if (isTimeMinutes(value)) return value
-  c.warn(path, `orario non valido (${String(value)}): la spesa entra senza orario`)
+  c.warn(path)
   return undefined
 }
 
@@ -229,7 +251,7 @@ interface BaseFields {
 
 function base(raw: RawRecord, path: string, c: Collector): BaseFields | null {
   const id = str(raw['id'])
-  if (id === null) return c.error(`${path}.id`, 'id assente o non testuale')
+  if (id === null) return c.error(`${path}.id`)
   // I timestamp mancanti non giustificano la perdita del record: quello che
   // conta di una spesa e' l'importo, non l'ora in cui e' stata digitata.
   const fallback = new Date(0).toISOString()
@@ -242,17 +264,17 @@ function parseExpense(raw: RawRecord, path: string, c: Collector): Expense | nul
   const b = base(raw, path, c)
   if (b === null) return null
   const amountCents = intCents(raw['amountCents'])
-  if (amountCents === null) return c.error(`${path}.amountCents`, 'importo non intero in centesimi', b.id)
+  if (amountCents === null) return c.error(`${path}.amountCents`, b.id)
   const categoryId = str(raw['categoryId'])
-  if (categoryId === null) return c.error(`${path}.categoryId`, 'categoria assente', b.id)
+  if (categoryId === null) return c.error(`${path}.categoryId`, b.id)
   const date = isoDate(raw['date'])
-  if (date === null) return c.error(`${path}.date`, `data non valida: ${String(raw['date'])}`, b.id)
+  if (date === null) return c.error(`${path}.date`, b.id)
   const source = raw['source'] === 'recurring' ? 'recurring' : 'manual'
   const note = optionalStr(raw['note'])
   const recurringId = optionalStr(raw['recurringId'])
   const deletedAt = optionalStr(raw['deletedAt'])
   if (note === false || recurringId === false || deletedAt === false) {
-    return c.error(path, 'campi opzionali di tipo sbagliato')
+    return c.error(path)
   }
   const timeMinutes = optionalTimeMinutes(raw['timeMinutes'], `${path}.timeMinutes`, c)
   return {
@@ -272,7 +294,7 @@ function parseCategory(raw: RawRecord, path: string, c: Collector): Category | n
   const b = base(raw, path, c)
   if (b === null) return null
   const name = str(raw['name'])
-  if (name === null) return c.error(`${path}.name`, 'nome assente', b.id)
+  if (name === null) return c.error(`${path}.name`, b.id)
   const order = raw['order']
   return {
     ...b,
@@ -288,19 +310,19 @@ function parseRule(raw: RawRecord, path: string, c: Collector): RecurringRule | 
   const b = base(raw, path, c)
   if (b === null) return null
   const amountCents = intCents(raw['amountCents'])
-  if (amountCents === null) return c.error(`${path}.amountCents`, 'importo non intero in centesimi', b.id)
+  if (amountCents === null) return c.error(`${path}.amountCents`, b.id)
   const categoryId = str(raw['categoryId'])
-  if (categoryId === null) return c.error(`${path}.categoryId`, 'categoria assente', b.id)
+  if (categoryId === null) return c.error(`${path}.categoryId`, b.id)
   const cadence = raw['cadence']
   if (cadence !== 'daily' && cadence !== 'weekly' && cadence !== 'monthly') {
-    return c.error(`${path}.cadence`, `cadenza sconosciuta: ${String(cadence)}`, b.id)
+    return c.error(`${path}.cadence`, b.id)
   }
   const interval = raw['interval']
   if (typeof interval !== 'number' || !Number.isInteger(interval) || interval < 1) {
-    return c.error(`${path}.interval`, `intervallo non valido: ${String(interval)}`, b.id)
+    return c.error(`${path}.interval`, b.id)
   }
   const startDate = isoDate(raw['startDate'])
-  if (startDate === null) return c.error(`${path}.startDate`, 'data di inizio non valida', b.id)
+  if (startDate === null) return c.error(`${path}.startDate`, b.id)
   // `endDate` non si legge piu', e non e' una perdita: il campo non esiste piu'
   // sul record (vedi `RecurringRuleCommon`), e **con zero produttori nemmeno un
   // backup poteva contenerlo** — un backup e' l'export di dati scritti da
@@ -309,7 +331,7 @@ function parseRule(raw: RawRecord, path: string, c: Collector): RecurringRule | 
   // qualcuno abbia perso, e' una chiave che questa app non ha mai emesso.
   const lastMaterializedDate = optionalIsoDate(raw['lastMaterializedDate'])
   if (lastMaterializedDate === false) {
-    return c.error(path, 'lastMaterializedDate non e una data valida')
+    return c.error(path)
   }
   const common = {
     ...b,
@@ -329,14 +351,12 @@ function parseRule(raw: RawRecord, path: string, c: Collector): RecurringRule | 
   // Fuori dalle mensili l'ancora non esiste: dallo schema 4 il tipo non la
   // lascia nemmeno esprimere. Nessun writer di questa app ne ha mai scritta una
   // su una giornaliera o una settimanale, ma un JSON a mano puo': si scarta, e
-  // lo si dice, perche' scartarla in silenzio significherebbe far sparire un
-  // numero che qualcuno aveva scritto apposta.
+  // resta segnato — una `warning` su `anchorDay` — perche' scartarla senza
+  // lasciare traccia farebbe sparire un numero che qualcuno aveva scritto
+  // apposta.
   if (cadence !== 'monthly') {
     if (anchorRaw !== undefined && anchorRaw !== null) {
-      c.warn(
-        `${path}.anchorDay`,
-        `il giorno di ancoraggio vale solo per le regole mensili: ignorato su una ${cadence}`,
-      )
+      c.warn(`${path}.anchorDay`)
     }
     return { ...common, cadence }
   }
@@ -355,10 +375,7 @@ function parseRule(raw: RawRecord, path: string, c: Collector): RecurringRule | 
   // per un campo derivabile sono una perdita che non serve a niente.
   if (anchorDay === null) {
     if (anchorRaw !== undefined && anchorRaw !== null) {
-      c.warn(
-        `${path}.anchorDay`,
-        `giorno di ancoraggio non valido (${String(anchorRaw)}): si usa il giorno di startDate`,
-      )
+      c.warn(`${path}.anchorDay`)
     }
     return { ...common, cadence, anchorDay: toDateParts(startDate).day }
   }
@@ -370,14 +387,14 @@ function parseBudget(raw: RawRecord, path: string, c: Collector): Budget | null 
   if (b === null) return null
   const period = raw['period']
   if (period !== 'weekly' && period !== 'monthly') {
-    return c.error(`${path}.period`, `periodo sconosciuto: ${String(period)}`, b.id)
+    return c.error(`${path}.period`, b.id)
   }
   const amountCents = intCents(raw['amountCents'])
-  if (amountCents === null) return c.error(`${path}.amountCents`, 'importo non intero in centesimi', b.id)
+  if (amountCents === null) return c.error(`${path}.amountCents`, b.id)
   const effectiveFrom = isoDate(raw['effectiveFrom'])
-  if (effectiveFrom === null) return c.error(`${path}.effectiveFrom`, 'inizio validita non valido', b.id)
+  if (effectiveFrom === null) return c.error(`${path}.effectiveFrom`, b.id)
   const effectiveTo = optionalIsoDate(raw['effectiveTo'])
-  if (effectiveTo === false) return c.error(`${path}.effectiveTo`, 'data di fine non valida', b.id)
+  if (effectiveTo === false) return c.error(`${path}.effectiveTo`, b.id)
   // `categoryId` non si legge: il campo non esiste piu' su `Budget` (vedi
   // `types.ts`). Con zero produttori nemmeno un backup puo' contenerlo, quindi
   // sostenerlo qui sarebbe un ramo raggiungibile solo da un JSON scritto a
@@ -421,11 +438,11 @@ function parseSettings(raw: RawRecord | undefined, exportedAt: Timestamp | null,
   const fallback = buildDefaultSettings()
   const derived = exportedAt === null ? {} : { lastBackupAt: exportedAt }
   if (raw === undefined) {
-    c.warn('settings', 'impostazioni assenti nel file: si usano quelle di default')
+    c.warn('settings')
     return { ...fallback, ...derived }
   }
   if (raw['weekStartsOn'] !== undefined && raw['weekStartsOn'] !== 1) {
-    c.warn('settings.weekStartsOn', 'la settimana in questa app inizia sempre di lunedi')
+    c.warn('settings.weekStartsOn')
   }
   return {
     id: SETTINGS_ID,
@@ -536,10 +553,7 @@ function capActiveCategories(categories: readonly Category[], c: Collector): Cat
   const keep = new Set(activeCategories(categories).map((cat) => cat.id))
   const surplus = categories.filter((cat) => !cat.archived && !keep.has(cat.id))
   if (surplus.length === 0) return [...categories]
-  c.warn(
-    'categories',
-    `${surplus.length} categorie oltre le ${MAX_ACTIVE_CATEGORIES} della griglia: entrano in archivio, non si perde niente`,
-  )
+  c.warn('categories')
   return categories.map((cat) =>
     keep.has(cat.id) || cat.archived ? cat : { ...cat, archived: true },
   )
@@ -549,12 +563,12 @@ function rawArray(source: RawRecord, key: StoreName, c: Collector): RawRecord[] 
   const value = source[key]
   if (value === undefined) return []
   if (!Array.isArray(value)) {
-    c.warn(key, 'sezione non e un elenco: ignorata')
+    c.warn(key)
     return []
   }
   return value.filter((item): item is RawRecord => {
     if (isRecord(item)) return true
-    c.warn(key, 'elemento non e un oggetto: ignorato')
+    c.warn(key)
     return false
   })
 }
@@ -573,8 +587,11 @@ function parseList<T extends { readonly id: string }>(
       discarded += 1
       return
     }
+    // La `warning` segna **la seconda occorrenza**, cioe' quella che vince:
+    // `byId.set` sovrascrive, quindi di due record con lo stesso id resta
+    // l'ultimo del file. Il fatto stava dentro la frase e adesso sta qui.
     if (byId.has(record.id)) {
-      c.warn(`${store}[${index}]`, `id duplicato ${record.id}: tenuta l'ultima occorrenza`)
+      c.warn(`${store}[${index}]`)
     }
     byId.set(record.id, record)
   })
@@ -615,12 +632,12 @@ export function parseBackup(input: unknown): ImportPreview {
     fromSchemaVersion: declared,
     exportedAt,
   })
-  const reject = (path: string, message: string): ImportPreview => {
-    c.error(path, message)
+  const reject = (path: string): ImportPreview => {
+    c.error(path)
     return refused(0)
   }
 
-  if (!isRecord(input)) return reject('file', 'il contenuto non e un oggetto JSON')
+  if (!isRecord(input)) return reject('file')
   exportedAt = str(input['exportedAt'])
   // **`app` assente non passa piu'.** Prima passava, e un `{schemaVersion, data}`
   // di 54 byte bastava a svuotare l'archivio. Rompe la retrocompatibilita' con
@@ -629,22 +646,21 @@ export function parseBackup(input: unknown): ImportPreview {
   // quest'app che questa riga rifiuti. Rifiuta i JSON di qualcun altro, che e'
   // cio' che deve fare.
   //
-  // I due messaggi sono separati perche' sono due situazioni diverse per chi
-  // legge: un file di un'altra app dice il nome di quell'app, un file che non
-  // dice niente non e' un backup.
-  if (input['app'] === undefined) {
-    return reject('file.app', 'questo file non dice di essere un backup di Cent')
-  }
-  if (input['app'] !== 'cent') {
-    return reject('file.app', `questo file dice di appartenere a "${String(input['app'])}"`)
-  }
+  // **Un ramo solo, ed e' il taglio di `message` a ridurlo.** Ce n'erano due —
+  // "non dice di essere un backup di Cent" e `dice di appartenere a "X"` — e la
+  // loro unica differenza era la frase: stesso `path`, stessa severita', stesso
+  // `not-backup` a schermo. Senza la frase erano due rami con lo stesso esito
+  // osservabile, cioe' una distinzione che nessuno poteva leggere.
+  //
+  // Il fatto che l'utente legge non si perde: sta gia' nel file che ha in mano.
+  if (input['app'] !== 'cent') return reject('file.app')
   const rawVersion = input['schemaVersion']
   if (typeof rawVersion !== 'number' || !Number.isInteger(rawVersion) || rawVersion < 1) {
-    return reject('file.schemaVersion', 'versione dello schema assente o non valida')
+    return reject('file.schemaVersion')
   }
   declared = rawVersion
   const body = input['data']
-  if (!isRecord(body)) return reject('file.data', 'sezione dati assente')
+  if (!isRecord(body)) return reject('file.data')
 
   const raw: RawDataSet = emptyRawDataSet()
   raw.expenses = rawArray(body, 'expenses', c)
@@ -657,9 +673,14 @@ export function parseBackup(input: unknown): ImportPreview {
   let migrated: RawDataSet
   try {
     migrated = migrateRawData(raw, declared)
-  } catch (error) {
-    const message = error instanceof SchemaTooNewError ? error.message : String(error)
-    return reject('file.schemaVersion', message)
+  } catch {
+    // Il caso che conta e' `SchemaTooNewError`, e **non si distingue qui**: si
+    // distingue a valle, perche' `declared` e' gia' scritto sopra e sopravvive
+    // al rifiuto. `refusalOf` guarda `fromSchemaVersion > SCHEMA_VERSION` e
+    // dice "aggiorna l'app"; su qualunque altro guasto della migrazione il
+    // numero non sfora e la schermata dice "questo non e' un backup". La
+    // distinzione sta nel numero, non in una frase che non esiste piu'.
+    return reject('file.schemaVersion')
   }
 
   const expenses = parseList(migrated.expenses, 'expenses', parseExpense, c)
@@ -690,19 +711,13 @@ export function parseBackup(input: unknown): ImportPreview {
   // e' producibile e' **sopravviverci a una riapertura**. La riga sotto e la
   // semina di `openRepository` dicono la stessa cosa da due porte.
   if (cappedCategories.length === 0) {
-    c.error(
-      'categories',
-      'il file non contiene nessuna categoria: senza griglia non si puo inserire nessuna spesa',
-    )
+    c.error('categories')
   }
 
   const knownCategories = new Set(cappedCategories.map((cat) => cat.id))
   const orphans = expenses.records.filter((e) => !knownCategories.has(e.categoryId)).length
   if (orphans > 0) {
-    c.warn(
-      'expenses',
-      `${orphans} spese fanno riferimento a una categoria che non e nel file: vengono importate lo stesso`,
-    )
+    c.warn('expenses')
   }
 
   const discarded =
@@ -719,9 +734,17 @@ export function parseBackup(input: unknown): ImportPreview {
   // cento rende il file non importabile**, e non e' un effetto collaterale.
   // L'import sostituisce tutto, quindi accettare un file monco vuol dire
   // scambiare un archivio intero con una copia mutilata, dopo un "va bene".
-  // Il rimedio esiste ed e' nelle mani di chi importa: la issue nomina il
-  // punto esatto (`expenses[12].amountCents`) dentro un file di testo che ha
-  // gia' in mano — e' l'unica forma di rifiuto che l'utente puo' verificare.
+  // **Il rimedio esiste ed e' nelle mani di chi importa**, e questa riga
+  // diceva quale sbagliando: *"la issue nomina il punto esatto
+  // (`expenses[12].amountCents`) dentro un file di testo che ha gia' in
+  // mano"*. Quella stringa nel JSON **non compare** — e' un indice, non un
+  // testo — e chi la cercava non trovava niente.
+  //
+  // Cio' che porta davvero il rimedio e' `recordId`: nel file c'e' (`"id":
+  // "e-42"`), e' unico, e si cerca. Quando a mancare e' l'id stesso non c'e'
+  // niente da cercare, e la schermata ripiega sull'indice **dicendo che e' una
+  // posizione**. E' con quell'id in mano che il rifiuto totale resta
+  // verificabile invece di essere un vicolo cieco (DEBITO §13).
   const fatal = c.issues.some((issue) => issue.severity === 'error')
   if (fatal) return refused(discarded)
 

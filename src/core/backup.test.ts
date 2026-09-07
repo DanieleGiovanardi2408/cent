@@ -253,7 +253,17 @@ describe('file rotti: si racconta il problema, non si esplode', () => {
   it('rifiuta un file scritto da una versione futura, e ne dichiara la versione', () => {
     const preview = parseBackup({ ...valido(), schemaVersion: SCHEMA_VERSION + 5 })
     expect(preview.ok).toBe(false)
-    expect(preview.issues[0]?.message).toContain('Aggiorna')
+    // Il rifiuto arriva da `file.schemaVersion`, **lo stesso path di un file
+    // senza versione**: qui il path non distingue niente, e non deve. Cio' che
+    // distingue e' il numero, ed e' la riga sotto.
+    //
+    // Qui c'era `issues[0].message` che conteneva "Aggiorna": era la frase di
+    // `SchemaTooNewError` che attraversava il dominio. Non asseriva un esito
+    // di prodotto — nessuna schermata l'ha mai letta — e il fatto che
+    // sorvegliava (*"aggiorna l'app" e' un rifiuto diverso da "non e' un
+    // backup"*) e' asserito **dove si vede**, in `import-view.test.ts`:
+    // `refusalOf` di questo stesso file torna `{ kind: 'too-new' }`.
+    expect(preview.issues[0]?.path).toBe('file.schemaVersion')
     // **Il campo dice il numero che il file dichiarava.** Prima ogni rifiuto
     // lo azzerava, e "aggiorna l'app" e "questo non e' un backup" — due
     // messaggi opposti — avevano lo stesso `null`. Adesso la distinzione si
@@ -337,13 +347,22 @@ describe('file rotti: si racconta il problema, non si esplode', () => {
     const preview = parseBackup({ schemaVersion: SCHEMA_VERSION, data: {} })
     expect(preview.ok).toBe(false)
     expect(preview.issues[0]?.path).toBe('file.app')
-    // I due messaggi restano due. Una prova di fallimento l'ha trovato: se le
-    // due condizioni tornassero una sola — `app !== undefined && app !== 'cent'`
-    // preceduta dal rifiuto generico — il file continuerebbe a essere rifiutato
-    // e il test resterebbe verde, ma leggendo *"questo file dice di appartenere
-    // a «undefined»"*, cioe' un fatto che nel file non c'e'.
-    expect(preview.issues[0]?.message).not.toContain('undefined')
-    expect(parseBackup({ ...valido(), app: 'altra-app' }).issues[0]?.message).toContain('altra-app')
+    // **I due casi sono lo stesso rifiuto, e adesso e' un invariante.**
+    //
+    // Qui c'erano due asserzioni sui messaggi: che il rifiuto di un file senza
+    // `app` non dicesse *"appartiene a «undefined»"*, e che quello di un file
+    // altrui nominasse `altra-app`. Sorvegliavano una distinzione che **a
+    // schermo non e' mai esistita**: `refusalOf` manda tutti i path che
+    // iniziano per `file.` sullo stesso `not-backup`, con la stessa coppia di
+    // frasi e lo stesso rimedio.
+    //
+    // Tolte le frasi, i due rami di `parseBackup` producevano due issue
+    // identiche: sono diventati uno. L'asserzione che sostituisce le due
+    // vecchie e' **l'identita'**, non una stringa — cade il giorno in cui
+    // qualcuno rimette una differenza fra i due casi senza darle un lettore.
+    const altrui = parseBackup({ ...valido(), app: 'altra-app' })
+    expect(altrui.ok).toBe(false)
+    expect(altrui.issues).toEqual(preview.issues)
     // E un backup vero, che quel campo ce l'ha, continua a passare.
     expect(parseBackup(valido()).ok).toBe(true)
   })
@@ -375,7 +394,14 @@ describe('file rotti: si racconta il problema, non si esplode', () => {
     const preview = parseBackup(file)
     expect(preview.counts.expenses).toBe(2)
     expect(preview.data?.expenses.find((e) => e.id === 'e1')?.amountCents).toBe(999)
-    expect(preview.issues.some((i) => i.message.includes('id duplicato'))).toBe(true)
+    // L'avviso segna **la seconda occorrenza**, cioe' quella che ha vinto: e'
+    // in coda al file, quindi `expenses[3]` delle quattro. Prima qui si
+    // cercava la stringa "id duplicato" dentro il messaggio — che diceva
+    // *quale* id, mai *dove*. Il posto e' il fatto verificabile: e' la riga da
+    // guardare aprendo il file.
+    expect(
+      preview.issues.some((i) => i.severity === 'warning' && i.path === 'expenses[3]'),
+    ).toBe(true)
   })
 
   it('una sezione che non e un elenco viene ignorata senza far cadere il resto', () => {
@@ -553,9 +579,13 @@ describe('l import non puo essere la porta di servizio del tetto', () => {
     expect(
       preview.data?.categories.filter((c) => c.archived).map((c) => c.id),
     ).toEqual(['c-9', 'c-10', 'c-11'])
-    // E non e' silenzioso: l'anteprima e' il momento in cui l'utente decide.
+    // E non e' silenzioso **nell'anteprima** — a schermo non arriva, ed e'
+    // DEBITO §15. La severita' e' la meta' che contava e che il messaggio non
+    // portava: `warning`, non `error`. Allo stesso path `categories` esce un
+    // `error` quando le categorie sono zero, e i due esiti sono opposti — uno
+    // archivia, l'altro rifiuta il file.
     expect(
-      preview.issues.some((i) => i.path === 'categories' && i.message.includes('archivio')),
+      preview.issues.some((i) => i.severity === 'warning' && i.path === 'categories'),
     ).toBe(true)
   })
 })
@@ -661,7 +691,14 @@ describe('l ancora mensile all ingresso di un import', () => {
     expect(preview.data?.recurringRules[0] && 'anchorDay' in preview.data.recurringRules[0]).toBe(
       false,
     )
-    expect(preview.issues.some((i) => i.message.includes('solo per le regole mensili'))).toBe(true)
+    // Il fatto di prodotto e' la riga sopra: l'ancora **non e' entrata** nel
+    // record. Questa dice che lo scarto e' segnato e non silenzioso. Il path
+    // e' lo stesso della derivazione da `startDate` — due warning che
+    // condividono `anchorDay` — ma qui la regola e' settimanale, quindi
+    // l'altro ramo non e' nemmeno raggiungibile.
+    expect(
+      preview.issues.some((i) => i.severity === 'warning' && i.path.endsWith('.anchorDay')),
+    ).toBe(true)
   })
 
   it('l ancora derivata attraversa il motore: 31 gennaio resta ultimo giorno del mese', () => {

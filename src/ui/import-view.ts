@@ -232,8 +232,14 @@ function errorsOf(issues: readonly ImportIssue[]): readonly ImportIssue[] {
  * *"questo non e' un backup"* sono messaggi opposti. Qui il numero si guarda
  * **insieme** alla soglia dello schema — `> SCHEMA_VERSION` significa una cosa
  * sola e la dice l'app, non il file — e tutto il resto si decide sul `path`
- * delle issue, che e' l'unica parte di `ImportIssue` che non e' prosa italiana
- * (DEBITO §12): il `message` non arriva mai a schermo.
+ * delle issue.
+ *
+ * Qui c'era scritto che il `path` e' *"l'unica parte di `ImportIssue` che non
+ * e' prosa italiana"*, e adesso non e' piu' una fortuna: **`ImportIssue` non
+ * ha piu' prosa**. Il campo `message` e' stato tolto invece che tradotto —
+ * aveva zero lettori di produzione, e questa funzione era l'unica che avrebbe
+ * potuto averne uno. Il dominio non parla nessuna lingua; le frasi nascono
+ * qui, dai due dizionari, dentro lo `switch` esaustivo di `ImportSheet`.
  *
  * ## Il `path` come discriminante: fragile, e sorvegliato
  *
