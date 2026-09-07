@@ -147,9 +147,26 @@ describe('monthlyFixedCosts: "Fisse: X al mese"', () => {
     expect(monthlyFixedCosts(rules, oggi).totalCents).toBe(90_000)
   })
 
-  // C'era "una regola gia finita non conta; una che finisce oggi si". Non esiste
-  // piu' una regola finita: `endDate` aveva zero produttori. Il test torna con
-  // il campo, in fase 7.
+  it('una regola gia finita non conta; una che finisce oggi si', () => {
+    // Il terzo motivo per cui una riga dell'elenco non pesa sul mese, accanto a
+    // "spenta" e "non ancora cominciata". Il giorno della fine e' incluso: quel
+    // giorno la regola genera ancora, quindi quel giorno e' ancora un costo.
+    const finita = makeRule({
+      startDate: '2026-01-01',
+      cadence: 'monthly',
+      amountCents: 50_000,
+      endDate: '2026-08-21',
+    })
+    const finisceOggi = makeRule({
+      startDate: '2026-01-01',
+      cadence: 'monthly',
+      amountCents: 30_000,
+      endDate: '2026-08-22',
+    })
+    expect(monthlyFixedCosts([finita], oggi).totalCents).toBe(0)
+    expect(monthlyFixedCosts([finita], oggi).lines).toEqual([])
+    expect(monthlyFixedCosts([finisceOggi], oggi).totalCents).toBe(30_000)
+  })
 
   it('una regola che comincia domani non conta ancora; una che comincia oggi si', () => {
     // Limite dichiarato: e' la fotografia di adesso, non un piano.
@@ -282,8 +299,43 @@ describe('previewMaterialization: cosa succede se salvo', () => {
     ])
   })
 
-  // C'era "endDate taglia la finestra". Il bordo superiore adesso e' `today` e
-  // basta: non c'e' piu' niente che lo tagli. Torna con il campo, in fase 7.
+  it('endDate taglia la finestra: una regola gia finita mostra solo le sue occorrenze', () => {
+    const p = ok(
+      previewMaterialization(
+        {
+          amountCents: 1_000,
+          cadence: 'weekly',
+          interval: 1,
+          startDate: '2026-01-05',
+          endDate: '2026-02-02',
+        },
+        '2026-08-22',
+        NO_OCCURRENCES,
+      ),
+    )
+    expect(p.count).toBe(5)
+    expect(p.lastDate).toBe('2026-02-02')
+    expect(p.totalCents).toBe(5_000)
+  })
+
+  it("togliere la fine allarga l'annuncio: e' per questo che passa dall'anteprima", () => {
+    // Il verso opposto, ed e' quello che spiega perche' `endDate` viaggia nella
+    // bozza e non nella patch. Metterla accorcia cio' che si scrive, toglierla
+    // lo allunga: in tutti e due i casi cambia un numero gia' mostrato.
+    const base = {
+      amountCents: 1_000,
+      cadence: 'weekly',
+      interval: 1,
+      startDate: '2026-01-05',
+    } as const
+    const conFine = ok(
+      previewMaterialization({ ...base, endDate: '2026-02-02' }, '2026-03-02', NO_OCCURRENCES),
+    )
+    const senzaFine = ok(previewMaterialization(base, '2026-03-02', NO_OCCURRENCES))
+    expect(conFine.count).toBe(5)
+    expect(senzaFine.count).toBe(9)
+    expect(senzaFine.totalCents).toBeGreaterThan(conFine.totalCents)
+  })
 
   it('una regola non valida non lancia: rifiuta con il motivo di validateRule', () => {
     const r = previewMaterialization(
@@ -294,8 +346,39 @@ describe('previewMaterialization: cosa succede se salvo', () => {
     expect(r.ok).toBe(false)
     if (!r.ok) expect(r.reason).toContain('interval')
 
-    // La seconda meta' era `endDate` prima di `startDate`: e' andata via con il
-    // campo. Al suo posto l'altro rifiuto che `validateRule` produce ancora.
+    const fine = previewMaterialization(
+      {
+        amountCents: 1_000,
+        cadence: 'monthly',
+        anchorDay: 1,
+        interval: 1,
+        startDate: '2026-05-01',
+        endDate: '2026-04-01',
+      },
+      '2026-08-22',
+      NO_OCCURRENCES,
+    )
+    expect(fine.ok).toBe(false)
+    if (!fine.ok) expect(fine.reason).toContain('endDate')
+
+    // Una fine illeggibile si rifiuta **prima** del confronto con l'inizio:
+    // `isBefore` fra due stringhe di cui una non e' una data risponde
+    // qualcosa, e quel qualcosa non vuol dire niente.
+    const illeggibile = previewMaterialization(
+      {
+        amountCents: 1_000,
+        cadence: 'monthly',
+        anchorDay: 1,
+        interval: 1,
+        startDate: '2026-05-01',
+        endDate: 'boh' as IsoDate,
+      },
+      '2026-08-22',
+      NO_OCCURRENCES,
+    )
+    expect(illeggibile.ok).toBe(false)
+    if (!illeggibile.ok) expect(illeggibile.reason).toContain('endDate non valida')
+
     const ancora = previewMaterialization(
       { amountCents: 1_000, cadence: 'monthly', anchorDay: 32, interval: 1, startDate: '2026-08-01' },
       '2026-08-22',
@@ -520,16 +603,36 @@ describe('previewMaterialization: nextDate, cioe la prima che NON viene scritta'
     expect(await dateScritte(regola, '2026-09-15')).toEqual(['2026-09-15'])
   })
 
-  // C'era "una regola gia finita non ha una prossima: null, anche con arretrato
-  // da scrivere". Era il caso in cui ancorarsi al bordo **inferiore** della
-  // finestra avrebbe risposto "5 gennaio" per una regola che non ne avra' mai
-  // piu': se n'e' andato con `endDate`, che aveva zero produttori. `nextDate`
-  // resta `IsoDate | null` perche' quel `null` e' la risposta giusta il giorno
-  // in cui la scadenza torna — fase 7, insieme al suo campo di input.
-  //
-  // L'altro ancoraggio sbagliato — quello che risponderebbe `firstDate` su una
-  // regola retrodatata — e' ancora coperto dal test qui sotto, che e' anche il
-  // caso comune dei due.
+  it('una regola gia finita non ha una prossima: null, anche con arretrato da scrivere', async () => {
+    // La finestra qui **non** e' vuota: la regola non ha mai materializzato e
+    // `endDate` e' passata, quindi ci sono otto quindicinali arretrate da
+    // scrivere. E' il caso in cui ancorarsi al bordo **inferiore** della
+    // finestra risponderebbe "5 gennaio" — una prossima spesa per una regola
+    // che non ne avra' mai piu'.
+    //
+    // Ed e' anche il fatto che chi scrive le parole deve poter dire per intero:
+    // `count > 0` e `nextDate === null` **nella stessa anteprima**. "Non
+    // creera' altre spese" da solo tacerebbe le otto che stanno per nascere.
+    const regola = makeRule({
+      startDate: '2026-01-05',
+      cadence: 'weekly',
+      interval: 2,
+      amountCents: 3_000,
+      endDate: '2026-04-30',
+    })
+    const oggi: IsoDate = '2026-08-22'
+
+    const p = ok(previewMaterialization(regola, oggi, NO_OCCURRENCES))
+    expect(p.count).toBeGreaterThan(0)
+    expect(p.firstDate).toBe('2026-01-05')
+    expect(p.nextDate).toBe(null)
+
+    // Dopo aver scritto l arretrato il motore non produce piu' niente: e'
+    // esattamente cio' che `null` annuncia.
+    const scritte = await dateScritte(regola, oggi)
+    expect(scritte).toHaveLength(p.count)
+    expect(scritte[scritte.length - 1]).toBe(p.lastDate)
+  })
 
   it('su una regola arretrata la prossima non e la prima: 1 settembre, non 1 gennaio', async () => {
     // L affitto del brief. `firstDate` e' la prima delle otto che stanno per
@@ -911,6 +1014,10 @@ describe('planRecurringRuleRewind: la regola torna appena creata', () => {
       amountCents: base.amountCents,
       interval: base.interval,
       startDate: nuovaData,
+      // La fine **non** e' toccata dal rewind: la regola torna indietro e
+      // continua a finire dove finiva. Senza questa riga l'impronta annunciata
+      // sarebbe quella di una regola infinita e la transazione la rifiuterebbe.
+      ...(base.endDate !== undefined ? { endDate: base.endDate } : {}),
     }
     // Cadenza e ancora si ricopiano insieme: e' l'unica forma che il tipo
     // accetta, ed e' anche l'unica in cui retrodatare non puo' spostare il
@@ -954,6 +1061,36 @@ describe('planRecurringRuleRewind: la regola torna appena creata', () => {
     // il secondo e' toccato **togliendolo**.
     const { lastMaterializedDate: _era, ...resto } = regola
     expect(esito.rule).toEqual({ ...resto, startDate: '2026-01-01', updatedAt: UPDATED })
+  })
+
+  it('riavvolgere una regola finita riapre solo fino alla fine, non fino a oggi', () => {
+    // Il rewind sposta `startDate` e toglie il segnaposto; `endDate` resta dov'e'.
+    // La finestra riaperta e' quindi [data nuova, fine], non [data nuova, oggi].
+    const regola = makeRule({
+      id: 'palestra',
+      startDate: '2026-05-01',
+      cadence: 'monthly',
+      anchorDay: 1,
+      amountCents: 4_000,
+      endDate: '2026-06-30',
+      lastMaterializedDate: '2026-06-30',
+    })
+    const footprint = impronta(regola, '2026-03-01', OGGI)
+    // Marzo, aprile, maggio, giugno: quattro. Luglio e agosto stanno oltre la
+    // fine, e oggi e' il 22 agosto.
+    expect(footprint.count).toBe(4)
+    expect(footprint.lastDate).toBe('2026-06-01')
+
+    const esito = planRecurringRuleRewind([regola], NESSUNA_SPESA, {
+      id: regola.id,
+      startDate: '2026-03-01',
+      today: OGGI,
+      footprint,
+      updatedAt: UPDATED,
+    })
+    expect(esito.ok).toBe(true)
+    if (!esito.ok) throw new Error('atteso ok')
+    expect(esito.rule.endDate).toBe('2026-06-30')
   })
 
   it('il record dopo il rewind e indistinguibile da una regola creata con quella data', () => {

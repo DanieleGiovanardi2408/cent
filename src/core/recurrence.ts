@@ -31,9 +31,10 @@
  * ## Le altre due difese, che restano
  *
  * **Il segnaposto dice fin dove si e' guardato, non che cosa si e' generato.**
- * Avanza a `today` anche quando la finestra era vuota, perche' registra che la
- * finestra e' stata **considerata**: e' l'unica cosa che evita di riesaminare
- * ogni volta lo stesso intervallo gia' vuoto. Non e' il meccanismo di
+ * Avanza al bordo superiore della finestra — `today`, o `endDate` se la regola
+ * e' gia' finita — anche quando dentro non c'era niente, perche' registra che
+ * la finestra e' stata **considerata**: e' l'unica cosa che evita di
+ * riesaminare ogni volta lo stesso intervallo gia' vuoto. Non e' il meccanismo di
  * correttezza — quello e' l'id deterministico piu' la semantica *add* — e' il
  * bordo inferiore della finestra, cioe' una cache. Da qui ADR 018: arretrarlo
  * e' sicuro, ma **solo su richiesta esplicita** (`rewindRecurringRule`), mai
@@ -92,6 +93,17 @@ export function validateRule(rule: RecurringRule): string | null {
       return `anchorDay non valido: ${rule.anchorDay}`
     }
   }
+  // Una fine prima dell'inizio non e' una regola che non genera niente: e' una
+  // regola che non si puo' leggere. Come per l'ancora, qui si controlla la
+  // **relazione** e non la forma della stringa — che `isIsoDate` la sorvegli
+  // e' compito dell'unica porta d'ingresso, `previewMaterialization`, la stessa
+  // che gia' controlla `startDate`.
+  //
+  // Il caso `endDate === startDate` e' legittimo: una regola che scatta una
+  // volta sola. Il confronto e' quindi stretto.
+  if (rule.endDate !== undefined && isBefore(rule.endDate, rule.startDate)) {
+    return `endDate (${rule.endDate}) precede startDate (${rule.startDate})`
+  }
   return null
 }
 
@@ -112,10 +124,11 @@ function monthlyOccurrence(rule: RecurringRule, anchorDay: number, k: number): I
 /**
  * La prima occorrenza il giorno `from` o dopo.
  *
- * **Non risponde mai `null`** da quando `endDate` non esiste: una regola non
- * finisce piu'. Il tipo lo dichiara ancora perche' il giorno in cui la scadenza
- * torna (ROADMAP fase 7, insieme al suo campo di input) `null` e' la risposta
- * giusta, e i chiamanti la gestiscono gia'.
+ * **`null` significa "questa regola non ne ha altre, mai"**, e da quando
+ * `endDate` esiste e' una risposta che si raggiunge davvero: l'occorrenza
+ * calcolata cade oltre la fine. Non e' "non ce n'e' nel periodo che hai
+ * chiesto" — un `from` qualunque nel futuro di una regola infinita risponde
+ * sempre una data.
  *
  * Non guarda `active`: descrive il calendario della regola, non se sia il caso
  * di applicarlo. Non fa nemmeno un ciclo giorno per giorno: l'indice
@@ -150,6 +163,7 @@ export function nextOccurrenceOnOrAfter(rule: RecurringRule, from: IsoDate): Iso
     date = addDays(rule.startDate, k * step)
   }
 
+  if (rule.endDate !== undefined && isAfter(date, rule.endDate)) return null
   return date
 }
 
@@ -185,8 +199,17 @@ export interface MaterializationWindow {
  * - `from` e' il giorno dopo il segnaposto, o `startDate` se la regola non ha
  *   mai prodotto niente. E' qui che nasce l'arretrato: una regola nuova con
  *   `startDate` a gennaio parte da gennaio, non da oggi;
- * - `to` e' oggi, e basta: da quando `endDate` non esiste non c'e' piu' niente
- *   che tagli il bordo superiore.
+ * - `to` e' oggi, **tagliato a `endDate`** se la regola e' gia' finita. E' il
+ *   taglio, e non un rifiuto in cima alla funzione, che tiene insieme le due
+ *   meta' di una regola scaduta: cio' che cadeva **prima** della fine e non e'
+ *   ancora stato scritto viene scritto lo stesso — quei soldi sono usciti
+ *   davvero, e una regola importata dopo la sua scadenza deve produrre le sue
+ *   occorrenze arretrate — e cio' che cade dopo non nasce mai.
+ *
+ * Il segnaposto non supera mai `endDate`, perche' avanza al bordo superiore
+ * della finestra: alla chiamata successiva `from` e' `endDate + 1` e la
+ * finestra e' `null`. Una regola finita costa quindi un confronto per apertura,
+ * per sempre, senza che nessuno debba spegnerla.
  *
  * Sta in una funzione sola perche' ha **due** chiamanti: il motore e
  * `previewMaterialization`. Se l'anteprima ricalcolasse la finestra per conto
@@ -203,8 +226,9 @@ export function materializationWindow(
 ): MaterializationWindow | null {
   const from =
     rule.lastMaterializedDate === undefined ? rule.startDate : addDays(rule.lastMaterializedDate, 1)
-  if (isAfter(from, today)) return null
-  return { from, to: today }
+  const to = rule.endDate !== undefined && isBefore(rule.endDate, today) ? rule.endDate : today
+  if (isAfter(from, to)) return null
+  return { from, to }
 }
 
 /**
@@ -421,13 +445,22 @@ function buildExpense(rule: RecurringRule, date: IsoDate, timestamp: Timestamp):
   }
 }
 
-/** I campi da cui dipende il calendario: se cambiano, le date calcolate scadono. */
+/**
+ * I campi da cui dipende il calendario: se cambiano, le date calcolate scadono.
+ *
+ * `endDate` c'e' perche' decide il **bordo superiore** della finestra, e il
+ * verso che conta e' quello che accorcia: se durante un catch-up lungo l'utente
+ * mette una fine, i blocchi rimasti scriverebbero occorrenze oltre la data che
+ * ha appena scelto — calcolate quando quella data non c'era. Si smette, e la
+ * chiamata successiva ricomincia dal segnaposto con il calendario nuovo.
+ */
 function sameCalendar(a: RecurringRule, b: RecurringRule): boolean {
   return (
     a.cadence === b.cadence &&
     a.interval === b.interval &&
     a.anchorDay === b.anchorDay &&
-    a.startDate === b.startDate
+    a.startDate === b.startDate &&
+    a.endDate === b.endDate
   )
 }
 

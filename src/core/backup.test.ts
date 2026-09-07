@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { buildBackup, parseBackup } from './backup'
-import { occurrencesBetween } from './recurrence'
+import { occurrencesBetween, validateRule } from './recurrence'
+import { monthlyFixedCosts } from './recurring-plan'
 import { SCHEMA_VERSION } from './schema'
 import { makeBudget, makeCategory, makeExpense, makeRule, makeSettings, tickingClock } from './testing'
 import type { DataSet } from './types'
@@ -35,6 +36,7 @@ function dataset(): DataSet {
         id: 'r1',
         startDate: '2026-01-01',
         anchorDay: 31,
+        endDate: '2026-12-31',
         lastMaterializedDate: '2026-08-02',
       }),
     ],
@@ -107,7 +109,7 @@ describe('round-trip export -> import', () => {
     expect(settings?.schemaVersion).toBe(SCHEMA_VERSION)
   })
 
-  it('sopravvivono i campi opzionali: nota, ricorrenza, cancellazione, fine budget', () => {
+  it('sopravvivono i campi opzionali: nota, ricorrenza, cancellazione, fine regola, fine budget', () => {
     const preview = roundTrip(dataset())
     const data = preview.data
     expect(data?.expenses[0]?.note).toBe('Caffe e brioche')
@@ -115,6 +117,7 @@ describe('round-trip export -> import', () => {
     expect(data?.expenses[1]?.recurringId).toBe('r1')
     expect(data?.expenses[2]?.deletedAt).toBe('2026-08-03T10:00:00.000Z')
     expect(data?.recurringRules[0]?.anchorDay).toBe(31)
+    expect(data?.recurringRules[0]?.endDate).toBe('2026-12-31')
     expect(data?.recurringRules[0]?.lastMaterializedDate).toBe('2026-08-02')
     expect(data?.budgets[0]?.effectiveTo).toBe('2026-07-31')
   })
@@ -125,6 +128,22 @@ describe('round-trip export -> import', () => {
     // La spesa senza orario resta senza: nessun `undefined` esplicito, nessuno zero.
     expect('timeMinutes' in (preview.data?.expenses[1] ?? {})).toBe(false)
     expect('effectiveTo' in (preview.data?.budgets[1] ?? {})).toBe(false)
+  })
+
+  it('una regola senza fine rientra senza fine: assente non diventa una data', () => {
+    // L'assenza **e' un dato**: significa "non finisce mai". Se il giro la
+    // riportasse dentro come `undefined` esplicito, il record uscito e quello
+    // rientrato non sarebbero lo stesso record; se la riportasse dentro come
+    // una data, sarebbe una regola diversa.
+    const base = dataset()
+    const { endDate: _senza, ...senzaFine } = base.recurringRules[0] ?? { endDate: undefined }
+    const data: DataSet = {
+      ...base,
+      recurringRules: [senzaFine as (typeof base.recurringRules)[number]],
+    }
+    const preview = roundTrip(data)
+    expect(archivio(preview.data as DataSet)).toEqual(archivio(data))
+    expect('endDate' in (preview.data?.recurringRules[0] ?? {})).toBe(false)
   })
 
   it('una regola senza segnaposto rientra senza segnaposto: e la forma che scrive il rewind', () => {
@@ -338,6 +357,7 @@ describe('file rotti: si racconta il problema, non si esplode', () => {
     ['recurringRules', 'r1', (r) => (r['cadence'] = 'annuale')],
     ['recurringRules', 'r1', (r) => (r['interval'] = 0)],
     ['recurringRules', 'r1', (r) => (r['startDate'] = 'boh')],
+    ['recurringRules', 'r1', (r) => (r['endDate'] = 'boh')],
     ['recurringRules', 'r1', (r) => (r['lastMaterializedDate'] = 'boh')],
     ['budgets', 'b1', (r) => (r['period'] = 'annuale')],
     ['budgets', 'b1', (r) => (r['amountCents'] = 1.5)],
@@ -769,6 +789,45 @@ describe('l ancora mensile all ingresso di un import', () => {
     expect(
       preview.issues.some((i) => i.severity === 'warning' && i.path.endsWith('.anchorDay')),
     ).toBe(true)
+  })
+
+  it('una fine illeggibile scarta il record: non si ripara in silenzio', () => {
+    // La differenza con l'ancora fuori scala, che e' l'argomento intero.
+    // L'ancora ha un sostituto difendibile (`startDate`); la fine no: assente
+    // vuol dire "non finisce mai", cioe' **un'altra regola**. Lasciarla cadere
+    // con un avviso significherebbe che alla prima apertura il motore genera le
+    // occorrenze dalla fine perduta fino a oggi — spese che non sono mai uscite.
+    const preview = parseBackup(
+      file(SCHEMA_VERSION, {
+        ...mensileSenzaAncora('2026-01-01'),
+        anchorDay: 1,
+        endDate: 'giugno',
+      }),
+    )
+    expect(preview.ok).toBe(false)
+    expect(preview.issues.some((i) => i.severity === 'error' && i.path.endsWith('.endDate'))).toBe(
+      true,
+    )
+  })
+
+  it('una fine prima dell inizio entra, e il dominio la dichiara non utilizzabile', () => {
+    // Solo la leggibilita' passa da `parseRule`: la **relazione** la giudica
+    // `validateRule`, senza lanciare. Il record entra, non genera, non pesa
+    // sulle fisse, e si ripara **dal telefono** cambiando la data — che e'
+    // l'unico posto da cui questa persona puo' riparare qualcosa.
+    const preview = parseBackup(
+      file(SCHEMA_VERSION, {
+        ...mensileSenzaAncora('2026-05-01'),
+        anchorDay: 1,
+        endDate: '2026-04-01',
+      }),
+    )
+    expect(preview.ok).toBe(true)
+    const regola = preview.data?.recurringRules[0]
+    if (regola === undefined) throw new Error('regola attesa')
+    expect(regola.endDate).toBe('2026-04-01')
+    expect(validateRule(regola)).toContain('endDate')
+    expect(monthlyFixedCosts([regola], '2026-06-01').totalCents).toBe(0)
   })
 
   it('l ancora derivata attraversa il motore: 31 gennaio resta ultimo giorno del mese', () => {

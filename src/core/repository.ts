@@ -204,10 +204,16 @@ export interface CategoryPatch {
  *   numeri che l'anteprima annuncia (ne' `count`, ne' le date, ne' il totale),
  *   quindi **non paga nessun pedaggio**: `updateRecurringRule` resta sincrona,
  *   ottimistica e senza esito da controllare.
- * - `RecurrenceDraft` (importo + calendario) — viaggia **solo** dentro una
- *   `ConfirmedPreview`. Non esiste nessun altro modo di farlo entrare in una
- *   regola. Non c'e' una guardia da ricordarsi: c'e' un'espressione che non
- *   esiste.
+ * - `RecurrenceDraft` (importo + calendario, `endDate` compresa) — viaggia
+ *   **solo** dentro una `ConfirmedPreview`. Non esiste nessun altro modo di
+ *   farlo entrare in una regola. Non c'e' una guardia da ricordarsi: c'e'
+ *   un'espressione che non esiste.
+ *
+ *   `endDate` sta qui e non nella patch perche' **taglia il bordo superiore
+ *   della finestra**: metterla accorcia cio' che verra' scritto, toglierla lo
+ *   allunga. In tutti e due i versi cambia `count`, i due estremi e
+ *   `totalCents`, cioe' i numeri che l'anteprima ha messo sotto gli occhi
+ *   dell'utente.
  * - `active` — spezzato nelle due direzioni. `deactivateRecurringRule` va
  *   sempre e non chiede niente: e' la via normale per far smettere una regola,
  *   ed e' quella che `planRecurringRuleDeletion` suggerisce quando cancellare
@@ -780,9 +786,14 @@ interface RuleIdentity {
  *
  * Prima qui c'erano due pezzi: una `ruleShape(draft)` che restituiva i campi
  * del calendario, e nel chiamante uno spread sul record corrente preceduto da
- * una destrutturazione che toglieva `anchorDay` (e, finche' e' esistita,
- * `endDate`) — perche' uno spread non cancella niente, e una bozza che li ha
- * persi deve poterli cancellare davvero dal record.
+ * una destrutturazione che toglieva `anchorDay` e `endDate` — perche' uno
+ * spread non cancella niente, e una bozza che li ha persi deve poterli
+ * cancellare davvero dal record.
+ *
+ * Il caso di `endDate` e' quello che si tocca con mano: togliere la data di
+ * fine da una regola e' un'operazione che l'utente fa davvero (il contratto e'
+ * stato rinnovato), e con uno spread sul record corrente non sarebbe
+ * esprimibile — la fine vecchia sopravvivrebbe alla bozza che non ce l'ha.
  *
  * Con il calendario diventato un'unione discriminata quella forma non regge
  * piu', e non e' un incidente: `Omit<RecurringRule, ...>` su un'unione **collassa
@@ -804,6 +815,7 @@ function ruleFromDraft(draft: RecurrenceDraft, identity: RuleIdentity): Recurrin
     amountCents: draft.amountCents,
     interval: draft.interval,
     startDate: draft.startDate,
+    ...(draft.endDate !== undefined ? { endDate: draft.endDate } : {}),
     ...(identity.lastMaterializedDate !== undefined
       ? { lastMaterializedDate: identity.lastMaterializedDate }
       : {}),

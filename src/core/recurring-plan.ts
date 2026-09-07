@@ -47,7 +47,8 @@ export const WEEKS_PER_YEAR = DAYS_PER_YEAR / 7
 const MONTHS_PER_YEAR = 12
 
 /**
- * Quante volte all'anno scatta questa regola, ignorando `startDate` e `active`.
+ * Quante volte all'anno scatta questa regola, ignorando `startDate`, `endDate`
+ * e `active`.
  * Un tasso, non un conteggio: e' un numero con la virgola apposta.
  */
 function occurrencesPerYear(cadence: Cadence, interval: number): number {
@@ -90,10 +91,10 @@ function occurrencesPerYear(cadence: Cadence, interval: number): number {
  * una previsione di cassa: chi vuole sapere che cosa scatta in un mese preciso
  * usa `occurrencesBetween`, che risponde esatto.
  *
- * Non tiene conto di `startDate`: una regola che comincia fra tre giorni pesa
- * qui come una gia' in corso. Il filtro su chi e' in vigore lo fa
- * `monthlyFixedCosts`, che e' l'unico posto in cui quella domanda ha una data a
- * cui riferirsi.
+ * Non tiene conto ne' di `startDate` ne' di `endDate`: una regola che comincia
+ * fra tre giorni, e una che finisce fra tre giorni, pesano qui come una in
+ * corso. Il filtro su chi e' in vigore lo fa `monthlyFixedCosts`, che e'
+ * l'unico posto in cui quella domanda ha una data a cui riferirsi.
  *
  * ## Una regola non valida vale zero
  *
@@ -129,15 +130,17 @@ export interface MonthlyFixedCosts {
  *
  * - `active`;
  * - `startDate <= onDate`: una regola che comincia il mese prossimo non e'
- *   ancora un costo, e metterla dentro direbbe che escono soldi che non escono.
+ *   ancora un costo, e metterla dentro direbbe che escono soldi che non escono;
+ * - `endDate` assente o `>= onDate`: una regola finita non e' piu' un costo.
+ *   E' il **terzo** motivo per cui una riga dell'elenco puo' non pesare sul
+ *   mese, accanto a "spenta" e "non ancora cominciata", e chi disegna l'elenco
+ *   deve poterlo dire: una riga a `null` senza una parola accanto e' un numero
+ *   che manca senza spiegazione.
  *
- * Era una coppia: c'era anche "`endDate` assente o `>= onDate`", che se n'e'
- * andata con il campo. Torna insieme a lui.
- *
- * L'esclusione e' deliberata ed e' anche il limite dichiarato di questo numero:
- * e' la fotografia di **adesso**, non un piano. Chi vuole vedere in anticipo il
- * peso di una regola futura ha `monthlyCostCents` sulla singola regola, che non
- * guarda le date.
+ * Le esclusioni sono deliberate e sono anche il limite dichiarato di questo
+ * numero: e' la fotografia di **adesso**, non un piano. Chi vuole vedere in
+ * anticipo il peso di una regola futura ha `monthlyCostCents` sulla singola
+ * regola, che non guarda le date.
  *
  * L'arrotondamento e' per riga e poi si sommano interi: il totale mostrato e'
  * sempre esattamente la somma delle righe mostrate. L'alternativa — sommare i
@@ -154,6 +157,9 @@ export function monthlyFixedCosts(
   for (const rule of rules) {
     if (!rule.active) continue
     if (isBefore(onDate, rule.startDate)) continue
+    // Finita **prima** di oggi. Il giorno stesso della fine conta ancora: la
+    // regola quel giorno genera, quindi quel giorno e' ancora un costo.
+    if (rule.endDate !== undefined && isAfter(onDate, rule.endDate)) continue
     // Una regola non valida non compare nemmeno come riga da zero: non e' un
     // costo, e' un record rotto. `monthlyCostCents` la porterebbe a 0 lo stesso,
     // ma una riga "Affitto — 0,00 €" e' un numero sbagliato con l'aria di
@@ -187,6 +193,13 @@ export interface RecurrenceDraftCommon {
   readonly amountCents: Cents
   readonly interval: number
   readonly startDate: IsoDate
+  /**
+   * La fine, se c'e'. **E' il campo attraverso cui il valore digitato nel
+   * foglio entra in un record**: `ruleFromDraft` costruisce la regola da qui e
+   * da nient'altro, quindi una bozza senza fine cancella la fine che il record
+   * aveva. Vedi `RecurringRuleCommon.endDate`.
+   */
+  readonly endDate?: IsoDate
   /**
    * Presente solo per una regola che esiste gia'. Assente su una regola nuova,
    * ed e' l'assenza che produce l'arretrato: si parte da `startDate`.
@@ -293,9 +306,13 @@ export interface MaterializationPreview {
    * materializzazione **non** genera e che nessuna materializzazione precedente
    * ha gia' generato.
    *
-   * **Da quando `endDate` non esiste non e' mai `null`**: una regola non
-   * finisce. Il tipo lo prevede ancora perche' e' la risposta giusta il giorno
-   * in cui la scadenza torna, e i chiamanti la gestiscono gia'.
+   * **`null` vuol dire "non ne avra' mai altre"**, ed e' la risposta di una
+   * regola con `endDate` gia' superata. Non vuol dire "non c'e' niente da
+   * scrivere": una regola finita a giugno e mai materializzata ha `count > 0`
+   * (l'arretrato fino a giugno) **e** `nextDate === null` nella stessa
+   * anteprima. I due numeri rispondono a due domande diverse — cosa nasce
+   * adesso, e cosa nascera' dopo — e chi scrive le parole deve poterle dire
+   * tutte e due.
    *
    * ## Il punto d'ancoraggio, che e' l'unica cosa da decidere qui
    *
@@ -328,9 +345,9 @@ export interface MaterializationPreview {
    * - regola retrodatata (`count > 0`): risponderebbe la **prima occorrenza
    *   arretrata**, cioe' esattamente `firstDate` — una spesa che fra un secondo
    *   sara' nello Storico, non la prossima;
-   * - il secondo caso era la regola gia' finita e mai materializzata, dove
-   *   `window.from` avrebbe risposto un'occorrenza dentro la finestra invece di
-   *   `null`. E' andato via con `endDate`, e torna con lei.
+   * - regola gia' finita e mai materializzata: `window.from` risponderebbe
+   *   un'occorrenza **dentro** la finestra invece di `null`, cioe' annuncerebbe
+   *   una prossima spesa per una regola che non ne avra' piu'.
    *
    * ## Non entra in `PreviewFootprint`, ed e' una conseguenza del suo significato
    *
@@ -463,6 +480,7 @@ export function previewMaterialization(
     interval: draft.interval,
     startDate: draft.startDate,
     active: true,
+    ...(draft.endDate !== undefined ? { endDate: draft.endDate } : {}),
     ...(draft.lastMaterializedDate !== undefined
       ? { lastMaterializedDate: draft.lastMaterializedDate }
       : {}),
@@ -491,6 +509,12 @@ export function previewMaterialization(
   }
   if (!isIsoDate(draft.startDate)) {
     return { ok: false, reason: `startDate non valida: "${draft.startDate}"` }
+  }
+  // `endDate` prima di `validateRule`: quella confronta la fine con l'inizio, e
+  // un confronto fra stringhe di cui una non e' una data risponde qualcosa
+  // senza voler dire niente.
+  if (draft.endDate !== undefined && !isIsoDate(draft.endDate)) {
+    return { ok: false, reason: `endDate non valida: "${draft.endDate}"` }
   }
   if (draft.lastMaterializedDate !== undefined && !isIsoDate(draft.lastMaterializedDate)) {
     return {
@@ -533,6 +557,7 @@ export function previewMaterialization(
     amountCents: draft.amountCents,
     interval: draft.interval,
     startDate: draft.startDate,
+    ...(draft.endDate !== undefined ? { endDate: draft.endDate } : {}),
     ...(draft.lastMaterializedDate !== undefined
       ? { lastMaterializedDate: draft.lastMaterializedDate }
       : {}),

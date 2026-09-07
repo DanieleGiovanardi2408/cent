@@ -85,30 +85,25 @@ export type Cadence = 'daily' | 'weekly' | 'monthly'
  *
  * ---
  *
- * **`endDate` non c'e' piu', per la stessa ragione e in forma piu' netta.**
+ * **`endDate` e' tornata** (fase 7), e la sua storia e' la prova della regola.
  *
- * Aveva lettori dappertutto — la finestra di materializzazione, `validateRule`,
- * `monthlyFixedCosts`, `sameCalendar`, l'anteprima, due chiavi di dizionario per
- * lingua — e **zero produttori**: nessun foglio la scriveva. `RuleSheet` si
- * limitava a ricopiarla da un record che non poteva averla, e l'unico posto che
- * sapesse costruirne una era `parseBackup`.
+ * Era stata tolta per **zero produttori**: aveva lettori dappertutto — la
+ * finestra di materializzazione, `validateRule`, `monthlyFixedCosts`,
+ * `sameCalendar`, l'anteprima, due chiavi di dizionario per lingua — e nessun
+ * foglio la scriveva. `RuleSheet` si limitava a ricopiarla da un record che non
+ * poteva averla, e l'unico posto che sapesse costruirne una era `parseBackup`;
+ * ma con zero produttori **nemmeno un backup poteva contenerla**, perche' un
+ * backup e' l'export di dati scritti da quest'app. Era morto anche il supporto
+ * in `parseRule`.
  *
- * Ed e' qui che e' piu' netta che con `note`: **con zero produttori nemmeno un
- * backup puo' contenerla**, perche' un backup e' l'export di dati scritti da
- * quest'app. Quindi era morto anche il supporto in `parseRule` — quindici rami
- * raggiungibili solo da un JSON scritto a mano.
+ * Torna adesso **insieme al suo produttore**, non prima: il campo di input del
+ * foglio della regola. `draft.endDate = rule.endDate` non e' produzione — e'
+ * una copia, ed e' esattamente la catena su cui `dead-surface.mjs` era verde
+ * su un albero malato. Il valore che entra da fuori e' quello che l'utente
+ * digita.
  *
- * La motivazione **e' questa e nessun'altra**: zero produttori. Non "toglie una
- * scorciatoia di performance": `amountCents: 1`, la doppia anteprima e i due
- * `useMemo` di `RuleSheet` restano da valutare per conto loro, con il loro
- * argomento.
- *
- * Nessuna migrazione, per lo stesso motivo di `note`: nessun record puo' averla.
- *
- * **L'idea non e' morta**, ed e' in `docs/ROADMAP.md` per la fase 7 con il suo
- * argomento vero — le spese fisse di un Erasmus finiscono tutte: la palestra a
- * giugno, il tram ad agosto, l'affitto con il contratto. Torna **insieme al suo
- * campo di input**, nello stesso commit.
+ * Nessuna migrazione, e la risposta e' stata **ri-derivata**, non citata: vedi
+ * `endDate` qui sotto.
  *
  * Qui ci sono i campi che **non dipendono dalla cadenza**. Gli altri due —
  * `cadence` e `anchorDay` — stanno in `WithCadence` qui sotto, insieme, perche'
@@ -120,6 +115,77 @@ export interface RecurringRuleCommon extends EntityBase {
   /** Ogni quanti giorni / settimane / mesi. Intero >= 1. */
   readonly interval: number
   readonly startDate: IsoDate
+  /**
+   * L'ultimo giorno in cui questa regola puo' generare. **Incluso**, come
+   * `startDate` e come i due estremi di `MaterializationWindow`. Assente = la
+   * regola non finisce.
+   *
+   * Esiste perche' le spese fisse di un Erasmus **finiscono tutte** — la
+   * palestra a giugno, il tram ad agosto, l'affitto con il contratto — e una
+   * regola senza fine costringe a ricordarsi di disattivarla nel giorno giusto,
+   * cioe' a fare a mano una cosa che la data sapeva gia' quando e' stata
+   * scritta.
+   *
+   * ## Perche' non e' `active`, e perche' non lo diventa
+   *
+   * Sono due cose diverse, e la differenza si vede **sull'arretrato**, non sul
+   * risultato di oggi.
+   *
+   * - **`active: false` sospende.** Il segnaposto resta dov'era e la finestra
+   *   resta aperta: riaccendere la regola **riscrive** tutto l'intervallo
+   *   rimasto indietro. E' per questo che `reactivateRecurringRule` paga il
+   *   pedaggio dell'anteprima (ADR 017): e' il terzo innesco della generazione
+   *   retroattiva.
+   * - **`endDate` chiude.** L'arretrato **prima** della data si scrive lo
+   *   stesso — una regola finita a giugno, importata a settembre, genera le sue
+   *   occorrenze di giugno, perche' quei soldi sono usciti davvero — e dopo
+   *   quella data non nasce piu' niente, per sempre, senza che nessuno debba
+   *   ricordarsene.
+   *
+   * Quindi una regola genera il giorno D se e solo se **`active` e
+   * `startDate <= D <= endDate`**: si compongono, non si sostituiscono.
+   *
+   * Unificarle e' stato considerato e scartato in tutte e due le direzioni:
+   *
+   * - **`active` derivato da `endDate`** (`endDate === undefined || >= oggi`)
+   *   toglierebbe la sospensione: spegnere una regola vorrebbe dire scriverle
+   *   una data di fine, cioe' rinunciare per sempre all'arretrato che lo
+   *   spegnimento invece conserva. E "spenta e poi riaccesa" e' il caso che il
+   *   prodotto ha davvero — nessuno spegne una regola per cancellarne il
+   *   passato.
+   * - **`endDate` che spegne `active` quando passa** vorrebbe dire una
+   *   **scrittura innescata da un orologio**: un campo dei dati che cambia da
+   *   solo alla prima apertura utile. E' precisamente cio' che ADR 018 vieta
+   *   sul segnaposto, e per la stessa ragione — chi legge il record non
+   *   saprebbe piu' distinguere una scelta dell'utente da un effetto del tempo.
+   *
+   * ## Fa parte del **calendario**, non delle preferenze
+   *
+   * Decide quali giorni stanno nella finestra, quindi entra nei numeri che
+   * l'anteprima annuncia (`count`, i due estremi, `totalCents`). Per il
+   * criterio di `NewRecurringRule` — *"se un campo entra in un numero
+   * annunciato, passa dall'annuncio"* — viaggia in `RecurrenceDraft` e **non**
+   * in `RecurringRulePatch`: sta con `startDate`, `cadence`, `interval` e
+   * `anchorDay`, e con loro sta in `sameCalendar`.
+   *
+   * ## Nessuna migrazione, e la risposta e' stata ri-derivata
+   *
+   * Non e' citata dalla fase 5: rifatta adesso, con le porte che l'archivio ha
+   * **oggi**. Il campo e' opzionale e la sua assenza significa gia' cio' che i
+   * record esistenti significano ("non finisce"), quindi non c'e' niente da
+   * riempire. E nessun record puo' portare un `endDate` vecchio da correggere:
+   * gli unici scrittori dello store `recurringRules` sono `addRecurringRule`,
+   * `updateRecurringRule`, `rewriteFromPreview`, `deactivateRecurringRule`,
+   * `advanceRecurringMarkers`, `planRecurringRuleRewind` e `replaceAll` — e
+   * nell'intervallo in cui il campo non esisteva **nessuno di loro poteva
+   * nominarlo**, perche' il tipo non ce l'aveva. L'unico ingresso esterno,
+   * `parseRule`, costruisce un oggetto nuovo dai soli campi che conosce: una
+   * chiave sconosciuta in un JSON non entra.
+   *
+   * Una migrazione qui riscriverebbe ogni regola sul disco — dati veri, ADR
+   * "Da qui in avanti i dati sono veri" — per non cambiare niente.
+   */
+  readonly endDate?: IsoDate
   /**
    * Ultimo giorno **gia' materializzato e persistito**. Avanza solo dopo che la
    * transazione che ha scritto le spese di quel giorno e' andata a buon fine.

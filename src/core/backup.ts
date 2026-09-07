@@ -374,12 +374,34 @@ function parseRule(raw: RawRecord, path: string, c: Collector): RecurringRule | 
   }
   const startDate = isoDate(raw['startDate'])
   if (startDate === null) return c.error(`${path}.startDate`, b.id)
-  // `endDate` non si legge piu', e non e' una perdita: il campo non esiste piu'
-  // sul record (vedi `RecurringRuleCommon`), e **con zero produttori nemmeno un
-  // backup poteva contenerlo** — un backup e' l'export di dati scritti da
-  // quest'app. Un `endDate` in un JSON scritto a mano viene ignorato in
-  // silenzio, come qualunque altra chiave sconosciuta: non e' un dato che
-  // qualcuno abbia perso, e' una chiave che questa app non ha mai emesso.
+  // `endDate` torna leggibile, e adesso un backup **puo'** contenerla: e' un
+  // campo che il foglio scrive.
+  //
+  // Illeggibile si scarta il **record**, non il campo, e non e' la scelta
+  // comoda: la comoda sarebbe una `warning` come per `anchorDay` fuori scala e
+  // per `timeMinutes`. Li' pero' esiste un sostituto difendibile — l'ancora si
+  // deriva da `startDate`, un orario assente vuol dire "non lo sappiamo".
+  // Qui il sostituto non esiste: **assente significa "non finisce mai"**, cioe'
+  // una regola diversa, e la differenza non e' un'etichetta a schermo — e' che
+  // alla prima apertura il motore genera le occorrenze da quella data a oggi.
+  // Un import che ripara in silenzio inventando spese che non sono mai uscite
+  // e' il danno peggiore che questo file possa fare.
+  //
+  // E' anche il criterio gia' applicato a `effectiveTo`, che e' lo stesso
+  // oggetto sul budget: una data facoltativa che decide fin dove un record
+  // vale.
+  //
+  // **Solo la leggibilita', non la relazione con `startDate`.** Una fine che
+  // precede l'inizio e' una data vera e un calendario impossibile: la prende
+  // `validateRule`, e la prende **senza lanciare** — la regola non genera, non
+  // entra nelle fisse, e il foglio si rifiuta di salvarla finche' la data non
+  // cambia. E' quindi una riga che si vede e si ripara **dal telefono**, che e'
+  // l'unico posto da cui la si puo' riparare; rifiutare il file intero
+  // manderebbe a cercare un computer per una cosa che il telefono sa fare.
+  // Stesso criterio di `effectiveTo` su `Budget`, che e' lo stesso oggetto: si
+  // controlla che sia una data, non che sia dopo l'altra.
+  const endDate = optionalIsoDate(raw['endDate'])
+  if (endDate === false) return c.error(`${path}.endDate`, b.id)
   const lastMaterializedDate = optionalIsoDate(raw['lastMaterializedDate'])
   if (lastMaterializedDate === false) {
     return c.error(path, b.id)
@@ -391,6 +413,7 @@ function parseRule(raw: RawRecord, path: string, c: Collector): RecurringRule | 
     interval,
     startDate,
     active: raw['active'] !== false,
+    ...(endDate !== undefined ? { endDate } : {}),
     ...(lastMaterializedDate !== undefined ? { lastMaterializedDate } : {}),
   }
   const anchorRaw = raw['anchorDay']
@@ -449,7 +472,7 @@ function parseBudget(raw: RawRecord, path: string, c: Collector): Budget | null 
   // `categoryId` non si legge: il campo non esiste piu' su `Budget` (vedi
   // `types.ts`). Con zero produttori nemmeno un backup puo' contenerlo, quindi
   // sostenerlo qui sarebbe un ramo raggiungibile solo da un JSON scritto a
-  // mano — lo stesso che `endDate` aveva in `parseRule`. Un file che lo porta
+  // mano. Un file che lo porta
   // perde quel campo e tiene il budget: e' un budget complessivo, che e'
   // l'unica cosa che questa app sa calcolare.
   return {

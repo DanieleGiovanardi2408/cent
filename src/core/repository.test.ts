@@ -2319,6 +2319,92 @@ describe('l anteprima e obbligatoria nel tipo, e scade a mezzanotte', () => {
     expect(repo.getState().expenses).toHaveLength(8)
   })
 
+  it('la fine entra dalla bozza, e togliendola dalla bozza sparisce dal record', async () => {
+    // E' l'invariante di `ruleFromDraft`, e vale un caso vero: il contratto e'
+    // stato rinnovato, la fine va tolta. Con uno spread sul record corrente la
+    // fine vecchia sopravvivrebbe a una bozza che non ce l'ha — cioe' una
+    // regola che continua a finire dove l'utente ha appena detto di no.
+    const { repo, disk } = await apriConOrologio(() => new Date(2026, 7, 22, 12, 0))
+    const regola = creaRegola(
+      repo,
+      {
+        amountCents: 4_000,
+        cadence: 'daily',
+        interval: 1,
+        startDate: '2026-08-20',
+        endDate: '2026-08-21',
+        categoryId: 'cat-1',
+      },
+      '2026-08-22',
+    )
+    expect(regola.endDate).toBe('2026-08-21')
+    // E la fine morde davvero sul motore: il 22 non nasce.
+    await repo.materializeRecurring('2026-08-22')
+    await repo.flush()
+    expect(disk.expenses.map((e) => e.date)).toEqual(['2026-08-20', '2026-08-21'])
+
+    const senzaFine = rivediRegola(
+      repo,
+      regola.id,
+      {
+        amountCents: 4_000,
+        cadence: 'daily',
+        interval: 1,
+        startDate: '2026-08-20',
+        lastMaterializedDate: repo.getState().recurringRules[0]?.lastMaterializedDate ?? '',
+      },
+      '2026-08-22',
+    )
+    // Rimossa, non `undefined`: e' la stessa forma che il round-trip JSON e lo
+    // structured clone devono poter rappresentare allo stesso modo.
+    expect(Object.hasOwn(senzaFine, 'endDate')).toBe(false)
+    await repo.flush()
+    expect(Object.hasOwn(disk.recurringRules[0] ?? {}, 'endDate')).toBe(false)
+  })
+
+  it('mettere una fine non cancella le occorrenze gia generate dopo di lei', async () => {
+    // La storia non cambia mai retroattivamente, e vale anche qui: una data di
+    // fine chiude il futuro, non riscrive il passato. Le spese gia' nate sono
+    // record veri — l'utente li ha visti nello Storico e sono entrati nei
+    // totali di periodi gia' chiusi — e toglierli sarebbe una cancellazione
+    // che nessuno ha chiesto, innescata da un campo che parla del calendario.
+    const { repo, disk } = await apriConOrologio(() => new Date(2026, 7, 22, 12, 0))
+    const regola = creaRegola(
+      repo,
+      {
+        amountCents: 1_000,
+        cadence: 'daily',
+        interval: 1,
+        startDate: '2026-08-18',
+        categoryId: 'cat-1',
+      },
+      '2026-08-22',
+    )
+    await repo.materializeRecurring('2026-08-22')
+    await repo.flush()
+    expect(disk.expenses).toHaveLength(5)
+
+    const conFine = rivediRegola(
+      repo,
+      regola.id,
+      {
+        amountCents: 1_000,
+        cadence: 'daily',
+        interval: 1,
+        startDate: '2026-08-18',
+        endDate: '2026-08-19',
+        lastMaterializedDate: repo.getState().recurringRules[0]?.lastMaterializedDate ?? '',
+      },
+      '2026-08-22',
+    )
+    expect(conFine.endDate).toBe('2026-08-19')
+    await repo.materializeRecurring('2026-08-22')
+    await repo.flush()
+    // Le cinque restano tutte, comprese le tre oltre la fine appena scritta.
+    expect(disk.expenses).toHaveLength(5)
+    expect(disk.expenses.filter((e) => e.date > '2026-08-19')).toHaveLength(3)
+  })
+
   it('una materializzazione passata nel frattempo fa rifiutare con moved-on', async () => {
     const { repo } = await apriConOrologio(() => new Date(2026, 7, 22, 12, 0))
     const regola = creaRegola(

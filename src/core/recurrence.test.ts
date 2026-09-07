@@ -175,8 +175,24 @@ describe('confini della regola', () => {
     expect(nextOccurrenceOnOrAfter(rule, '2026-01-01')).toBe('2026-05-10')
   })
 
-  // C'era "si ferma a endDate", ed e' andato via con il campo: una regola non
-  // finisce piu'. Torna con lui, in fase 7, insieme al suo campo di input.
+  it('si ferma a endDate', () => {
+    const rule = makeRule({ startDate: '2026-05-01', endDate: '2026-05-03', cadence: 'daily' })
+    expect(occurrencesBetween(rule, '2026-05-01', '2026-12-31')).toEqual([
+      '2026-05-01',
+      '2026-05-02',
+      '2026-05-03',
+    ])
+    // `null` e' "non ne avra' mai altre", non "non ce n'e' nel periodo chiesto".
+    expect(nextOccurrenceOnOrAfter(rule, '2026-05-04')).toBeNull()
+  })
+
+  it('endDate uguale a startDate: una occorrenza sola, non zero', () => {
+    // Il confine incluso. Con un confronto largo al posto di quello stretto
+    // questa regola non genererebbe niente, e sarebbe il modo silenzioso di
+    // perdere l'unica spesa che qualcuno ha chiesto.
+    const rule = makeRule({ startDate: '2026-05-01', endDate: '2026-05-01', cadence: 'daily' })
+    expect(occurrencesBetween(rule, '2026-01-01', '2026-12-31')).toEqual(['2026-05-01'])
+  })
 
   it('finestra vuota o invertita restituisce nessuna occorrenza', () => {
     const rule = makeRule({ startDate: '2026-05-01', cadence: 'daily' })
@@ -186,6 +202,13 @@ describe('confini della regola', () => {
   it('validateRule segnala le regole impossibili', () => {
     expect(validateRule(makeRule({ startDate: '2026-01-01', interval: 0 }))).toContain('interval')
     expect(validateRule(makeRule({ startDate: '2026-01-01', anchorDay: 32 }))).toContain('anchorDay')
+    expect(
+      validateRule(makeRule({ startDate: '2026-05-01', endDate: '2026-04-01' })),
+    ).toContain('endDate')
+    // Il giorno stesso non e' impossibile: e' una regola che scatta una volta.
+    expect(
+      validateRule(makeRule({ startDate: '2026-05-01', endDate: '2026-05-01' })),
+    ).toBeNull()
     expect(validateRule(makeRule({ startDate: '2026-01-01' }))).toBeNull()
   })
 
@@ -904,9 +927,94 @@ describe('materializzazione: regole ignorate', () => {
     expect(h.disk.recurringRules[0]?.lastMaterializedDate).toBeUndefined()
   })
 
-  // C'era "una regola scaduta si ferma a endDate e non riparte piu". Una regola
-  // scaduta non esiste piu': `endDate` aveva zero produttori ed e' stata tolta.
-  // Il test torna con il campo, in fase 7.
+  it('una regola scaduta si ferma a endDate e non riparte piu', async () => {
+    const h = harness([
+      makeRule({ startDate: '2026-08-01', endDate: '2026-08-03', cadence: 'daily' }),
+    ])
+    await h.run('2026-08-20')
+    expect(h.disk.expenses).toHaveLength(3)
+    // Il segnaposto si ferma alla fine, non a oggi: e' cio' che rende la
+    // finestra `null` a ogni apertura successiva.
+    expect(h.disk.recurringRules[0]?.lastMaterializedDate).toBe('2026-08-03')
+    expect(await h.run('2026-09-20')).toBe(0)
+  })
+
+  it("l'arretrato PRIMA della fine si scrive lo stesso: una regola importata dopo la scadenza", async () => {
+    // E' l'invariante che divide `endDate` da `active`. Spegnere una regola
+    // sospende l'arretrato; una data di fine **chiude**, e cio' che cadeva
+    // prima della chiusura e' uscito davvero dal conto corrente. Una regola
+    // finita a giugno, importata a settembre, deve produrre giugno.
+    const h = harness([
+      makeRule({
+        id: 'palestra',
+        startDate: '2026-06-01',
+        endDate: '2026-06-30',
+        cadence: 'weekly',
+        interval: 1,
+      }),
+    ])
+    await h.run('2026-09-07')
+    expect(h.disk.expenses.map((e) => e.date)).toEqual([
+      '2026-06-01',
+      '2026-06-08',
+      '2026-06-15',
+      '2026-06-22',
+      '2026-06-29',
+    ])
+    expect(h.disk.recurringRules[0]?.lastMaterializedDate).toBe('2026-06-30')
+  })
+
+  it('aprire dieci volte una regola finita non crea niente e non scrive niente', async () => {
+    // Idempotenza sul ramo nuovo: la finestra e' `null` per costruzione, quindi
+    // non e' "si riscrive e il disco salta" — non si propone proprio niente.
+    const h = harness([
+      makeRule({ startDate: '2026-08-01', endDate: '2026-08-03', cadence: 'daily' }),
+    ])
+    await h.run('2026-08-10')
+    // Le tre della regola, e **non** i dieci giorni fino a oggi: senza questa
+    // riga il test resterebbe verde anche togliendo la fine dal calendario,
+    // perche' il segnaposto arriverebbe comunque a oggi e i giri successivi
+    // scriverebbero comunque zero. Sarebbe un test che non puo' fallire.
+    expect(h.disk.expenses.map((e) => e.date)).toEqual([
+      '2026-08-01',
+      '2026-08-02',
+      '2026-08-03',
+    ])
+    for (let i = 0; i < 10; i += 1) expect(await h.run('2026-08-10')).toBe(0)
+    expect(h.disk.expenses).toHaveLength(3)
+  })
+
+  it('una fine messa a meta catch-up ferma il giro invece di sconfinare', async () => {
+    // `sameCalendar`. I blocchi rimasti erano stati calcolati quando la fine non
+    // c'era: scriverli vorrebbe dire spese oltre la data appena scelta.
+    const rule = makeRule({ id: 'tram', startDate: '2026-07-01', cadence: 'daily' })
+    const h = harness([rule])
+    let chiamate = 0
+    await materializeRecurring({
+      today: '2026-08-09',
+      rules: h.disk.recurringRules,
+      expenses: h.disk.expenses,
+      currentRule: (id) => {
+        chiamate += 1
+        const vera = h.disk.recurringRules.find((r) => r.id === id)
+        if (vera === undefined || chiamate < 2) return vera
+        return { ...vera, endDate: '2026-07-05' }
+      },
+      write: (batch) => createMemoryPersistence(h.disk).write(batch),
+      now: tickingClock(),
+      chunkSize: 5,
+    }).then((r) => {
+      expect(r.skipped[0]?.reason).toContain('calendario')
+    })
+    // Solo il primo blocco: cinque giorni, tutti dentro la fine nuova.
+    expect(h.disk.expenses.map((e) => e.date)).toEqual([
+      '2026-07-01',
+      '2026-07-02',
+      '2026-07-03',
+      '2026-07-04',
+      '2026-07-05',
+    ])
+  })
 
   it('la spesa generata porta importo e categoria della regola, e nessuna nota', () => {
     // La nota **non** c e: una regola non ne ha piu una, perche non esisteva
