@@ -224,6 +224,17 @@ function Body({
               ))}
             </tbody>
           </table>
+          {/* **La riga che scioglie il numero delle categorie** — DEBITO §15.
+              Sta **sotto la tabella** e non accanto alla riga, perche' la riga
+              e' una cella di un prima/dopo e una nota dentro una cella
+              cambierebbe la larghezza delle colonne, cioe' la geometria di
+              tutte e tre le righe (CLAUDE.md, "La geometria di una parte non
+              dipende dal contenuto di un'altra").
+
+              Sta dentro il corpo, che scorre: le tre fasce non si muovono. */}
+          {step.offGrid === 0 ? null : (
+            <p class="restore__note">{t('import.offGrid', { count: step.offGrid })}</p>
+          )}
         </>
       )
     }

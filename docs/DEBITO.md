@@ -905,9 +905,10 @@ entrambe** durante questo giro — ed e' li' che si e' visto un difetto che ness
 geometria poteva vedere: la frase di `too-new` finiva con *"poi riprova"* mentre
 il bottone diceva *"Scegli un altro file"*.
 
-## 15. L'anteprima dell'import butta via tutte le warning
+## 15. L'anteprima dell'import butta via tutte le warning — **CHIUSA**
 
-**Stato: aperto.** Nato il 4 settembre 2026, trovato dal gate della fase 7.
+**Stato: chiusa il 7 settembre 2026.** Nata il 4 settembre, trovata dal gate
+della fase 7.
 
 **Cosa.** `ImportStep.ready` non porta `preview.issues`, e la schermata nel ramo
 "pronto" disegna solo la frase e la tabella del prima/dopo. Tre warning non
@@ -934,10 +935,52 @@ vedra'**. Ma quale sia quell'insieme e' una decisione di prodotto — le spese
 orfane, per esempio, non cambiano niente di visibile — e prenderla di corsa
 dentro una riparazione di gate significherebbe deciderla senza guardarla.
 
-**La condizione che la chiude**: il primo commit che tocca la schermata d'import
-per qualunque altra ragione. Oppure — ed e' il caso che la rende urgente — **il
-giorno in cui qualcuno importa un file con piu' di otto categorie e non capisce
-dove sono finite**: li' il costo non e' il debito, e' la fiducia.
+**La condizione che la chiudeva**: il primo commit che tocca la schermata
+d'import per qualunque altra ragione. Oppure — ed e' il caso che la rendeva
+urgente — **il giorno in cui qualcuno importa un file con piu' di otto categorie
+e non capisce dove sono finite**: li' il costo non e' il debito, e' la fiducia.
+
+### Chiusa: `ImportStep.ready.offGrid`, una riga sotto la tabella
+
+La condizione era **gia' scattata due volte** — in questa chiusura la schermata
+d'import e' stata toccata due volte per altre ragioni — e riscriverla invece di
+pagarla sarebbe stato §17 una seconda volta: *una condizione che scatta e non fa
+niente*.
+
+**La riga e' una, e non e' una warning: e' la legenda di un numero.** La tabella
+dice *"Categorie: adesso 8 / dopo 10"*, e chi legge conta i chip che avra': ne
+trovera' otto. Il debito diceva *"nemmeno il numero lo tradisce"*, e la
+riparazione parte da li' — il numero non si corregge (`counts.categories` conta
+anche le archiviate **di proposito**, perche' un'archiviata resta su ogni spesa
+che l'ha usata): **si scioglie**.
+
+    Categorie fuori dalla griglia dopo il ripristino: 2. In griglia ne stanno
+    otto; le altre vanno in archivio, sotto Categorie in Impostazioni.
+
+**Cosa NON dice, e perche' e' la parte decisa.** Non dice *"due sono state
+archiviate per te"*, che era la forma ovvia — il conteggio del taglio di
+`capActiveCategories`. Quel fatto vive dentro il dominio, non esce da nessun
+campo, e soprattutto **l'utente non lo puo' verificare**: dopo il ripristino
+l'Archivio mostra il taglio **piu'** le archiviate che il file portava gia', e i
+due numeri non combaciano. Questo invece e' `archivedCategories`, cioe' **la
+stessa funzione** che disegna "Archiviate · N" in Impostazioni: chi dubita apre
+quella schermata e trova lo stesso numero.
+
+Il prezzo di questa scelta, dichiarato: la riga **non attribuisce**. Chi importa
+un file che portava gia' delle archiviate legge la stessa frase, e non impara
+che l'app ha spostato qualcosa. Cio' che impara e' dove sono finite, che e' la
+domanda che si stava facendo.
+
+**Non serviva niente dal dominio**: `ImportStep.ready` porta gia' `data`, e da
+li' il numero si deriva con una funzione di `src/core/categories.ts`. Nessun
+campo nuovo in `ImportPreview`, nessun `code` sulle issue, nessuna frase nel
+dominio — che non parla nessuna lingua.
+
+**Sorvegliata** da `ripristino.spec.ts`, *"dieci categorie: l'anteprima dice
+quante restano fuori dalla griglia"*: il numero si deriva da
+`MAX_ACTIVE_CATEGORIES` invece di essere scritto, la riga **non** compare quando
+tutte le categorie del file stanno in griglia, e le tre fasce di §14 sono
+confrontate fra la stessa schermata con e senza la riga.
 
 ## 16. L'Annulla dell'import butta via lo scatto e ne mette al suo posto il file importato
 

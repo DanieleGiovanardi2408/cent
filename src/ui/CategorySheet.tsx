@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'preact/hooks'
-import { MAX_ACTIVE_CATEGORIES } from '../core/categories'
+import { MAX_ACTIVE_CATEGORIES, isLastOnGrid } from '../core/categories'
 import type { CategoryDeletion } from '../core/categories'
 import { DEFAULT_CATEGORY_SEEDS } from '../core/defaults'
 import type { Category } from '../core/types'
@@ -40,6 +40,15 @@ import './Categories.css'
  * dell'aggiunta — si tocca una categoria e l'app chiede quale sostituisce — e
  * in questo foglio la modalita' `place` e' identica alla `new` meno il modulo
  * del nome. **Nessun bottone "Ripristina" da nessuna parte.**
+ *
+ * ## Il pavimento della griglia si legge qui, per tutte e due le porte
+ *
+ * Archiviare e cancellare arrivano allo stesso stato — zero chip, cioe' nessun
+ * tap che salvi una spesa — da due funzioni diverse. Il fatto che le chiude sta
+ * in **una** funzione di dominio, `isLastOnGrid`, e questo foglio la legge una
+ * volta: sull'ultima in griglia "Elimina del tutto" e "Archivia" non esistono, e
+ * il piede dice perche'. Il rifiuto arriva **prima** del bottone, in parole,
+ * invece che dopo il tap sotto forma di "non e' riuscito".
  *
  * ## Cosa scorre e cosa no
  *
@@ -257,6 +266,31 @@ export function CategorySheet({
   const colors = ownColor === null ? PALETTE : [...PALETTE, ownColor]
 
   const index = target === null ? -1 : active.findIndex((c) => c.id === target.id)
+
+  /**
+   * **Togliere questa dalla griglia la lascerebbe vuota**, e non e' una domanda
+   * sulla cancellazione: e' la stessa che si fa `planCategoryDeletion`, letta
+   * qui per l'**altra** porta.
+   *
+   * ## Perche' il foglio la chiede, e non aspetta il dominio
+   *
+   * `Repository.archiveCategory` ha gia' il pavimento e risponde `null`. Ma
+   * `null` in `App.archiveCategory` diventa `toast.catFailed`, cioe' *"non e'
+   * riuscito"* — che e' **falso**: non e' fallito, e' stato rifiutato. La
+   * guardia del dominio deve restare cio' che e', vera per costruzione e muta;
+   * le parole del rifiuto stanno qui, prima che il bottone si possa toccare.
+   *
+   * ## Perche' `active` e non l'elenco intero
+   *
+   * `isLastOnGrid` comincia con `activeCategories`, e `active` **e' gia'** il
+   * suo risultato (`App` lo calcola una volta per tutta la schermata):
+   * `activeCategories` e' idempotente — filtra i non archiviati, ordina, taglia
+   * a otto — quindi `isLastOnGrid(active, id)` e `isLastOnGrid(tutte, id)` sono
+   * lo stesso valore. Il foglio non riceve l'elenco intero, e chiederlo come
+   * prop aggiungerebbe un secondo posto da tenere d'accordo per un fatto che si
+   * deriva da cio' che c'e' gia'.
+   */
+  const lastOnGrid = target !== null && isLastOnGrid(active, target.id)
 
   /**
    * Il rifiuto in parole, calcolato una volta sola perche' decide **due** cose:
@@ -524,9 +558,15 @@ export function CategorySheet({
             </>
           ) : editing ? (
             <div class="editor__row">
-              <button type="button" class="editor__second" disabled={busy} onClick={onArchive}>
-                {t('cat.archive')}
-              </button>
+              {/* Il bottone **non esiste** quando il piano non lo permette, come
+                  "Elimina del tutto" qui sopra: un bersaglio che si tocca per
+                  ricevere un rifiuto e' un tap speso per niente, e il rifiuto
+                  arriverebbe come "non e' riuscito". */}
+              {lastOnGrid ? null : (
+                <button type="button" class="editor__second" disabled={busy} onClick={onArchive}>
+                  {t('cat.archive')}
+                </button>
+              )}
               <button
                 type="button"
                 class="editor__primary"
@@ -549,7 +589,25 @@ export function CategorySheet({
             </button>
           )}
 
-          {editing ? <p class="editor__note editor__note--foot">{t('cat.archive.note')}</p> : null}
+          {/* **La nota del piede e' l'unico posto in cui il rifiuto e' scritto**,
+              e lo slot esiste gia': quando "Archivia" c'e', dice cosa fa; quando
+              non c'e', dice perche'. Niente si sposta, e niente resta muto.
+
+              Perche' qui e non nella fascia rossa, che sarebbe il posto ovvio:
+              il fatto e' **uno** — *e' l'ultima in griglia* — e chiude **due**
+              porte. Scriverlo due volte sarebbe una copia che parafrasa
+              (DEBITO §1); scriverlo solo nella fascia lo metterebbe in fondo al
+              corpo che scorre, cioe' spiegherebbe l'assenza di un bottone del
+              piede da un posto che si puo' non aver raggiunto. Il piede e'
+              l'unica parte sempre a schermo — ed e' anche il pezzo che sta
+              **subito sotto** la fascia, quindi chi scorre fino in fondo
+              cercando "Elimina del tutto" trova la frase venti pixel piu'
+              giu'. */}
+          {editing ? (
+            <p class="editor__note editor__note--foot">
+              {t(lastOnGrid ? 'cat.lastOnGrid' : 'cat.archive.note')}
+            </p>
+          ) : null}
         </div>
       </div>
     </>
@@ -580,6 +638,20 @@ function refusalCopy(deletion: Extract<CategoryDeletion, { ok: false }>): string
     // utile da dire a chi sta guardando una cosa che non esiste piu'. Qui `null`
     // vuol dire "nessuna fascia", non "fascia vuota".
     case 'unknown':
+      return null
+    // **Le parole di questo esito ci sono, e stanno nel piede.** Il fatto — *e'
+    // l'ultima in griglia* — non e' una proprieta' della cancellazione: chiude
+    // anche l'archiviazione, che passa da un'altra funzione e da un altro
+    // bottone. Una frase sola per due porte, nell'unica parte del foglio che
+    // non scorre: `cat.lastOnGrid`, letta accanto al piede.
+    //
+    // Qui `null` vuol dire "nessuna fascia", non "fascia vuota" — la stessa
+    // lettura di `'unknown'`, per una ragione diversa: li' non c'e' niente di
+    // utile da dire, qui e' gia' detto altrove.
+    //
+    // **E questo `case` non e' decorativo**: senza, `refusalCopy` non compila,
+    // ed e' esattamente cosi' che l'esito nuovo si e' annunciato.
+    case 'last-active':
       return null
     case 'in-use':
       // `removed` e' **la stessa stringa che comparirebbe sulla riga**, non una

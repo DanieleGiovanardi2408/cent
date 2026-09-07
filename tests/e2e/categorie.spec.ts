@@ -56,12 +56,26 @@
  *    spese resta zero, che e' l'unico modo di leggere la frase della regola da
  *    sola.
  *
+ * ## Il quarto esito, e il titolo che non vale piu' per tutti
+ *
+ * `planCategoryDeletion` ha di nuovo **quattro** esiti: e' arrivato
+ * `'last-active'`, il pavimento della griglia. Su quello la fascia rossa **non
+ * dice niente, apposta** — quindi *"la fascia rossa dice sempre qualcosa"* e'
+ * il titolo del test qui sotto e non una proprieta' della schermata, ed e'
+ * scritto qui perche' altrimenti si legge come la seconda.
+ *
+ * La ragione sta per esteso nel secondo test di questo file: il fatto e' uno
+ * e chiude **due** porte — cancellare e archiviare — quindi le sue parole
+ * stanno nell'unico posto che le vale per tutte e due, la nota del piede.
+ * Scriverle anche nella fascia sarebbe una copia che parafrasa.
+ *
  * ## Le premesse
  *
  * Orologio fissato: il caso 4 sceglie una data di partenza **dopo oggi**, e
  * "dopo oggi" con l'orologio della macchina e' una cosa che scade.
  */
 import { chiudiGuida, expect, test } from './installed'
+import { it as dizionario } from '../../src/ui/i18n/it'
 import type { Page } from '@playwright/test'
 import { fissaOrologio, giornoDichiarato } from './clock'
 
@@ -228,4 +242,117 @@ test('la fascia rossa dice sempre qualcosa: i tre esiti della cancellazione', as
   await expect(page.locator('.danger')).toContainText('La usa 1 spesa fissa')
 
   await senzaScrollOrizzontale(page, 'in uso')
+})
+
+/**
+ * **Il quarto esito: l'ultima in griglia, e la fascia rossa tace apposta.**
+ *
+ * `planCategoryDeletion` ha un pavimento — `'last-active'` — e prima non ne
+ * aveva nessuno: su un'installazione appena aperta le otto categorie si
+ * cancellavano una per una, e da li' **non si puo' piu' inserire nessuna spesa**
+ * (il salvataggio *e'* il tap sulla categoria) e l'export prodotto in quel
+ * momento e' un file che `parseBackup` rifiuta.
+ *
+ * ## Perche' questo test archivia invece di cancellare
+ *
+ * Perche' la porta chiusa peggio era **l'altra**. Il pavimento vive in
+ * `isLastOnGrid`, e il suo argomento — *"senza chip non esiste il tap che salva
+ * una spesa"* — non nomina la cancellazione: vale identico per
+ * l'archiviazione, che arriva allo stesso stato da un'altra funzione. Otto
+ * archiviazioni lasciano otto record e **zero chip**, e quello stato non lo
+ * prende nessuno: `openRepository` risemina a zero **record**, e `parseBackup`
+ * conta i record, archiviate comprese.
+ *
+ * Il percorso qui sotto e' quello vero: sette archiviazioni una dopo l'altra,
+ * dal foglio, come le farebbe una persona che si costruisce la propria griglia.
+ *
+ * ## Cosa si guarda all'ottava, e perche' non e' la fascia rossa
+ *
+ * **Niente "Archivia", niente "Elimina del tutto", e la fascia rossa non c'e'
+ * affatto.** Il fatto e' **uno** — *e' l'ultima in griglia* — e chiude **due**
+ * porte: scritto due volte sarebbe una copia che parafrasa, scritto solo nella
+ * fascia starebbe in fondo al corpo che scorre, cioe' spiegherebbe l'assenza di
+ * un bottone del **piede** da un posto che si puo' non aver raggiunto.
+ *
+ * Sta quindi nella nota del piede, che in modifica c'e' sempre: quando
+ * "Archivia" esiste dice cosa fa, quando non esiste dice perche'. Lo slot non
+ * si svuota e non si sposta niente.
+ *
+ * ## Il rifiuto arriva **prima** del tap, e non come "non e' riuscito"
+ *
+ * `Repository.archiveCategory` il pavimento ce l'ha e risponde `null`. Ma quel
+ * `null`, in `App.archiveCategory`, diventa `toast.catFailed` — *"non sono
+ * riuscito"* — che e' **falso**: non e' fallito, e' stato rifiutato. La guardia
+ * del dominio resta vera per costruzione e muta; le parole stanno qui.
+ */
+test('l\'ultima in griglia non si archivia e non si cancella, e il piede lo dice', async ({
+  page,
+}) => {
+  await page.goto('./')
+  await expect(page.locator('.fab')).toBeEnabled()
+  await chiudiGuida(page)
+
+  await page.locator('.app__action').tap()
+  await expect(page.locator('.prefs')).toBeVisible()
+  await expect(page.locator('.cats--edit .cat')).toHaveCount(8)
+
+  // Sette archiviazioni: si tocca sempre la prima, perche' la griglia si
+  // accorcia sotto il dito e "la prima" e' l'unica posizione che resta vera.
+  for (let restano = 8; restano > 1; restano -= 1) {
+    await page.locator('.cats--edit .cat').first().tap()
+    await expect(page.locator('.sheet--cat')).toBeVisible()
+    await still(page)
+    await expect(
+      page.locator('.editor__second'),
+      `con ${restano} in griglia "Archivia" deve esserci`,
+    ).toHaveText('Archivia')
+    await page.locator('.editor__second').tap()
+    await expect(page.locator('.sheet--cat')).toHaveCount(0)
+    await expect(page.locator('.cats--edit .cat')).toHaveCount(restano - 1)
+  }
+
+  // L'ottava: e' l'ultima, e le due uscite non ci sono.
+  await page.locator('.cats--edit .cat').first().tap()
+  await expect(page.locator('.sheet--cat')).toBeVisible()
+  await still(page)
+  await expect(
+    page.locator('.editor__second'),
+    'sull\'ultima in griglia "Archivia" e\' ancora li\': toccarlo darebbe ' +
+      '"non sono riuscito", che e\' falso — non e\' fallito, e\' stato rifiutato',
+  ).toHaveCount(0)
+  await expect(
+    page.locator('.danger'),
+    'la fascia rossa e\' rimasta: sull\'ultima non ha niente da dire che il ' +
+      'piede non dica gia\', e una fascia in piu\' e\' una copia che parafrasa',
+  ).toHaveCount(0)
+  await expect(page.locator('.editor__note--foot')).toHaveText(
+    dizionario['cat.lastOnGrid'],
+  )
+
+  // Il rimedio nominato dalla frase — *"prima mettine un'altra in griglia"* —
+  // e' eseguibile **da dietro il velo**: la schermata sotto e' Impostazioni, e
+  // "Aggiungi una categoria" e l'elenco delle archiviate stanno li'.
+  await chiudiFoglio(page)
+  await expect(
+    page.locator('.cats__add'),
+    'la frase manda a mettere un\'altra categoria in griglia e il bottone per farlo non c\'e\'',
+  ).toBeVisible()
+  await expect(page.locator('.arch__row')).toHaveCount(7)
+
+  // E rimessane una, le due uscite tornano tutte e due.
+  await page.locator('.arch__row').first().tap()
+  await expect(page.locator('.sheet--cat')).toBeVisible()
+  await still(page)
+  await page.locator('.editor__primary').tap()
+  await expect(page.locator('.sheet--cat')).toHaveCount(0)
+  await expect(page.locator('.cats--edit .cat')).toHaveCount(2)
+
+  await page.locator('.cats--edit .cat').first().tap()
+  await expect(page.locator('.sheet--cat')).toBeVisible()
+  await still(page)
+  await expect(page.locator('.editor__second')).toHaveText('Archivia')
+  await expect(page.locator('.danger__action')).toHaveText('Elimina del tutto')
+  await expect(page.locator('.editor__note--foot')).toHaveText(dizionario['cat.archive.note'])
+
+  await senzaScrollOrizzontale(page, 'ultima in griglia')
 })

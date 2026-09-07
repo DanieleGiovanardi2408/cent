@@ -45,6 +45,7 @@
  */
 
 import { parseBackup } from '../core/backup'
+import { archivedCategories } from '../core/categories'
 import { toIsoDate } from '../core/date'
 import type { IsoDate } from '../core/date'
 import type { ImportIssue, ImportPreview } from '../core/backup'
@@ -178,6 +179,47 @@ export type ImportStep =
       readonly exportedAt: Timestamp | null
       /** Il "dopo" del prima/dopo, come `parseBackup` l'ha contato. */
       readonly counts: ImportCounts
+      /**
+       * **Quante delle categorie del file resteranno fuori dalla griglia** —
+       * DEBITO §15.
+       *
+       * ## Il numero che c'e' gia' non basta, e non per una svista
+       *
+       * `counts.categories` conta **anche le archiviate, di proposito** (una
+       * archiviata resta su ogni spesa che l'ha usata, quindi si vede da
+       * qualche parte). Ma la riga a schermo dice *"Categorie: ora 8 → dopo
+       * 10"*, e chi la legge conta i chip che avra': ne trovera' otto. Il
+       * numero non e' sbagliato — e' **ambiguo**, e lo e' in tutti e due i modi
+       * in cui una categoria puo' finire fuori dalla griglia:
+       *
+       * 1. il file ne portava piu' di otto attive e `capActiveCategories` ha
+       *    archiviato il surplus — il caso che DEBITO §15 nomina, e la
+       *    **giustificazione scritta** per archiviare invece di rifiutare
+       *    (*"non e' silenzioso: l'anteprima lo dice"*), che poggiava su un
+       *    canale che non esisteva;
+       * 2. il file portava gia' delle archiviate sue, ed e' il caso comune di
+       *    chi reimporta la propria copia.
+       *
+       * ## Perche' si dice *dove sono finite* e non *chi ce le ha messe*
+       *
+       * La forma che veniva prima in mente e' *"due sono state archiviate per
+       * te"*, cioe' il conteggio del solo caso 1 — un fatto che vive dentro
+       * `capActiveCategories` e che nessun campo porta fuori. E' anche un fatto
+       * che **l'utente non puo' verificare**: dopo l'import l'Archivio mostra
+       * le sue archiviate **piu'** quelle del taglio, e i due numeri non
+       * combaciano.
+       *
+       * Questo invece si riconcilia con lo schermo alla lettera: e'
+       * `archivedCategories`, **la stessa funzione** che disegna l'elenco
+       * "Archiviate · N" in Impostazioni. Non e' una comodita': e' la
+       * contromisura sull'identita' fra due viste che mostrano la stessa cosa,
+       * quella per cui non si sorveglia *"il numero e' giusto"* ma *"i due
+       * numeri sono lo stesso numero"*.
+       *
+       * `0` quando tutte le categorie del file stanno in griglia, e allora la
+       * riga non si disegna: non c'e' nessuna ambiguita' da sciogliere.
+       */
+      readonly offGrid: number
     }
 
 /** Quale riga del prima/dopo: l'etichetta la sceglie il componente. */
@@ -217,6 +259,10 @@ export function stepFromText(text: string): ImportStep {
       categories: preview.counts.categories,
       rules: preview.counts.recurringRules,
     },
+    // Sulle categorie **gia' tagliate** (`preview.data`), che sono quelle che
+    // andranno a disco: contarle sul file grezzo direbbe cosa c'era scritto,
+    // non cosa si vedra'.
+    offGrid: archivedCategories(preview.data.categories).length,
   }
 }
 

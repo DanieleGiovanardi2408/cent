@@ -304,6 +304,32 @@ export const en: Record<keyof typeof it, string> = {
     'Restoring the backup from {day}: the expenses you saved after that day are gone, and the fixed ones are created again from that day on.',
   'import.ready.undated':
     'This backup does not say when it was made. Restoring it: the expenses you saved after it are gone, and the fixed ones are created again.',
+  /* **DEBITO §15**: la riga sotto la tabella, e ce ne vuole **una**.
+   *
+   * La tabella dice *"Categories: now 8 / after 10"*, e chi legge conta i chip
+   * che avra': ne trovera' otto. Il numero e' voluto — `counts.categories`
+   * conta anche le archiviate, che restano su ogni spesa che le ha usate —
+   * quindi non si corregge: **si scioglie**.
+   *
+   * Il numero e' `archivedCategories(...)`, cioe' **la stessa funzione** che
+   * disegna "Archived · N" in Impostazioni: chi dubita apre quella schermata
+   * dopo il ripristino e trova lo stesso numero. Un conteggio del solo taglio
+   * (*"two were archived for you"*) non si riconcilierebbe con nessuna
+   * schermata, perche' li' dentro ci sono anche le archiviate che il file
+   * portava gia'.
+   *
+   * **Senza plurale, e non per pigrizia**: il numero sta dopo i due punti, come
+   * in `import.damaged.more` due righe piu' su, e cosi' regge da 1 a 99 in tutte
+   * e due le lingue senza una seconda chiave da tenere d'accordo.
+   *
+   * **E non dice cosa sia un archivio**: quello lo dice gia'
+   * `settings.cats.archivedText` — *"still on every expense that used them; tap
+   * one to put it back"* — nel posto in cui si puo' fare. Ripeterlo qui sarebbe
+   * una copia che parafrasa (DEBITO §1) di una frase che vive a due tap di
+   * distanza. Questa riga nomina **dove**, che e' anche dove il numero si
+   * verifica: sotto Categorie c'e' "Archived · N", e N e' questo. */
+  'import.offGrid':
+    'Categories off the grid after this restore: {count}. Only eight fit on the grid; the rest go to the archive, under Categories in Settings.',
   'import.now': 'now',
   'import.next': 'after',
   'import.rows.expenses': 'Expenses',
@@ -413,6 +439,22 @@ export const en: Record<keyof typeof it, string> = {
   'cat.archive': 'Archive',
   'cat.archive.note':
     'This only takes it off the grid: it stays on every expense that used it, and you keep seeing it in History.',
+  /* Il rifiuto dell'**ultima in griglia**, e ne serve **una** frase perche' il
+   * fatto e' uno solo e chiude due porte: archiviare e cancellare portano
+   * tutti e due a zero chip, e a zero chip non esiste piu' il tap che salva una
+   * spesa.
+   *
+   * Non porta numeri, e non e' una svista: il fatto — *e' l'unica rimasta* — lo
+   * conferma la griglia che sta dietro al velo mentre si legge. E' l'unico
+   * rifiuto di questo foglio che si verifica senza andare da nessuna parte.
+   *
+   * **Il rimedio non e' "archiviala"** — quello e' il rimedio di `cat.inUse.text`
+   * e qui produrrebbe lo stesso stato rotto dall'altra porta. Ed e' eseguibile
+   * da dove la frase compare: dietro al velo c'e' Impostazioni, con
+   * "Aggiungi una categoria" e l'elenco delle archiviate, che e' esattamente
+   * cio' che *"mettine un'altra in griglia"* chiede di fare. */
+  'cat.lastOnGrid':
+    'It is the only category left on the grid, so it can be neither archived nor deleted: with no chips there is no tap that saves an expense. Put another one on the grid first, then come back here.',
   'cat.delete': 'Delete for good',
   'cat.delete.note':
     'Nothing you can see uses it: no expense, no fixed cost. This is the only thing in Cent you cannot undo.',

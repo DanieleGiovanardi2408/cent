@@ -347,6 +347,9 @@ export const it = {
     'Ripristinando il backup del {day}: le spese registrate dopo quel giorno non ci sono più, e le fisse vengono ricreate da quel giorno in poi.',
   'import.ready.undated':
     'Questo backup non dice quando è stato fatto. Ripristinandolo: le spese registrate dopo non ci sono più, e le fisse vengono ricreate.',
+  // La riga di DEBITO §15: l'originale e la sua ragione stanno in `en.ts`.
+  'import.offGrid':
+    'Categorie fuori dalla griglia dopo il ripristino: {count}. In griglia ne stanno otto; le altre vanno in archivio, sotto Categorie in Impostazioni.',
   'import.now': 'adesso',
   'import.next': 'dopo',
   'import.rows.expenses': 'Spese',
@@ -494,6 +497,9 @@ export const it = {
   'cat.archive': 'Archivia',
   'cat.archive.note':
     'La toglie dalla griglia e basta: resta su ogni spesa che l’ha usata, e continui a vederla nello Storico.',
+  // Una frase sola per due porte: vedi la nota in `en.ts`, dove sta l'originale.
+  'cat.lastOnGrid':
+    'È l’unica categoria rimasta in griglia, quindi non si può né archiviare né cancellare: senza chip non esiste il tap che salva una spesa. Prima mettine un’altra in griglia, poi torna qui.',
   'cat.delete': 'Elimina del tutto',
   // L'elenco qui e' **lo stesso** che `planCategoryDeletion` controlla, e per
   // questo va riletto ogni volta che quello cambia: nominava anche i budget,

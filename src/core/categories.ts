@@ -379,10 +379,19 @@ export type CategoryDeletion =
  * ## Il pavimento viene **prima** di `in-use`, e cambia il rimedio
  *
  * L'ordine non e' estetico. Il rimedio di `in-use` e' *"archiviala"*, e
- * sull'ultima della griglia sarebbe un consiglio che produce lo stesso stato
- * rotto per un'altra porta — `archiveCategory` non ha nessun pavimento e non
- * passa di qui. Chi sta guardando l'ultima categoria ha un rimedio solo, e non
- * e' nessuno dei due: **prima un'altra, poi questa.**
+ * sull'ultima della griglia sarebbe **un consiglio che il prodotto rifiuta**:
+ * `archiveCategory` ha il suo pavimento — legge lo stesso `isLastOnGrid` — e non
+ * passa di qui, quindi seguire quel consiglio non produce lo stato rotto, non
+ * produce niente.
+ *
+ * Questa riga diceva *"`archiveCategory` non ha nessun pavimento"*, ed era vera
+ * per il tempo che separa due commit. La conclusione non cambia e la premessa
+ * si', ed e' il verso in cui va riscritta: prima l'ordine impediva un **danno**,
+ * adesso impedisce un **messaggio sbagliato** — e un consiglio che non si puo'
+ * eseguire e' comunque un rifiuto che non porta da nessuna parte.
+ *
+ * Chi sta guardando l'ultima categoria ha un rimedio solo, e non e' nessuno dei
+ * due: **prima un'altra, poi questa.**
  *
  * ## Le lapidi: perche' bloccavano, e perche' l'argomento era falso
  *

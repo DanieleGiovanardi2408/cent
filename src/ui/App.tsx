@@ -1269,6 +1269,14 @@ export function App({ readBackup }: AppProps) {
       return
     }
     closeCategory()
+    // `null` ha **tre** cause, e sono tutte e tre chiuse a monte: l'id non
+    // esiste, era gia' archiviata, oppure e' l'ultima in griglia
+    // (`isLastOnGrid`). Le prime due non sono producibili da questo bottone —
+    // il foglio rilegge il bersaglio dal mirror a ogni render e le archiviate
+    // non hanno il modo `edit`; la terza la rifiuta il foglio **prima**, con le
+    // parole, perche' qui diventerebbe "non e' riuscito" e non e' vero: non e'
+    // fallito, e' stato rifiutato. Il toast resta come rete per cio' che non
+    // abbiamo previsto, non come messaggio del pavimento.
     if (done === null) {
       showToast(t('toast.catFailed'))
       return

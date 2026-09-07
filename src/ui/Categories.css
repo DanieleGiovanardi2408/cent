@@ -427,6 +427,13 @@
  * facendo altro. Il bottone **esiste solo se il piano lo permette**
  * (`planCategoryDeletion`), altrimenti al suo posto ci sono le parole con
  * dentro i numeri: "3 spese la usano".
+ *
+ * **Due esiti su quattro non disegnano niente, nemmeno la linea.** `'unknown'`
+ * perche' non c'e' niente di utile da dire; `'last-active'` perche' quel
+ * rifiuto vale anche per l'archiviazione, e la sua frase sta nel piede — vedi
+ * la nota accanto a `.editor__note--foot` in `CategorySheet.tsx`. Una fascia
+ * vuota sotto una linea era il difetto di partenza: qui l'intero blocco e'
+ * assente, non svuotato.
  */
 .danger {
   display: flex;

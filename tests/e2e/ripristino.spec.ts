@@ -42,6 +42,7 @@
  */
 import { chiudiGuida, expect, test } from './installed'
 import { fissaOrologio } from './clock'
+import { MAX_ACTIVE_CATEGORIES } from '../../src/core/categories'
 import { it as dizionario } from '../../src/ui/i18n/it'
 import { en as inglese } from '../../src/ui/i18n/en'
 import type { Page } from '@playwright/test'
@@ -189,6 +190,34 @@ const POSIZIONE_ROTTA = `expenses[${SENZA_ID.data.expenses.findIndex((s) => !('i
 
 /** Un backup senza nessuna categoria: uno stato a cui l'app non sopravvive. */
 const SENZA_CATEGORIE = { ...BUONO, data: { ...BUONO.data, categories: [] } }
+
+/**
+ * **Dieci categorie, tutte in griglia nel file** — DEBITO §15.
+ *
+ * E' il caso che il debito nomina: `capActiveCategories` ne archivia il
+ * surplus, e chi importa *"ne trova due in archivio, e lo scopre la prima volta
+ * che apre il tastierino"*. **Nemmeno il numero lo tradisce**, perche'
+ * `counts.categories` conta anche le archiviate, di proposito.
+ *
+ * Il numero delle categorie non e' scritto a mano: e' `MAX_ACTIVE_CATEGORIES`
+ * piu' due. Cosi' il giorno in cui il tetto cambiasse, la fixture lo segue e
+ * l'attesa qui sotto — che si deriva dalla stessa costante — resta vera.
+ */
+const DIECI_CATEGORIE = {
+  ...BUONO,
+  data: {
+    ...BUONO.data,
+    categories: Array.from({ length: MAX_ACTIVE_CATEGORIES + 2 }, (_, i) => ({
+      ...BUONO.data.categories[0]!,
+      id: `c${i + 1}`,
+      name: `Categoria ${i + 1}`,
+      order: i,
+    })),
+  },
+}
+
+/** Lo stesso file con due sole categorie: nessuna resta fuori dalla griglia. */
+const DUE_CATEGORIE = BUONO
 
 /** Scritto da una versione futura: aprirlo qui mutilerebbe cio' che non conosciamo. */
 const TROPPO_NUOVO = { ...BUONO, schemaVersion: 99 }
@@ -622,6 +651,84 @@ async function fasce(page: Page): Promise<Fasce> {
     }
   })
 }
+
+/**
+ * **La riga che scioglie il numero delle categorie** — DEBITO §15, pagato.
+ *
+ * ## Il difetto, e cosa mancava davvero
+ *
+ * La tabella dice *"Categorie: adesso 8 / dopo 10"*, e chi legge conta i chip
+ * che avra': ne trovera' otto. Il numero non e' sbagliato — `counts.categories`
+ * conta anche le archiviate apposta, perche' un'archiviata resta su ogni spesa
+ * che l'ha usata — **e' ambiguo**, e lo era in silenzio. Quella warning era
+ * anche la **giustificazione scritta** per archiviare invece di rifiutare
+ * (*"non e' silenzioso: l'anteprima lo dice"*), e poggiava su un canale che non
+ * esisteva.
+ *
+ * ## Il numero e' quello che l'utente potra' andare a contare
+ *
+ * Non e' *"due sono state archiviate per te"* — quello e' un fatto che vive
+ * dentro `capActiveCategories` e che **nessuna schermata conferma**: dopo il
+ * ripristino l'Archivio mostra il taglio **piu'** le archiviate che il file
+ * portava gia', e i due numeri non combaciano. E' `archivedCategories`, cioe'
+ * **la stessa funzione** che disegna "Archiviate · N" in Impostazioni.
+ *
+ * ## E la riga non muove le tre fasce
+ *
+ * L'invariante di DEBITO §14 e' che intestazione, corpo e piede stiano ferme
+ * fra un contenuto e l'altro. La riga nuova sta **dentro il corpo**, che scorre,
+ * e il secondo mezzo test lo misura nel modo che cade sul difetto vero: la
+ * stessa schermata **con** e **senza** la riga, e le tre fasce confrontate fra
+ * loro.
+ */
+test('dieci categorie: l\'anteprima dice quante restano fuori dalla griglia', async ({
+  page,
+}) => {
+  let prossimo: unknown = DIECI_CATEGORIE
+  serviIlSelettore(page, () => prossimo)
+  await apriImpostazioni(page)
+
+  await bottoneRipristina(page).tap()
+  await expect(page.locator('.restore__lead')).toContainText('Ripristinando il backup del')
+
+  // Il numero si **deriva**: quante il file ne porta, meno quante ne stanno in
+  // griglia. Scritto a mano sarebbe una seconda copia del tetto.
+  const fuori = DIECI_CATEGORIE.data.categories.length - MAX_ACTIVE_CATEGORIES
+  await expect(
+    page.locator('.restore__note'),
+    'l\'anteprima non dice che due categorie del file resteranno fuori dalla griglia: ' +
+      'chi importa lo scopre la prima volta che apre il tastierino',
+  ).toHaveText(dizionario['import.offGrid'].replace('{count}', String(fuori)))
+
+  const conLaRiga = await fasce(page)
+  expect(conLaRiga.overflowX, 'scroll orizzontale con la riga nuova').toBeLessThanOrEqual(0)
+  expect(
+    conLaRiga.corsa,
+    `avanzano ${conLaRiga.eccedenza}px e il corpo si lascia scorrere di ${conLaRiga.corsa}`,
+  ).toBeGreaterThanOrEqual(conLaRiga.eccedenza)
+  await page.locator('.restore__close').tap()
+  await expect(page.locator('.restore')).toHaveCount(0)
+
+  // Due categorie: non c'e' niente da sciogliere, e la riga non si disegna.
+  prossimo = DUE_CATEGORIE
+  await bottoneRipristina(page).tap()
+  await expect(page.locator('.restore__lead')).toContainText('Ripristinando il backup del')
+  await expect(
+    page.locator('.restore__note'),
+    'la riga compare anche quando tutte le categorie del file stanno in griglia: ' +
+      'un avviso che non avvisa di niente insegna a non leggerlo',
+  ).toHaveCount(0)
+
+  const senzaLaRiga = await fasce(page)
+  expect(
+    `${senzaLaRiga.head} | ${senzaLaRiga.body} | ${senzaLaRiga.foot}`,
+    'la riga nuova ha spostato una delle tre fasce: sta dentro il corpo, che scorre',
+  ).toBe(`${conLaRiga.head} | ${conLaRiga.body} | ${conLaRiga.foot}`)
+
+  console.log(
+    `  ripristino §15 | ${fuori} fuori dalla griglia | eccedenza ${conLaRiga.eccedenza} su corsa ${conLaRiga.corsa}`,
+  )
+})
 
 test.describe('ImportSheet: le tre fasce non si muovono fra gli otto contenuti', () => {
   /** Apre la schermata su uno degli otto contenuti e aspetta che ci sia arrivata. */
