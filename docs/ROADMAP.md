@@ -1,7 +1,7 @@
 # La mappa
 
-<!-- JUDGMENT rivisto=2acb995 -->
-> Rivisto a `2acb995`, 6 commit fa. **Da riguardare.**
+<!-- JUDGMENT rivisto=2319138 -->
+> Rivisto a `2319138`, cioe' a questo commit.
 
 **Questo blocco dice la forma, non i fatti.** Non porta nessun numero: quelli si
 rigenerano qui sotto, e una cifra scritta a mano accanto a una rigenerata e' la
@@ -17,11 +17,12 @@ con anteprima e conferma. E' **A2** del binario A, e la ragione per cui viene
 prima di dare l'app a qualcuno e' che fino a ieri i dati uscivano e non
 rientravano.
 
-**Cosa manca per chiuderla.** Il gate a zero ALTO, il merge su `main` — che
-pubblica su Pages — e **le tre prove che solo un iPhone puo' dare**: `accept` nel
-foglio File, il file da iCloud non ancora scaricato, e la chiusura del selettore
-senza scegliere niente. Le voci per esteso stanno in "Criterio di chiusura della
-fase 7".
+**Cosa manca per chiuderla.** Il gate e' a zero ALTO e il merge su `main` e'
+fatto; cosa c'e' su Pages lo dice il blocco rigenerato qui sotto. Restano **le
+tre prove che solo un iPhone puo' dare**: `accept` nel foglio File, il file da
+iCloud non ancora scaricato, e la chiusura del selettore senza scegliere niente.
+Le voci per esteso stanno in "Criterio di chiusura della fase 7"; le tre prove,
+passo per passo, in "Verificabili solo sul dispositivo".
 
 **Cosa viene dopo, in ordine.**
 
@@ -61,17 +62,17 @@ sa gia', e per questo non puo' invecchiare. I giudizi — cosa e' in volo, cosa
 aspetta una persona — stanno sotto, scritti a mano e timbrati con lo SHA a cui
 sono stati rivisti.
 
-- **Ultimo commit**: `5156102` — feat: `endDate` ha un produttore — il selettore della fine nel foglio della regola
-- **Data**: 07/09/2026 21:45
-- **Ramo**: `fase7/scatto-pre-import`
-- **Pushato**: si, `origin/fase7/scatto-pre-import` e' allo stesso commit
-- **Rispetto a `origin/main`**: 36 commit avanti
+- **Ultimo commit**: `2319138` — docs: chiusura della fase 7 — il ritorno dei dati
+- **Data**: 07/09/2026 22:07
+- **Ramo**: `main`
+- **Pushato**: si, `origin/main` e' allo stesso commit
 - **Albero di lavoro**: **non pulito**, ci sono modifiche non committate
 
 - **Test unitari**: 850 in 27 file, tutti verdi
 - **Test e2e dichiarati**: 466 in 15 file, su 4 progetti (iphone-se, iphone-14, landscape, dark)
 - **Test e2e eseguiti**: 440 passati, 26 saltati, in 3.0 minuti. I saltati sono condizionali (ADR 013): solo un'esecuzione li vede.
 - **Bundle iniziale**: 65.4 KB gzip su 68.0 KB (2.6 KB di margine)
+- **Su Pages**: `2319138`, pubblicato il 2026-09-07. Come il disco, e' un fatto **di GitHub** e non del repository: si rigenera, e resta fuori dal confronto di `--check`.
 - **Disco**: 5.4 GB liberi, 75% pieno. Non e' un giudizio e non porta un timbro: cambia da solo, quindi si rigenera.
 
 - **Schema del database**: 6. La scala delle migrazioni:
@@ -90,90 +91,46 @@ sono stati rivisti.
 
 ## In volo adesso
 
-<!-- JUDGMENT rivisto=d143f2f -->
-> Rivisto a `d143f2f`, 18 commit fa. **Da riguardare.**
+<!-- JUDGMENT rivisto=2319138 -->
+> Rivisto a `2319138`, cioe' a questo commit.
 
-**Ri-derivato il 4 settembre, e stavolta il fatto e' un altro**: si lavora sul
-ramo `fase7/scatto-pre-import`, e `main` e' fermo a `9958f4f`.
+**La fase 7 e' chiusa e ha attraversato `main`.** La posizione del ramo, la
+distanza da `origin/main` e **cosa c'e' su Pages** non stanno piu' qui: si
+rigenerano nel blocco in cima.
 
-**E la CI su `main` e' ROSSA da tre commit** — `33671564470`, `33738482024`,
-`33738767441`, tutti e tre di **documenti**. La causa e' `state --check`: il
-disco era appena diventato un fatto rigenerato, e `df` sul portatile non da' lo
-stesso numero di `df` sul runner. Nessuno se n'e' accorto perche' erano commit di
-documenti e **il verde si dava per scontato**.
+### Il fatto che ha invecchiato quattro volte adesso e' derivato
 
-Riparato escludendo il disco dal confronto (e' un fatto **della macchina**, come
-le righe di identita'), ma il fatto operativo resta: **dopo un push su `main` si
-guarda la CI**, anche quando il commit tocca solo `docs/`.
+Questo giudizio ha sbagliato **quattro volte sullo stesso fatto** — dove sta
+`main`, e cosa e' pubblicato — e per tre volte ha scritto da solo il proprio
+rimedio: *"la posizione di `main` e' derivabile e non deve stare scritta a mano;
+finche' non entra in `npm run state`, chi rilegge questa riga la rilegge
+guardando `git rev-parse origin/main` e `gh run list"*.
 
-**Il lavoro della fase 6 e' su `main`, e `main` e' su Pages.** Ri-derivato il 2
-settembre guardando `git rev-parse HEAD origin/main` e l'ultimo deploy: le tre
-posizioni coincidono su `547fba4` — *"docs: i fatti dopo la linea del
-sostenibile"* — e il workflow `Deploy` e' `success` su quel commit. `fase-6-wip`
-esiste ancora come ramo (`1910c4e`) ma non e' piu' dove si lavora: il suo
-contenuto e' dentro `main`.
+**Alla quarta si smette di scriverlo e si fa.** Meta' del fatto era gia'
+rigenerata (`Ramo`, `Pushato`, `Rispetto a origin/main`); mancava l'altra meta',
+cioe' **il commit dell'ultimo `Deploy` riuscito** — l'unica che risponde a *"cosa
+apre chi tocca il link"*. Adesso c'e', e **sta fuori dal confronto di
+`--check`** insieme al disco: sul portatile `gh` risponde "l'ultimo riuscito",
+sul runner durante il proprio push l'ultimo riuscito e' quello **precedente**.
+Due valori diversi per costruzione — *derivabile qui*, non *derivabile allo
+stesso valore ovunque*. Includerlo avrebbe reso `state --check` rosso a ogni
+push, che e' il difetto che ha gia' tenuto la CI rossa per tre commit.
 
-**Questa riga diceva *"Fase 6 sul ramo `fase-6-wip`, tredici commit sopra
-`origin/main`"*, ed era la TERZA volta che invecchiava sullo stesso fatto.** Le
-prime due sono raccontate qui sotto. Tre volte sullo stesso fatto chiude la
-discussione: **la posizione di `main` e' derivabile e non deve stare scritta a
-mano.** Finche' non entra in `npm run state`, chi rilegge questa riga la rilegge
-guardando `git rev-parse origin/main` e `gh run list`, non ricordando — ed e'
-esattamente cosi' che e' stata riscritta adesso.
+> **Quando un giudizio invecchia tre volte sullo stesso fatto, il fatto non e' un
+> giudizio.** La terza volta era gia' scritta qui e non e' bastata: quello che ha
+> chiuso la discussione e' stato **scrivere lo script**, non scriverlo un'altra
+> volta.
 
-**La chiusura della fase 6 sta sul ramo `fase-6-chiusura`**, spinto a ogni
-rientro; il piano che la segue sta in "I due binari", piu' sotto.
+### Cosa resta, e nessuna macchina lo puo' dire
 
-**Rilettura del 30 agosto sera: questa riga era falsa in due punti.** Diceva
-*"cinque commit sopra"* (erano tredici) e *"cio' che sta su Pages e' ancora
-`d9d6471`"*. Su Pages c'e' **`005224d`** — *"densita', accento e numero grande, e
-ADR 016 §3 non abitava qui"* — che contiene `d9d6471`: `main` **e' stato toccato**
-dopo che questa riga fu scritta, esattamente come l'emendamento qui sotto
-prevedeva, e la riga non se n'e' accorta.
+**Le tre prove sul telefono.** Sono l'unica cosa che separa la fase 7 dall'essere
+finita, e non sono automatizzabili: `accept` su iOS si risolve in UTI e in
+Chromium non filtra niente, `100dvh` e' statico, e il foglio File non esiste. Le
+tre prove stanno scritte passo per passo in "Verificabili solo sul dispositivo",
+con **cosa si deve vedere** accanto a ognuna.
 
-E' la **seconda volta** che questo giudizio invecchia sullo stesso fatto — la
-prima e' raccontata due paragrafi piu' giu'. Due volte sullo stesso fatto non e'
-sfortuna: e' che **la posizione di `main` e' derivabile e sta scritta a mano**.
-Va in `npm run state` insieme agli altri fatti; finche' non ci sta, questa riga
-va riletta guardando `git rev-parse origin/main`, non ricordando.
-
-Qui c'era scritto *"la fase 6 e' gia' su Pages"*, ed era vero a `848f417`. Quattro
-commit dopo non lo era piu', e la riga non se n'era accorta: e' il guasto che questa
-meta' del documento **dichiara di avere per costruzione** — i fatti rigenerati
-tacciono un difetto, i giudizi scritti a mano dichiarano aperto cio' che e' chiuso e
-chiuso cio' che e' aperto. L'ha preso `npm run state -- --check`, che segnalava tre
-giudizi oltre la soglia dei cinque commit.
-
-### Qui c'era scritto che non ci si spingeva, e il push era gia' avvenuto
-
-La riga precedente diceva *"Main resta a `origin/main` e pubblica su Pages: non ci
-si spinge finche' la schermata non e' stata riletta"*. Timbrata `b289fff`, cioe'
-**il commit prima dell'emendamento che la supera**: `d9d6471` ha riscritto la voce
-7 del criterio di chiusura stabilendo che **il push su main non e' un passo a se',
-e' il modo in cui si esegue la voce 5** — Statistiche non e' guardabile sul
-telefono se non passando da Pages.
-
-L'emendamento e' stato applicato dove era stato discusso e **non e' stato cercato
-dove altro valeva**. Questa riga e' rimasta nella forma precedente, e da allora
-descriveva come divieto cio' che era gia' diventato lo strumento: chi la legge oggi
-trova un albero che la contraddice e non ha modo di sapere quale delle due sia
-invecchiata.
-
-E' **la settima ricorrenza di "una decisione vale dove vale il suo argomento"**, in
-una forma nuova: non una decisione applicata troppo stretta, ma una decisione
-**emendata** in un punto mentre la sua vecchia formulazione restava viva in un
-altro. Il costo e' lo stesso — un difetto che si crede gia' corretto — e la ragione
-per cui e' arrivata qui e' la solita: la sezione degli emendamenti e la sezione dei
-giudizi sono due posti, e chi emenda sta guardando il primo.
-
-**La regola operativa che ne segue, ed e' controllabile a occhio**: chi emenda una
-voce del criterio di chiusura rilegge "In volo adesso" nello stesso gesto. Sono le
-due meta' scritte a mano dello stesso documento, e l'una racconta cio' che l'altra
-decide.
-
-**Cosa vale adesso**: il push su main e' consentito e atteso, perche' e' cio' che
-rende la schermata guardabile. Cio' che resta chiuso e' **dare il link a qualcuno**
-(voce 7), e resta chiuso finche' le voci 5 e 8 non sono fatte.
+**Il link resta chiuso.** E' A3, ed e' una fase sua. Chiudere la fase 7 chiude
+il ritorno dei dati, non il progetto.
 
 ### Come e' stata derivata questa lista, e perche' la riga lo dice
 
@@ -1007,13 +964,19 @@ differenza fra il modello mentale della richiesta e la configurazione dei dati.
 Sono ferme dal **24 agosto** e vanno fatte **in quest'ordine**, che non e' una
 preferenza: ogni passo distrugge la possibilita' di fare il precedente.
 
-<!-- JUDGMENT rivisto=d143f2f -->
-> Rivisto a `547fba4`, 6 commit fa. **Da riguardare.**
+<!-- JUDGMENT rivisto=2319138 -->
+> Rivisto a `d143f2f`, 19 commit fa. **Da riguardare.**
 
 **Riletto, non ri-derivato, e la differenza e' il contenuto della voce**: i passi
 3 e 4 succedono sul telefono, e da questa macchina non si leggono. Il timbro
 certifica che questa prosa e' stata riguardata, non che i due passi siano ancora
 aperti.
+
+**Cosa e' cambiato con la chiusura della fase 7**: questa sezione ha adesso **tre
+prove nuove**, scritte passo per passo piu' sotto — `accept` in quattro posti, il
+file da iCloud non scaricato con il suo "Riprova", e la chiusura del selettore
+senza scegliere niente. Sono le **uniche voci del criterio di chiusura della fase
+7 che restano aperte**, e nessuna macchina puo' chiuderle.
 
 **Cosa e' cambiato dal timbro precedente, ed e' una cosa sola**: il passo 4 —
 *"dare il telefono a una persona che non ha mai visto l'app"* — **non e' piu' una
@@ -1470,7 +1433,7 @@ giorno in cui serviva davvero.
 
 ## Decisioni prese e non ancora applicate
 
-<!-- JUDGMENT rivisto=d143f2f -->
+<!-- JUDGMENT rivisto=2319138 -->
 > Rivisto a `547fba4`. **Ri-derivato**: `npm run state -- --check` da' ancora
 > **14/14 applicate**, cioe' nessuna decisione dichiarata qui e assente dal
 > codice. E' l'unico dei quattro giudizi la cui verita' e' interamente

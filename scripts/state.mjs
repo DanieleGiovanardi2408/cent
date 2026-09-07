@@ -373,6 +373,53 @@ function discoFacts() {
   }
 }
 
+/**
+ * **Cosa c'e' su Pages, derivato invece che ricordato.**
+ *
+ * Il giudizio "In volo adesso" e' invecchiato **quattro volte sullo stesso
+ * fatto** — dove sta `main`, e cosa e' pubblicato — e per tre volte ha scritto
+ * da solo il proprio rimedio: *"la posizione di `main` e' derivabile e non deve
+ * stare scritta a mano; finche' non entra in `npm run state`, chi rilegge questa
+ * riga la rilegge guardando `git rev-parse origin/main` e `gh run list"*.
+ *
+ * Alla quarta si smette di scriverlo e si fa. Meta' del fatto c'era gia'
+ * (`Ramo`, `Pushato`, `Rispetto a origin/main`); questa e' l'altra meta': **il
+ * commit dell'ultimo `Deploy` riuscito**, cioe' cio' che una persona apre sul
+ * telefono.
+ *
+ * ## Ed **esce dal confronto** di `--check`, come il disco
+ *
+ * Non e' un fatto **del repository**: e' un fatto di GitHub, letto attraverso
+ * `gh`. Sul portatile risponde "l'ultimo riuscito"; sul runner, durante il
+ * proprio push, l'ultimo riuscito e' quello **precedente** — il deploy in corso
+ * non e' ancora finito. Due valori diversi per costruzione, cioe' esattamente la
+ * famiglia del disco: *derivabile qui*, non *derivabile allo stesso valore
+ * ovunque*.
+ *
+ * Includerlo nel confronto avrebbe reso `state --check` rosso a ogni push, che
+ * e' il difetto che ha gia' tenuto la CI rossa per tre commit. Resta nel
+ * documento perche' serve a chi legge; esce dal confronto perche' non e'
+ * condiviso.
+ */
+function pagesFacts() {
+  try {
+    const out = execFileSync(
+      'gh',
+      ['run', 'list', '--workflow', 'Deploy', '--status', 'success', '--limit', '1', '--json', 'headSha,createdAt'],
+      { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] },
+    )
+    const rows = JSON.parse(out)
+    const row = Array.isArray(rows) ? rows[0] : undefined
+    if (row === undefined) return { ok: false, why: 'nessun deploy riuscito' }
+    return { ok: true, sha: String(row.headSha).slice(0, 7), when: String(row.createdAt).slice(0, 10) }
+  } catch {
+    // `gh` che non c'e' o non e' autenticato non e' un difetto del documento.
+    // **Non sapere non e' un dato da scrivere**, ma qui la riga serve a dire che
+    // non e' stato guardato — che e' diverso da "non c'e' niente".
+    return { ok: false, why: '`gh` non ha risposto' }
+  }
+}
+
 function bundleFacts() {
   let distFiles
   try {
@@ -714,6 +761,12 @@ function renderBlock(f) {
       : `- **Bundle iniziale**: non misurato — ${f.bundle.why}`,
   )
   L.push(
+    f.pages.ok
+      ? `- **Su Pages**: \`${f.pages.sha}\`, pubblicato il ${f.pages.when}. Come il disco, e' un `
+        + `fatto **di GitHub** e non del repository: si rigenera, e resta fuori dal confronto di \`--check\`.`
+      : `- **Su Pages**: non misurato — ${f.pages.why}`,
+  )
+  L.push(
     f.disco.ok
       ? `- **Disco**: ${f.disco.gb} GB liberi, ${f.disco.uso} pieno. Non e' un giudizio ` +
           'e non porta un timbro: cambia da solo, quindi si rigenera.'
@@ -755,6 +808,7 @@ const facts = {
   e2eRun: e2eRunFacts(e2eDichiarati === null ? undefined : e2eDichiarati.total),
   bundle: bundleFacts(),
   disco: discoFacts(),
+  pages: pagesFacts(),
   schema: schemaFacts(),
 }
 
@@ -838,7 +892,7 @@ const withoutIdentity = (s) =>
     .split('\n')
     .filter(
       (line) =>
-        !/^- \*\*(Ultimo commit|Data|Ramo|Pushato|Rispetto a `origin\/main`|Albero di lavoro|Disco)\*\*/.test(
+        !/^- \*\*(Ultimo commit|Data|Ramo|Pushato|Rispetto a `origin\/main`|Albero di lavoro|Disco|Su Pages)\*\*/.test(
           line,
         ) &&
         !/^> Rivisto a /.test(line) &&
