@@ -134,7 +134,14 @@ const CON_REGOLA = {
   },
 }
 
-/** Lo stesso file con una spesa illeggibile: `expenses[0].amountCents`. */
+/**
+ * Lo stesso file con una spesa illeggibile.
+ *
+ * Il campo rotto e' `amountCents` della **prima** spesa; cio' che la schermata
+ * nomina non e' quella posizione ma **l'id di quel record**, che nel file c'e'
+ * davvero — vedi `ImportRefusal.where`. L'id si prende da `BUONO`, non si
+ * riscrive: cosi' cambiare la fixture non lascia indietro un'attesa.
+ */
 const ROTTO = {
   ...BUONO,
   data: {
@@ -507,7 +514,17 @@ test.describe('ImportSheet: le tre fasce non si muovono fra i sette contenuti', 
       ],
       [
         'un record illeggibile',
-        await scena(page, () => (prossimo = ROTTO), 'ok', 'expenses[0].amountCents'),
+        // **L'attesa e' l'id, e prima era il path.** Qui c'era
+        // `'expenses[0].amountCents'`, ed e' rimasta quando `where` ha smesso
+        // di essere un indice: la e2e e' stata rossa per due commit senza che
+        // nessuno la lanciasse. La riparazione che tolse il path da
+        // `import-view.test.ts` non ando' a cercare dove altro valeva il
+        // proprio argomento — e valeva qui.
+        //
+        // Adesso l'id si **deriva dalla fixture** invece di essere riscritto,
+        // quindi non puo' restare indietro, e l'attesa cade il giorno in cui
+        // qualcuno rimette un indice a schermo.
+        await scena(page, () => (prossimo = ROTTO), 'ok', BUONO.data.expenses[0]!.id),
       ],
       [
         'anteprima',
