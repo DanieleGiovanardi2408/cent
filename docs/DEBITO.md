@@ -606,9 +606,34 @@ a meta' della domanda: *"come sta andando il mese"* non e' un totale, e' un tota
 **contro un'aspettativa**, e l'aspettativa mensile non esiste da nessuna parte —
 il budget e' settimanale.
 
-**La condizione di riapertura**: si decide in **fase 7**, oppure **prima se il test
-degli amici lo fa emergere** — cioe' se qualcuno che non ha scritto l'app chiede
-*"quanto ho speso questo mese?"* e non trova dove guardare. Fino ad allora l'eroe
+**La condizione di riapertura era scritta qui, ed e' scaduta in silenzio.**
+Diceva *"si decide in **fase 7**"*. La fase 7 si e' chiusa, non si e' deciso
+niente, **e non e' successo niente** — perche' quella frase dice *quando* si
+decide e non *cosa succede se non si decide*. E' identica alla condizione vecchia
+di [§17](#17-themepreference-ha-due-membri-che-nessuno-scrive-e-nessuno-legge),
+che stava **tre sezioni piu' giu'** e aveva gia' diagnosticato la malattia con la
+frase che adesso apre `scripts/scadenze.mjs`:
+
+> **Una condizione senza un esito scritto non e' una condizione: e' una data.**
+
+**E nel frattempo la decisione era stata presa altrove.** [ROADMAP.md](ROADMAP.md)
+mette questa voce in **B1**, prima del binario B, con condizione *"dopo A3"* — e
+A3 e' la fase 8. Quindi la data giusta non era la fase 7 gia' da prima che la
+fase 7 finisse: era scritta in un secondo posto, e questo non l'ha saputo.
+
+Non e' una svista in piu': e' [§1](#1-le-copie-che-parafrasano) sulla **data**
+invece che sulla frase. La riparazione e' quella di sempre — **un fatto ha una
+casa, e chi lo ridice lo cita.** La casa e' B1; qui si cita.
+
+<!-- SCADENZA
+     cosa:  l'app risponde a "come sta andando il mese" — ROADMAP.md, B1
+     entro: fase 9
+     esito: oppure questa voce si rilegge e si rida' un termine, con il numero di
+            quel giorno accanto: oggi le fisse valgono 530,00 € al mese su un
+            budget che e' settimanale, ed e' quel rapporto a dire se serve ancora
+-->
+
+Fino ad allora l'eroe
 **deve continuare a dire "Questa settimana · <intervallo>"**: e' l'unica frase che
 impedisce di leggere quel numero come mensile, ed e' quindi parte di questa voce e
 non una rifinitura del copy.
@@ -1062,6 +1087,15 @@ Costruirlo vuol dire riaprire quella decisione, non aggiungere una schermata.
 
 **La condizione che lo chiude, e stavolta con il suo esito**, nella forma che ADR
 026 ha usato per lo scatto:
+
+<!-- SCADENZA
+     cosa:  il tema esplicito ha un lettore — qualcosa che legga `settings.theme`
+            e cambi lo schermo, con la risposta al lampo al primo frame
+     entro: fase 8
+     esito: oppure escono i due membri `'light'` e `'dark'` di `ThemePreference`,
+            `SettingsPatch.theme`, la riga di `tokens.css` che li promette, e la
+            dichiarazione in `scripts/dead-surface.mjs` che li tiene vivi
+-->
 
 > Il tema esplicito arriva **col suo lettore** — qualcosa che legga
 > `settings.theme` e cambi lo schermo — **entro la fine della fase 8. Oppure

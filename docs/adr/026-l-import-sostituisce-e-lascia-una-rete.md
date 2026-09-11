@@ -243,6 +243,16 @@ Costo massimo: 1,3 MB costanti.
 
 ### La scadenza: il lettore arriva entro la fine della fase 8, o la scrittura esce
 
+<!-- SCADENZA
+     cosa:  lo scatto pre-import ha un lettore di produzione — `snapshotTakenAt`,
+            `restoreSnapshot` e la voce in Impostazioni che dice a che data si torna
+     entro: fase 8
+     esito: oppure la scrittura esce — `replaceAll` smette di prendere lo scatto,
+            `buildPreImportSnapshot` e `readArchive` se ne vanno, lo store di
+            sistema `preImportSnapshot` esce con la sua migrazione, e con lui
+            decade DEBITO.md §16, che senza scatto non ha piu' niente da consumare
+-->
+
 **4 settembre.** Lo scatto si scrive — fino a **1,3 MB** al tetto delle 5.000
 spese — e **nessuno lo legge**. La rete che l'utente ha oggi e' l'Annulla sul
 toast, che vive in memoria e muore con l'app.

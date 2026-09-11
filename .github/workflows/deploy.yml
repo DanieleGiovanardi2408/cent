@@ -104,6 +104,27 @@ jobs:
       - name: Le due scale — spaziatura e tipografia
         run: npm run audit:scale
 
+      # **Le scadenze, e perche' questo ferma tutti e tre i suoi controlli.**
+      #
+      # La classe che copre ha un conto: tre condizioni datate scritte in questo
+      # albero, **due** scadute senza che succedesse niente — i due membri di
+      # `ThemePreference` (DEBITO §17) e l'orizzonte mensile (DEBITO §9, trovata
+      # il 10 settembre, tre sezioni sopra la §17 che aveva gia' diagnosticato
+      # la malattia). L'unica che ha funzionato, ADR 026, si distingue per una
+      # parola: *"oppure"*.
+      #
+      # S1 e S3 hanno rimedi meccanici — si scrive il campo, si dichiara il
+      # blocco — quindi la calibrazione e' quella di G1.
+      #
+      # S2 sembra un giudizio e non lo e', ed e' la parte da non copiare a
+      # memoria: riparare non vuol dire decidere cosa fare, vuol dire eseguire
+      # uno dei due rami che stanno **gia' scritti** nell'`esito`. La decisione
+      # e' stata presa il giorno della dichiarazione. Cio' che nelle due
+      # occorrenze e' mancato non era la decisione: era qualcuno che la
+      # chiedesse.
+      - name: Le scadenze dichiarate
+        run: npm run audit:scadenze
+
       - name: Test
         run: npm test
 
