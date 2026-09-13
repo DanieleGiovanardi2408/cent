@@ -1,7 +1,7 @@
 # La mappa
 
 <!-- JUDGMENT rivisto=2319138 -->
-> Rivisto a `2319138`, 2 commit fa.
+> Rivisto a `2319138`, 3 commit fa.
 
 **Questo blocco dice la forma, non i fatti.** Non porta nessun numero: quelli si
 rigenerano qui sotto, e una cifra scritta a mano accanto a una rigenerata e' la
@@ -62,18 +62,18 @@ sa gia', e per questo non puo' invecchiare. I giudizi — cosa e' in volo, cosa
 aspetta una persona — stanno sotto, scritti a mano e timbrati con lo SHA a cui
 sono stati rivisti.
 
-- **Ultimo commit**: `03d3042` — feat(audit): le scadenze si dichiarano e scattano da sole
-- **Data**: 11/09/2026 15:33
+- **Ultimo commit**: `5588874` — feat: lo scatto pre-import ha un lettore, e le due reti diventano una
+- **Data**: 13/09/2026 12:13
 - **Ramo**: `main`
 - **Pushato**: si, `origin/main` e' allo stesso commit
 - **Albero di lavoro**: **non pulito**, ci sono modifiche non committate
 
 - **Test unitari**: 853 in 27 file, tutti verdi
 - **Test e2e dichiarati**: 466 in 15 file, su 4 progetti (iphone-se, iphone-14, landscape, dark)
-- **Test e2e eseguiti**: non misurato — l'ultima esecuzione e' **parziale** — 45 test su 466 dichiarati, probabilmente un `-g` o un `--project`: va rilanciata intera
-- **Bundle iniziale**: 66.0 KB gzip su 68.0 KB (2.0 KB di margine)
-- **Su Pages**: `03d3042`, pubblicato il 2026-09-11. Come il disco, e' un fatto **di GitHub** e non del repository: si rigenera, e resta fuori dal confronto di `--check`.
-- **Disco**: 12.8 GB liberi, 56% pieno. Non e' un giudizio e non porta un timbro: cambia da solo, quindi si rigenera.
+- **Test e2e eseguiti**: non misurato — l'ultima esecuzione e' **parziale** — 105 test su 466 dichiarati, probabilmente un `-g` o un `--project`: va rilanciata intera
+- **Bundle iniziale**: 66.2 KB gzip su 68.0 KB (1.8 KB di margine)
+- **Su Pages**: `5588874`, pubblicato il 2026-09-13. Come il disco, e' un fatto **di GitHub** e non del repository: si rigenera, e resta fuori dal confronto di `--check`.
+- **Disco**: 12.7 GB liberi, 56% pieno. Non e' un giudizio e non porta un timbro: cambia da solo, quindi si rigenera.
 
 - **Schema del database**: 6. La scala delle migrazioni:
   - **1** — Schema iniziale: expenses, categories, recurringRules, budgets, settings

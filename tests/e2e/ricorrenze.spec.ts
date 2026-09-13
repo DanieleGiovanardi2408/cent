@@ -1075,7 +1075,12 @@ test('correggere l importo di una fissa conserva id e source, e la riga Restano 
 
   // Il foglio dice quale spesa si sta correggendo, e **dichiara** che il budget
   // non si muove: un'esclusione taciuta e' un numero che mente per omissione.
-  await expect(page.locator('.fix__name')).toHaveText('Casa')
+  // Era `.fix__name`, l'intestazione del foglio. Quella riga non c'e' piu':
+  // adesso la categoria e' un **chip premuto**, cioe' lo stesso fatto in forma
+  // modificabile. La proprieta' sorvegliata non e' cambiata — il foglio dice
+  // quale spesa si sta correggendo — e' cambiato cosa la porta, e questa forma
+  // e' piu' severa: chiede anche che sia **selezionata**, non solo scritta.
+  await expect(page.locator('.sheet--amount .cat[aria-pressed="true"]')).toHaveText('🏠Casa')
   await expect(page.locator('.fix__note')).toHaveText(
     'Resta una spesa fissa: correggerla non tocca il budget del periodo.',
   )

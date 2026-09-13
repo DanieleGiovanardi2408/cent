@@ -239,6 +239,31 @@ export function materializationWindow(
  *
  * Non contiene mai caratteri ambigui perche' `recurringId` e' un UUID e `date`
  * e' `YYYY-MM-DD`: la coppia si rilegge dall'id senza ambiguita'.
+ *
+ * ## Due date per la stessa spesa, e quale delle due comanda
+ *
+ * Da quando il foglio della spesa sa cambiare la data (E1), una occorrenza
+ * spostata ha **due** date: quella dentro l'id, che e' il giorno del
+ * calendario, e `Expense.date`, che e' il giorno a cui l'utente l'ha messa.
+ * Sono una seconda copia di un fatto solo se si pretende che dicano la stessa
+ * cosa. Non la dicono, e non devono:
+ *
+ * > **Per l'occupazione del calendario comanda l'id. Per tutto il resto —
+ * > Storico, statistiche, budget, totali — comanda `Expense.date`.**
+ *
+ * L'id dice *"il giorno del calendario e' gia' stato materializzato"*; `date`
+ * dice *"la spesa e' successa questo giorno"*. Spostare l'affitto del 1 agosto
+ * al 5 settembre non libera il 1 agosto — quell'occorrenza e' gia' stata
+ * generata, e rigenerarla sarebbe un duplicato — e il 5 settembre non viene
+ * occupato, perche' su quel giorno il calendario non ha mai prodotto niente.
+ * Tutte e due le cose sono giuste, e nessuna e' una copia dell'altra.
+ *
+ * **L'unico lettore dell'id come data e' `occupiedOccurrenceDates`**, verificato
+ * con un `grep` su tutto `src/` prima di aprire la modifica della data: due
+ * righe, `startsWith(prefix)` e `slice(prefix.length)`, e nient'altro nel
+ * progetto estrae una data da un id. L'altro indice, `buildOccurrenceIndex`,
+ * guarda l'id **intero** e non lo scompone. Chi ne aggiunge un terzo si trova
+ * questa riga qui.
  */
 export function recurringExpenseId(recurringId: string, date: IsoDate): string {
   return `rec:${recurringId}:${date}`
@@ -338,9 +363,14 @@ export const NO_OCCURRENCES: ReadonlySet<IsoDate> = new Set<IsoDate>()
  * salterebbe comunque, cioe' l'anteprima annuncerebbe una riga che non
  * comparira'.
  *
- * Il giorno in cui una schermata offrisse "cambia data", la ragione 1 varrebbe
- * identica e la 2 diventerebbe ordinaria: **la decisione non cambia, cambia
- * solo quanto e' facile accorgersi che l'alternativa sbaglia.**
+ * **Quel giorno e' arrivato, ed era scritto qui prima che arrivasse.** Il foglio
+ * della spesa cambia la data (E1), quindi la ragione 2 non e' piu' ipotetica:
+ * una occorrenza spostata ha un `date` che non concorda con il giorno dell'id, e
+ * un insieme costruito su `date` direbbe **libero** un giorno che `add`
+ * salterebbe comunque — cioe' l'anteprima annuncerebbe una riga che non
+ * comparira'. La decisione non e' cambiata di una virgola; e' cambiato quanto
+ * costa sbagliarla. Quale delle due date comanda sta scritto sopra
+ * `recurringExpenseId`.
  *
  * ## Il costo, che e' la ragione della forma
  *

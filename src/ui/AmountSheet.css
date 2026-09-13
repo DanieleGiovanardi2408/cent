@@ -8,66 +8,22 @@
  * riga che dichiara cosa **non** succede al budget.
  */
 
-/* Piu' basso del budget (31rem): niente selettori, solo un'intestazione, il
- * numero e i tasti. Sotto questo minimo i tasti si stringerebbero per niente. */
+/* Piu' basso del budget (31rem). Diceva "niente selettori, solo
+ * un'intestazione, il numero e i tasti": l'intestazione non c'e' piu' e i
+ * selettori sono arrivati (contorno e otto chip), quindi la frase descriveva un
+ * foglio che non esiste. Cio' che il minimo protegge non e' cambiato: sotto
+ * questo, i tasti si stringerebbero per niente. */
 .sheet--amount {
   --sheet-min: 30rem;
 }
 
-/* Quale spesa. La stessa grammatica della riga in elenco — pastiglia colorata,
- * nome, quando — perche' e' la stessa informazione e non deve chiedere di
- * essere riletta con altri occhi. */
-.fix__head {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-3);
-  min-block-size: var(--tap-min);
-  padding-inline: var(--sp-1);
-}
-
-.fix__emoji {
-  flex: none;
-  display: grid;
-  place-items: center;
-  inline-size: 1.75rem;
-  block-size: 1.75rem;
-  border-radius: var(--radius-full);
-  /* Il colore resta superficie e non tinge mai il testo: nessun esadecimale
-   * puo' stare in AA sia sul chiaro sia sullo scuro.
-   *
-   * Tinta piena. **E qui la ragione non e' il pavimento**: in questo foglio la
-   * pastiglia e' una sola — quella della spesa che si sta correggendo — quindi
-   * non c'e' nessuna coppia da distinguere e il controllo "compresente ⇒ tinta
-   * piena" non la tocca. Cambia perche' e' **lo stesso oggetto** della pastiglia
-   * della griglia, e un oggetto che si presenta in due modi in due schermate
-   * chiede all'utente di imparare due volte la stessa cosa. La coerenza
-   * dell'oggetto, non la soglia. */
-  background-color: var(--cat);
-  font-size: var(--fs-200);
-  line-height: 1;
-}
-
-.fix__text {
-  flex: 1;
-  min-inline-size: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-.fix__name {
-  font-size: var(--fs-300);
-  font-weight: var(--fw-semibold);
-  line-height: var(--lh-snug);
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-.fix__when {
-  font-size: var(--fs-100);
-  line-height: var(--lh-snug);
-  color: var(--text-muted);
-}
+/* **Qui c'erano `.fix__head` e le sue quattro parti**, ed e' uscita con la
+ * riga che dipingeva (AmountSheet.tsx, "L'intestazione se n'e' andata"). Con
+ * lei se n'e' andata `.fix__emoji`, che era **l'unica pastiglia di categoria
+ * dipinta da questo foglio**: `audit:surfaces` la dichiarava, e la
+ * dichiarazione e' uscita nello stesso commit. Un inventario che sopravvive
+ * alla cosa che inventaria e' la forma di `history.blank.install`, gia' vista.
+ */
 
 /* "Resta una spesa fissa: correggerla non tocca il budget del periodo."
  * Smorzata, non urlata: e' una rassicurazione, non un avviso. */
@@ -80,16 +36,35 @@
 
 /* --- il telefono girato --------------------------------------------------- */
 /* Stessa risposta degli altri fogli col tastierino: due colonne invece di una
- * colonna che non ci sta. A sinistra il numero e i tasti, a destra chi si sta
- * correggendo e — in fondo — l'unico tap che scrive. */
+ * colonna che non ci sta. A sinistra il numero e i tasti, a destra il contorno,
+ * le categorie e — in fondo — l'unico tap che scrive.
+ *
+ * ## Questo blocco e' stato riscritto, e il modo in cui si e' rotto vale
+ *
+ * Fino a E1 le aree erano `head` / `note` / `save`. Con l'intestazione tolta e
+ * `.meta` e `.cats` arrivate, quelle due **non avevano nessuna area**: sono
+ * uscite dalla griglia e si sono impilate sopra il contorno. La sonda l'ha
+ * presa subito — *"coperto: button.chip «Oggi» (58x44) risponde div.cats"* — e
+ * non come overflow: come **sovrapposizione su un bersaglio toccabile**, che e'
+ * la regola non negoziabile di CLAUDE.md.
+ *
+ * Vale la pena averlo scritto perche' il difetto non era nel CSS nuovo: era in
+ * quello vecchio, che nominava per nome tre cose di cui una non esisteva piu'.
+ * Una griglia ad aree nominate **non fallisce quando un'area sparisce**: mette
+ * l'orfano dove capita. */
 @media (max-height: 480px) and (orientation: landscape) {
   .sheet--amount {
+    /* Come in `AddSheet`: girato manca l'altezza, non la larghezza, e sotto il
+     * minimo tattile non si scende. */
+    --chip-min: var(--tap-min);
     display: grid;
     grid-template-columns: 1fr 1fr;
-    grid-template-rows: auto auto 1fr;
+    grid-template-rows: auto auto 1fr auto auto;
     grid-template-areas:
-      "hint   head"
-      "amount note"
+      "hint   meta"
+      "amount cats"
+      "pad    cats"
+      "pad    note"
       "pad    save";
     column-gap: var(--sp-3);
     row-gap: var(--sp-1);
@@ -98,17 +73,84 @@
     padding-block: var(--sp-1) max(var(--sp-1), var(--safe-bottom));
   }
 
-  .fix__head {
-    grid-area: head;
+  .sheet--amount .meta {
+    grid-area: meta;
   }
 
+  /* Quattro file da due, come in inserimento e per la stessa ragione: le otto
+   * restano tutte visibili e nessuna scende sotto il minimo tattile. */
+  .sheet--amount .cats {
+    grid-area: cats;
+    grid-template-columns: repeat(2, 1fr);
+    grid-auto-rows: minmax(var(--chip-min), 1fr);
+    gap: var(--sp-1);
+  }
+
+  /* **Una riga sua, e la prima stesura non gliela dava.**
+   *
+   * Era `grid-area: cats; align-self: end`, cioe' appoggiata in fondo alla
+   * colonna delle categorie per non rubare altezza ai chip. La sonda l'ha presa
+   * al giro dopo: *"coperto: button.cat «Casa» risponde p.fix__note"* — due
+   * chip su otto finivano sotto una riga di prosa.
+   *
+   * E' la regola delle sovrapposizioni applicata a me mentre riparavo una
+   * sovrapposizione: *un overlay o sposta il contenuto, o vive in una fascia
+   * dove non c'e' niente di toccabile*. "Non ruba altezza" era precisamente il
+   * modo di dire "non sposta il contenuto", cioe' il ramo sbagliato dei due.
+   * Il costo e' una riga di griglia, e il tastierino la restituisce spanando su
+   * tre. */
   .fix__note {
     grid-area: note;
-    align-self: start;
+    align-self: end;
   }
 
   .sheet--amount .save {
     grid-area: save;
     align-self: end;
   }
+}
+
+/* --- i chip della correzione scelgono, e uno e' gia' scelto ---------------
+ *
+ * `.cat` e' la stessa classe di `AddSheet`, e questi due stati non la toccano
+ * la': in inserimento nessun chip porta `aria-pressed`, quindi il selettore non
+ * fa presa. Una seconda classe per la stessa griglia avrebbe voluto dire due
+ * geometrie da tenere d'accordo — e' il difetto che questo progetto insegue da
+ * settimane — mentre un attributo in piu' e' esattamente cio' che distingue i
+ * due mestieri.
+ *
+ * L'anello e' `inset`, non un bordo: un bordo aggiungerebbe 2 px alla scatola e
+ * il chip selezionato sarebbe **piu' grande** degli altri sette. La griglia
+ * resterebbe ferma (e' `1fr`), ma il contenuto dentro si stringerebbe di due
+ * pixel, cioe' "Coffeeshop" andrebbe in ellissi solo quando e' quello scelto.
+ *
+ * Il riempimento al 22% e' lo stesso di `.cat:active`, e non per risparmiare:
+ * li' dice "lo sto premendo", qui "e' questo". Sono due letture dello stesso
+ * segno in due momenti che non si sovrappongono mai — un chip premuto e' uno,
+ * e mentre lo premi e' quello selezionato un istante dopo. */
+.cat[aria-pressed='true'] {
+  background-color: color-mix(in srgb, var(--cat) 22%, var(--surface-sunken));
+  box-shadow: inset 0 0 0 var(--seam) var(--cat);
+}
+
+/* **La marca di ADR 019**: c'e' perche' e' la sua, si distingue perche' non e'
+ * piu' scegliibile.
+ *
+ * Il tratteggio e non l'opacita': un chip sbiadito si legge come *spento*, e
+ * spento vuol dire "non si puo' toccare" — che qui e' falso, si puo' eccome,
+ * ed e' anzi il valore che la spesa ha adesso. Il tratteggio dice "provvisorio,
+ * non fa piu' parte della griglia", che e' esattamente cosa vuol dire
+ * archiviata.
+ *
+ * `--line-strong` e non `--cat`: questo segno non parla della categoria, parla
+ * del suo **stato**, e portarlo nella sua stessa tinta lo farebbe leggere come
+ * una variante dell'anello di selezione invece che come un'altra cosa. Il
+ * contrasto e' 3,2:1 sul fondo in chiaro e 3,3:1 in scuro — misurato in
+ * `tokens.css`, e su `--surface-sunken` non su `--bg`, quindi va riguardato se
+ * quel token cambia. */
+.cat[data-off] {
+  box-shadow: inset 0 0 0 var(--seam) var(--line-strong);
+  border-radius: var(--radius-2);
+  outline: var(--seam) dashed var(--line-strong);
+  outline-offset: calc(-1 * var(--seam) * 2);
 }

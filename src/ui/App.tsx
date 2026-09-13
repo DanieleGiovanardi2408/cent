@@ -3,12 +3,13 @@ import { backupFilename, exportBackupFile, serializeBackup } from '../app/backup
 import { getAppState, refreshDay } from '../app/boot'
 import { activeCategories, archivedCategories, planCategoryDeletion } from '../core/categories'
 import { isLive } from '../core/stats'
-import type { Repository } from '../core/repository'
+import type { ExpensePatch, Repository } from '../core/repository'
 import { nowTimestamp } from '../core/types'
 import type { BudgetPeriod, Category, Expense, Language, RecurringRule } from '../core/types'
 import { AddSheet } from './AddSheet'
 import type { SaveInput } from './AddSheet'
 import { AmountSheet } from './AmountSheet'
+import type { FixInput } from './AmountSheet'
 import { BackupNudge } from './BackupNudge'
 import { backupNudge, daysSince } from './backup-nudge'
 import { BackupPanel } from './BackupPanel'
@@ -479,17 +480,27 @@ export function App({ readBackup }: AppProps) {
    * perche' qui, a differenza del budget, **qualcosa si perde**: l'importo di
    * prima non esiste piu' da nessuna parte. Il rimedio riscrive quello.
    */
-  function saveAmount(amountCents: number): boolean {
+  function saveAmount(input: FixInput): boolean {
     const repo = app.repo
     const target = amountTarget
     if (repo === null || target === null) return false
-    const before = target.amountCents
+    // **Tutti e quattro i campi**, non solo quelli cambiati: `updateExpense`
+    // riscrive cio' che il patch nomina, e nominare un campo col valore che ha
+    // gia' e' una scrittura senza effetto. Filtrare qui vorrebbe dire ricostruire
+    // il confronto che il foglio ha gia' fatto per accendere il bottone — due
+    // definizioni di "cos'e' cambiato" che devono restare d'accordo.
+    const before = {
+      amountCents: target.amountCents,
+      categoryId: target.categoryId,
+      date: target.date,
+      note: target.note ?? null,
+    } satisfies ExpensePatch
     let saved: Expense | null
     try {
-      saved = repo.updateExpense(target.id, { amountCents })
+      saved = repo.updateExpense(target.id, input)
     } catch {
-      // Un import sta sostituendo i dati: il foglio resta aperto con l'importo
-      // digitato e lo dice dove si riprova.
+      // Un import sta sostituendo i dati: il foglio resta aperto con quello che
+      // si e' scritto e lo dice dove si riprova.
       return false
     }
     if (saved === null) {
@@ -502,7 +513,12 @@ export function App({ readBackup }: AppProps) {
       return true
     }
     closeSheet()
-    showToast(t('toast.amountFixed', { amount: money(amountCents) }), {
+    // Il toast nomina **l'importo**, anche quando a cambiare e' stata la
+    // categoria: e' il campo che si corregge in dieci casi su dieci, ed e'
+    // l'unico che si riconosce a colpo d'occhio nella riga dietro al foglio.
+    // Un toast che elencasse i campi toccati direbbe cio' che la lista mostra
+    // gia', e lo direbbe in una riga sola per quattro combinazioni diverse.
+    showToast(t('toast.amountFixed', { amount: money(input.amountCents) }), {
       label: t('toast.undo'),
       run: () => restoreAmount(repo, target.id, before),
     })
@@ -510,16 +526,24 @@ export function App({ readBackup }: AppProps) {
   }
 
   /**
-   * L'annullamento della correzione: rimette l'importo di prima.
+   * L'annullamento della correzione: rimette **tutti e quattro** i campi di
+   * prima.
    *
    * L'id viaggia nel toast, non il record: fra il tap e l'annullamento passano
-   * fino a sei secondi, e cio' che si riscrive e' un campo solo su qualunque
+   * fino a sei secondi, e cio' che si riscrive sono quattro campi su qualunque
    * versione del record ci sia adesso.
+   *
+   * Quattro e non "quelli cambiati", per la ragione scritta in `saveAmount`: chi
+   * annulla vuole la spesa **com'era**, e riscrivere un campo col valore che ha
+   * gia' non costa niente. La forma con i soli campi toccati avrebbe avuto un
+   * caso in piu' da sbagliare — la nota cancellata, dove "non toccato" e
+   * "cancellato" sono lo stesso `undefined` in ingresso e due cose diverse in
+   * uscita.
    */
-  function restoreAmount(repo: Repository, id: string, amountCents: number): void {
+  function restoreAmount(repo: Repository, id: string, before: Required<ExpensePatch>): void {
     let back: Expense | null
     try {
-      back = repo.updateExpense(id, { amountCents })
+      back = repo.updateExpense(id, before)
     } catch {
       showToast(t('toast.restoreFailed'))
       return
@@ -529,7 +553,7 @@ export function App({ readBackup }: AppProps) {
       return
     }
     // Nessun secondo "Annulla": annullare un annullamento non lo fa nessuno.
-    showToast(t('toast.amountBack', { amount: money(amountCents) }))
+    showToast(t('toast.amountBack', { amount: money(before.amountCents) }))
   }
 
   /* --- le spese fisse ---------------------------------------------------- *
@@ -1797,6 +1821,7 @@ export function App({ readBackup }: AppProps) {
           key={session}
           expense={amountTarget}
           category={categoryOf(amountTarget.categoryId)}
+          categories={categories}
           day={app.day}
           leaving={sheet.leaving}
           onSave={saveAmount}
