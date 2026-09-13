@@ -38,6 +38,7 @@ const MIRROR: RepositoryState = {
   recurringRules: [],
   budgets: [],
   settings: makeSettings(),
+  snapshotTakenAt: null,
   writeFailures: NO_WRITE_FAILURES,
 }
 

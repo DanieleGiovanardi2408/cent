@@ -22,7 +22,8 @@ import { Fit } from './Fit'
 import { Guide } from './Guide'
 import { History } from './History'
 import { ImportSheet } from './ImportSheet'
-import { currentCounts, exportedDay, stepFromText } from './import-view'
+import { toIsoDate } from '../core/date'
+import { currentCounts, exportedDay, snapshotCost, stepFromText } from './import-view'
 import type { BackupReader, ImportStep } from './import-view'
 import { Stats } from './Stats'
 import { Home } from './Home'
@@ -996,24 +997,23 @@ export function App({ readBackup }: AppProps) {
     closeImport()
     setView('home')
     void repo.importBackup(step.data).then(
-      (precedente) => {
-        /* **L'Annulla, e il materiale ce l'aveva gia' in mano.**
+      () => {
+        /* **L'Annulla adesso passa dal disco, ed e' la stessa cosa che fa la
+         * voce in Impostazioni.**
          *
-         * `importBackup` restituisce l'archivio **com'era un istante prima**, e
-         * fino al 4 settembre quel valore veniva costruito, pagato — una copia di
-         * fino a 5.000 spese — e **buttato via**: `showToast` era chiamata con un
-         * argomento solo. L'unica operazione distruttiva dell'app era l'unica
-         * senza rete, mentre ogni cancellazione di una singola spesa ce l'ha.
+         * Fino a qui era `importBackup(precedente.data)` — la fotografia del
+         * mirror che `importBackup` restituiva. Funzionava, e aveva due difetti
+         * che si vedono solo adesso che qualcuno legge lo scatto:
          *
-         * L'ha trovata il gate. Il percorso dal bottone al disco non aveva
-         * nessun test: `ripristino.spec.ts` copriva sette contenuti e due azioni,
-         * e mai la conferma.
+         * 1. **viveva in memoria**, quindi moriva con l'app: chiusa la scheda
+         *    dentro la finestra del toast, l'annullamento non c'era piu';
+         * 2. **passando di nuovo da `replaceAll` rifotografava**, e lo scatto
+         *    finiva per contenere il file appena rifiutato. E' DEBITO §16, e la
+         *    riparazione che quella voce chiedeva era esattamente questa: una
+         *    strada sola invece di due che devono restare d'accordo.
          *
-         * **Il limite di questa rete e' che vive in memoria**, ed e' quello gia'
-         * scritto in `docs/ROADMAP.md`: se l'app muore nella finestra del toast,
-         * l'annullamento non c'e' piu'. La rete che sopravvive alla chiusura e'
-         * lo scatto su disco, che `replaceAll` scrive gia' e che nessuno legge
-         * ancora — con la sua scadenza in ADR 026. */
+         * Il costo e' una lettura dal disco dove prima non ce n'erano: la paga
+         * chi tocca Annulla, una volta, dentro una finestra di sei secondi. */
         showToast(
           when === null
             ? t('toast.importedUndated')
@@ -1021,9 +1021,9 @@ export function App({ readBackup }: AppProps) {
           {
             label: t('toast.undo'),
             run: () => {
-              void repo.importBackup(precedente.data).then(
-                () => {
-                  showToast(t('toast.importUndone'))
+              void repo.restoreSnapshot().then(
+                (tornato) => {
+                  showToast(t(tornato ? 'toast.importUndone' : 'toast.gone'))
                   void repo.materializeRecurring(getAppState().day).catch(() => {})
                 },
                 () => showToast(t('toast.importFailed')),
@@ -1398,6 +1398,47 @@ export function App({ readBackup }: AppProps) {
       : app.data?.expenses.find((expense) => expense.id === sheet.id) ?? null
 
   /**
+   * Lo scatto pre-import, se c'e', **con il suo costo gia' contato**.
+   *
+   * Si ricalcola a ogni render insieme al resto, e non si congela: fra
+   * l'apertura di Impostazioni e il tap possono essere nate delle spese — una
+   * materializzazione al risveglio ne scrive anche quaranta — e la frase deve
+   * dire quante ne sparirebbero **adesso**, non quante all'apertura. E' la
+   * stessa ragione per cui `amountTarget` si rilegge dal mirror qui sopra.
+   */
+  const undoSnapshot =
+    app.data === null || app.data.snapshotTakenAt === null
+      ? undefined
+      : {
+          day: toIsoDate(new Date(app.data.snapshotTakenAt)),
+          ...snapshotCost(app.data.expenses, app.data.snapshotTakenAt),
+        }
+
+  /**
+   * Torna allo scatto. **Nessuna conferma davanti**, ed e' la regola di questo
+   * progetto applicata dove sembra piu' rischiosa: la frase della voce dice gia'
+   * quante spese se ne vanno e per quanto, quindi chi tocca il bottone ha letto
+   * il costo un attimo prima di toccarlo. Un "Sei sicuro?" ripeterebbe la
+   * domanda senza aggiungere un fatto — e ADR 026 §6d ha gia' scritto che una
+   * conferma drammatica insegna a temere la cosa sbagliata.
+   *
+   * Cio' che manca invece c'e': dopo il ripristino le fisse si rigenerano, come
+   * su ogni altra porta che riscrive l'archivio.
+   */
+  function runUndoSnapshot(): void {
+    const repo = app.repo
+    if (repo === null) return
+    setView('home')
+    void repo.restoreSnapshot().then(
+      (tornato) => {
+        showToast(t(tornato ? 'toast.importUndone' : 'toast.gone'))
+        void repo.materializeRecurring(getAppState().day).catch(() => {})
+      },
+      () => showToast(t('toast.importFailed')),
+    )
+  }
+
+  /**
    * Il permesso di cancellare **una regola**, chiesto prima di mostrare il
    * bottone, esattamente come per le categorie: il rifiuto porta con se' il
    * numero ("nello Storico ci sono 8 spese"), e con quel numero si scrive una
@@ -1676,6 +1717,8 @@ export function App({ readBackup }: AppProps) {
                  funzione non esiste ancora per nessuno. */
               onImport={readBackup === undefined ? undefined : () => beginImport(readBackup)}
               onReplayGuide={replayGuide}
+              undo={undoSnapshot}
+              onUndo={runUndoSnapshot}
             />
           )}
         </main>

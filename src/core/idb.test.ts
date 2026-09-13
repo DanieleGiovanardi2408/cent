@@ -647,6 +647,7 @@ describe('morte a meta su un database vero', () => {
     let left = n
     return {
       loadAll: () => inner.loadAll(),
+      restoreSnapshot: () => inner.restoreSnapshot(),
       async write(batch: WriteBatch) {
         if (left <= 0) throw new Error('processo terminato')
         left -= 1

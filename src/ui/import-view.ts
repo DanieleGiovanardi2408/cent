@@ -387,3 +387,43 @@ export function exportedDay(exportedAt: Timestamp | null): IsoDate | null {
   const when = new Date(exportedAt)
   return Number.isNaN(when.getTime()) ? null : toIsoDate(when)
 }
+
+/**
+ * Cosa costa tornare allo scatto: **quante spese spariscono e per quanto**.
+ *
+ * ## Perche' esiste, e perche' non e' una rifinitura del copy
+ *
+ * La voce di ripristino e' una rete, e una rete che non dice quanto pesa e'
+ * **essa stessa una botola**: *"Torna ai dati del 3 agosto"* su un telefono che
+ * da allora ha sei settimane di spese dentro distrugge sei settimane, e la frase
+ * nuda non lo dice. E' l'identico difetto dell'anteprima dell'import — un
+ * confine temporale al posto di una perdita — spostato di una schermata, cioe'
+ * "una decisione vale dove vale il suo argomento" sul percorso opposto.
+ *
+ * ## Il confine e' `createdAt`, non `date`
+ *
+ * Sparisce cio' che e' stato **scritto** dopo lo scatto, non cio' che e' datato
+ * dopo: una spesa di ieri inserita stamattina e' nata dopo l'import e se ne va
+ * con le altre. Sono due domande diverse, e quella a cui questa riga risponde e'
+ * *"cosa perdo"*.
+ *
+ * ## Le lapidi non si contano
+ *
+ * Stessa regola di `ImportPreview.counts` e stesso argomento: una spesa
+ * cancellata non si vede in nessuna schermata, quindi nominarla in un numero
+ * darebbe una cifra che lo Storico non conferma. E' la regola dei messaggi
+ * verificabili, che in questo progetto ha gia' morso due volte.
+ */
+export function snapshotCost(
+  expenses: readonly Expense[],
+  takenAt: Timestamp,
+): { readonly count: number; readonly cents: number } {
+  let count = 0
+  let cents = 0
+  for (const e of expenses) {
+    if (e.deletedAt !== undefined || e.createdAt <= takenAt) continue
+    count += 1
+    cents += e.amountCents
+  }
+  return { count, cents }
+}

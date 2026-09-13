@@ -368,6 +368,17 @@ export const NO_WRITE_FAILURES: WriteFailureState = { count: 0, lastError: null,
  */
 export interface RepositoryState extends DataSet {
   readonly writeFailures: WriteFailureState
+  /**
+   * La data dello scatto pre-import, o `null` se non c'e' niente a cui tornare.
+   *
+   * **E' nel mirror e non dietro una chiamata** perche' la voce in Impostazioni
+   * esiste solo quando questo non e' `null`: una lettura asincrona la farebbe
+   * comparire dopo il primo disegno, su una schermata fatta di righe toccabili.
+   * Arriva con `loadAll`, che la paga con un cursore di sole chiavi.
+   *
+   * Dopo l'apertura non si rilegge mai: chi scrive sa gia' il valore nuovo.
+   */
+  readonly snapshotTakenAt: Timestamp | null
 }
 
 export interface Repository {
@@ -692,7 +703,7 @@ export interface Repository {
    * pensare che si fondano — quindi l'unica rete e' poter tornare indietro,
    * come per ogni altra azione distruttiva dell'app.
    *
-   * L'annullamento e' `importBackup(precedente.data)`.
+   * L'annullamento e' `restoreSnapshot()`, non un secondo import.
    *
    * Mentre e' in corso, ogni mutazione lancia `ImportInProgressError`: un
    * "salvata" col toast su una spesa che l'import sta per cancellare e' peggio
@@ -705,14 +716,22 @@ export interface Repository {
    * E' anche l'unico punto in cui `writeFailures` torna a zero: dopo un
    * `replaceAll` riuscito mirror e disco sono uguali per costruzione.
    *
-   * ## Due reti, e non sono la stessa
+   * ## Le due reti sono diventate una, ed e' DEBITO §16 che si chiude
    *
-   * Il `BackupFile` che torna e' la rete **in memoria**: serve all'Annulla
-   * subito dopo, e muore con l'app. Sotto, `replaceAll` ne lascia una **sul
-   * disco** — lo scatto pre-import di ADR 026 — che sopravvive alla chiusura ed
-   * e' lo stato letto dal disco, non dal mirror. Chi disegna il ripristino usa
-   * quella; questa resta perche' un Annulla che costa zero letture, nell'istante
-   * in cui il toast e' ancora a schermo, e' un'altra cosa.
+   * Fino a qui ce n'erano due. Questa funzione tornava un `BackupFile` — la
+   * fotografia del mirror, rete **in memoria**, che moriva con l'app — e sotto
+   * `replaceAll` ne lasciava una **sul disco**, lo scatto di ADR 026. L'Annulla
+   * del toast usava la prima, cioe' chiamava di nuovo `importBackup`.
+   *
+   * E passando di qui una seconda volta **rifotografava**: dopo l'Annulla lo
+   * scatto conteneva il file appena rifiutato, cioe' l'unico stato che esiste
+   * anche altrove, al posto dell'unico che non esisteva da nessun'altra parte.
+   * Latente finche' nessuno leggeva lo scatto; da oggi qualcuno lo legge.
+   *
+   * §16 chiedeva che le due diventassero **la stessa operazione**, e il modo
+   * piu' corto e' che ne resti una: l'Annulla e' `restoreSnapshot()`. Con lui
+   * se n'e' andato il valore di ritorno, che aveva un chiamante solo — e una
+   * copia di fino a 5.000 spese costruita a ogni import per tenerlo in piedi.
    *
    * ## "Tutto" e' l'archivio, non il telefono
    *
@@ -721,7 +740,24 @@ export interface Repository {
    * `lastBackupAt` diventa l'`exportedAt` del file. Vedi `settingsAfterImport`
    * per la divisione e per il motivo di ciascuno dei quattro.
    */
-  importBackup(data: DataSet): Promise<BackupFile>
+  importBackup(data: DataSet): Promise<void>
+
+  /**
+   * Torna allo scatto pre-import e lo **consuma**. `true` se qualcosa e' stato
+   * ripristinato, `false` se non c'era niente.
+   *
+   * E' l'unica strada: la usa la voce in Impostazioni e la usa l'Annulla del
+   * toast subito dopo un import. Averne una sola e' la riparazione di
+   * [DEBITO §16](../../docs/DEBITO.md) — due strade che devono restare
+   * d'accordo sono due strade che un giorno non lo sono.
+   *
+   * **Chi la chiama deve dire cosa costa**, e il dato per dirlo e' nel mirror:
+   * le spese con `createdAt` successivo a `snapshotTakenAt` sono esattamente
+   * quelle che spariranno. Un "Annulla" che riporta a sei settimane fa distrugge
+   * sei settimane, e una rete che non dice quanto pesa e' essa stessa una
+   * botola.
+   */
+  restoreSnapshot(): Promise<boolean>
 
   /**
    * Attende la coda di scrittura. Rilancia il primo errore, **senza
@@ -900,6 +936,7 @@ export async function openRepository(
     budgets: loaded.budgets,
     settings,
     writeFailures: NO_WRITE_FAILURES,
+    snapshotTakenAt: loaded.snapshotTakenAt,
   })
 
   let queue: Promise<void> = Promise.resolve()
@@ -1585,11 +1622,12 @@ export async function openRepository(
       if (importing) throw new ImportInProgressError()
       importing = true
       try {
-        // Prima di distruggere: la fotografia di quello che c'era, che e'
-        // l'unico modo per offrire Annulla dopo un import sbagliato. Il mirror
-        // contiene gia' tutto quello che e' in coda verso il disco, quindi
-        // fotografarlo adesso non perde niente.
-        const previous = buildBackup(observable.get(), clock)
+        // **Qui c'era `buildBackup(observable.get(), clock)`**, la fotografia
+        // del mirror che serviva all'Annulla del toast. Se n'e' andata con
+        // `restoreSnapshot`: la rete e' una sola ed e' quella su disco, che
+        // `replaceAll` scrive comunque. Costava una copia di fino a 5.000 spese
+        // a ogni import, per una rete che ne duplicava un'altra e per di piu'
+        // la corrompeva (DEBITO §16).
         // Da qui una materializzazione in volo non scrivera' un blocco in piu'.
         generation += 1
         // `replaceAll` entra **nella coda**, non la scavalca: `await queue`
@@ -1627,8 +1665,47 @@ export async function openRepository(
         // costruzione, e quindi l'unico in cui si puo' onestamente dire che la
         // divergenza non c'e' piu'.
         pendingError = null
-        observable.set({ ...applied, writeFailures: NO_WRITE_FAILURES })
-        return previous
+        // `takenAt` e non una rilettura: `replaceAll` ha appena fotografato con
+        // **questo** istante, quindi il mirror lo sa gia'. Tornare sul disco per
+        // una data che si ha in mano sarebbe la seconda copia di un fatto.
+        observable.set({
+          ...applied,
+          writeFailures: NO_WRITE_FAILURES,
+          snapshotTakenAt: takenAt,
+        })
+      } finally {
+        importing = false
+      }
+    },
+
+    async restoreSnapshot() {
+      if (importing) throw new ImportInProgressError()
+      importing = true
+      try {
+        // Stesse due righe di `importBackup`, e per le stesse ragioni: un
+        // catch-up in volo scriverebbe dentro l'archivio che stiamo
+        // sostituendo, e `queue` va attraversata invece che scavalcata.
+        generation += 1
+        const run = queue.then(() => persistence.restoreSnapshot())
+        queue = run.then(
+          () => undefined,
+          () => undefined,
+        )
+        const restored = await run
+        if (restored === null) return false
+        revision += 1
+        pendingError = null
+        // **`null`, e qui sta la differenza con l'import.** Lo scatto e' stato
+        // consumato dentro la stessa transazione, quindi la voce in
+        // Impostazioni sparisce nello stesso istante in cui smette di essere
+        // vera. Un ripristino che lasciasse il proprio scatto offrirebbe di
+        // tornare al posto in cui si e' appena arrivati.
+        observable.set({
+          ...restored,
+          writeFailures: NO_WRITE_FAILURES,
+          snapshotTakenAt: null,
+        })
+        return true
       } finally {
         importing = false
       }
@@ -1667,6 +1744,10 @@ export async function openRepository(
         budgets: loaded.budgets,
         settings: loaded.settings,
         writeFailures: observable.get().writeFailures,
+        // La rilettura al risveglio porta anche questo: un altro contesto puo'
+        // aver importato o ripristinato mentre l'app era sospesa, e il mirror
+        // non puo' restare l'unico a dire che lo scatto c'e' ancora.
+        snapshotTakenAt: loaded.snapshotTakenAt,
       })
       return { reloaded: true }
     },

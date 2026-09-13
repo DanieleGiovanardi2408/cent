@@ -251,6 +251,10 @@ Costo massimo: 1,3 MB costanti.
             `buildPreImportSnapshot` e `readArchive` se ne vanno, lo store di
             sistema `preImportSnapshot` esce con la sua migrazione, e con lui
             decade DEBITO.md §16, che senza scatto non ha piu' niente da consumare
+     chiusa: 2026-09-13, sul primo ramo — il lettore e' arrivato. `restoreSnapshot`
+            e `snapshotPayload` in `snapshot.ts`, la data dentro `LoadedData`, e
+            una sezione in Impostazioni che dice la data **e** il costo. 556 byte
+            gzip contro un tetto di 900 dichiarato prima di scriverli.
 -->
 
 **4 settembre.** Lo scatto si scrive — fino a **1,3 MB** al tetto delle 5.000

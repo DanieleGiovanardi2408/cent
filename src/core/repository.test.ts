@@ -1528,7 +1528,7 @@ describe('export e import dal repository', () => {
     expect(letto.settings).toEqual(dopoImport)
   })
 
-  it('l import restituisce il backup di quello che c era: l Annulla e una riga', async () => {
+  it('l Annulla passa dallo scatto su disco, e lo consuma', async () => {
     const sorgente = await popolato()
     const preview = parseBackup(JSON.parse(JSON.stringify(sorgente.repo.exportBackup())))
 
@@ -1539,21 +1539,32 @@ describe('export e import dal repository', () => {
 
     // Il file sbagliato scelto dal Files di iOS: si conferma, e due mesi
     // spariscono. L'unica rete e' tornare indietro.
-    const annulla = await destinazione.repo.importBackup(preview.data as DataSet)
+    await destinazione.repo.importBackup(preview.data as DataSet)
     expect(destinazione.repo.getState().expenses.some((e) => e.amountCents === 999)).toBe(false)
+    // La rete e' su disco, non in memoria: lo scatto c'e' e il mirror lo sa.
+    expect(destinazione.repo.getState().snapshotTakenAt).not.toBeNull()
+    expect(destinazione.disk.snapshot).not.toBeNull()
 
-    await destinazione.repo.importBackup(annulla.data)
+    expect(await destinazione.repo.restoreSnapshot()).toBe(true)
 
     expect(destinazione.repo.getState().expenses).toEqual(prima.expenses)
     expect(destinazione.repo.getState().categories).toEqual(prima.categories)
     expect(destinazione.repo.getState().budgets).toEqual(prima.budgets)
     expect(destinazione.disk.expenses.some((e) => e.amountCents === 999)).toBe(true)
+
+    // **Consumato**, ed e' meta' della riparazione di DEBITO §16: prima
+    // l'Annulla ripassava da `importBackup`, quindi `replaceAll` rifotografava
+    // e lo scatto finiva per contenere il file appena rifiutato. Adesso non
+    // c'e' piu' nessuno scatto, perche' non c'e' piu' niente a cui tornare.
+    expect(destinazione.repo.getState().snapshotTakenAt).toBeNull()
+    expect(destinazione.disk.snapshot).toBeNull()
+    expect(await destinazione.repo.restoreSnapshot()).toBe(false)
   })
 
   it('l Annulla riporta indietro anche la data dell ultimo backup', async () => {
     // `lastBackupAt` e' l'unico campo del record `settings` che l'import
     // cambia, quindi e' l'unico che l'Annulla deve rimettere a posto. Passa
-    // dalla stessa porta di tutto il resto: il `BackupFile` di prima.
+    // dalla stessa porta di tutto il resto: lo scatto su disco.
     const sorgente = await popolato()
     const file = JSON.parse(JSON.stringify(sorgente.repo.exportBackup())) as {
       readonly exportedAt: string
@@ -1564,10 +1575,10 @@ describe('export e import dal repository', () => {
     destinazione.repo.updateSettings({ lastBackupAt: '2026-08-10T07:00:00.000Z' })
     await destinazione.repo.flush()
 
-    const annulla = await destinazione.repo.importBackup(preview.data as DataSet)
+    await destinazione.repo.importBackup(preview.data as DataSet)
     expect(destinazione.repo.getState().settings.lastBackupAt).toBe(file.exportedAt)
 
-    await destinazione.repo.importBackup(annulla.data)
+    expect(await destinazione.repo.restoreSnapshot()).toBe(true)
     expect(destinazione.repo.getState().settings.lastBackupAt).toBe('2026-08-10T07:00:00.000Z')
     expect(destinazione.disk.settings?.lastBackupAt).toBe('2026-08-10T07:00:00.000Z')
   })
@@ -1592,16 +1603,20 @@ describe('export e import dal repository', () => {
     expect(destinazione.disk.settings && 'lastBackupAt' in destinazione.disk.settings).toBe(false)
   })
 
-  it('il backup restituito e la fotografia di prima, non di dopo', async () => {
+  it('lo scatto e la fotografia di prima, non di dopo', async () => {
+    // Era "il backup restituito e la fotografia di prima": asseriva la stessa
+    // proprieta' sul valore di ritorno di `importBackup`, che non esiste piu'.
+    // La proprieta' non e' cambiata, e' cambiato **dove si legge**: dal disco,
+    // che e' piu' severo di quanto fosse leggerla da un valore in memoria.
     const sorgente = await popolato()
     const preview = parseBackup(JSON.parse(JSON.stringify(sorgente.repo.exportBackup())))
     const destinazione = await open(emptyDisk(), 'dest')
     const attese = destinazione.repo.getState().categories.length
 
-    const annulla = await destinazione.repo.importBackup(preview.data as DataSet)
-    expect(annulla.data.expenses).toHaveLength(0)
-    expect(annulla.data.categories).toHaveLength(attese)
-    expect(annulla.app).toBe('cent')
+    await destinazione.repo.importBackup(preview.data as DataSet)
+    const scatto = destinazione.disk.snapshot
+    expect(scatto?.data.expenses).toHaveLength(0)
+    expect(scatto?.data.categories).toHaveLength(attese)
   })
 
   it('la spesa cancellata resta cancellata dopo il round-trip', async () => {
@@ -1903,6 +1918,7 @@ describe('rilettura al risveglio', () => {
       },
       write: (batch) => inner.write(batch),
       replaceAll: (data, takenAt) => inner.replaceAll(data, takenAt),
+      restoreSnapshot: () => inner.restoreSnapshot(),
       close: () => inner.close(),
     }
     const repo = await openRepository(persistence, {
@@ -1941,6 +1957,7 @@ describe('import: la coda e sua', () => {
         write: (batch) =>
           failing ? Promise.reject(new Error('disco non disponibile')) : inner.write(batch),
         replaceAll: (data, takenAt) => inner.replaceAll(data, takenAt),
+        restoreSnapshot: () => inner.restoreSnapshot(),
         close: () => inner.close(),
       },
       fail: (on) => {
@@ -1982,15 +1999,15 @@ describe('import: la coda e sua', () => {
     // blocco e l'altro: venti spese della regola precedente restavano sul disco
     // **insieme** ai dati importati.
     const catchUp = repo.materializeRecurring('2026-08-22')
-    const annulla = await repo.importBackup(vuoto(repo))
+    await repo.importBackup(vuoto(repo))
     await expect(catchUp).rejects.toBeInstanceOf(MaterializationSupersededError)
     await repo.flush()
 
     expect(disk.expenses).toHaveLength(0)
     expect(disk.recurringRules).toHaveLength(0)
     expect(repo.getState().expenses).toHaveLength(0)
-    // L'Annulla resta possibile: la regola e' nella fotografia di prima.
-    expect(annulla.data.recurringRules).toHaveLength(1)
+    // L'Annulla resta possibile: la regola e' nello scatto su disco.
+    expect(disk.snapshot?.data.recurringRules).toHaveLength(1)
   })
 
   it('le mutazioni durante l import falliscono invece di mentire', async () => {

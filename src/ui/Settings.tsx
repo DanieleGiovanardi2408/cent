@@ -4,7 +4,7 @@ import { CARDS } from './guide-steps'
 import type { Card } from './guide-steps'
 import { Categories } from './Categories'
 import { FixedCosts } from './FixedCosts'
-import { LANGUAGE_NAMES, cadenceLabel, daysLabel, list, money, t } from './i18n'
+import { LANGUAGE_NAMES, cadenceLabel, daysLabel, fullDayLabel, list, money, t } from './i18n'
 import './Settings.css'
 
 /**
@@ -106,6 +106,18 @@ interface Props {
    * diverge non si sa piu' quale si sta guardando.
    */
   readonly onReplayGuide: () => void
+  /**
+   * Lo scatto pre-import, se c'e': il giorno a cui si tornerebbe e **cosa costa
+   * tornarci**. `undefined` = non c'e' niente a cui tornare, e la sezione non
+   * compare.
+   *
+   * I due numeri arrivano gia' calcolati (`snapshotCost`) e non si ricavano qui:
+   * questa e' una vista, e il conto di cosa sparisce e' la stessa domanda a cui
+   * risponde l'anteprima dell'import — sta accanto a lei, non accanto al suo
+   * bottone.
+   */
+  readonly undo?: { readonly day: IsoDate; readonly count: number; readonly cents: number } | undefined
+  readonly onUndo: () => void
 }
 
 export function Settings({
@@ -129,6 +141,8 @@ export function Settings({
   onExport,
   onImport,
   onReplayGuide,
+  undo,
+  onUndo,
 }: Props) {
   return (
     <div class="prefs">
@@ -252,6 +266,33 @@ export function Settings({
           </button>
         )}
       </section>
+
+      {/* **Una sezione sua, e solo quando lo scatto esiste.**
+          Non una riga in fondo a "I tuoi dati": quella sezione risponde a "come
+          porto via i miei dati", questa a "ho appena fatto un danno". E sparisce
+          insieme allo scatto che la giustifica — `undo === undefined` — perche'
+          una voce spenta direbbe che c'e' qualcosa di negato invece di qualcosa
+          che non c'e', ed e' la stessa distinzione gia' scritta su `onImport`. */}
+      {undo === undefined ? null : (
+        <section class="prefs__group" aria-labelledby="prefs-undo">
+          <h2 class="prefs__title" id="prefs-undo">
+            {t('settings.undo.title')}
+          </h2>
+          {/* La data **e** il costo, in una frase sola: vedi le due chiavi. */}
+          <p class="prefs__text">
+            {undo.count === 0
+              ? t('settings.undo.free', { day: fullDayLabel(undo.day, day) })
+              : t('settings.undo.cost', {
+                  day: fullDayLabel(undo.day, day),
+                  count: undo.count,
+                  amount: money(undo.cents),
+                })}
+          </p>
+          <button type="button" class="prefs__action" disabled={!ready} onClick={onUndo}>
+            {t('settings.undo.action', { day: fullDayLabel(undo.day, day) })}
+          </button>
+        </section>
+      )}
 
       {/* Ultima, ed e' la posizione giusta: e' la voce che si cerca una volta
           sola, e chi la cerca la cerca **qui dentro** — dove ADR 009 la manda,

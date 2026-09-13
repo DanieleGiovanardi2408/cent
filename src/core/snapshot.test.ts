@@ -15,6 +15,7 @@ import { describe, expect, it } from 'vitest'
 import { buildBackup } from './backup'
 import { createIdbPersistence, openCentDatabase } from './idb'
 import { createMemoryPersistence, emptyDisk } from './memory-persistence'
+import type { MemoryDisk } from './memory-persistence'
 import type { Persistence } from './persistence'
 import type { PreImportSnapshot } from './types'
 import { SCHEMA_VERSION } from './schema'
@@ -240,7 +241,93 @@ describe('lo scatto e di un altra famiglia', () => {
   })
 })
 
+/** Un disco in memoria a partire da uno stato, piu' lo scatto se serve. */
+function disco(data: DataSet, snapshot: PreImportSnapshot | null = null): MemoryDisk {
+  return {
+    expenses: [...data.expenses],
+    categories: [...data.categories],
+    recurringRules: [...data.recurringRules],
+    budgets: [...data.budgets],
+    settings: data.settings,
+    snapshot,
+  }
+}
+
+/**
+ * **Il ripristino, e il caso difficile e' il primo.**
+ *
+ * Il giro felice — scatto e app allo stesso schema — non attraversa **nessuna**
+ * riga di `migrateRawData`: `snapshotPayload` torna prima. Un test che provasse
+ * solo quello proverebbe che funziona il `return` anticipato, e lascerebbe
+ * scoperta l'unica riga che esiste per una ragione.
+ *
+ * E non e' un caso limite: fra un import e il suo ripristino possono passare
+ * settimane, e un aggiornamento dell'app in mezzo e' la norma. Lo scatto
+ * sopravvive agli aggiornamenti **apposta** — le migrazioni non lo toccano
+ * (`MIGRATED_STORES`) — quindi "scatto piu' vecchio dell'app" e' lo stato
+ * normale di uno scatto vissuto, non l'eccezione.
+ */
+describe('il ripristino', () => {
+  it('porta alla versione corrente un carico scritto da uno schema precedente', async () => {
+    // Uno scatto di schema 4: i record dicono `schemaVersion: 4`, come li
+    // avrebbe scritti l'app di allora. Il passo 5 e il 6 devono girarci sopra.
+    const vecchio = stato('vecchio', 100)
+    const disk = disco(stato('adesso', 900), {
+      id: PRE_IMPORT_SNAPSHOT_ID,
+      takenAt: PRIMA,
+      schemaVersion: 4,
+      data: { ...vecchio, settings: { ...vecchio.settings, schemaVersion: 4 } },
+    })
+    const p = createMemoryPersistence(disk)
+
+    const tornato = await p.restoreSnapshot()
+
+    // Il carico e' quello vecchio — e' l'archivio a cui si torna...
+    expect(tornato?.expenses.map((e) => e.id)).toEqual(['e-vecchio'])
+    // ...ma **portato avanti**: senza `snapshotPayload` l'archivio si
+    // riempirebbe di record di forma vecchia, che e' un danno silenzioso su
+    // dati irripetibili. Provato mutando: togliendo la migrazione resta 4.
+    expect(tornato?.settings.schemaVersion).toBe(SCHEMA_VERSION)
+    expect(disk.settings?.schemaVersion).toBe(SCHEMA_VERSION)
+    p.close()
+  })
+
+  it('consuma lo scatto, e il secondo giro non ha niente da ripristinare', async () => {
+    // **E' la riparazione di DEBITO §16 vista dal lato del dominio.** Uno
+    // scatto che sopravvive al proprio ripristino offre di tornare al posto in
+    // cui si e' appena arrivati — un bottone con una data precisa accanto a
+    // garantire che faccia qualcosa.
+    const disk = disco(stato('adesso', 900))
+    const p = createMemoryPersistence(disk)
+    await p.replaceAll(stato('nuovo', 111), PRIMA)
+    expect(disk.snapshot).not.toBeNull()
+
+    expect((await p.restoreSnapshot())?.expenses.map((e) => e.id)).toEqual(['e-adesso'])
+    expect(disk.snapshot).toBeNull()
+    expect((await p.loadAll()).snapshotTakenAt).toBeNull()
+    expect(await p.restoreSnapshot()).toBeNull()
+    p.close()
+  })
+
+  it('la data arriva da loadAll senza che il carico venga letto', async () => {
+    // La voce in Impostazioni ha bisogno della **data**, non del carico. Su
+    // IndexedDB la differenza e' un cursore di sole chiavi contro 1,3 MB; qui
+    // si sorveglia che il contratto sia lo stesso nelle due implementazioni.
+    const name = dbName()
+    const p = createIdbPersistence({ name })
+    await p.write(stato('vecchio', 100))
+    expect((await p.loadAll()).snapshotTakenAt).toBeNull()
+    await p.replaceAll(stato('nuovo', 900), PRIMA)
+    expect((await p.loadAll()).snapshotTakenAt).toBe(PRIMA)
+
+    expect((await p.restoreSnapshot())?.expenses.map((e) => e.id)).toEqual(['e-vecchio'])
+    expect((await p.loadAll()).snapshotTakenAt).toBeNull()
+    expect((await p.loadAll()).expenses.map((e) => e.id)).toEqual(['e-vecchio'])
+    p.close()
+  })
+})
+
 /* **Qui c'erano i due test del carico che attraversa le migrazioni**, e sono
- * usciti con `snapshotPayload`. Cio' che resta sotto guardia e' il fatto che
+ * rientrati qui sopra con `snapshotPayload`. Resta sotto guardia il fatto che
  * rende possibile quella migrazione: lo scatto **scrive** la propria
  * `schemaVersion`, che e' l'unico momento in cui quel numero si puo' sapere. */

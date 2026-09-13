@@ -47,7 +47,7 @@ import type { CategoryDeletion, CategoryPlacement } from './categories'
 import { isAfter } from './date'
 import { NOTHING_SKIPPED } from './persistence'
 import type { LoadedData, Persistence, WriteBatch, WriteResult } from './persistence'
-import { buildPreImportSnapshot } from './snapshot'
+import { buildPreImportSnapshot, snapshotPayload } from './snapshot'
 import type {
   AnyStoreName,
   Budget,
@@ -573,14 +573,28 @@ export function createIdbPersistence(options: OpenOptions = {}): IdbPersistence 
       return withDb(async (connection) => {
         // Le spese arrivano gia' ordinate per data: e' l'unica ragione per cui
         // l'indice `by-date` esiste.
-        const [expenses, categories, recurringRules, budgets, settings] = await Promise.all([
+        // **Un cursore di sole chiavi, e non un `get`.** La chiave dell'indice
+        // `by-takenAt` *e'* `takenAt`, quindi la data dello scatto arriva senza
+        // che il carico venga letto — 1,3 MB al tetto delle 5.000 spese. E' la
+        // sola ragione per cui quell'indice esiste (`SNAPSHOT_STORE`, in
+        // `schema.ts`), e senza di lui dipingere una riga in Impostazioni
+        // costerebbe quanto un import.
+        const [expenses, categories, recurringRules, budgets, settings, cursor] = await Promise.all([
           connection.getAllFromIndex('expenses', 'by-date'),
           connection.getAll('categories'),
           connection.getAll('recurringRules'),
           connection.getAll('budgets'),
           connection.get('settings', SETTINGS_ID),
+          connection.transaction('preImportSnapshot').store.index('by-takenAt').openKeyCursor(),
         ])
-        return { expenses, categories, recurringRules, budgets, settings: settings ?? null }
+        return {
+          expenses,
+          categories,
+          recurringRules,
+          budgets,
+          settings: settings ?? null,
+          snapshotTakenAt: cursor?.key ?? null,
+        }
       })
     },
 
@@ -636,6 +650,34 @@ export function createIdbPersistence(options: OpenOptions = {}): IdbPersistence 
             budgets: data.budgets,
             settings: data.settings,
           })
+        } catch (error) {
+          await rollback(tx)
+          throw error
+        }
+      })
+    },
+
+    async restoreSnapshot(): Promise<DataSet | null> {
+      return withDb(async (connection) => {
+        // Stessa transazione su tutte e due le famiglie di `replaceAll`, e per
+        // la stessa ragione: leggere lo scatto, riscrivere l'archivio e
+        // cancellare lo scatto sono **un gesto solo**. Fossero due, una morte
+        // in mezzo lascerebbe uno scatto che riporta a uno stato gia'
+        // ripristinato — cioe' una botola con una data precisa accanto.
+        const tx = connection.transaction([...ALL_STORES], 'readwrite') as WriteTx
+        try {
+          const store = tx.objectStore('preImportSnapshot')
+          const snapshot = await store.get(PRE_IMPORT_SNAPSHOT_ID)
+          if (snapshot === undefined) return null
+          // Il carico si porta alla versione corrente **prima** di riscriverlo:
+          // fra l'import e il ripristino puo' esserci stato un aggiornamento, e
+          // rimettere nell'archivio dei record di forma vecchia e' un danno
+          // silenzioso su dati irripetibili.
+          const data = snapshotPayload(snapshot)
+          await store.delete(PRE_IMPORT_SNAPSHOT_ID)
+          await Promise.all(REPLACED_STORES.map((name) => tx.objectStore(name).clear()))
+          await runBatch(tx, data)
+          return data
         } catch (error) {
           await rollback(tx)
           throw error

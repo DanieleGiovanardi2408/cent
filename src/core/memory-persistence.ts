@@ -38,7 +38,7 @@ import type {
   WriteBatch,
   WriteResult,
 } from './persistence'
-import { buildPreImportSnapshot } from './snapshot'
+import { buildPreImportSnapshot, snapshotPayload } from './snapshot'
 import type {
   Budget,
   Category,
@@ -199,6 +199,10 @@ export function createMemoryPersistence(seed: MemoryDiskSeed = emptyDisk()): Mem
         recurringRules: disk.recurringRules,
         budgets: disk.budgets,
         settings: disk.settings,
+        // Solo la data, come il cursore di sole chiavi di `idb.ts`: i due lati
+        // devono restare osservabilmente identici anche in **cosa non leggono**,
+        // altrimenti un test qui passa su un carico che la' nessuno tocca.
+        snapshotTakenAt: disk.snapshot?.takenAt ?? null,
       })
     },
     async write(batch: WriteBatch): Promise<WriteResult> {
@@ -343,6 +347,26 @@ export function createMemoryPersistence(seed: MemoryDiskSeed = emptyDisk()): Mem
       // raggiungibile, lo diventa per tutti e due.
       disk.snapshot = snapshot
       writes += 1
+    },
+
+    async restoreSnapshot(): Promise<DataSet | null> {
+      guard()
+      if (disk.snapshot === null) return null
+      // Migrato **prima** di scrivere, come in `idb.ts`: se il doppio saltasse
+      // questo passo, il ramo che il test deve coprire — uno scatto di uno
+      // schema precedente — sarebbe coperto solo dove non gira.
+      const data = snapshotPayload(disk.snapshot)
+      const clone = structuredClone(data) as DataSet
+      disk.expenses = [...clone.expenses]
+      disk.categories = [...clone.categories]
+      disk.recurringRules = [...clone.recurringRules]
+      disk.budgets = [...clone.budgets]
+      disk.settings = clone.settings
+      // Consumato: uno scatto che sopravvive al proprio ripristino riporta a
+      // uno stato in cui si e' gia'.
+      disk.snapshot = null
+      writes += 1
+      return data
     },
 
     close(): void {

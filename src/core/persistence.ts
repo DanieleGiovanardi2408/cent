@@ -43,6 +43,24 @@ export interface LoadedData {
   readonly recurringRules: readonly RecurringRule[]
   readonly budgets: readonly Budget[]
   readonly settings: Settings | null
+  /**
+   * La data dello scatto pre-import, o `null` se non ce n'e' uno.
+   *
+   * **Sta qui e non in un metodo suo**, e la ragione e' l'ordine di pittura. La
+   * voce in Impostazioni esiste solo se lo scatto esiste: una `snapshotTakenAt()`
+   * a parte vorrebbe dire che quella riga compare **dopo** il primo disegno
+   * della schermata, cioe' uno spostamento su una schermata piena di bersagli
+   * toccabili. Arrivando con tutto il resto, il guscio sa gia' se disegnarla.
+   *
+   * **Costa una lettura di sole chiavi** sull'indice `by-takenAt`, che esiste
+   * apposta: il carico vale fino a 1,3 MB a 5.000 spese, e nessuna schermata
+   * deve pagarlo per dipingere una riga.
+   *
+   * Da qui in poi non si rilegge mai: chi scrive sa gia' il valore nuovo —
+   * `replaceAll` lascia `takenAt`, `restoreSnapshot` lascia `null` — quindi il
+   * mirror si aggiorna senza tornare sul disco.
+   */
+  readonly snapshotTakenAt: Timestamp | null
 }
 
 /**
@@ -328,46 +346,39 @@ export interface Persistence {
    */
   replaceAll(data: DataSet, takenAt: Timestamp): Promise<void>
   /**
-   * **Qui c'erano `snapshotTakenAt` e `restoreSnapshot`, e sono state differite.
-   * Con loro se n'e' andato il valore di ritorno di `replaceAll`**, che diceva
-   * la data dello scatto rimasto (o `null` se non c'era niente da salvare).
+   * Ripristina lo scatto e lo **consuma**: torna il carico scritto, o `null` se
+   * non c'era niente da ripristinare. Una transazione sola.
    *
-   * Quel valore si giustificava con un uso — *"dire subito dopo l'import a cosa
-   * si tornerebbe"* — che nessuno fa: l'unico chiamante di produzione,
-   * `Repository.importBackup`, lo buttava via. Era la meta' di lettura dello
-   * scatto travestita da valore di ritorno, cioe' la stessa superficie senza
-   * chiamante, presa dalla porta di servizio. Rientra col dialogo che la legge,
-   * e costa due implementazioni piu' il loro ramo per il caso vuoto.
+   * ## Consumare non e' pulizia: e' cio' che rende vera la frase a schermo
    *
-   * Cio' che quel valore rendeva osservabile non e' andato perso: lo scatto e'
-   * un record su disco, e i test lo leggono **da dove sta** — piu' severo di
-   * quanto fosse leggerlo qui.
+   * La voce in Impostazioni dice *"torna ai dati del ‹data›"*. Se dopo averla
+   * toccata lo scatto restasse li', la voce resterebbe a schermo e direbbe la
+   * stessa data — ma l'archivio a cui riporterebbe adesso e' quello che si e'
+   * appena ripristinato, cioe' **quello in cui si e' gia'**. Un bottone che non
+   * fa niente, con una data precisa accanto a garantire che faccia qualcosa.
    *
-   * Lo scatto si prende gia' — `replaceAll` qui sopra — ma **niente lo legge e
-   * niente lo ripristina**, perche' non esiste ancora una schermata che lo
-   * chieda. La regola e' quella del progetto: **una funzione si spedisce insieme
-   * al suo chiamante, o non si spedisce.** E' la stessa con cui
-   * `expensesInRange` e `planBudgetChange` sono state cancellate — API di
-   * dominio senza chiamanti di produzione, tenute vive dai test che le
-   * chiamavano — e con cui `RecurringRule.note` e `endDate` sono uscite dai tipi.
+   * E nella stessa transazione, per la ragione di sempre: se fossero due, una
+   * morte in mezzo — iOS termina le web app in background — lascerebbe uno
+   * scatto che riporta a uno stato gia' ripristinato.
    *
-   * **Il tetto del bundle ha fatto solo da rivelatore**: con le due dentro, il
-   * primo caricamento valeva 61.554 byte contro un tetto di 61.440. Togliendole
-   * restano 225 byte di margine. Ma il numero non e' la ragione — se il tetto
-   * fosse stato piu' alto la regola sarebbe valsa lo stesso, e vale la pena
-   * scriverlo perche' fra sei mesi la tentazione sara' di rimetterle "tanto
-   * adesso c'e' spazio".
+   * ## E qui si chiude DEBITO §16
    *
-   * **Condizione**: arrivano nel commit che le chiama, cioe' quello del dialogo
-   * di ripristino. **Se quel dialogo non arriva in fase 7, non arrivano nemmeno
-   * loro** — e lo scatto resta una rete che nessuno puo' tirare, che e' un
-   * difetto suo e va guardato allora.
+   * `replaceAll` fotografa **sempre**, quindi un Annulla implementato come
+   * *"importa di nuovo l'archivio di prima"* passava da `replaceAll` una seconda
+   * volta e metteva **il file appena rifiutato** al posto dello scatto. La rete
+   * su disco finiva per conservare l'unico stato che esiste anche altrove.
    *
-   * Gli argomenti che le riguardavano non sono andati persi: stanno in
-   * [ADR 026](../../docs/adr/026-l-import-sostituisce-e-lascia-una-rete.md),
-   * §"Il lato lettura, differito" — perche' sono **decisioni**, e una decisione
-   * non vive in un commento di una funzione che non esiste.
+   * §16 chiedeva che l'Annulla del toast e il ripristino da scatto diventassero
+   * **la stessa operazione** — ed e' questa. Non ci sono due strade che devono
+   * restare d'accordo: ce n'e' una.
+   *
+   * ## Il carico si migra qui, non all'upgrade
+   *
+   * `snapshotPayload` lo porta alla versione corrente prima di riscriverlo. Un
+   * aggiornamento fra l'import e il ripristino e' il caso normale, non il caso
+   * limite: fra i due gesti possono passare settimane.
    */
+  restoreSnapshot(): Promise<DataSet | null>
   close(): void
 }
 

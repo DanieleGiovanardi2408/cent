@@ -413,6 +413,11 @@ export const it = {
   'settings.data.title': 'I tuoi dati',
   'settings.data.text':
     'Le spese restano su questo telefono: non c’è nessun account e nessun server. L’export è l’unica copia che sopravvive a un telefono perso o a un’app disinstallata.',
+  'settings.undo.title': 'Torna indietro',
+  'settings.undo.free': 'Torna ai dati del {day}. Da allora su questo telefono non e` stato segnato niente.',
+  'settings.undo.cost':
+    'Torna ai dati del {day} — le {count} spese segnate su questo telefono da allora ({amount}) se ne vanno con lui.',
+  'settings.undo.action': 'Torna al {day}',
   'settings.data.export': 'Esporta tutto',
   // Due righe di stato, non una decorazione: sono la stessa informazione che
   // accende il promemoria, detta dove si esporta.

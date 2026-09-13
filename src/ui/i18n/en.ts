@@ -387,6 +387,24 @@ export const en: Record<keyof typeof it, string> = {
   'settings.data.title': 'Your data',
   'settings.data.text':
     'Your expenses stay on this phone: there is no account and no server. The export is the only copy that survives a lost phone or an app you delete.',
+  /* **La data e il costo nella stessa frase, e non e' verbosita'.**
+   *
+   * Un "Torna indietro" nudo e' una rete che non dice quanto pesa, cioe' una
+   * botola: su un telefono con sei settimane di spese dopo l'import, tornare ne
+   * distrugge sei settimane. La data da sola non basta — dice *dove* si va, non
+   * *cosa* si lascia — ed e' lo stesso difetto dell'anteprima dell'import, un
+   * confine temporale al posto di una perdita.
+   *
+   * Due chiavi perche' ci sono **due fatti diversi**, non due toni: subito dopo
+   * un import non c'e' ancora niente da perdere, e la frase del costo nominerebbe
+   * zero spese e 0,00 € — un numero vero che sembra un difetto. E il caso zero
+   * non e' il caso raro: e' l'Annulla, cioe' l'uso piu' frequente di questa
+   * voce. */
+  'settings.undo.title': 'Go back',
+  'settings.undo.free': 'Go back to your data from {day}. Nothing has been saved on this phone since then.',
+  'settings.undo.cost':
+    'Go back to your data from {day} — the {count} expenses saved on this phone since then ({amount}) go with it.',
+  'settings.undo.action': 'Go back to {day}',
   'settings.data.export': 'Export everything',
   'settings.data.last': 'Last backup: {days} ago.',
   'settings.data.never': 'You have not exported anything yet.',
