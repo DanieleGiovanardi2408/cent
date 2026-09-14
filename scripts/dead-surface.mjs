@@ -176,6 +176,48 @@ const MEMBRI_DICHIARATI = new Map([
   ],
 ])
 
+/**
+ * **I produttori che A non riesce ad attribuire, e dove stanno davvero.**
+ *
+ * Non e' la gemella di `MEMBRI_DICHIARATI`, ed e' importante non confonderle:
+ * quella dichiara cose **morte e tenute apposta**, questa cose **vive che lo
+ * script non sa vedere**. La prima e' una decisione di prodotto, la seconda un
+ * limite dello strumento.
+ *
+ * Il limite e' il numero 3 dell'elenco in cima a questo file, ed e' l'unico che
+ * il file dichiara come *"il modo in cui A puo' mentire"*: un'occorrenza
+ * `campo:` viene attribuita a un tipo solo se nel letterale c'e' una chiave
+ * **esclusiva** di quel tipo. Un produttore vero che vive in un letterale senza
+ * chiavi esclusive risulta assente.
+ *
+ * ## Perche' non e' una scusa: si verifica
+ *
+ * Una riga qui non dice *"fidati"*. Dice **file e pattern**, e lo script
+ * controlla che quel file contenga ancora quel pattern. Se il produttore se ne
+ * va — rinominato, spostato, cancellato — la riga **cade**, e cade con il nome
+ * del campo che credeva di coprire.
+ *
+ * E' la differenza fra un elenco di eccezioni e un controllo: la prima forma di
+ * questa mappa era una stringa di prosa, e sarebbe invecchiata come ogni altra
+ * promessa scritta una volta e riletta mai.
+ */
+const PRODUTTORI_DICHIARATI = new Map([
+  [
+    'RecurringRuleCommon.note',
+    {
+      file: 'src/ui/RuleSheet.tsx',
+      pattern: /note:\s*trimmed === '' \? null : trimmed/,
+      perche:
+        "il valore entra da `event.currentTarget.value` nel campo del foglio, e " +
+        "il letterale che lo porta fuori (`{ recurrence, categoryId, note, day }`) " +
+        "non ha nessuna chiave esclusiva di una regola: `categoryId` sta anche su " +
+        "`Expense`, `recurrence` e `day` non sono campi di nessun tipo. E' il " +
+        'limite 3 in cima a questo file. Il campo e` vivo: lo scrive il foglio, ' +
+        'lo legge `ruleTitle` in due schermate.',
+    },
+  ],
+])
+
 /* ------------------------------------------------------------------------ *
  * Lessico: via i commenti, via il contenuto delle stringhe.
  * ------------------------------------------------------------------------ */
@@ -666,15 +708,32 @@ function campiSenzaProduttore(tuttiIFile) {
   }
 
   const morti = []
+  const dichiaratiVivi = []
+  const dichiarazioniRotte = []
   for (const [tipo, campi] of campiPerTipo) {
     for (const campo of campi) {
       const id = `${tipo}.${campo}`
       if ((produttori.get(id) ?? []).length > 0) continue
+      const dichiarato = PRODUTTORI_DICHIARATI.get(id)
+      if (dichiarato !== undefined) {
+        // La dichiarazione si verifica, non si crede: se il produttore che
+        // nomina non c'e' piu', **cade la dichiarazione** invece di coprire un
+        // campo che nel frattempo e' morto davvero.
+        if (existsSync(dichiarato.file) && dichiarato.pattern.test(leggi(dichiarato.file))) {
+          dichiaratiVivi.push({ id, ...dichiarato })
+        } else {
+          dichiarazioniRotte.push({ id, file: dichiarato.file })
+        }
+        continue
+      }
       const altri = [...campiPerTipo]
         .filter(([t, campi]) => t !== tipo && campi.has(campo))
         .map(([t]) => t)
       morti.push({ tipo, campo, altri, lettori: lettori(campo, tuttiIFile) })
     }
+  }
+  for (const rotta of dichiarazioniRotte) {
+    morti.push({ tipo: rotta.id.split('.')[0], campo: rotta.id.split('.')[1], altri: [], lettori: [] })
   }
   const quantiCampi = [...campiPerTipo.values()].reduce((n, s) => n + s.size, 0)
   // L'inventario si puo' stampare (`--dettagli`): un verde di cui non si vede
@@ -693,6 +752,7 @@ function campiSenzaProduttore(tuttiIFile) {
   }
   return {
     morti,
+    dichiaratiVivi,
     inventario,
     quantiCampi,
     quanteDichiarazioni: campiPerTipo.size,
@@ -1049,7 +1109,7 @@ console.log(
     `di ${TYPES_FILE}, ${a.quantiFile} file di produzione`,
 )
 if (a.morti.length === 0) {
-  console.log('     nessuno: ogni campo ha una scrittura fuori da import, migrazioni e test.\n')
+  console.log('     nessuno: ogni campo ha una scrittura fuori da import, migrazioni e test.')
 } else {
   rotto = true
   for (const { tipo, campo, altri, lettori: trovate } of a.morti) {
@@ -1080,6 +1140,12 @@ if (a.morti.length === 0) {
       '     La cancellazione e\' una decisione umana: questo script si limita a non farla passare in silenzio.\n',
   )
 }
+
+for (const { id, file, perche } of a.dichiaratiVivi) {
+  console.log(`     ${id} — vivo, e il produttore e' dichiarato perche' A non lo attribuisce:`)
+  console.log(`        ${file} — ${perche}`)
+}
+console.log('')
 
 const b = chiaviSenzaLettore(tuttiIFile)
 if (!b.applicabile) {

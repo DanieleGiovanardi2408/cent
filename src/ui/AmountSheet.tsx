@@ -156,10 +156,9 @@ export function AmountSheet({
    * al suo vecchio posto sposterebbe i chip che il pollice conosce, ed e' il
    * motivo per cui la griglia non si riordina mai (CLAUDE.md).
    */
-  const choices =
-    category === undefined || categories.some((c) => c.id === category.id)
-      ? categories
-      : [...categories, category]
+  const orphan =
+    category === undefined || categories.some((c) => c.id === category.id) ? null : category
+  const choices = orphan === null ? categories : [...categories, orphan]
 
   /** Niente da scrivere: tutti e quattro i campi sono quelli di prima. */
   const same =
@@ -312,25 +311,32 @@ export function AmountSheet({
             chip spento diceva "prima l'importo, poi la categoria"; qui la
             categoria e' gia' scelta e l'importo gia' valorizzato — spegnerli
             direbbe che la spesa non ha una categoria, che e' falso. */}
-        <div class="cats">
-          {choices.map((choice) => (
-            <button
-              key={choice.id}
-              type="button"
-              class="cat"
-              style={`--cat:${choice.color}`}
-              aria-pressed={choice.id === categoryId}
-              /* Marcata quando non e' piu' fra le scegliibili: c'e' perche' e'
-                 la sua, si distingue perche' e' archiviata. Vedi ADR 019. */
-              data-off={(choice.archived && choice.id === categoryId) || undefined}
-              onClick={() => setCategoryId(choice.id)}
-            >
-              <span class="cat__emoji" aria-hidden="true">
-                {choice.emoji}
-              </span>
-              <span class="cat__name">{choice.name}</span>
-            </button>
-          ))}
+        <div class="cats cats--pick" role="group" aria-label={t('rule.cats')}>
+          {choices.map((choice) => {
+            /* Fuori dalla griglia: la sua, ma non piu' scegliibile. La marca e'
+               `data-current` e non una mia — stesso attributo, stesso contorno
+               tratteggiato e stessa parola del foglio della regola, che ADR 019
+               aveva gia' risolto. Due marche diverse per lo stesso stato in due
+               fogli adiacenti chiederebbero di impararlo due volte. */
+            const outside = choice.id === orphan?.id
+            return (
+              <button
+                key={choice.id}
+                type="button"
+                class="cat"
+                style={`--cat:${choice.color}`}
+                data-current={outside || undefined}
+                aria-pressed={choice.id === categoryId}
+                onClick={() => setCategoryId(choice.id)}
+              >
+                <span class="cat__emoji" aria-hidden="true">
+                  {choice.emoji}
+                </span>
+                <span class="cat__name">{choice.name}</span>
+                {outside ? <span class="cat__tag">{t('pick.current')}</span> : null}
+              </button>
+            )
+          })}
         </div>
 
         {/* Le parti, non la stringa: i centesimi al 55% del corpo (sheet.css).

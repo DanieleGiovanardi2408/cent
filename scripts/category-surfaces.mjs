@@ -77,18 +77,6 @@ const INVENTARIO = [
     dove: 'il chip sotto il dito: uno solo, e il mix e\' l\'estetica dello stato',
   },
   {
-    selettore: '.cat[aria-pressed=\'true\']',
-    proprieta: 'background-color',
-    piuDiUno: false,
-    dove: 'il chip selezionato nel foglio di correzione: **uno solo per costruzione**, e il mix e\' l\'estetica dello stato — come `.cat:active`',
-  },
-  {
-    selettore: '.cat[aria-pressed=\'true\']',
-    proprieta: 'box-shadow',
-    piuDiUno: false,
-    dove: 'l\'anello del chip selezionato: uno solo, e a tinta piena perche\' e\' il segno che deve reggere sul riempimento mescolato sotto di lui',
-  },
-  {
     selettore: '.arch__dot,.editor__chip',
     proprieta: 'background-color',
     piuDiUno: true,

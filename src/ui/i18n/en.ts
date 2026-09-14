@@ -586,6 +586,15 @@ export const en: Record<keyof typeof it, string> = {
   'rule.cadence.monthly': 'Monthly',
   'rule.cadence.weekly': 'Weekly',
   'rule.cadence.daily': 'Daily',
+  /* **La descrizione di una regola, e le parole scelgono un mestiere.**
+   *
+   * Non "Note" come sulla spesa, che dice *cos'era quella volta*: qui dice
+   * **quale delle due**, e il posto in cui serve e' un elenco di righe che
+   * altrimenti si chiamano tutte come la loro categoria. Il segnaposto porta un
+   * esempio invece di una definizione — e' piu' corto e si capisce senza
+   * leggerlo tutto. */
+  'rule.note': 'What to call it',
+  'rule.note.placeholder': 'Gym, Spotify, the small room…',
   'rule.cats': 'Category',
   'rule.start': 'Starting',
   'rule.start.today': 'Today',

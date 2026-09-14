@@ -1,6 +1,6 @@
 import type { IsoDate } from '../core/date'
 import type { Category, RecurringRule } from '../core/types'
-import { fixedLineNote, fixedList } from './recurring-view'
+import { fixedLineNote, fixedList, ruleTitle } from './recurring-view'
 import { money, t } from './i18n'
 // `.arch__dot` e' la pastiglia dell'elenco archiviate: stessa forma, stesso
 // ruolo (il colore della categoria come superficie, mai come testo).
@@ -106,17 +106,15 @@ export function FixedCosts({ rules, categories, day, ready, onNew, onPick }: Pro
                     {category?.emoji ?? '•'}
                   </span>
                   <span class="fixed__text">
-                    <span class="fixed__name">
-                      {category?.name ?? t('row.categoryRemoved')}
-                    </span>
+                    <span class="fixed__name">{ruleTitle(line.rule, category?.name)}</span>
                     {/* Il perche' non pesa **e** cosa fa: "spenta" da sola
                         avrebbe tolto la cadenza e l'importo proprio alla riga
                         che si sta per riaccendere, cioe' i due numeri che
                         servono a decidere. */}
                     <span class="fixed__note">
                       {line.aside === null
-                        ? fixedLineNote(line.rule)
-                        : `${line.aside} · ${fixedLineNote(line.rule)}`}
+                        ? fixedLineNote(line.rule, category?.name)
+                        : `${line.aside} · ${fixedLineNote(line.rule, category?.name)}`}
                     </span>
                   </span>
                   {/* Il costo mensile normalizzato. Su una regola che non e'

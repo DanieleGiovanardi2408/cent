@@ -235,6 +235,17 @@ export interface RuleDraft {
   readonly recurrence: RecurrenceDraft
   readonly categoryId: string
   /**
+   * Come si chiama questa regola. `null` = nessuna descrizione, si chiama come
+   * la sua categoria.
+   *
+   * Sta accanto a `categoryId` e **non dentro `recurrence`**, ed e' il criterio
+   * di `NewRecurringRule` applicato invece che copiato: dentro la bozza stanno i
+   * campi che entrano nei numeri annunciati. Una descrizione non entra in
+   * `count`, ne' nei due estremi, ne' in `totalCents` — non tocca il calendario
+   * in nessun verso — quindi non ha niente da annunciare.
+   */
+  readonly note: string | null
+  /**
    * Il giorno su cui i numeri annunciati sono stati calcolati.
    *
    * Viaggia col resto e non si rilegge dall'orologio al momento di scrivere, ed
@@ -348,6 +359,7 @@ export function RuleSheet({
 }: Props) {
   const [cents, setCents] = useState(target?.amountCents ?? 0)
   const [categoryId, setCategoryId] = useState<string | null>(target?.categoryId ?? null)
+  const [note, setNote] = useState(target?.note ?? '')
   const [cadence, setCadence] = useState<Cadence>(target?.cadence ?? 'monthly')
   /**
    * La data d'inizio **di una regola nuova**, e solo di quella.
@@ -693,7 +705,16 @@ export function RuleSheet({
 
   function save(): void {
     if (done.current || !ready || categoryId === null) return
-    const problem = onSave({ recurrence: draft, categoryId, day })
+    // `null` cancella, `''` **non** e' una descrizione: e' la sua assenza, e la
+    // distinzione si fa qui — nello stesso punto in cui `AmountSheet` la fa per
+    // la nota di una spesa.
+    const trimmed = note.trim()
+    const problem = onSave({
+      recurrence: draft,
+      categoryId,
+      note: trimmed === '' ? null : trimmed,
+      day,
+    })
     if (problem === null) {
       done.current = true
       return
@@ -1251,6 +1272,31 @@ export function RuleSheet({
                 {t('rule.cats.current', { name: orphan.name })}
               </p>
             )}
+
+            {/* **La descrizione, e sta qui perche' qui sta il problema che
+                risolve.** Subito sotto i chip: il nome di una regola e' il nome
+                della sua categoria, quindi due regole sulla stessa categoria
+                sono indistinguibili — e il posto in cui ci si accorge di
+                sceglierne una gia' usata e' il chip che si sta premendo.
+
+                Sempre aperto e non collassato come nell'inserimento: li' la
+                nota e' fuori dal percorso dei due tap e si apre una volta su
+                dieci, qui e' l'unica cosa che distingue questa regola dalla
+                prossima e si scrive **mentre** la si crea. Un campo che si apre
+                con un tap in piu' e' un campo che chi ne ha due non trova.
+
+                `maxLength` uguale a quello della nota di una spesa: e' lo
+                stesso mestiere e la stessa riga di elenco a doverlo contenere. */}
+            <input
+              class="meta__note rule__note"
+              type="text"
+              value={note}
+              maxLength={120}
+              placeholder={t('rule.note.placeholder')}
+              enterKeyHint="done"
+              aria-label={t('rule.note')}
+              onInput={(event) => setNote(event.currentTarget.value)}
+            />
 
             {/* Le parti, non la stringa: i centesimi al 55% del corpo. Stesso
                 cents-first, stessa virgola da 3 px, stesso rimedio. */}

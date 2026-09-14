@@ -110,47 +110,25 @@
   }
 }
 
-/* --- i chip della correzione scelgono, e uno e' gia' scelto ---------------
+/* **Qui c'era un secondo disegno per i chip selezionati**, e non doveva
+ * esistere: `.cats--pick` in `RuleSheet.css` risolveva gia' lo stesso problema
+ * — un chip scelto fra otto, piu' la marca di ADR 019 su quello che non e' piu'
+ * scegliibile — con un contorno `--brand` e, per la marca, un tratteggio
+ * `--line-strong`. Avevo scritto un riempimento mescolato piu' un anello nella
+ * tinta della categoria, e una marca chiamata `data-off` invece di
+ * `data-current`.
  *
- * `.cat` e' la stessa classe di `AddSheet`, e questi due stati non la toccano
- * la': in inserimento nessun chip porta `aria-pressed`, quindi il selettore non
- * fa presa. Una seconda classe per la stessa griglia avrebbe voluto dire due
- * geometrie da tenere d'accordo — e' il difetto che questo progetto insegue da
- * settimane — mentre un attributo in piu' e' esattamente cio' che distingue i
- * due mestieri.
+ * Due fogli, lo stesso mestiere, due linguaggi visivi. E' la divergenza che
+ * questo progetto paga da settimane, costruita in mezz'ora perche' **non ho
+ * cercato se la soluzione esistesse gia'**.
  *
- * L'anello e' `inset`, non un bordo: un bordo aggiungerebbe 2 px alla scatola e
- * il chip selezionato sarebbe **piu' grande** degli altri sette. La griglia
- * resterebbe ferma (e' `1fr`), ma il contenuto dentro si stringerebbe di due
- * pixel, cioe' "Coffeeshop" andrebbe in ellissi solo quando e' quello scelto.
+ * E ne aveva prodotta una conseguenza vera, non solo estetica: la mia regola
+ * era `.cat[aria-pressed='true']` **senza** il contesto di `.cats--pick`,
+ * quindi il suo `box-shadow` — che `RuleSheet` non dichiara, e che percio' non
+ * veniva sovrascritto — **colava sui chip del foglio della regola**, disegnando
+ * un anello nella tinta della categoria sopra il contorno `--brand`. Un
+ * selettore troppo largo non e' un problema di stile: e' un difetto in una
+ * schermata che non si stava guardando.
  *
- * Il riempimento al 22% e' lo stesso di `.cat:active`, e non per risparmiare:
- * li' dice "lo sto premendo", qui "e' questo". Sono due letture dello stesso
- * segno in due momenti che non si sovrappongono mai — un chip premuto e' uno,
- * e mentre lo premi e' quello selezionato un istante dopo. */
-.cat[aria-pressed='true'] {
-  background-color: color-mix(in srgb, var(--cat) 22%, var(--surface-sunken));
-  box-shadow: inset 0 0 0 var(--seam) var(--cat);
-}
-
-/* **La marca di ADR 019**: c'e' perche' e' la sua, si distingue perche' non e'
- * piu' scegliibile.
- *
- * Il tratteggio e non l'opacita': un chip sbiadito si legge come *spento*, e
- * spento vuol dire "non si puo' toccare" — che qui e' falso, si puo' eccome,
- * ed e' anzi il valore che la spesa ha adesso. Il tratteggio dice "provvisorio,
- * non fa piu' parte della griglia", che e' esattamente cosa vuol dire
- * archiviata.
- *
- * `--line-strong` e non `--cat`: questo segno non parla della categoria, parla
- * del suo **stato**, e portarlo nella sua stessa tinta lo farebbe leggere come
- * una variante dell'anello di selezione invece che come un'altra cosa. Il
- * contrasto e' 3,2:1 sul fondo in chiaro e 3,3:1 in scuro — misurato in
- * `tokens.css`, e su `--surface-sunken` non su `--bg`, quindi va riguardato se
- * quel token cambia. */
-.cat[data-off] {
-  box-shadow: inset 0 0 0 var(--seam) var(--line-strong);
-  border-radius: var(--radius-2);
-  outline: var(--seam) dashed var(--line-strong);
-  outline-offset: calc(-1 * var(--seam) * 2);
-}
+ * Adesso questo foglio usa `cats--pick` e `data-current`, e qui non c'e'
+ * niente da dichiarare. */

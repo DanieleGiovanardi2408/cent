@@ -688,6 +688,8 @@ export const it = {
   'rule.cadence.monthly': 'Al mese',
   'rule.cadence.weekly': 'A settimana',
   'rule.cadence.daily': 'Al giorno',
+  'rule.note': 'Come si chiama',
+  'rule.note.placeholder': 'Palestra, Spotify, la stanza piccola…',
   'rule.cats': 'Categoria',
   'rule.start': 'Da quando',
   'rule.start.today': 'Oggi',

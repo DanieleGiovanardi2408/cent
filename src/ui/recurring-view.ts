@@ -165,7 +165,29 @@ function asideFor(rule: RecurringRule, onDate: IsoDate): string | null {
  * Solo sulle mensili, perche' solo li' esiste: una settimanale non ha
  * un'ancora, e inventarle un giorno sarebbe peggio che tacerlo.
  */
-export function fixedLineNote(rule: RecurringRule): string {
+/**
+ * Il nome con cui una regola si presenta: **la sua descrizione se ce l'ha,
+ * altrimenti il nome della sua categoria.**
+ *
+ * Sta qui e non dentro i due componenti perche' i posti che chiamano una regola
+ * per nome sono **due** — la riga in Impostazioni e i messaggi di `App.tsx` — e
+ * una regola che si chiama in due modi a seconda di chi la nomina e' il difetto
+ * che questa funzione esiste per rendere impossibile.
+ *
+ * `undefined` per la categoria e' un caso vero: una categoria si puo'
+ * archiviare mentre una regola la usa. Chi chiama passa quello che ha.
+ */
+export function ruleTitle(rule: RecurringRule, categoryName: string | undefined): string {
+  return rule.note ?? categoryName ?? t('row.categoryRemoved')
+}
+
+/**
+ * La riga sotto il nome. Con una descrizione porta **anche la categoria**: il
+ * nome se l'e' preso la descrizione, e senza questa riga l'unico posto in cui
+ * la categoria resterebbe leggibile sarebbe l'emoji. Una regola dice a quale
+ * categoria appartiene, sempre — e' cio' che decide dove finiscono le sue spese.
+ */
+export function fixedLineNote(rule: RecurringRule, categoryName?: string): string {
   const every =
     rule.cadence === 'monthly'
       ? t('fixed.anchor', {
@@ -177,7 +199,8 @@ export function fixedLineNote(rule: RecurringRule): string {
   // e' un altro numero**: per una mensile da 900 la colonna dice gia' 900, e
   // scriverlo due volte sulla stessa riga fa dubitare che siano la stessa cosa.
   const normalized = monthlyCostCents(rule)
-  return normalized === rule.amountCents ? every : `${every} · ${money(rule.amountCents)}`
+  const base = normalized === rule.amountCents ? every : `${every} · ${money(rule.amountCents)}`
+  return rule.note !== undefined && categoryName !== undefined ? `${categoryName} · ${base}` : base
 }
 
 /* ------------------------------------------------------------------------- *

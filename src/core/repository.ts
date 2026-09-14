@@ -200,10 +200,14 @@ export interface CategoryPatch {
  * Quindi i campi si dividono per **chi puo' allargare la finestra di
  * materializzazione**, e ogni gruppo ha un solo produttore:
  *
- * - `RecurringRulePatch` — `categoryId`, e basta. Non entra in nessuno dei
+ * - `RecurringRulePatch` — `categoryId` e `note`. Nessuno dei due entra nei
  *   numeri che l'anteprima annuncia (ne' `count`, ne' le date, ne' il totale),
- *   quindi **non paga nessun pedaggio**: `updateRecurringRule` resta sincrona,
+ *   quindi **non pagano nessun pedaggio**: `updateRecurringRule` resta sincrona,
  *   ottimistica e senza esito da controllare.
+ *
+ *   `note` sta qui **per il criterio in fondo a questo blocco**, non per
+ *   somiglianza con `categoryId`: una descrizione non tocca il calendario in
+ *   nessun verso, quindi non c'e' niente da annunciare prima di scriverla.
  * - `RecurrenceDraft` (importo + calendario, `endDate` compresa) — viaggia
  *   **solo** dentro una `ConfirmedPreview`. Non esiste nessun altro modo di
  *   farlo entrare in una regola. Non c'e' una guardia da ricordarsi: c'e'
@@ -229,10 +233,14 @@ export interface CategoryPatch {
  */
 export interface NewRecurringRule {
   readonly categoryId: string
+  /** Come si chiama. Assente = si chiama come la sua categoria. Vedi il tipo. */
+  readonly note?: string
 }
 
 export interface RecurringRulePatch {
   readonly categoryId?: string
+  /** `null` cancella la descrizione, come `ExpensePatch.note`. */
+  readonly note?: string | null
 }
 
 export interface SettingsPatch {
@@ -813,6 +821,17 @@ interface RuleIdentity {
   readonly categoryId: string
   readonly active: boolean
   readonly lastMaterializedDate?: IsoDate
+  /**
+   * La descrizione sta **nell'identita' e non nella bozza**, e la conseguenza
+   * e' quella che conta: `rewriteFromPreview` ricostruisce la regola da capo a
+   * ogni cambio di calendario, quindi un campo che non arriva da qui si perde
+   * in silenzio la prima volta che qualcuno sposta una data.
+   *
+   * E' anche il criterio di `NewRecurringRule` letto dal lato opposto: nella
+   * bozza sta cio' che entra nei numeri annunciati, qui cio' che la regola **e'**
+   * indipendentemente dal suo calendario.
+   */
+  readonly note?: string
 }
 
 /**
@@ -848,6 +867,7 @@ function ruleFromDraft(draft: RecurrenceDraft, identity: RuleIdentity): Recurrin
     updatedAt: identity.updatedAt,
     categoryId: identity.categoryId,
     active: identity.active,
+    ...(identity.note !== undefined ? { note: identity.note } : {}),
     amountCents: draft.amountCents,
     interval: draft.interval,
     startDate: draft.startDate,
@@ -1270,6 +1290,7 @@ export async function openRepository(
           updatedAt: clock(),
           categoryId: current.categoryId,
           active: activate ? true : current.active,
+          ...(current.note !== undefined ? { note: current.note } : {}),
           ...(current.lastMaterializedDate !== undefined
             ? { lastMaterializedDate: current.lastMaterializedDate }
             : {}),
@@ -1450,6 +1471,7 @@ export async function openRepository(
             updatedAt: timestamp,
             categoryId: input.categoryId,
             active: true,
+            ...(input.note !== undefined ? { note: input.note } : {}),
           }),
         ),
       }
@@ -1458,9 +1480,16 @@ export async function openRepository(
     updateRecurringRule(id, patch) {
       const current = observable.get().recurringRules.find((r) => r.id === id)
       if (!current) return null
+      // `note` si toglie dal record prima di ricomporlo: uno spread non sa
+      // cancellare un campo, e `{ note: undefined }` scriverebbe la **chiave**
+      // con valore `undefined` — che `structuredClone` conserva e IndexedDB
+      // pure. E' la stessa forma di `updateExpense`.
+      const note = patch.note === undefined ? current.note : (patch.note ?? undefined)
+      const { note: _dropped, ...rest } = current
       return commitRule({
-        ...current,
+        ...rest,
         ...(patch.categoryId !== undefined ? { categoryId: patch.categoryId } : {}),
+        ...(note !== undefined ? { note } : {}),
         updatedAt: clock(),
       })
     },

@@ -65,23 +65,62 @@ export interface Category extends EntityBase {
 export type Cadence = 'daily' | 'weekly' | 'monthly'
 
 /**
- * `note` non c'e', e non e' una dimenticanza.
+ * **`note` e' tornata, ed e' la seconda volta che questa regola si chiude da
+ * sola.**
  *
- * C'e' stata: tre lettori (l'etichetta della riga in `App.tsx`, quella in
- * `FixedCosts.tsx`, e la copia sulla spesa generata) e **zero produttori** —
- * nessuna schermata l'ha mai scritta, perche' il foglio della regola non ha mai
- * avuto un campo nota. Un campo cosi' non e' "pronto per quando servira'": e'
- * un ramo di codice che nessun test puo' raggiungere passando dal prodotto, e
- * tre `?? fallback` che sembrano coprire un caso vivo.
+ * Era uscita in fase 5 per zero produttori: tre lettori (l'etichetta in
+ * `App.tsx`, quella in `FixedCosts.tsx`, e la copia sulla spesa generata) e
+ * nessuna schermata che la scrivesse, perche' il foglio della regola non aveva
+ * un campo nota. La riga che l'accompagnava diceva:
  *
- * La regola generale: **un campo si spedisce insieme al suo produttore, o non
- * si spedisce.** Il giorno in cui il foglio avra' il campo nota, questo torna
- * insieme a lui.
+ * > *Il giorno in cui il foglio avra' il campo nota, questo torna insieme a lui.*
  *
- * Nessuna migrazione: nessun record puo' averlo (l'unico modo di scriverlo era
- * un `addRecurringRule` che nessuno ha mai chiamato con `note`). Se ne
- * arrivasse uno da un JSON scritto a mano, IndexedDB lo conserva — `loadAll`
- * non valida — e `parseRule` lo scarta in import.
+ * **Quel giorno e' oggi, e la condizione e' scattata da sola due mesi dopo** —
+ * senza che nessuno la ricordasse, perche' era scritta **dentro il tipo** e non
+ * in un documento. Vale la pena averlo annotato: e' l'unico caso di questo
+ * progetto in cui una condizione ha funzionato come previsto, e la differenza
+ * con le due che sono scadute in silenzio (DEBITO §9 e §17) non e' la
+ * disciplina — e' **dove stava scritta**.
+ *
+ * ## E il motivo per cui torna non e' la completezza
+ *
+ * Oggi il nome di una regola **e' il nome della sua categoria** (`ruleName` in
+ * `App.tsx`, `.fixed__name` in `FixedCosts.tsx`). Quindi **due regole sulla
+ * stessa categoria sono indistinguibili**: due righe identiche nell'elenco
+ * delle fisse, due conferme di cancellazione che dicono la stessa cosa.
+ *
+ * Non lo si vede avendo due regole su due categorie diverse. Lo si vede il
+ * primo giorno se si hanno due abbonamenti sotto "Abbonamenti", che e' cio' che
+ * fara' chiunque non abbia scritto l'app.
+ *
+ * ## Sta sulla regola, mai sull'istanza
+ *
+ * Una spesa generata **non** ne porta una copia. L'istanza riferisce gia' la
+ * regola dentro il proprio id (`rec:<ruleId>:<giorno>`, ADR 006), quindi una
+ * stringa copiata su ogni occorrenza sarebbe una seconda casa dello stesso
+ * fatto, con dodici copie all'anno che divergono alla prima rinomina. E' la
+ * forma che la fase 5 aveva gia' tolto — *"la copia sulla spesa generata"* era
+ * uno dei tre lettori morti — e non torna.
+ *
+ * ## Nessuna migrazione, e la risposta e' ri-derivata invece che citata
+ *
+ * Il campo e' opzionale e la sua assenza significa gia' cio' che i record
+ * esistenti significano: **nessuna descrizione**. Non c'e' niente da
+ * trasformare, quindi non c'e' niente da migrare, e `SCHEMA_VERSION` resta 6 —
+ * la stessa risposta di `endDate` una settimana fa, e per lo stesso motivo.
+ *
+ * Il numero di schema segna un cambio di **forma che richiede una
+ * trasformazione**, non l'arrivo di un campo facoltativo: i passi 2 e 3 esistono
+ * perche' `Settings.schemaVersion` avrebbe mentito, non per i campi che
+ * introducevano.
+ *
+ * ## Entra dalla patch, non dalla bozza
+ *
+ * Il criterio e' scritto sopra `NewRecurringRule` e non ha eccezioni: **se un
+ * campo entra in un numero annunciato, passa dall'annuncio.** Una descrizione
+ * non entra in `count`, non nei due estremi e non in `totalCents` — non tocca
+ * il calendario in nessun verso — quindi sta con `categoryId` in
+ * `RecurringRulePatch`, e `updateRecurringRule` resta sincrona e senza pedaggio.
  *
  * ---
  *
@@ -112,6 +151,14 @@ export type Cadence = 'daily' | 'weekly' | 'monthly'
 export interface RecurringRuleCommon extends EntityBase {
   readonly amountCents: Cents
   readonly categoryId: string
+  /**
+   * Come si chiama questa regola, quando il nome della categoria non basta.
+   * Assente = si chiama come la sua categoria, ed e' il caso normale.
+   *
+   * Non e' la nota di una spesa: quella dice *cos'era quella volta*, questa dice
+   * **quale delle due**. Vedi il blocco in cima a questo tipo.
+   */
+  readonly note?: string
   /** Ogni quanti giorni / settimane / mesi. Intero >= 1. */
   readonly interval: number
   readonly startDate: IsoDate

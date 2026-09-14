@@ -32,7 +32,7 @@ import { Mark } from './Mark'
 import { NO_OCCURRENCES, occupiedOccurrenceDates } from '../core/recurrence'
 import { planRecurringRuleDeletion, previewMaterialization } from '../core/recurring-plan'
 import type { RecurringRuleWrite } from '../core/recurring-plan'
-import { calendarChanged, refusalText, rewindRefusalText } from './recurring-view'
+import { calendarChanged, refusalText, rewindRefusalText, ruleTitle } from './recurring-view'
 import { Settings } from './Settings'
 import { activePeriod, currentBudgetCents } from './budget-view'
 import { Toast } from './Toast'
@@ -566,9 +566,16 @@ export function App({ readBackup }: AppProps) {
    * infatti non ha nemmeno una conferma davanti.
    */
 
-  /** Il nome con cui una regola si chiama nei messaggi: la sua categoria. */
+  /**
+   * Il nome con cui una regola si chiama nei messaggi.
+   *
+   * Passa da `ruleTitle`, cioe' **la stessa espressione** che disegna la riga in
+   * Impostazioni. Prima erano due: qui la categoria, la' la categoria — uguali
+   * per coincidenza, e con la descrizione sarebbero diventate due nomi diversi
+   * per la stessa regola a seconda di chi la nominava.
+   */
   function ruleName(rule: RecurringRule): string {
-    return categoryOf(rule.categoryId)?.name ?? t('rule.label.edit')
+    return ruleTitle(rule, categoryOf(rule.categoryId)?.name)
   }
 
   /**
@@ -645,7 +652,10 @@ export function App({ readBackup }: AppProps) {
     let write: RecurringRuleWrite
     try {
       if (target === null) {
-        write = repo.addRecurringRule({ categoryId: draft.categoryId }, preview.confirmed)
+        write = repo.addRecurringRule(
+          { categoryId: draft.categoryId, ...(draft.note !== null ? { note: draft.note } : {}) },
+          preview.confirmed,
+        )
       } else if (!target.active) {
         write = repo.reactivateRecurringRule(target.id, preview.confirmed)
       } else if (moved || preview.backdated) {
@@ -677,9 +687,13 @@ export function App({ readBackup }: AppProps) {
     // La categoria e la nota passano dalla porta **senza pedaggio**: non
     // entrano in nessuno dei numeri annunciati, quindi non hanno un permesso da
     // spendere e non hanno un esito da controllare.
-    if (target !== null && draft.categoryId !== target.categoryId) {
+    const noteChanged = target !== null && draft.note !== (target.note ?? null)
+    if (target !== null && (draft.categoryId !== target.categoryId || noteChanged)) {
       try {
-        repo.updateRecurringRule(target.id, { categoryId: draft.categoryId })
+        repo.updateRecurringRule(target.id, {
+          ...(draft.categoryId !== target.categoryId ? { categoryId: draft.categoryId } : {}),
+          ...(noteChanged ? { note: draft.note } : {}),
+        })
       } catch {
         // Come sopra: la regola e' scritta, la categoria no. L'avviso delle
         // scritture non arrivate al disco e' gia' l'unico canale che serve.
@@ -687,7 +701,17 @@ export function App({ readBackup }: AppProps) {
     }
 
     closeSheet()
-    const name = ruleName({ ...write.rule, categoryId: draft.categoryId })
+    // Il nome nel messaggio si compone su **cio' che e' stato appena scritto**,
+    // non su `write.rule`: quello torna dalla porta col pedaggio, che la
+    // categoria e la descrizione non attraversano. Senza questi due campi il
+    // toast direbbe il nome di prima per una regola che si chiama gia' in un
+    // altro modo.
+    const { note: _oldNote, ...writtenRule } = write.rule
+    const name = ruleName({
+      ...writtenRule,
+      categoryId: draft.categoryId,
+      ...(draft.note !== null ? { note: draft.note } : {}),
+    })
     const back = preview.backdated
     // Il conteggio sceglie la chiave, non riempie un segnaposto: "1 spese
     // create" e' un refuso, e il ramo a uno non e' raro (una mensile creata a
