@@ -15,6 +15,7 @@
     "audit:surfaces": "node scripts/category-surfaces.mjs",
     "audit:scale": "node scripts/scale.mjs",
     "audit:scadenze": "node scripts/scadenze.mjs",
+    "demo": "node scripts/demo.mjs",
     "state": "node scripts/state.mjs",
     "icons": "node scripts/generate-icons.mjs",
     "test:e2e": "npm run build && playwright test",
