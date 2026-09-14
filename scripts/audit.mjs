@@ -14,22 +14,41 @@
 //      pochi minuti di distanza. E' la coppia di correzione: si e' digitato in
 //      centesimi, ci si e' accorti, si e' rifatta.
 //
-//      IL FATTORE 100 E' LA REGOLA, NON UN DETTAGLIO DA ALLENTARE. Nel primo
-//      backup reale c'era questo caso, ed e' il motivo per cui la condizione non
-//      puo' diventare "stessa categoria, stessa data, cancellata e rifatta":
+//      IL FATTORE 100 E' LA REGOLA, NON UN DETTAGLIO DA ALLENTARE. Il caso che
+//      lo dimostra e' la cancella-e-rifai **senza** cambio di ordine di
+//      grandezza, ed e' il motivo per cui la condizione non puo' diventare
+//      "stessa categoria, stessa data, cancellata e rifatta". Nella forma che
+//      ha `docs/demo.json`:
 //
-//          220b8638  2500  Spesa  creata 12:31:25  cancellata 12:31:27
-//          22e338ba  2500  Spesa  creata 12:31:38  nota "Decathlon"
+//          demo-exp-0085   522  Transport  creata 09:14  cancellata 09:14
+//          demo-exp-0088   522  Transport  creata 09:27  nota "to Utrecht"
 //
-//      Stessa categoria, stessa data, tredici secondi di distanza, cancella-e-
-//      rifai — ma 2500 -> 2500: non e' un errore di ordine di grandezza, si stava
+//      Stessa categoria, stessa data, tredici minuti di distanza, cancella-e-
+//      rifai — ma 522 -> 522: non e' un errore di ordine di grandezza, si stava
 //      solo aggiungendo una nota. Segnalarlo sarebbe un falso positivo, e un
 //      audit che grida al lupo sulle cancellazioni normali smette di essere letto
 //      dopo la seconda settimana, cioe' esattamente quando servirebbe.
 //   2. L'errore NON preso. Le spese vive sotto 1 EUR. Non e' la soglia che e'
 //      stata scartata per la UI — quella gridava all'utente nel momento
 //      sbagliato. Qui e' un elenco che si legge in blocco, dove 0,80 per un
-//      caffe' e 0,25 per Decathlon si distinguono in un secondo.
+//      caffe' e 0,25 per un biglietto si distinguono in un secondo.
+//
+// ## Perche' gli esempi qui sopra vengono da `docs/demo.json`
+//
+// **Perche' prima venivano da un archivio vero, e questo file e' pubblico.**
+// Portavano l'id di due spese reali, l'importo, l'ora in cui erano state
+// inserite e il nome di un negozio in cui qualcuno aveva speso davvero.
+//
+// La regola *"i dati veri non si committano mai"* c'era gia', ed e' stata
+// violata **da una derivazione fatta bene**: un caso vero, studiato sul primo
+// backup reale, e scritto nel posto sbagliato. Il commit che l'ha introdotta ha
+// "dai dati d'uso" nel titolo — non era sbadataggine, era buon lavoro.
+//
+// Una regola che dipende dal fatto che qualcuno se la ricordi mentre sta
+// pensando ad altro non e' una regola: e' una speranza. Quindi la riparazione
+// non e' stata cancellare le righe, ma togliere la ragione per cui erano state
+// scritte: **adesso esiste del materiale realistico che si puo' citare**, e
+// `npm run audit:dati-veri` cerca cio' che sfugge lo stesso.
 import { readFileSync } from 'node:fs'
 
 const SOTTO = 100 // centesimi: la soglia dell'elenco da rileggere a mano
