@@ -15,6 +15,7 @@ import {
   calendarChanged,
   deletionRefusalText,
   fixedLineNote,
+  ruleTitle,
   fixedList,
   previewCopy,
   refusalText,
@@ -553,6 +554,61 @@ describe('l elenco delle spese fisse', () => {
     const a = fixedList([affitto, palestra], OGGI).lines.map((line) => line.rule.id)
     const b = fixedList([palestra, affitto], OGGI).lines.map((line) => line.rule.id)
     expect(a).toEqual(b)
+  })
+})
+
+describe('due regole sulla stessa categoria si distinguono', () => {
+  // **E' il fatto per cui `note` esiste**, e prima di questo commit non aveva
+  // nessun test a nessun livello. Il nome di una regola era il nome della sua
+  // categoria, quindi due abbonamenti sotto "Abbonamenti" erano due righe
+  // identiche: stessa emoji, stesso nome, stessa cadenza, e l'importo come
+  // unico appiglio — che con due regole da 9,99 € non e' un appiglio.
+  const palestra = makeRule({
+    id: 'r-palestra',
+    startDate: '2026-01-01',
+    cadence: 'monthly',
+    anchorDay: 1,
+    amountCents: 999,
+    note: 'Palestra',
+  })
+  const spotify = makeRule({
+    id: 'r-spotify',
+    startDate: '2026-01-01',
+    cadence: 'monthly',
+    anchorDay: 1,
+    amountCents: 999,
+    note: 'Spotify',
+  })
+
+  it('il nome e la descrizione quando c e, la categoria quando non c e', () => {
+    expect(ruleTitle(palestra, 'Abbonamenti')).toBe('Palestra')
+    expect(ruleTitle(spotify, 'Abbonamenti')).toBe('Spotify')
+    // Senza descrizione non cambia niente: e' il caso normale, ed e' quello che
+    // ogni regola scritta prima di oggi ha.
+    const { note: _senza, ...nuda } = palestra
+    expect(ruleTitle(nuda as typeof palestra, 'Abbonamenti')).toBe('Abbonamenti')
+  })
+
+  it('e la categoria non sparisce: scende nella riga sotto', () => {
+    // Il nome se l'e' preso la descrizione, quindi senza questa riga l'unico
+    // posto in cui la categoria resterebbe leggibile sarebbe l'emoji. Una
+    // regola dice sempre a quale categoria appartiene: e' cio' che decide dove
+    // finiscono le sue spese, e l'elenco delle fisse e' l'unico posto in cui lo
+    // si puo' leggere.
+    expect(fixedLineNote(palestra, 'Abbonamenti')).toBe('Abbonamenti · ogni mese, il giorno 1')
+    // Senza descrizione la riga non ripete la categoria: la' il nome **e'** la
+    // categoria, e scriverla due volte sulla stessa riga la farebbe dubitare.
+    const { note: _senza, ...nuda } = palestra
+    expect(fixedLineNote(nuda as typeof palestra, 'Abbonamenti')).toBe('ogni mese, il giorno 1')
+  })
+
+  it('il fatto che serve: le due righe intere non coincidono', () => {
+    // L'invariante vero non e' "il nome e' quello giusto" — quello e' l'ordine,
+    // e cambia idea. E' **l'identita' fra due righe**, che resta vera anche il
+    // giorno in cui si cambia come si compongono.
+    const riga = (r: typeof palestra): string =>
+      `${ruleTitle(r, 'Abbonamenti')} | ${fixedLineNote(r, 'Abbonamenti')} | ${r.amountCents}`
+    expect(riga(palestra)).not.toBe(riga(spotify))
   })
 })
 

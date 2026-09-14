@@ -1,9 +1,23 @@
 import { describe, expect, it } from 'vitest'
 import { buildBackup, parseBackup } from './backup'
+/* Il sorgente dei tipi come stringa. `?raw` e non `node:fs`: `src/core` e'
+ * TypeScript puro senza DOM **e senza node** — `tsconfig.json` non include
+ * `@types/node`, ed e' una scelta, non una dimenticanza. Aggiungerli per una
+ * riga di test allargherebbe la superficie di tutto il progetto; questa forma
+ * e' gia' dichiarata da `vite/client`, che nei tipi c'e'. */
+import typesSource from './types.ts?raw'
 import { occurrencesBetween, validateRule } from './recurrence'
 import { monthlyFixedCosts } from './recurring-plan'
 import { SCHEMA_VERSION } from './schema'
-import { makeBudget, makeCategory, makeExpense, makeRule, makeSettings, tickingClock } from './testing'
+import {
+  completeDataSet,
+  makeBudget,
+  makeCategory,
+  makeExpense,
+  makeRule,
+  makeSettings,
+  tickingClock,
+} from './testing'
 import type { DataSet } from './types'
 
 function dataset(): DataSet {
@@ -810,6 +824,19 @@ describe('l ancora mensile all ingresso di un import', () => {
     )
   })
 
+  it('una descrizione illeggibile scarta il record, come sulla spesa', () => {
+    // Non una `warning`, e il criterio non e' la gravita' del campo: **un `note`
+    // che non e' una stringa dice qualcosa del record che lo contiene.** Nessun
+    // produttore di quest'app puo' emetterlo, quindi il file e' stato toccato a
+    // mano o e' corrotto, e la domanda diventa di cos'altro fidarsi li' dentro.
+    // E' la stessa scelta gia' presa su `Expense.note`, applicata dove vale.
+    const preview = parseBackup(
+      file(SCHEMA_VERSION, { ...mensileSenzaAncora('2026-01-01'), anchorDay: 1, note: 42 }),
+    )
+    expect(preview.ok).toBe(false)
+    expect(preview.issues.some((i) => i.severity === 'error' && i.path.endsWith('.note'))).toBe(true)
+  })
+
   it('una fine prima dell inizio entra, e il dominio la dichiara non utilizzabile', () => {
     // Solo la leggibilita' passa da `parseRule`: la **relazione** la giudica
     // `validateRule`, senza lanciare. Il record entra, non genera, non pesa
@@ -845,5 +872,120 @@ describe('l ancora mensile all ingresso di un import', () => {
       '2026-04-30',
       '2026-05-31',
     ])
+  })
+})
+
+/* ------------------------------------------------------------------------ *
+ * La guardia sull'asimmetria di `backup.ts`
+ * ------------------------------------------------------------------------ */
+
+/**
+ * **Il difetto non era `note`: era l'asimmetria.**
+ *
+ * `buildBackup` passa i record per riferimento, quindi **qualunque** campo esce
+ * nel file. I `parse*` invece ricostruiscono campo per campo. Un campo nuovo
+ * esce e non rientra, con `ok: true` e zero issue — perdita silenziosa sul
+ * percorso del ripristino.
+ *
+ * Il round-trip con `toEqual` esisteva gia' e non l'ha preso, e la ragione e'
+ * quella da tenere a mente: **il confronto era completo, la fixture no.**
+ * `dataset()` non popolava `RecurringRule.note`, e un campo che nessuno scrive
+ * non si puo' perdere. Aggiungere il campo alla fixture avrebbe chiuso *questo*
+ * caso e lasciato in piedi la causa: il prossimo campo dipenderebbe di nuovo da
+ * qualcuno che si ricorda.
+ *
+ * ## Quindi la fixture non si ricorda: si deriva
+ *
+ * Il primo test legge **`types.ts`** ed estrae i campi dichiarati di ogni tipo
+ * d'archivio; il secondo chiede che `completeDataSet()` li popoli tutti. Un
+ * campo nuovo in `types.ts` fa cadere il primo **prima** che qualcuno pensi al
+ * backup, e da li' in poi il round-trip lo copre per costruzione.
+ *
+ * E' la stessa forma con cui la didascalia della guida deriva il proprio elenco
+ * dalle schede: un test si accorge di una divergenza, una derivazione la rende
+ * impossibile.
+ *
+ * ## Perche' un secondo lettore di `types.ts` e non `dead-surface.mjs`
+ *
+ * Quello script e' un eseguibile: importarlo vuol dire farlo girare e uscire
+ * con `process.exit`. La lettura qui sotto e' quindici righe e risponde a
+ * un'altra domanda — *quali campi ha questo tipo* invece di *chi li scrive* —
+ * quindi non e' la stessa fonte duplicata: sono due consumatori dello stesso
+ * file, che e' cio' che `types.ts` e' gia' per il compilatore.
+ */
+function campiDichiarati(nome: string): readonly string[] {
+  const inizio = typesSource.indexOf(`export interface ${nome}`)
+  if (inizio === -1) throw new Error(`interfaccia non trovata: ${nome}`)
+  const apre = typesSource.indexOf('{', inizio)
+  const chiude = typesSource.indexOf('\n}', apre)
+  const corpo = typesSource
+    .slice(apre, chiude)
+    // Via i commenti: dentro ce ne sono con degli esempi che sembrano campi.
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/\/\/[^\n]*/g, '')
+  const campi = [...corpo.matchAll(/^\s*readonly\s+([A-Za-z_$][\w$]*)\??\s*:/gm)].map((m) => m[1])
+  const base = nome === 'EntityBase' ? [] : campiDichiarati('EntityBase')
+  return [...new Set([...base, ...campi])] as readonly string[]
+}
+
+describe('nessun campo esce dal backup e non rientra', () => {
+  /**
+   * I campi di `RecurringRule` non stanno tutti in un'interfaccia: `cadence` e
+   * `anchorDay` vivono in `WithCadence`, che e' un'unione. Si aggiungono a
+   * mano **e con il loro nome**, non con un "piu' due": un elenco che dichiara
+   * un numero invece delle cose che contiene diverge al primo cambiamento.
+   */
+  const ATTESI: Record<string, readonly string[]> = {
+    expenses: campiDichiarati('Expense'),
+    categories: campiDichiarati('Category'),
+    recurringRules: [...campiDichiarati('RecurringRuleCommon'), 'cadence', 'anchorDay'],
+    budgets: campiDichiarati('Budget'),
+  }
+
+  it('la lettura dei tipi vede davvero dei campi', () => {
+    // **Senza questo, tutto il resto non puo' fallire.** Una regex che smette
+    // di combaciare — un `readonly` scritto diverso, un'interfaccia rinominata —
+    // restituirebbe zero campi, e "ogni campo e' popolato" sarebbe vero a vuoto
+    // su un insieme vuoto. E' la forma 3 della tassonomia: un controllo la cui
+    // premessa non e' costruita.
+    expect(ATTESI['expenses']).toContain('timeMinutes')
+    expect(ATTESI['expenses']).toContain('id')
+    expect(ATTESI['recurringRules']).toContain('note')
+    expect(ATTESI['budgets']).toContain('effectiveTo')
+    for (const [lista, campi] of Object.entries(ATTESI)) {
+      expect(campi.length, `${lista}: nessun campo letto da types.ts`).toBeGreaterThan(3)
+    }
+  })
+
+  it('completeDataSet popola ogni campo dichiarato di ogni tipo d archivio', () => {
+    const data = completeDataSet()
+    for (const [lista, campi] of Object.entries(ATTESI)) {
+      const records = data[lista as 'expenses' | 'categories' | 'recurringRules' | 'budgets']
+      // L'**unione** dei record, non ogni record: `anchorDay` esiste solo sulle
+      // mensili e `recurringId` solo sulle generate. Chiedere ogni campo su ogni
+      // record vorrebbe dire fabbricare record che la produzione non scrive.
+      const popolati = new Set<string>()
+      for (const r of records) {
+        for (const [k, v] of Object.entries(r)) if (v !== undefined) popolati.add(k)
+      }
+      const mancanti = campi.filter((c) => !popolati.has(c))
+      expect(
+        mancanti,
+        `${lista}: campi dichiarati in types.ts e non popolati da completeDataSet(). ` +
+          'Popolali, oppure il round-trip qui sotto non li copre e un import li perde in silenzio.',
+      ).toEqual([])
+    }
+  })
+
+  it('e il giro li restituisce tutti, identici', () => {
+    const originale = completeDataSet()
+    const preview = roundTrip(originale)
+    expect(preview.ok).toBe(true)
+    expect(preview.issues).toEqual([])
+    // Uguaglianza **profonda** sull'archivio intero: e' l'asserzione che cade
+    // quando un `parse*` dimentica un campo. Le impostazioni restano fuori
+    // perche' meta' di quel record descrive il telefono e non i dati (ADR 026
+    // §4), ed e' l'unica esclusione.
+    expect(archivio(preview.data as DataSet)).toEqual(archivio(originale))
   })
 })

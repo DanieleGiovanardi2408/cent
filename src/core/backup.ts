@@ -406,6 +406,22 @@ function parseRule(raw: RawRecord, path: string, c: Collector): RecurringRule | 
   if (lastMaterializedDate === false) {
     return c.error(path, b.id)
   }
+  // La descrizione. Illeggibile **scarta il record**, ed e' la stessa scelta di
+  // `Expense.note` venti righe piu' su: non una decisione nuova, la stessa
+  // applicata dove vale.
+  //
+  // Un `note` che non e' una stringa non e' un nome storto: e' un record che
+  // questa app non ha scritto — nessun produttore puo' emettere altro — quindi
+  // il file e' stato toccato a mano o e' corrotto, e la domanda diventa "di
+  // cos'altro ci si puo' fidare in questo record". Il criterio non e' la
+  // gravita' del campo, e' **cosa la sua forma dice del record che lo
+  // contiene**.
+  //
+  // Diverso da `endDate` qui sotto solo nelle parole, non nella sostanza: la'
+  // e' scritto per esteso perche' li' la tentazione della `warning` e' reale —
+  // esiste un sostituto plausibile. Qui no: un nome non si indovina.
+  const note = optionalStr(raw['note'])
+  if (note === false) return c.error(`${path}.note`, b.id)
   const common = {
     ...b,
     amountCents,
@@ -413,6 +429,7 @@ function parseRule(raw: RawRecord, path: string, c: Collector): RecurringRule | 
     interval,
     startDate,
     active: raw['active'] !== false,
+    ...(note !== undefined ? { note } : {}),
     ...(endDate !== undefined ? { endDate } : {}),
     ...(lastMaterializedDate !== undefined ? { lastMaterializedDate } : {}),
   }

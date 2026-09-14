@@ -19,6 +19,7 @@ import type {
   Budget,
   Cadence,
   Category,
+  DataSet,
   Expense,
   RecurringRule,
   RecurringRuleCommon,
@@ -212,4 +213,136 @@ export function rivediRegola(
     if (esito.reason !== 'stale-preview') throw new Error(`scrittura rifiutata: ${esito.reason}`)
   }
   throw new Error('due anteprime di fila rifiutate: non e la mezzanotte')
+}
+
+/**
+ * **Un archivio in cui ogni campo dichiarato porta un valore**, e l'unione
+ * delle liste copre l'intero inventario dei tipi d'archivio.
+ *
+ * ## Il difetto che esiste per chiudere
+ *
+ * `backup.ts` ha un'asimmetria: `buildBackup` passa i record **per
+ * riferimento** — qualunque campo esce — mentre `parseRule`, `parseExpense` e
+ * le altre **ricostruiscono campo per campo**. Un campo nuovo esce nel file e
+ * non rientra, e rientra `ok: true` con zero issue: **perdita silenziosa sul
+ * percorso del ripristino**, cioe' nel punto peggiore in cui un'app
+ * local-first possa averne una.
+ *
+ * Il round-trip con `toEqual` c'era gia' e non l'ha preso. Il confronto era
+ * completo; era la **fixture** a essere parziale: `dataset()` in
+ * `backup.test.ts` non popolava `RecurringRule.note`, e un campo che nessuno
+ * scrive non si puo' perdere. Misurato sul backup vero del 26 agosto prima di
+ * scrivere questa funzione — `EXPORT "Palestra"` / `IMPORT undefined` / `ok: true`.
+ *
+ * ## Perche' e' qui e non nel file di test
+ *
+ * Perche' ha due consumatori: questa guardia, e `docs/demo.json` — il profilo
+ * dimostrativo degli screenshot, che deve mostrare ogni cosa che l'app sa
+ * disegnare. Le due cose vogliono la stessa **forma** (ogni campo popolato) e
+ * volumi diversi, quindi la forma sta qui una volta sola.
+ *
+ * ## I record sono plausibili, non solo completi
+ *
+ * Nessun record che la produzione non potrebbe scrivere: un'occorrenza generata
+ * porta `recurringId` e **non** `timeMinutes` (una spesa che l'app ha creato da
+ * sola non ha osservato nessun orologio), una lapide porta `deletedAt` su una
+ * spesa che prima era viva. La copertura si ottiene con l'unione di record
+ * onesti, non con un mostro che nessuna schermata potrebbe produrre — altrimenti
+ * il giro proverebbe che il parser regge una forma che non incontrera' mai.
+ */
+export function completeDataSet(): DataSet {
+  return {
+    expenses: [
+      // Manuale, con tutto quello che un inserimento a mano puo' portare.
+      makeExpense({
+        id: 'exp-manuale',
+        date: '2026-08-01',
+        amountCents: 1_250,
+        categoryId: 'cat-attiva',
+        note: 'Caffe e brioche',
+        timeMinutes: 1_240,
+        source: 'manual',
+      }),
+      // Generata da una regola: `recurringId`, e nessun orario.
+      makeExpense({
+        id: 'rec:rule-mensile:2026-08-25',
+        date: '2026-08-25',
+        amountCents: 50_700,
+        categoryId: 'cat-attiva',
+        source: 'recurring',
+        recurringId: 'rule-mensile',
+      }),
+      // Lapide: cancellata, e resta nel backup perche' l'import non la resusciti.
+      makeExpense({
+        id: 'exp-cancellata',
+        date: '2026-08-03',
+        amountCents: 500,
+        categoryId: 'cat-archiviata',
+        source: 'manual',
+        deletedAt: '2026-08-03T10:00:00.000Z',
+      }),
+    ],
+    categories: [
+      makeCategory({ id: 'cat-attiva', name: 'Spesa', emoji: '🛒', color: '#709951', order: 10 }),
+      // `archived: true` e' un valore del campo, non la sua assenza: senza una
+      // categoria archiviata il giro non proverebbe niente su quel booleano.
+      makeCategory({
+        id: 'cat-archiviata',
+        name: 'Coffeeshop',
+        emoji: '🌿',
+        color: '#00a6c6',
+        order: 20,
+        archived: true,
+      }),
+    ],
+    recurringRules: [
+      // Mensile: e' l'unica cadenza che porta `anchorDay`.
+      makeRule({
+        id: 'rule-mensile',
+        cadence: 'monthly',
+        anchorDay: 25,
+        startDate: '2026-01-25',
+        endDate: '2026-12-31',
+        lastMaterializedDate: '2026-08-25',
+        amountCents: 50_700,
+        categoryId: 'cat-attiva',
+        note: 'La stanza',
+        interval: 1,
+        active: true,
+      }),
+      // Settimanale e spenta: copre `cadence` fuori dal ramo mensile e `active`
+      // nel valore che l'altro record non ha.
+      makeRule({
+        id: 'rule-settimanale',
+        cadence: 'weekly',
+        startDate: '2026-02-01',
+        amountCents: 2_300,
+        categoryId: 'cat-attiva',
+        note: 'Palestra',
+        interval: 2,
+        active: false,
+      }),
+    ],
+    budgets: [
+      makeBudget({
+        id: 'bud-chiuso',
+        period: 'weekly',
+        amountCents: 20_000,
+        effectiveFrom: '2026-01-01',
+        effectiveTo: '2026-07-31',
+      }),
+      makeBudget({
+        id: 'bud-aperto',
+        period: 'monthly',
+        amountCents: 80_000,
+        effectiveFrom: '2026-08-01',
+      }),
+    ],
+    settings: makeSettings({
+      lastBackupAt: '2026-08-01T09:00:00.000Z',
+      language: 'it',
+      onboardingCompletedAt: '2026-08-23T10:00:00.000Z',
+      theme: 'dark',
+    }),
+  }
 }
