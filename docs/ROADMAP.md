@@ -1,7 +1,7 @@
 # La mappa
 
-<!-- JUDGMENT rivisto=2319138 -->
-> Rivisto a `2319138`, 6 commit fa. **Da riguardare.**
+<!-- JUDGMENT rivisto=edeb6cf -->
+> Rivisto a `edeb6cf`, un commit fa.
 
 **Questo blocco dice la forma, non i fatti.** Non porta nessun numero: quelli si
 rigenerano qui sotto, e una cifra scritta a mano accanto a una rigenerata e' la
@@ -62,16 +62,16 @@ sa gia', e per questo non puo' invecchiare. I giudizi — cosa e' in volo, cosa
 aspetta una persona — stanno sotto, scritti a mano e timbrati con lo SHA a cui
 sono stati rivisti.
 
-- **Ultimo commit**: `a38ff53` — feat(E2): la descrizione sulle regole, e la guardia sull'asimmetria del backup
-- **Data**: 15/09/2026 00:56
+- **Ultimo commit**: `98b2f67` — docs: lo stato si rigenera, e il giudizio in volo si ri-deriva
+- **Data**: 15/09/2026 02:01
 - **Ramo**: `main`
-- **Pushato**: **no: 2 commit non pushati su `origin/main`**
+- **Pushato**: **no: 1 commit non pushati su `origin/main`**
 - **Albero di lavoro**: pulito
 
-- **Test unitari**: 860 in 27 file, tutti verdi
+- **Test unitari**: 867 in 28 file, tutti verdi
 - **Test e2e dichiarati**: 466 in 15 file, su 4 progetti (iphone-se, iphone-14, landscape, dark)
-- **Test e2e eseguiti**: non misurato — l'ultima esecuzione e' piu' vecchia dei sorgenti — va rilanciata
-- **Bundle iniziale**: non misurato — `dist/` e' piu' vecchio dei sorgenti — va ricostruito
+- **Test e2e eseguiti**: 440 passati, 26 saltati, in 3.0 minuti. I saltati sono condizionali (ADR 013): solo un'esecuzione li vede.
+- **Bundle iniziale**: 66.5 KB gzip su 68.0 KB (1.5 KB di margine)
 - **Su Pages**: `753e54f`, pubblicato il 2026-09-13. Come il disco, e' un fatto **di GitHub** e non del repository: si rigenera, e resta fuori dal confronto di `--check`.
 - **Disco**: 9.6 GB liberi, 63% pieno. Non e' un giudizio e non porta un timbro: cambia da solo, quindi si rigenera.
 
@@ -91,12 +91,26 @@ sono stati rivisti.
 
 ## In volo adesso
 
-<!-- JUDGMENT rivisto=2319138 -->
-> Rivisto a `2319138`, cioe' a questo commit.
+<!-- JUDGMENT rivisto=edeb6cf -->
+> Rivisto a `edeb6cf`, cioe' a questo commit.
 
-**La fase 7 e' chiusa e ha attraversato `main`.** La posizione del ramo, la
-distanza da `origin/main` e **cosa c'e' su Pages** non stanno piu' qui: si
-rigenerano nel blocco in cima.
+**La fase 8 e' in corso.** La posizione del ramo, la distanza da `origin/main` e
+**cosa c'e' su Pages** non stanno qui: si rigenerano nel blocco in cima.
+
+Cio' che di questa fase e' **gia' su `main`**, derivato da `git log` e non
+ricordato: il controllo sulle scadenze (`npm run audit:scadenze`, in CI); il
+lettore dello scatto pre-import, che ha fatto scattare la scadenza di ADR 026 sul
+ramo buono e ha chiuso [DEBITO §16](DEBITO.md); la modifica di una spesa gia'
+inserita su tutti e quattro i campi; la descrizione sulle regole, con la guardia
+che rende impossibile a un campo di uscire dal backup senza rientrare;
+`docs/demo.json` con le sue proprieta' asserite; e [METODO.md](METODO.md), che
+nasce con un caso solo e si compone per accumulo.
+
+**Cio' che ancora non c'e'**, dagli stessi compiti espliciti piu' in basso: il
+colore sui soldi rimasti, le due correzioni nei documenti, gli screenshot, il
+README, il pacchetto. E il **controllo E** — i simboli esportati senza chiamante
+— che resta il buco noto di `dead-surface.mjs` e che oggi copre una persona al
+gate.
 
 ### Il fatto che ha invecchiato quattro volte adesso e' derivato
 
@@ -123,14 +137,24 @@ push, che e' il difetto che ha gia' tenuto la CI rossa per tre commit.
 
 ### Cosa resta, e nessuna macchina lo puo' dire
 
-**Le tre prove sul telefono.** Sono l'unica cosa che separa la fase 7 dall'essere
-finita, e non sono automatizzabili: `accept` su iOS si risolve in UTI e in
+**Le tre prove sul telefono, ancora non tornate.** Tengono congelati
+`src/ui/ImportSheet.tsx`, `src/core/backup.ts` e la sonda degli 800 ms — con
+un'unica eccezione autorizzata caso per caso, le tre righe che hanno fatto
+rientrare `RecurringRule.note` da `parseRule`. Non sono automatizzabili: `accept` su iOS si risolve in UTI e in
 Chromium non filtra niente, `100dvh` e' statico, e il foglio File non esiste. Le
 tre prove stanno scritte passo per passo in "Verificabili solo sul dispositivo",
 con **cosa si deve vedere** accanto a ognuna.
 
-**Il link resta chiuso.** E' A3, ed e' una fase sua. Chiudere la fase 7 chiude
-il ritorno dei dati, non il progetto.
+**Il link resta chiuso, e la definizione di "finito" e' cambiata.** Non e' piu' il
+test degli amici: e' il repository impacchettato bene, con l'app che fa quello che
+promette. A3 esce dal cancello e diventa una cosa che succede dopo, una persona
+alla volta.
+
+**E una scadenza che non e' un gate ma una persona**: `npm run audit:dati-veri`
+non puo' girare in CI — la CI non ha i backup e non deve averli — quindi e' un
+controllo **pre-rilascio locale**. Va lanciato prima di dire a qualcuno "guarda
+qui", e un suo verde non e' un verde della CI. Il caso che l'ha prodotto sta in
+[METODO.md](METODO.md) §1.
 
 ### Come e' stata derivata questa lista, e perche' la riga lo dice
 
@@ -964,7 +988,7 @@ differenza fra il modello mentale della richiesta e la configurazione dei dati.
 Sono ferme dal **24 agosto** e vanno fatte **in quest'ordine**, che non e' una
 preferenza: ogni passo distrugge la possibilita' di fare il precedente.
 
-<!-- JUDGMENT rivisto=2319138 -->
+<!-- JUDGMENT rivisto=edeb6cf -->
 > Rivisto a `d143f2f`, 19 commit fa. **Da riguardare.**
 
 **Riletto, non ri-derivato, e la differenza e' il contenuto della voce**: i passi
@@ -1433,7 +1457,7 @@ giorno in cui serviva davvero.
 
 ## Decisioni prese e non ancora applicate
 
-<!-- JUDGMENT rivisto=2319138 -->
+<!-- JUDGMENT rivisto=edeb6cf -->
 > Rivisto a `547fba4`. **Ri-derivato**: `npm run state -- --check` da' ancora
 > **14/14 applicate**, cioe' nessuna decisione dichiarata qui e assente dal
 > codice. E' l'unico dei quattro giudizi la cui verita' e' interamente
