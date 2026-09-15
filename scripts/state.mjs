@@ -479,15 +479,39 @@ function judgmentFacts(text) {
   for (const m of text.matchAll(/<!-- JUDGMENT rivisto=([0-9a-f]{7,40}) -->/g)) {
     const sha = m[1]
     let distance = null
+    let perche = null
     try {
       distance = Number(git('rev-list', '--count', `${sha}..HEAD`, '--'))
     } catch {
-      // La storia non c'e'. Non e' un errore del documento: e' un clone senza
-      // profondita' — `actions/checkout` ne fa uno cosi' per default. Vedi
-      // `stampLine` per cosa NON si fa in questo caso.
+      // **Due cause, due rimedi, e collassarle produce la diagnosi sbagliata.**
+      //
+      // Fin qui questo ramo diceva sempre *"clone superficiale, serve
+      // `fetch-depth: 0`"*. E' una delle due:
+      //
+      //  - **la storia non c'e'** — un clone a profondita' 1, che e' cio' che
+      //    `actions/checkout` fa per default. Il documento e' sano, manca il
+      //    contesto per contare;
+      //  - **la storia c'e' e questo SHA non e' dentro** — il timbro punta a un
+      //    commit emendato, rebasato o forzato via. Il documento e' **rotto**, e
+      //    il timbro non potra' mai piu' invecchiare: resta "non databile" per
+      //    sempre, cioe' un giudizio che nessuna soglia raggiungera'.
+      //
+      // La seconda e' successa scrivendo questa riga: un `--amend` dopo aver
+      // timbrato ha lasciato quattro marcatori su un oggetto penzolante, vivo
+      // **solo su quella macchina**. In CI sarebbe stato un clone superficiale
+      // secondo il messaggio, e un documento rotto secondo i fatti.
+      //
+      // Si distinguono chiedendo se la storia esiste: se `HEAD~1` si risolve, il
+      // clone e' profondo e la colpa e' del timbro.
+      try {
+        git('rev-parse', 'HEAD~1', '--')
+        perche = 'il timbro punta a un commit che non e\' in questa storia: emendato o rebasato via'
+      } catch {
+        perche = "la storia non c'e'. Clone superficiale? Serve `fetch-depth: 0`."
+      }
       distance = null
     }
-    found.push({ sha, distance, index: m.index })
+    found.push({ sha, distance, perche, index: m.index })
   }
   return found
 }
@@ -933,11 +957,11 @@ if (check) {
     )
   }
   for (const u of unmeasurable) console.log(`  ${u.label}: non misurabile qui — ${u.why}`)
-  if (unknown.length) {
-    console.log(
-      `  ${unknown.length} giudizi non databili: la storia non c'e'. Clone superficiale?` +
-        ' Serve `fetch-depth: 0`.',
-    )
+  for (const u of unknown) {
+    // **La causa, non la famiglia.** Prima questa riga diceva sempre "clone
+    // superficiale": la meta' delle volte e' vero e la meta' delle volte manda a
+    // cercare una profondita' di clone mentre il documento ha un timbro rotto.
+    console.log(`  Giudizio ${u.sha}: non databile — ${u.perche ?? 'causa sconosciuta'}`)
   }
   if (!stale.length && !unknown.length) console.log('  Giudizi: nessuno oltre la soglia.')
   if (uscite.length > 0) console.log(conteggioUscite())

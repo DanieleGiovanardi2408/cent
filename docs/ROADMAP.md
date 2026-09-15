@@ -1,7 +1,7 @@
 # La mappa
 
-<!-- JUDGMENT rivisto=edeb6cf -->
-> Rivisto a `edeb6cf`, un commit fa.
+<!-- JUDGMENT rivisto=ea12358 -->
+> Rivisto a `ea12358`, cioe' a questo commit.
 
 **Questo blocco dice la forma, non i fatti.** Non porta nessun numero: quelli si
 rigenerano qui sotto, e una cifra scritta a mano accanto a una rigenerata e' la
@@ -62,11 +62,11 @@ sa gia', e per questo non puo' invecchiare. I giudizi — cosa e' in volo, cosa
 aspetta una persona — stanno sotto, scritti a mano e timbrati con lo SHA a cui
 sono stati rivisti.
 
-- **Ultimo commit**: `98b2f67` — docs: lo stato si rigenera, e il giudizio in volo si ri-deriva
+- **Ultimo commit**: `ea12358` — docs: lo stato si rigenera, e il giudizio in volo si ri-deriva
 - **Data**: 15/09/2026 02:01
 - **Ramo**: `main`
-- **Pushato**: **no: 1 commit non pushati su `origin/main`**
-- **Albero di lavoro**: pulito
+- **Pushato**: si, `origin/main` e' allo stesso commit
+- **Albero di lavoro**: **non pulito**, ci sono modifiche non committate
 
 - **Test unitari**: 867 in 28 file, tutti verdi
 - **Test e2e dichiarati**: 466 in 15 file, su 4 progetti (iphone-se, iphone-14, landscape, dark)
@@ -91,7 +91,7 @@ sono stati rivisti.
 
 ## In volo adesso
 
-<!-- JUDGMENT rivisto=edeb6cf -->
+<!-- JUDGMENT rivisto=ea12358 -->
 > Rivisto a `edeb6cf`, cioe' a questo commit.
 
 **La fase 8 e' in corso.** La posizione del ramo, la distanza da `origin/main` e
@@ -988,7 +988,7 @@ differenza fra il modello mentale della richiesta e la configurazione dei dati.
 Sono ferme dal **24 agosto** e vanno fatte **in quest'ordine**, che non e' una
 preferenza: ogni passo distrugge la possibilita' di fare il precedente.
 
-<!-- JUDGMENT rivisto=edeb6cf -->
+<!-- JUDGMENT rivisto=ea12358 -->
 > Rivisto a `d143f2f`, 19 commit fa. **Da riguardare.**
 
 **Riletto, non ri-derivato, e la differenza e' il contenuto della voce**: i passi
@@ -1457,7 +1457,7 @@ giorno in cui serviva davvero.
 
 ## Decisioni prese e non ancora applicate
 
-<!-- JUDGMENT rivisto=edeb6cf -->
+<!-- JUDGMENT rivisto=ea12358 -->
 > Rivisto a `547fba4`. **Ri-derivato**: `npm run state -- --check` da' ancora
 > **14/14 applicate**, cioe' nessuna decisione dichiarata qui e assente dal
 > codice. E' l'unico dei quattro giudizi la cui verita' e' interamente
